@@ -1,0 +1,1549 @@
+ANTLR-generated file resulting from grammar symbela.g
+Diagnostic output
+
+Terence Parr, MageLang Institute
+with John Lilley, Empathy Software
+ANTLR Version 2.7.7 (20120126); 1989-2005
+
+*** Header Action.
+This action will appear at the top of all generated files.
+	
+	import re
+	
+	import promela_lts
+	import promela_tac
+	
+*** End of Header Action
+
+
+*** Tree-walker Preamble Action.
+This action will appear before the declaration of your tree-walker class:
+	
+*** End of tree-walker Preamble Action
+
+*** Your tree-walker class is called 'SymbelaTreeWalker' and is a subclass of 'TreeParser'.
+
+*** User-defined tree-walker class members:
+These are the member declarations that you defined for your class:
+	
+*** End of user-defined tree-walker class members
+
+*** tree-walker rules:
+	
+	
+	*** Parser Rule: module
+		Access: public
+		Return value(s): module_info
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ NULL_TREE_LOOKAHEAD, "mtype", "proctype", "init" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ NULL_TREE_LOOKAHEAD, "mtype", "proctype", "init" }
+			is matched.
+			ACTION: 
+			module_info = promela_tac.Module()
+			
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ NULL_TREE_LOOKAHEAD, "mtype", "proctype", "init" }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ "mtype" }
+						is matched.
+						Rule Reference: head, arguments = module_info
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ NULL_TREE_LOOKAHEAD, "proctype", "init" }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ "proctype" }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ "proctype" }
+					is matched.
+					Rule Reference: proctype, assigned to 'proctype_info', arguments = module_info
+					ACTION: 
+					module_info.add_proctype(proctype_info)
+					
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ NULL_TREE_LOOKAHEAD, "init" }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ "init" }
+						is matched.
+						Rule Reference: init_section, arguments = module_info
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ NULL_TREE_LOOKAHEAD }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in module: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: module
+	
+	
+	*** Parser Rule: head
+		Access: public
+		Return value: none
+		Arguments: module_info
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype" }
+			is matched.
+			Tree reference:  #( "mtype" ( m:IDENT 
+                module_info.add_mtype(m.getText())
+             )* )			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in head: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, "proctype", "init" }
+	*** End Parser Rule: head
+	
+	
+	*** Parser Rule: proctype
+		Access: public
+		Return value(s): proctype_info
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "proctype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "proctype" }
+			is matched.
+			Tree reference:  #( "proctype" name:IDENT 
+            proctype_info = promela_tac.ProcessType(module, name.getText())
+            vpool = proctype_info.vpool
+            ipool = proctype_info.ipool
+         declarationSequencemodule, vpool sequencemodule, vpool, ipool, 0 )			ACTION: 
+			proctype_info.resolve_gotos()
+			// uncomment to debug
+			//            print "Instruction pool for " + name.getText() + ":"
+			//            print ipool.str()
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in proctype: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, "proctype", "init" }
+	*** End Parser Rule: proctype
+	
+	
+	*** Parser Rule: init_section
+		Access: public
+		Return value: none
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "init" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "init" }
+			is matched.
+			Tree reference:  #( "init" ( chanVarDefinitionmodule )* ( annotatedProcInstancemodule )* )			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in init_section: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: init_section
+	
+	
+	*** Parser Rule: declarationSequence
+		Access: public
+		Return value: none
+		Arguments: module, vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ NULL_TREE_LOOKAHEAD, DECL, CUT_POINT, ANNOTATION, STATEMENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ NULL_TREE_LOOKAHEAD, DECL, CUT_POINT, ANNOTATION, STATEMENT }
+			is matched.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ DECL }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ DECL }
+					is matched.
+					Rule Reference: declaration, arguments = module, vpool
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in declarationSequence: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, CUT_POINT, ANNOTATION, STATEMENT }
+	*** End Parser Rule: declarationSequence
+	
+	
+	*** Parser Rule: sequence
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool, level
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ NULL_TREE_LOOKAHEAD, CUT_POINT, ANNOTATION, STATEMENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ NULL_TREE_LOOKAHEAD, CUT_POINT, ANNOTATION, STATEMENT }
+			is matched.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ CUT_POINT, ANNOTATION, STATEMENT }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ CUT_POINT, ANNOTATION, STATEMENT }
+					is matched.
+					Rule Reference: statement, arguments = module, vpool, ipool, level
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in sequence: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: sequence
+	
+	
+	*** Parser Rule: declaration
+		Access: public
+		Return value: none
+		Arguments: module, vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ DECL }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ DECL }
+			is matched.
+			Tree reference:  #( DECL declmodule, vpool )			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in declaration: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, DECL, CUT_POINT, ANNOTATION, STATEMENT }
+	*** End Parser Rule: declaration
+	
+	
+	*** Parser Rule: decl
+		Access: public
+		Return value: none
+		Arguments: module, vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype", "chan", "int", "bool", "enum" }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ "chan" }
+				is matched.
+				Match string literal "chan"
+				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: channel_name, arguments = vpool
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ "int" }
+				is matched.
+				Match string literal "int"
+				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: int_name, arguments = vpool
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "bool" }
+				is matched.
+				Match string literal "bool"
+				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: bool_name, arguments = vpool
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "enum" }
+				is matched.
+				Tree reference:  #( "enum" enum_values )				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: enum_name, arguments = vpool, enum_vals
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				
+				Otherwise, Alternate(5) will be taken IF:
+				The lookahead set: 
+					{ "mtype" }
+				is matched.
+				Match string literal "mtype"
+				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: mtype_name, arguments = module, vpool
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in decl: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: decl
+	
+	
+	*** Parser Rule: channel_name
+		Access: public
+		Return value: none
+		Arguments: vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=name
+			ACTION: 
+			vpool.add_chan(name.getText())
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in channel_name: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, IDENT }
+	*** End Parser Rule: channel_name
+	
+	
+	*** Parser Rule: int_name
+		Access: public
+		Return value: none
+		Arguments: vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=name
+			ACTION: 
+			vpool.add_int_var(name.getText())
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in int_name: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, IDENT }
+	*** End Parser Rule: int_name
+	
+	
+	*** Parser Rule: bool_name
+		Access: public
+		Return value: none
+		Arguments: vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=name
+			ACTION: 
+			vpool.add_bool_var(name.getText())
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in bool_name: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, IDENT }
+	*** End Parser Rule: bool_name
+	
+	
+	*** Parser Rule: enum_values
+		Access: public
+		Return value(s): v
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ NULL_TREE_LOOKAHEAD, IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ NULL_TREE_LOOKAHEAD, IDENT }
+			is matched.
+			ACTION: 
+			v = []
+			
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ IDENT }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ IDENT }
+					is matched.
+					Match token IDENT, label=name
+					ACTION: v.append(name.getText())
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in enum_values: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: enum_values
+	
+	
+	*** Parser Rule: enum_name
+		Access: public
+		Return value: none
+		Arguments: vpool, values
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=name
+			ACTION: 
+			vpool.add_enum_var(name.getText(), values)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in enum_name: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, IDENT }
+	*** End Parser Rule: enum_name
+	
+	
+	*** Parser Rule: mtype_name
+		Access: public
+		Return value: none
+		Arguments: module, vpool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=name
+			ACTION: 
+			vpool.add_mtype_var(name.getText(), module.mtype_values)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in mtype_name: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, IDENT }
+	*** End Parser Rule: mtype_name
+	
+	
+	*** Parser Rule: statement
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool, level
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ CUT_POINT, ANNOTATION, STATEMENT }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ STATEMENT }
+				is matched.
+				Tree reference:  #( STATEMENT stmntmodule, vpool, ipool, level )				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ ANNOTATION }
+				is matched.
+				Tree reference:  #( ANNOTATION annotationmodule, vpool, ipool )				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ CUT_POINT }
+				is matched.
+				Tree reference:  #( CUT_POINT DOUBLE_SEMI )				ACTION: 
+				// cut-point explicitly performs step
+				ic = ipool.counter()
+				ipool.add(promela_tac.Goto(ic + 1))
+				
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in statement: %s\n" % str(ex);
+			print >>sys.stderr, "Source tree: %s\n" % ex.node.toStringList();
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, CUT_POINT, ANNOTATION, STATEMENT }
+	*** End Parser Rule: statement
+	
+	
+	*** Parser Rule: stmnt
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool, level
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					LABEL, RECEIVE, SEND, ASSIGN, "if", 
+					"do", "skip", "break", "goto", OR, AND, 
+					EQ, NE_COMP, "true", "false", BOOL_NEG, BOOL_EVAL
+				 }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ "do" }
+				is matched.
+				Tree reference:  #( "do" 
+                goto = promela_tac.Goto(0)
+                entry_ic = ipool.add(goto)
+                goto_any = promela_tac.GotoAny()
+                ic = ipool.add(goto_any)
+                goto.dst = ic
+             (  goto_any.add_dst(ipool.counter())  do_optionmodule, vpool, ipool, level )* )				ACTION: 
+				ipool.replace_goto_label("ENTRY_IC_" + str(level), entry_ic)
+				ipool.replace_goto_label("EXIT_IC_" + str(level), ipool.counter())
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ "if" }
+				is matched.
+				Tree reference:  #( "if" 
+                goto = promela_tac.Goto(0)
+                entry_ic = ipool.add(goto)
+                goto_any = promela_tac.GotoAny()
+                ic = ipool.add(goto_any)
+                goto.dst = ic
+             (  goto_any.add_dst(ipool.counter())  if_optionmodule, vpool, ipool, level )* )				ACTION: 
+				ipool.replace_goto_label("EXIT_IC_" + str(level), ipool.counter())
+				
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ LABEL }
+				is matched.
+				Tree reference:  #( LABEL lab1:IDENT )				ACTION: 
+				// create nop instruction and remember its location
+				goto = promela_tac.Nop()
+				ic = ipool.add(goto)
+				vpool.add_label(lab1.getText(), ic)
+				
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ SEND }
+				is matched.
+				Tree reference:  #( SEND c1:IDENT m1:IDENT )				ACTION: 
+				chan = vpool.chan(c1.getText())
+				if m1 == None:
+				raise "None message passed: " + c1.getText() + "!"
+				
+				if module.has_mtype(m1.getText()):
+				chan.add_snd_msg(m1.getText())
+				val = m1.getText()
+				elif vpool.has_var(m1.getText()):
+				for msg in module.mtype_values:
+				chan.add_snd_msg(msg)
+				
+				var_type = vpool.var_type(m1.getText())
+				val = (var_type, m1.getText())
+				else:
+				raise "Neither variable, nor mtype: " + m1.getText()
+				
+				instr = promela_tac.Send(chan, val)
+				ipool.add(instr)
+				// message ends basic block
+				ipool.add(promela_tac.Goto(ipool.counter() + 1))
+				
+				
+				Otherwise, Alternate(5) will be taken IF:
+				The lookahead set: 
+					{ RECEIVE }
+				is matched.
+				Tree reference:  #( RECEIVE c2:IDENT m2:IDENT )				ACTION: 
+				chan = vpool.chan(c2.getText())
+				if m2 == None:
+				raise "None message passed: " + c2.getText() + "?"
+				
+				if module.has_mtype(m2.getText()):
+				chan.add_rcv_msg(m2.getText())
+				val = m2.getText()
+				elif vpool.has_var(m2.getText()):
+				for msg in module.mtype_values:
+				chan.add_rcv_msg(msg)
+				
+				var_type = vpool.var_type(m2.getText())
+				val = (var_type, m2.getText())
+				else:
+				raise "Neither variable, nor mtype: " + m2.getText()
+				
+				instr = promela_tac.Receive(chan, val)
+				ipool.add(instr)
+				
+				// message ends basic block
+				ipool.add(promela_tac.Goto(ipool.counter() + 1))
+				
+				
+				Otherwise, Alternate(6) will be taken IF:
+				The lookahead set: 
+					{ AND }
+				is matched.
+				Tree reference:  #( AND     
+            instr = promela_tac.And()
+            ipool.add(instr)
+         stmntmodule, vpool, ipool, level stmntmodule, vpool, ipool, level )				
+				Otherwise, Alternate(7) will be taken IF:
+				The lookahead set: 
+					{ OR }
+				is matched.
+				Tree reference:  #( OR     
+            instr = promela_tac.Or()
+            ipool.add(instr)
+         stmntmodule, vpool, ipool, level stmntmodule, vpool, ipool, level )				
+				Otherwise, Alternate(8) will be taken IF:
+				The lookahead set: 
+					{ ASSIGN }
+				is matched.
+				Tree reference:  #( ASSIGN n1:IDENT assignvpool, ipool, n1.getText() )				
+				Otherwise, Alternate(9) will be taken IF:
+				The lookahead set: 
+					{ "break" }
+				is matched.
+				Match string literal "break"
+				ACTION: 
+				instr = promela_tac.Goto("EXIT_IC_" + str(level - 1))
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(10) will be taken IF:
+				The lookahead set: 
+					{ "goto" }
+				is matched.
+				Tree reference:  #( "goto" lab2:IDENT )				ACTION: 
+				instr = promela_tac.Goto(lab2.getText())
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(11) will be taken IF:
+				The lookahead set: 
+					{ "skip" }
+				is matched.
+				Match string literal "skip"
+				
+				Otherwise, Alternate(12) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				
+				Otherwise, Alternate(13) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				ACTION: 
+				raise "I do not know how to handle constantly false conditions..."
+				
+				
+				Otherwise, Alternate(14) will be taken IF:
+				The lookahead set: 
+					{ EQ }
+				is matched.
+				Tree reference:  #( EQ n3:IDENT cond_eqvpool, ipool, n3.getText() )				
+				Otherwise, Alternate(15) will be taken IF:
+				The lookahead set: 
+					{ NE_COMP }
+				is matched.
+				Tree reference:  #( NE_COMP n4:IDENT cond_neqvpool, ipool, n4.getText() )				
+				Otherwise, Alternate(16) will be taken IF:
+				The lookahead set: 
+					{ BOOL_NEG }
+				is matched.
+				Tree reference:  #( BOOL_NEG cond_bool_negvpool, ipool )				
+				Otherwise, Alternate(17) will be taken IF:
+				The lookahead set: 
+					{ BOOL_EVAL }
+				is matched.
+				Tree reference:  #( BOOL_EVAL cond_bool_evalvpool, ipool )				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			import traceback
+			traceback.print_exc()
+			print >>sys.stderr, "Error in stmnt: %s\n" % str(ex);
+			print >>sys.stderr, "Source tree: %s\n" % ex.node.toStringList();
+			raise ex;
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ 
+				NULL_TREE_LOOKAHEAD, LABEL, RECEIVE, SEND, ASSIGN, 
+				"if", "do", "skip", "break", "goto", OR, 
+				AND, EQ, NE_COMP, "true", "false", BOOL_NEG, 
+				BOOL_EVAL
+			 }
+	*** End Parser Rule: stmnt
+	
+	
+	*** Parser Rule: annotation
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Tree reference:  #( name:IDENT 
+            annot = promela_tac.Annotation(name.getText())
+            ipool.add(annot)
+         )			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in annotation: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: annotation
+	
+	
+	*** Parser Rule: do_option
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool, level
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ OPTION }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ OPTION }
+			is matched.
+			Tree reference:  #( OPTION sequencemodule, vpool, ipool, level + 1 )			ACTION: 
+			instr = promela_tac.Goto("ENTRY_IC_" + str(level))
+			ipool.add(instr)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in do_option %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, OPTION }
+	*** End Parser Rule: do_option
+	
+	
+	*** Parser Rule: if_option
+		Access: public
+		Return value: none
+		Arguments: module, vpool, ipool, level
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ OPTION }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ OPTION }
+			is matched.
+			Tree reference:  #( OPTION sequencemodule, vpool, ipool, level + 1 )			ACTION: 
+			instr = promela_tac.Goto("EXIT_IC_" + str(level))
+			ipool.add(instr)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in if_option: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, OPTION }
+	*** End Parser Rule: if_option
+	
+	
+	*** Parser Rule: assign
+		Access: public
+		Return value: none
+		Arguments: vpool, ipool, name
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT, "true", "false", INT_CONST }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ IDENT }
+				is matched.
+				Match token IDENT, label=v1
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				if dst_type.name == "Enum" \
+				and dst_type.has_value(v1.getText()):
+				instr = promela_tac.ConstAssignment(dst_name,
+				dst_type, v1.getText())
+				else:
+				src_name = v1.getText()
+				src_type = vpool.var_type(src_name)
+				instr = promela_tac.VarAssignment(dst_name,
+				dst_type, src_name, src_type)
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ INT_CONST }
+				is matched.
+				Match token INT_CONST, label=v2
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstAssignment(dst_name,
+				dst_type, int(v2.getText()))
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstAssignment(dst_name,
+				dst_type, "true")
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstAssignment(dst_name,
+				dst_type, "false")
+				ipool.add(instr)
+				
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Expected expression: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: assign
+	
+	
+	*** Parser Rule: cond_eq
+		Access: public
+		Return value: none
+		Arguments: vpool, ipool, name
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT, "true", "false", INT_CONST }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ IDENT }
+				is matched.
+				Match token IDENT, label=v1
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				if dst_type.name == "Enum" \
+				and dst_type.has_value(v1.getText()):
+				instr = promela_tac.ConstEq(dst_name,
+				dst_type, v1.getText())
+				else:
+				src_name = v1.getText()
+				src_type = vpool.var_type(src_name)
+				instr = promela_tac.VarEq(dst_name,
+				dst_type, src_name, src_type)
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ INT_CONST }
+				is matched.
+				Match token INT_CONST, label=v2
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstEq(dst_name, dst_type,
+				int(v2.getText()))
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstEq(dst_name, dst_type,
+				"true")
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstEq(dst_name, dst_type,
+				"false")
+				ipool.add(instr)
+				
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in cond_eq: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: cond_eq
+	
+	
+	*** Parser Rule: cond_neq
+		Access: public
+		Return value: none
+		Arguments: vpool, ipool, name
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT, "true", "false", INT_CONST }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ IDENT }
+				is matched.
+				Match token IDENT, label=v1
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				if dst_type.name == "Enum" \
+				and dst_type.has_value(v1.getText()):
+				instr = promela_tac.ConstNeq(dst_name,
+				dst_type, v1.getText())
+				else:
+				src_name = v1.getText()
+				src_type = vpool.var_type(src_name)
+				instr = promela_tac.VarNeq(dst_name,
+				dst_type, src_name, src_type)
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ INT_CONST }
+				is matched.
+				Match token INT_CONST, label=v2
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstNeq(dst_name, dst_type,
+				int(v2.getText()))
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstNeq(dst_name, dst_type,
+				"true")
+				ipool.add(instr)
+				
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				ACTION: 
+				dst_name = name
+				dst_type = vpool.var_type(dst_name)
+				instr = promela_tac.ConstNeq(dst_name, dst_type,
+				"false")
+				ipool.add(instr)
+				
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in cond_neq: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: cond_neq
+	
+	
+	*** Parser Rule: cond_bool_neg
+		Access: public
+		Return value: none
+		Arguments: vpool, ipool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=v1
+			ACTION: 
+			src_name = v1.getText()
+			src_type = vpool.var_type(src_name)
+			if src_type == "Bool":
+			instr = promela_tac.ConstNeq(src_name, src_type, "true")
+			elif src_type == "Int":
+			instr = promela_tac.ConstEq(src_name, src_type, 0)
+			else:
+			raise "Only bool and int variables are supported in boolean negation"
+			ipool.add(instr)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in cond_bool_neg: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: cond_bool_neg
+	
+	
+	*** Parser Rule: cond_bool_eval
+		Access: public
+		Return value: none
+		Arguments: vpool, ipool
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=v1
+			ACTION: 
+			src_name = v1.getText()
+			src_type = vpool.var_type(src_name)
+			if src_type == "Bool":
+			instr = promela_tac.ConstEq(src_name, src_type, "true")
+			elif src_type == "Int":
+			instr = promela_tac.ConstNeq(src_name, src_type, 0)
+			else:
+			raise "Only bool and int variables are supported in boolean evaluation"
+			ipool.add(instr)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in cond_bool_eval: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: cond_bool_eval
+	
+	
+	*** Parser Rule: chanVarDefinition
+		Access: public
+		Return value: none
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "chan" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "chan" }
+			is matched.
+			Tree reference:  #( "chan" name:IDENT sz:INT_CONST )			ACTION: 
+			module.add_chan(name.getText())
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in chanVarDefinition: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, "chan", AT, "run" }
+	*** End Parser Rule: chanVarDefinition
+	
+	
+	*** Parser Rule: annotatedProcInstance
+		Access: public
+		Return value: none
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ AT, "run" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ AT, "run" }
+			is matched.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ AT }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ AT }
+					is matched.
+					Rule Reference: processAnnotation, arguments = module
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Rule Reference: procInstance, arguments = module
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in annotatedProcInstance: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, AT, "run" }
+	*** End Parser Rule: annotatedProcInstance
+	
+	
+	*** Parser Rule: processAnnotation
+		Access: public
+		Return value: none
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ AT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ AT }
+			is matched.
+			Tree reference:  #( AT name:IDENT value:STR_CONST )			ACTION: 
+			module.add_proc_annotation(name.getText(), value.getText())
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in processAnnotation: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ AT, "run" }
+	*** End Parser Rule: processAnnotation
+	
+	
+	*** Parser Rule: procInstance
+		Access: public
+		Return value: none
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "run" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "run" }
+			is matched.
+			Tree reference:  #( "run" name:IDENT chanVarListmodule )			ACTION: 
+			module.add_proc(name.getText(), channels)
+			module.reset_proc_annotations()
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in procInstance: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD, AT, "run" }
+	*** End Parser Rule: procInstance
+	
+	
+	*** Parser Rule: chanVarList
+		Access: public
+		Return value(s): channels
+		Arguments: module
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ NULL_TREE_LOOKAHEAD, IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ NULL_TREE_LOOKAHEAD, IDENT }
+			is matched.
+			ACTION: 
+			channels = []
+			
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ IDENT }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ IDENT }
+					is matched.
+					Match token IDENT, label=var
+					ACTION: 
+					channels.append(var.getText())
+					
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in chanVarList: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			{ NULL_TREE_LOOKAHEAD }
+	*** End Parser Rule: chanVarList
+
+*** End of tree-walker rules
+
+*** End of tree-walker

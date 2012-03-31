@@ -1,0 +1,1946 @@
+ANTLR-generated file resulting from grammar symbela.g
+Diagnostic output
+
+Terence Parr, MageLang Institute
+with John Lilley, Empathy Software
+ANTLR Version 2.7.7 (20120126); 1989-2005
+
+*** Header Action.
+This action will appear at the top of all generated files.
+	
+	import re
+	
+	import promela_lts
+	import promela_tac
+	
+*** End of Header Action
+
+
+*** Parser Preamble Action.
+This action will appear before the declaration of your parser class:
+	
+*** End of Parser Preamble Action
+
+*** Your parser class is called 'SymbelaParser' and is a subclass of 'LLkParser'.
+
+*** User-defined parser class members:
+These are the member declarations that you defined for your class:
+	
+	def getFilename(self):
+	return self.inputState.input.input.getFilename()
+	
+	def getLine(self):
+	return self.inputState.input.input.line
+	
+	def getColumn(self):
+	return self.inputState.input.input.getColumn()
+	
+*** End of user-defined parser class members
+
+*** Parser rules:
+	
+	
+	*** Parser Rule: imaginaryTokenDefinitions
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ DECL }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ DECL }
+			is matched.
+			Match token DECL
+			Match token CUT_POINT
+			Match token LABEL
+			Match token OPTION
+			Match token ANNOTATION
+			Match token RECEIVE
+			Match token SEND
+			Match token STATEMENT
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {EOF }
+	*** End Parser Rule: imaginaryTokenDefinitions
+	
+	
+	*** Parser Rule: spec
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype", "proctype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype", "proctype" }
+			is matched.
+			Rule Reference: module
+			Match token EOF
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {EOF }
+	*** End Parser Rule: spec
+	
+	
+	*** Parser Rule: module
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype", "proctype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype", "proctype" }
+			is matched.
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ "mtype", "proctype" }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ "mtype" }
+						is matched.
+						Rule Reference: head
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ "proctype" }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			Start ONE-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ "proctype" }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ "proctype" }
+					is matched.
+					Rule Reference: proctype
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ONE-OR-MORE block.
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ EOF, "init" }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ "init" }
+						is matched.
+						Rule Reference: init_section
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ EOF }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in module: %s" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {EOF }
+	*** End Parser Rule: module
+	
+	
+	*** Parser Rule: head
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype" }
+			is matched.
+			Match string literal "mtype"
+			Match token ASSIGN
+			Match token LCURLY
+			Match token IDENT
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COMMA }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COMMA }
+					is matched.
+					Match token COMMA
+					Match token IDENT
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Match token RCURLY
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ SEMI, "proctype" }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ SEMI }
+						is matched.
+						Match token SEMI
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ "proctype" }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in mtype: %s" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {"proctype" }
+	*** End Parser Rule: head
+	
+	
+	*** Parser Rule: proctype
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "proctype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "proctype" }
+			is matched.
+			Match string literal "proctype"
+			Match token IDENT
+			Match token LPAREN
+			Rule Reference: chanDeclarationSequence
+			Match token RPAREN
+			Match token LCURLY
+			Rule Reference: declarationSequence
+			Rule Reference: sequence
+			Match token RCURLY
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in proctype declaration: %s" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {EOF, "proctype", "init" }
+	*** End Parser Rule: proctype
+	
+	
+	*** Parser Rule: init_section
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "init" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "init" }
+			is matched.
+			Match string literal "init"
+			Match token LCURLY
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ "chan" }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ "chan" }
+					is matched.
+					Rule Reference: chanVarDefinition
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ JCOMMENT_BEGIN, "run" }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ JCOMMENT_BEGIN, "run" }
+					is matched.
+					Rule Reference: annotatedProcInstance
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Match token RCURLY
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {EOF }
+	*** End Parser Rule: init_section
+	
+	
+	*** Parser Rule: chanDeclarationSequence
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "chan" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "chan" }
+			is matched.
+			Match string literal "chan"
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ IDENT, COMMA, RPAREN }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: chanDeclaration
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ COMMA, RPAREN }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COMMA }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COMMA }
+					is matched.
+					Match token COMMA
+					Rule Reference: chanDeclaration
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			ACTION: 
+			#chanDeclarationSequence = #(#[DECL, "DECL"], #chanDeclarationSequence);
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in channel declaration sequence: %s" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {RPAREN }
+	*** End Parser Rule: chanDeclarationSequence
+	
+	
+	*** Parser Rule: declarationSequence
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					"mtype", IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, 
+					DOUBLE_SEMI, "int", "bool", "enum", "if", "do", 
+					"skip", "break", "goto", OR, AND, "true", 
+					"false"
+				 }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ 
+					"mtype", IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, 
+					DOUBLE_SEMI, "int", "bool", "enum", "if", "do", 
+					"skip", "break", "goto", OR, AND, "true", 
+					"false"
+				 }
+			is matched.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ "mtype", "int", "bool", "enum" }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ "mtype", "int", "bool", "enum" }
+					is matched.
+					Rule Reference: declaration
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+				"if", "do", "skip", "break", "goto", OR, 
+				AND, "true", "false"
+			 }
+	*** End Parser Rule: declarationSequence
+	
+	
+	*** Parser Rule: sequence
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+					"if", "do", "skip", "break", "goto", OR, 
+					AND, "true", "false"
+				 }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ 
+					IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+					"if", "do", "skip", "break", "goto", OR, 
+					AND, "true", "false"
+				 }
+			is matched.
+			Rule Reference: step
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ 
+							IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+							"if", "do", "skip", "break", "goto", OR, 
+							AND, "true", "false"
+						 }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ 
+							IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+							"if", "do", "skip", "break", "goto", OR, 
+							AND, "true", "false"
+						 }
+					is matched.
+					Rule Reference: step
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {RCURLY, COLON, "fi", "od" }
+	*** End Parser Rule: sequence
+	
+	
+	*** Parser Rule: chanDeclaration
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT, label=i
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {COMMA, RPAREN }
+	*** End Parser Rule: chanDeclaration
+	
+	
+	*** Parser Rule: declaration
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype", "int", "bool", "enum" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype", "int", "bool", "enum" }
+			is matched.
+			Rule Reference: typedecl
+			Match token IDENT
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COMMA }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COMMA }
+					is matched.
+					Match token COMMA
+					Match token IDENT
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Match token SEMI
+			ACTION: 
+			#declaration = #(#[DECL, "DECL"], #declaration);
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {
+				"mtype", IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "int", "bool", "enum", "if", "do", 
+				"skip", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: declaration
+	
+	
+	*** Parser Rule: typedecl
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype", "int", "bool", "enum" }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ "int" }
+				is matched.
+				Rule Reference: typeInt
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ "bool" }
+				is matched.
+				Rule Reference: typeBool
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "enum" }
+				is matched.
+				Rule Reference: typeEnum
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "mtype" }
+				is matched.
+				Rule Reference: typeMtype
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {IDENT }
+	*** End Parser Rule: typedecl
+	
+	
+	*** Parser Rule: step
+		Access: public
+		Return value: none
+		Error: This rule is non-deterministic
+		Start of an alternative block.
+			The lookahead set for this block is:
+				k==1: {
+					IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+					"if", "do", "skip", "break", "goto", OR, 
+					AND, "true", "false"
+				 }
+				k==2: {
+					ASSIGN, IDENT, RCURLY, SEMI, LPAREN, 
+					RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, AT, "if", 
+					"do", COLON, "skip", "fi", "od", EXCLAM, 
+					QUESTION, "break", "goto", OR, AND, EQ, 
+					NE_COMP, "true", "false"
+				 }
+				k==3: {
+					EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+					"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+					AT, "if", "do", COLON, "skip", "fi", 
+					"od", EXCLAM, QUESTION, "break", "goto", OR, 
+					AND, EQ, NE_COMP, "true", "false", INT_CONST, 
+					"init"
+				 }
+				k==4: {
+					EOF, ASSIGN, LCURLY, IDENT, RCURLY, 
+					SEMI, "proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, 
+					DOUBLE_SEMI, AT, "if", "do", COLON, "skip", 
+					"fi", "od", "else", EXCLAM, QUESTION, "break", 
+					"goto", OR, AND, EQ, NE_COMP, "true", 
+					"false", INT_CONST, "init"
+				 }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					k==1: {SEMI }
+					k==2: {
+						IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+						DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+						"od", "break", "goto", OR, AND, "true", 
+						"false"
+					 }
+					k==3: {
+						EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+						"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+						AT, "if", "do", COLON, "skip", "fi", 
+						"od", EXCLAM, QUESTION, "break", "goto", OR, 
+						AND, EQ, NE_COMP, "true", "false", "init"
+					 }
+					k==4: {
+						EOF, ASSIGN, LCURLY, IDENT, RCURLY, 
+						SEMI, "proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, 
+						DOUBLE_SEMI, AT, "if", "do", COLON, "skip", 
+						"fi", "od", "else", EXCLAM, QUESTION, "break", 
+						"goto", OR, AND, EQ, NE_COMP, "true", 
+						"false", INT_CONST, "init"
+					 }
+				is matched, AND the syntactic predicate:
+					Start of alternative block.
+						Start of an alternative block.
+							The lookahead set for this block is:
+								{ SEMI }
+							This block has a single alternative
+							
+							Alternate(1) will be taken IF:
+							The lookahead set: 
+								{ SEMI }
+							is matched.
+							Match token SEMI
+							
+							OTHERWISE, a NoViableAlt exception will be thrown
+							
+						End of alternative block.
+				is matched.
+				Start of alternative block.
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ SEMI }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ SEMI }
+						is matched.
+						Match token SEMI
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					k==1: {
+						IDENT, SEMI, LPAREN, "skip", "break", 
+						"goto", OR, AND, "true", "false"
+					 }
+					k==2: {
+						ASSIGN, IDENT, RCURLY, SEMI, LPAREN, 
+						RPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, "if", "do", COLON, 
+						"skip", "fi", "od", EXCLAM, QUESTION, "break", 
+						"goto", OR, AND, EQ, NE_COMP, "true", 
+						"false"
+					 }
+					k==3: {
+						EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+						"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+						AT, "if", "do", COLON, "skip", "fi", 
+						"od", EXCLAM, QUESTION, "break", "goto", OR, 
+						AND, EQ, NE_COMP, "true", "false", INT_CONST, 
+						"init"
+					 }
+					k==4: {
+						EOF, ASSIGN, LCURLY, IDENT, RCURLY, 
+						SEMI, "proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, 
+						DOUBLE_SEMI, AT, "if", "do", COLON, "skip", 
+						"fi", "od", "else", EXCLAM, QUESTION, "break", 
+						"goto", OR, AND, EQ, NE_COMP, "true", 
+						"false", INT_CONST, "init"
+					 }
+				is matched.
+				Rule Reference: stmnt
+				ACTION: 
+				#step = #(#[STATEMENT, "STATEMENT"], #step) ;
+				
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "if", "do" }
+				is matched.
+				Rule Reference: compound_stmnt
+				ACTION: 
+				#step = #(#[STATEMENT, "STATEMENT"], #step) ;
+				
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ JCOMMENT_BEGIN }
+				is matched.
+				Match token JCOMMENT_BEGIN
+				Start ZERO-OR-MORE (...)+ block:
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ AT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ AT }
+						is matched.
+						Rule Reference: annotation
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				End ZERO-OR-MORE block.
+				Match token JCOMMENT_END
+				
+				Otherwise, Alternate(5) will be taken IF:
+				The lookahead set: 
+					{ DOUBLE_SEMI }
+				is matched.
+				Match token DOUBLE_SEMI
+				ACTION: 
+				#step = #(#[CUT_POINT, "CUT_POINT"], #step) ;
+				
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+				"od", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: step
+	
+	
+	*** Parser Rule: stmnt
+		Access: public
+		Return value: none
+		Error: This rule is non-deterministic
+		Start of an alternative block.
+			The lookahead set for this block is:
+				k==1: {
+					IDENT, SEMI, LPAREN, "skip", "break", 
+					"goto", OR, AND, "true", "false"
+				 }
+				k==2: {
+					ASSIGN, IDENT, RCURLY, SEMI, LPAREN, 
+					RPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, "if", "do", COLON, 
+					"skip", "fi", "od", EXCLAM, QUESTION, "break", 
+					"goto", OR, AND, EQ, NE_COMP, "true", 
+					"false"
+				 }
+				k==3: {
+					EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+					"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+					AT, "if", "do", COLON, "skip", "fi", 
+					"od", EXCLAM, QUESTION, "break", "goto", OR, 
+					AND, EQ, NE_COMP, "true", "false", INT_CONST, 
+					"init"
+				 }
+				k==4: {
+					EOF, ASSIGN, LCURLY, IDENT, RCURLY, 
+					SEMI, "proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, 
+					DOUBLE_SEMI, AT, "if", "do", COLON, "skip", 
+					"fi", "od", "else", EXCLAM, QUESTION, "break", 
+					"goto", OR, AND, EQ, NE_COMP, "true", 
+					"false", INT_CONST, "init"
+				 }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					k==1: {IDENT }
+					k==2: {COLON }
+					k==3: {
+						IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+						DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+						"od", "break", "goto", OR, AND, "true", 
+						"false"
+					 }
+					k==4: {
+						EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+						"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+						AT, "if", "do", COLON, "skip", "fi", 
+						"od", EXCLAM, QUESTION, "break", "goto", OR, 
+						AND, EQ, NE_COMP, "true", "false", "init"
+					 }
+				is matched, AND the syntactic predicate:
+					Start of alternative block.
+						Start of an alternative block.
+							The lookahead set for this block is:
+								{ IDENT }
+							This block has a single alternative
+							
+							Alternate(1) will be taken IF:
+							The lookahead set: 
+								{ IDENT }
+							is matched.
+							Match token IDENT
+							Match token COLON
+							
+							OTHERWISE, a NoViableAlt exception will be thrown
+							
+						End of alternative block.
+				is matched.
+				Start of alternative block.
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ IDENT }
+						This block has a single alternative
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Match token IDENT
+						Match token COLON
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternative block.
+				ACTION: 
+				#stmnt = #(#[LABEL, "LABEL"], #stmnt);
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					k==1: {IDENT }
+					k==2: {EXCLAM }
+				is matched.
+				Rule Reference: send
+				Match token SEMI
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					k==1: {IDENT }
+					k==2: {QUESTION }
+				is matched.
+				Rule Reference: receive
+				Match token SEMI
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					k==1: {IDENT }
+					k==2: {ASSIGN }
+				is matched.
+				Rule Reference: assign
+				Match token SEMI
+				
+				Otherwise, Alternate(5) will be taken IF:
+				The lookahead set: 
+					{ "break" }
+				is matched.
+				Rule Reference: breakStmnt
+				Match token SEMI
+				
+				Otherwise, Alternate(6) will be taken IF:
+				The lookahead set: 
+					{ "goto" }
+				is matched.
+				Rule Reference: gotoStmnt
+				Match token SEMI
+				
+				Otherwise, Alternate(7) will be taken IF:
+				The lookahead set: 
+					k==1: {
+						IDENT, SEMI, LPAREN, OR, AND, 
+						"true", "false"
+					 }
+					k==2: {
+						IDENT, RCURLY, SEMI, LPAREN, RPAREN, 
+						JCOMMENT_BEGIN, DOUBLE_SEMI, "if", "do", COLON, "skip", 
+						"fi", "od", "break", "goto", OR, AND, 
+						EQ, NE_COMP, "true", "false"
+					 }
+					k==3: {
+						EOF, ASSIGN, IDENT, RCURLY, SEMI, 
+						"proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, DOUBLE_SEMI, 
+						AT, "if", "do", COLON, "skip", "fi", 
+						"od", EXCLAM, QUESTION, "break", "goto", OR, 
+						AND, EQ, NE_COMP, "true", "false", INT_CONST, 
+						"init"
+					 }
+					k==4: {
+						EOF, ASSIGN, LCURLY, IDENT, RCURLY, 
+						SEMI, "proctype", LPAREN, RPAREN, JCOMMENT_BEGIN, JCOMMENT_END, 
+						DOUBLE_SEMI, AT, "if", "do", COLON, "skip", 
+						"fi", "od", "else", EXCLAM, QUESTION, "break", 
+						"goto", OR, AND, EQ, NE_COMP, "true", 
+						"false", INT_CONST, "init"
+					 }
+				is matched.
+				Rule Reference: condexpr
+				Match token SEMI
+				
+				Otherwise, Alternate(8) will be taken IF:
+				The lookahead set: 
+					{ "skip" }
+				is matched.
+				Match string literal "skip"
+				Match token SEMI
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in statement %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+				"od", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: stmnt
+	
+	
+	*** Parser Rule: compound_stmnt
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "if", "do" }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ "if" }
+				is matched.
+				Match string literal "if"
+				Rule Reference: if_opts
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ "do" }
+				is matched.
+				Match string literal "do"
+				Rule Reference: do_opts
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in statement %s\n" % str(ex);
+			raise;
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+				"od", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: compound_stmnt
+	
+	
+	*** Parser Rule: annotation
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ AT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ AT }
+			is matched.
+			Match token AT
+			Match token IDENT, label=i
+			ACTION: 
+			#annotation = #(#[ANNOTATION, "ANNOTATION"], i);
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {JCOMMENT_END, AT }
+	*** End Parser Rule: annotation
+	
+	
+	*** Parser Rule: typeInt
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "int" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "int" }
+			is matched.
+			Match string literal "int"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {IDENT }
+	*** End Parser Rule: typeInt
+	
+	
+	*** Parser Rule: typeBool
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "bool" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "bool" }
+			is matched.
+			Match string literal "bool"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {IDENT }
+	*** End Parser Rule: typeBool
+	
+	
+	*** Parser Rule: typeEnum
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "enum" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "enum" }
+			is matched.
+			Match string literal "enum"
+			Match token LCURLY
+			Match token IDENT
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COMMA }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COMMA }
+					is matched.
+					Match token COMMA
+					Match token IDENT
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Match token RCURLY
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {IDENT }
+	*** End Parser Rule: typeEnum
+	
+	
+	*** Parser Rule: typeMtype
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "mtype" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "mtype" }
+			is matched.
+			Match string literal "mtype"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {IDENT }
+	*** End Parser Rule: typeMtype
+	
+	
+	*** Parser Rule: if_opts
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ COLON }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ COLON }
+			is matched.
+			Rule Reference: opts
+			Match string literal "fi"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+				"od", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: if_opts
+	
+	
+	*** Parser Rule: do_opts
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ COLON }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ COLON }
+			is matched.
+			Rule Reference: opts
+			Match string literal "od"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {
+				IDENT, RCURLY, SEMI, LPAREN, JCOMMENT_BEGIN, 
+				DOUBLE_SEMI, "if", "do", COLON, "skip", "fi", 
+				"od", "break", "goto", OR, AND, "true", 
+				"false"
+			 }
+	*** End Parser Rule: do_opts
+	
+	
+	*** Parser Rule: send
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT
+			Match token EXCLAM
+			Match token IDENT
+			ACTION: 
+			#send = #(#[SEND, "SEND"], #send);
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI }
+	*** End Parser Rule: send
+	
+	
+	*** Parser Rule: receive
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT
+			Match token QUESTION
+			Match token IDENT
+			ACTION: 
+			#receive = #(#[RECEIVE, "RECEIVE"], #receive);
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI }
+	*** End Parser Rule: receive
+	
+	
+	*** Parser Rule: assign
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT
+			Match token ASSIGN
+			Rule Reference: rvalue
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI }
+	*** End Parser Rule: assign
+	
+	
+	*** Parser Rule: breakStmnt
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "break" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "break" }
+			is matched.
+			Match string literal "break"
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI }
+	*** End Parser Rule: breakStmnt
+	
+	
+	*** Parser Rule: gotoStmnt
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "goto" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "goto" }
+			is matched.
+			Match string literal "goto"
+			Match token IDENT
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI }
+	*** End Parser Rule: gotoStmnt
+	
+	
+	*** Parser Rule: condexpr
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					IDENT, SEMI, LPAREN, RPAREN, OR, 
+					AND, "true", "false"
+				 }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ 
+					IDENT, SEMI, LPAREN, RPAREN, OR, 
+					AND, "true", "false"
+				 }
+			is matched.
+			Rule Reference: andexpr
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ OR }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ OR }
+					is matched.
+					Match token OR
+					Rule Reference: andexpr
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI, RPAREN }
+	*** End Parser Rule: condexpr
+	
+	
+	*** Parser Rule: opts
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ COLON }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ COLON }
+			is matched.
+			Match token COLON
+			Match token COLON
+			Rule Reference: option
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COLON }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COLON }
+					is matched.
+					Match token COLON
+					Match token COLON
+					Rule Reference: option
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Error in option: %s\n" % str(ex);
+			raise;
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {"fi", "od" }
+	*** End Parser Rule: opts
+	
+	
+	*** Parser Rule: option
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+					"if", "do", "skip", "else", "break", "goto", 
+					OR, AND, "true", "false"
+				 }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ 
+						IDENT, SEMI, LPAREN, JCOMMENT_BEGIN, DOUBLE_SEMI, 
+						"if", "do", "skip", "break", "goto", OR, 
+						AND, "true", "false"
+					 }
+				is matched.
+				Rule Reference: sequence
+				ACTION: 
+				#option = #(#[OPTION, "OPTION"], #option);
+				
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ "else" }
+				is matched.
+				Match string literal "else"
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Expected option at line %d\n" % ex.line;
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {COLON, "fi", "od" }
+	*** End Parser Rule: option
+	
+	
+	*** Parser Rule: rvalue
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT, "true", "false", INT_CONST }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ IDENT }
+				is matched.
+				Match token IDENT
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ INT_CONST }
+				is matched.
+				Match token INT_CONST
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI, RPAREN, OR, AND }
+	*** End Parser Rule: rvalue
+	
+	
+	*** Parser Rule: andexpr
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					IDENT, SEMI, LPAREN, RPAREN, OR, 
+					AND, "true", "false"
+				 }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ 
+					IDENT, SEMI, LPAREN, RPAREN, OR, 
+					AND, "true", "false"
+				 }
+			is matched.
+			Rule Reference: anyexpr
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ AND }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ AND }
+					is matched.
+					Match token AND
+					Rule Reference: anyexpr
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		You specified error-handler(s) for this rule:
+			Error-handler(1) catches [antlr.RecognitionException ex] and executes:
+			
+			print >>sys.stderr, "Expected expression: %s\n" % str(ex);
+			
+		End error-handlers.
+		The follow set for this rule is:
+			k==1: {SEMI, RPAREN, OR }
+	*** End Parser Rule: andexpr
+	
+	
+	*** Parser Rule: anyexpr
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ 
+					IDENT, SEMI, LPAREN, RPAREN, OR, 
+					AND, "true", "false"
+				 }
+			This block has multiple alternatives:
+				
+				Alternate(1) will be taken IF:
+				The lookahead set: 
+					{ SEMI, RPAREN, OR, AND }
+				is matched.
+				
+				Otherwise, Alternate(2) will be taken IF:
+				The lookahead set: 
+					{ LPAREN }
+				is matched.
+				Match token LPAREN
+				Rule Reference: condexpr
+				Match token RPAREN
+				
+				Otherwise, Alternate(3) will be taken IF:
+				The lookahead set: 
+					{ IDENT }
+				is matched.
+				Match token IDENT
+				Start of alternative block.
+					Start of an alternative block.
+						The lookahead set for this block is:
+							{ EQ, NE_COMP }
+						This block has multiple alternatives:
+							
+							Alternate(1) will be taken IF:
+							The lookahead set: 
+								{ EQ }
+							is matched.
+							Match token EQ
+							
+							Otherwise, Alternate(2) will be taken IF:
+							The lookahead set: 
+								{ NE_COMP }
+							is matched.
+							Match token NE_COMP
+							
+							OTHERWISE, a NoViableAlt exception will be thrown
+							
+						End of alternatives
+					End of alternative block.
+				Rule Reference: rvalue
+				
+				Otherwise, Alternate(4) will be taken IF:
+				The lookahead set: 
+					{ "true" }
+				is matched.
+				Match string literal "true"
+				
+				Otherwise, Alternate(5) will be taken IF:
+				The lookahead set: 
+					{ "false" }
+				is matched.
+				Match string literal "false"
+				
+				OTHERWISE, a NoViableAlt exception will be thrown
+				
+			End of alternatives
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {SEMI, RPAREN, OR, AND }
+	*** End Parser Rule: anyexpr
+	
+	
+	*** Parser Rule: chanVarDefinition
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "chan" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "chan" }
+			is matched.
+			Match string literal "chan"
+			Match token IDENT
+			Match token ASSIGN
+			Match token LBRACK
+			Match token INT_CONST, label=sz
+			Match token RBRACK
+			Match string literal "of"
+			Match token LCURLY
+			Match string literal "mtype"
+			Match token RCURLY
+			Match token SEMI
+			ACTION: 
+			// only rendezvous channels are supported
+			assert(int(sz.getText()) == 0)
+			
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {RCURLY, "chan", JCOMMENT_BEGIN, "run" }
+	*** End Parser Rule: chanVarDefinition
+	
+	
+	*** Parser Rule: annotatedProcInstance
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ JCOMMENT_BEGIN, "run" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ JCOMMENT_BEGIN, "run" }
+			is matched.
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ JCOMMENT_BEGIN }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ JCOMMENT_BEGIN }
+					is matched.
+					Rule Reference: procAnnotationInJComment
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Rule Reference: procInstance
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {RCURLY, JCOMMENT_BEGIN, "run" }
+	*** End Parser Rule: annotatedProcInstance
+	
+	
+	*** Parser Rule: procAnnotationInJComment
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ JCOMMENT_BEGIN }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ JCOMMENT_BEGIN }
+			is matched.
+			Match token JCOMMENT_BEGIN
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ AT }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ AT }
+					is matched.
+					Rule Reference: procAnnotation
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			Match token JCOMMENT_END
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {JCOMMENT_BEGIN, "run" }
+	*** End Parser Rule: procAnnotationInJComment
+	
+	
+	*** Parser Rule: procInstance
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ "run" }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ "run" }
+			is matched.
+			Match string literal "run"
+			Match token IDENT
+			Match token LPAREN
+			Start of alternative block.
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ IDENT, RPAREN }
+					This block has multiple alternatives:
+						
+						Alternate(1) will be taken IF:
+						The lookahead set: 
+							{ IDENT }
+						is matched.
+						Rule Reference: chanVarList
+						
+						Otherwise, Alternate(2) will be taken IF:
+						The lookahead set: 
+							{ RPAREN }
+						is matched.
+						
+						OTHERWISE, a NoViableAlt exception will be thrown
+						
+					End of alternatives
+				End of alternative block.
+			Match token RPAREN
+			Match token SEMI
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {RCURLY, JCOMMENT_BEGIN, "run" }
+	*** End Parser Rule: procInstance
+	
+	
+	*** Parser Rule: procAnnotation
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ AT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ AT }
+			is matched.
+			Match token AT
+			Match token IDENT, label=i
+			Match token LPAREN
+			Match token STR_CONST, label=v
+			Match token RPAREN
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {JCOMMENT_END, AT }
+	*** End Parser Rule: procAnnotation
+	
+	
+	*** Parser Rule: chanVarList
+		Access: public
+		Return value: none
+		Start of an alternative block.
+			The lookahead set for this block is:
+				{ IDENT }
+			This block has a single alternative
+			
+			Alternate(1) will be taken IF:
+			The lookahead set: 
+				{ IDENT }
+			is matched.
+			Match token IDENT
+			Start ZERO-OR-MORE (...)+ block:
+				Start of an alternative block.
+					The lookahead set for this block is:
+						{ COMMA }
+					This block has a single alternative
+					
+					Alternate(1) will be taken IF:
+					The lookahead set: 
+						{ COMMA }
+					is matched.
+					Match token COMMA
+					Match token IDENT
+					
+					OTHERWISE, a NoViableAlt exception will be thrown
+					
+				End of alternative block.
+			End ZERO-OR-MORE block.
+			
+			OTHERWISE, a NoViableAlt exception will be thrown
+			
+		End of alternative block.
+		Default error-handling will be generated, which catches all
+		parser exceptions and consumes tokens until the follow-set is seen.
+		The follow set for this rule is:
+			k==1: {RPAREN }
+	*** End Parser Rule: chanVarList
+
+*** End of parser rules
+
+*** End of parser

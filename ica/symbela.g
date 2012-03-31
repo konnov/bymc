@@ -11,10 +11,10 @@ options {
     language=Python;
 }
 
-class TinyPromelaParser extends Parser;
+class SymbelaParser extends Parser;
 options {
     k = 4;              // two token lookahead
-    exportVocab = TinyPromela;      // Call its vocabulary "TinyBasic"
+    exportVocab = Symbela;      // Call its vocabulary "SymbelaBasic"
     //codeGenMakeSwitchThreshold = 2;  // Some optimizations
     //codeGenBitsetTestThreshold = 3;
     defaultErrorHandler = true;     // Do generate parser error handlers
@@ -358,9 +358,9 @@ chanVarList
 //-------------------------------
 // The TinyPromela treewalker
 //-------------------------------
-class TinyPromelaTreeWalker extends TreeParser;
+class SymbelaTreeWalker extends TreeParser;
 options {
-    importVocab = TinyPromela;
+    importVocab = Symbela;
     buildAST = true;
 }    
 
@@ -967,10 +967,10 @@ annotation[module, vpool, ipool]
 // The TinyPromela scanner
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
-class TinyPromelaLexer extends Lexer;
+class SymbelaLexer extends Lexer;
 
 options {
-    exportVocab = TinyPromela;  // call the vocabulary "TinyBasic"
+    exportVocab = Symbela;  // call the vocabulary "TinyBasic"
     testLiterals = true;     // automatically test for literals
     k = 6;                   // four characters of lookahead
     defaultErrorHandler = true;     // Do generate parser error handlers
