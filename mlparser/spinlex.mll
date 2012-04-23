@@ -25,9 +25,14 @@ rule token = parse
  | '&'                   { BITAND }
  | "||"                  { OR }
  | '|'                   { BITOR }
+ | '~'                   { BITNOT }
+ | '@'                   { AT }
  | '%'                   { MOD }
  | '+'                   { PLUS }
  | "--"                  { DECR }
+ | "++"                  { INCR }
+ | "<<"                  { LSHIFT }
+ | ">>"                  { RSHIFT }
  | "->"                  { SEMI }
  | ';'                   { SEMI }
  | '-'                   { MINUS }
@@ -46,8 +51,8 @@ rule token = parse
  | ')'                   { RPAREN }
  | '['                   { LBRACE }
  | ']'                   { RBRACE }
- | '{'                   { token lexbuf }
- | '}'                   { token lexbuf }
+ | '{'                   { LCURLY }
+ | '}'                   { RCURLY }
  | "active"              { ACTIVE }
  | "assert"              { ASSERT }
  | "atomic"              { ATOMIC }

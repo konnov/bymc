@@ -1,7 +1,9 @@
+open Lexing;;
+open Printf;;
+
 open Spin;;
 open Spinlex;;
 open Spin_types;;
-open Printf;;
 
 let token_s t =
     match t with
@@ -78,6 +80,8 @@ let token_s t =
       | LPAREN -> "LPAREN"
       | RBRACE -> "RBRACE"
       | LBRACE -> "LBRACE"
+      | RCURLY -> "RCURLY"
+      | LCURLY -> "LCURLY"
       | DOT -> "DOT"
       | COMMA -> "COMMA"
       | COLON -> "COLON"
@@ -89,6 +93,7 @@ let token_s t =
       | PLUS -> "PLUS"
       | MULT -> "MULT"
       | ASGN -> "ASGN"
+      | BITNOT -> "BITNOT"
       | BITAND -> "BITAND"
       | BITOR -> "BITOR"
       | AND -> "AND"
@@ -99,6 +104,9 @@ let token_s t =
       | LT -> "LT"
       | EQ -> "EQ"
       | NE -> "NE"
+      | AT -> "AT"
+      | LSHIFT -> "<<"
+      | RSHIFT -> ">>"
 ;;
 
 
@@ -122,16 +130,21 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
       | NAME id ->
         if Hashtbl.mem macro_tbl id
         then (* substitute the contents and scan over it *)
-            let new_buf = Lexing.from_string (Hashtbl.find macro_tbl id) in
-            aux_bufs := new_buf :: !aux_bufs;
+            let newbuf = Lexing.from_string (Hashtbl.find macro_tbl id) in
+            let bname = sprintf "%s:%d,%d" lexbuf.lex_curr_p.pos_fname
+                lexbuf.lex_curr_p.pos_lnum
+                (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol) in
+            newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = bname};
+            aux_bufs := newbuf :: !aux_bufs;
             (* TODO: it must fail properly on co-recursive macro definitions *)
             lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
         else tok
 
       | INCLUDE filename -> (* scan another file *)
         let path = (Filename.concat dirname filename) in
-        let new_buf = Lexing.from_channel (open_in path) in
-        aux_bufs := new_buf :: !aux_bufs;
+        let newbuf = Lexing.from_channel (open_in path) in
+        newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = filename };
+        aux_bufs := newbuf :: !aux_bufs;
         lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
 
       (* TODO: if/endif + ifdef/endif *)
@@ -142,19 +155,28 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
 
 let _ =
     try
-        let filename, dirname = if Array.length Sys.argv > 1
-        then Sys.argv.(1), Filename.dirname Sys.argv.(1)
+        let filename, basename, dirname =
+        if Array.length Sys.argv > 1
+        then Sys.argv.(1), Filename.basename Sys.argv.(1),
+             Filename.dirname Sys.argv.(1)
         else raise (Failure "Use: program filename")
         in
         let lexbuf = Lexing.from_channel (open_in filename) in
+        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
         let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
+
+        while true do
+            let res = Spin.program lfun lexbuf in
+            printf "The outcome is %d\n" res; flush stdout
+        done
+
         (*
-        let _ = Spin.program lfun lexbuf in ()
-        *)
         while true do
             let t = lfun lexbuf in
             printf "%s\n" (token_s t)
         done
+        *)
     with End_of_file ->
-        exit 0
+        print_string "Premature end of file\n";
+        exit 1
 
