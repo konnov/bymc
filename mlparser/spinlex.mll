@@ -128,10 +128,14 @@ rule token = parse
             let name = (parse_name lexbuf) in
             let text = (strip_leading (parse_define lexbuf)) in
             DEFINE(name, text)
-        | _ -> STRING macro
+        | "#ifdef" -> MACRO_IFDEF
+        | "#if" -> MACRO_IF
+        | "#else" -> MACRO_ELSE
+        | "#endif" -> MACRO_ENDIF
+        | _ -> MACRO_OTHER macro
     }
+ | eof                   { EOF }
  | _ as c { raise (Unexpected_token (sprintf "Unrecognized char: %c" c)) }
- | eof                   { raise End_of_file }
 
 and parse_name = parse
    [' ' '\t']+    { parse_name lexbuf } (* skip spaces *)

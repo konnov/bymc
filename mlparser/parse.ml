@@ -70,6 +70,11 @@ let token_s t =
       | LTL -> "LTL"
       | DEFINE(n, v) -> (sprintf "DEFINE %s '%s'" n v)
       | INCLUDE(filename) -> (sprintf "INCLUDE \"%s\"" filename)
+      | MACRO_IF -> "MACRO_IF"
+      | MACRO_IFDEF -> "MACRO_IFDEF"
+      | MACRO_ELSE -> "MACRO_ELSE"
+      | MACRO_ENDIF -> "MACRO_ENDIF"
+      | MACRO_OTHER name -> (sprintf "#%s" name)
       | NOTRACE -> "NOTRACE"
       | NEVER -> "NEVER"
       | R_RCV -> "R_RCV"
@@ -107,6 +112,7 @@ let token_s t =
       | AT -> "AT"
       | LSHIFT -> "<<"
       | RSHIFT -> ">>"
+      | EOF -> "EOF"
 ;;
 
 
@@ -116,13 +122,15 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
       [] -> lex_fun lexbuf  (* read from the main buffer *)
 
       | b :: tl -> (* read from the auxillary buffer *)
-          try
-              lex_fun b    
-          with End_of_file ->
-              aux_bufs := tl;
-              lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+        let t = lex_fun b in
+        if t != EOF then t
+        else begin
+            aux_bufs := tl;
+            lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+        end
     in
     match tok with
+      (* TODO: handle macros with arguments foo(x, y) *)
       DEFINE(name, text) ->
         Hashtbl.add macro_tbl name text;
         lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
@@ -136,7 +144,7 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
                 (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol) in
             newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = bname};
             aux_bufs := newbuf :: !aux_bufs;
-            (* TODO: it must fail properly on co-recursive macro definitions *)
+            (* TODO: fail decently on co-recursive macro definitions *)
             lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
         else tok
 
@@ -147,7 +155,12 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
         aux_bufs := newbuf :: !aux_bufs;
         lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
 
-      (* TODO: if/endif + ifdef/endif *)
+      (* TODO: if/endif + ifdef/endif + if-else-endif*)
+      | MACRO_IF | MACRO_IFDEF | MACRO_ELSE | MACRO_ENDIF ->
+            raise (Failure (sprintf "%s is not supported" (token_s tok)))
+
+      | MACRO_OTHER name ->
+            raise (Failure (sprintf "#%s is not supported" name))
 
       | _ -> tok
 ;;
@@ -165,15 +178,14 @@ let _ =
         lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
         let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
 
-        while true do
-            let res = Spin.program lfun lexbuf in
-            printf "The outcome is %d\n" res; flush stdout
-        done
+        let res = Spin.program lfun lexbuf in
+        printf "The outcome is %d\n" res; flush stdout
 
         (*
-        while true do
-            let t = lfun lexbuf in
-            printf "%s\n" (token_s t)
+        let t = ref EQ in
+        while !t != EOF do
+            t := lfun lexbuf;
+            printf "%s\n" (token_s !t)
         done
         *)
     with End_of_file ->

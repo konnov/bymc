@@ -64,7 +64,8 @@ let error_count = ref 0;;
 let parse_error s =
     let p = Parsing.symbol_start_pos () in
     let fname = if p.pos_fname != "" then p.pos_fname else "<filename>" in
-    Printf.printf "%s at %s:%d,%d\n" s fname p.pos_lnum (p.pos_cnum - p.pos_bol);
+    let col = max (p.pos_cnum - p.pos_bol + 1) 1 in
+    Printf.printf "%s at %s:%d,%d\n" s fname p.pos_lnum col;
     error_count := !error_count + 1
 ;;
 %}
@@ -98,6 +99,9 @@ let parse_error s =
 %token  NEVER NOTRACE TRACE ASSERT
 %token  <string * string> DEFINE
 %token  <string> INCLUDE
+%token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
+%token  <string> MACRO_OTHER
+%token  EOF
 
 %right	ASGN
 %left	SND O_SND RCV R_RCV     /* SND doubles as boolean negation */
@@ -122,7 +126,7 @@ let parse_error s =
 
 /** PROMELA Grammar Rules **/
 
-program	: units	{ (* yytext[0] = '\0'; *) 0 }
+program	: units	EOF { (* yytext[0] = '\0'; *) 0 }
 	;
 
 units	: unit {}
@@ -655,7 +659,7 @@ option  : SEP   		/* { (* open_seq(0); *) } */
 				  $$->sq = close_seq(6); *) }
 	;
 
-OS	: /* empty */
+OS	: /* empty */ {}
 	| SEMI			{ (* redundant semi at end of sequence *) }
 	;
 
