@@ -58,15 +58,28 @@ static	int	Embedded = 0, inEventMap = 0, has_ini = 0;
 *)
 
 open Lexing;;
+open Spin_ir;;
+
+exception Not_implemented of string;;
 
 let error_count = ref 0;;
 
-let parse_error s =
+let curr_pos () =
     let p = Parsing.symbol_start_pos () in
     let fname = if p.pos_fname != "" then p.pos_fname else "<filename>" in
     let col = max (p.pos_cnum - p.pos_bol + 1) 1 in
-    Printf.printf "%s at %s:%d,%d\n" s fname p.pos_lnum col;
+    (fname, p.pos_lnum, col)
+;;
+
+let parse_error s =
+    let f, l, c = curr_pos() in
+    Printf.printf "%s:%d,%d %s\n" f l c s;
     error_count := !error_count + 1
+;;
+
+let fatal msg payload =
+    let f, l, c = curr_pos() in
+    raise (Failure (Printf.sprintf "%s:%d,%d %s %s\n" f l c msg payload))
 ;;
 %}
 
@@ -126,7 +139,7 @@ let parse_error s =
 
 /** PROMELA Grammar Rules **/
 
-program	: units	EOF { (* yytext[0] = '\0'; *) 0 }
+program	: units	EOF { 0 }
 	;
 
 units	: unit {}
@@ -269,7 +282,8 @@ events : TRACE	/* { (* context = $1->sym;
 			  eventmap = $1->sym->name;
 			  inEventMap++; *)
 			} */
-	  body		{ (*
+	  body	{ raise (Not_implemented "TRACE")
+            (*
 			  if (strcmp($1->sym->name, ":trace:") == 0)
 			  {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, E_TRACE);
 			  } else
@@ -285,7 +299,9 @@ utype	: TYPEDEF NAME	/*	{ (* if (context)
 						$2->sym->name);
 				   owner = $2->sym; *)
 				} */
-	  LCURLY decl_lst LCURLY	{ (* setuname($5); owner = ZS; *) }
+	  LCURLY decl_lst LCURLY	{
+                raise (Not_implemented "typedef is not supported")
+             (* setuname($5); owner = ZS; *) }
 	;
 
 nm	: NAME			{ (* $$ = $1; *) }
@@ -296,37 +312,51 @@ nm	: NAME			{ (* $$ = $1; *) }
 	;
 
 ns	: INLINE nm LPAREN		/* { (* NamesNotAdded++; *) } */
-	  args RPAREN		{ (* prep_inline($2->sym, $5);
+	  args RPAREN		{
+                    raise (Not_implemented "inline")
+               (* prep_inline($2->sym, $5);
 				  NamesNotAdded--; *)
 				}
 	;
 
-c_fcts	: ccode			{ (* leaves pseudo-inlines with sym of
+c_fcts	: ccode			{
+                    raise (Not_implemented "c_fcts")
+                  (* leaves pseudo-inlines with sym of
 				   * type CODE_FRAG or CODE_DECL in global context
 				   *)
 				}
     | cstate {}
 	;
 
-cstate	: C_STATE STRING STRING	{ (*
+cstate	: C_STATE STRING STRING	{
+                 raise (Not_implemented "c_state")
+                (*
 				  c_state($2->sym, $3->sym, ZS);
 				  has_code = has_state = 1; *)
 				}
-	| C_TRACK STRING STRING { (*
+	| C_TRACK STRING STRING {
+                 raise (Not_implemented "c_track")
+                 (*
 				  c_track($2->sym, $3->sym, ZS);
 				  has_code = has_state = 1; *)
 				}
-	| C_STATE STRING STRING	STRING { (*
+	| C_STATE STRING STRING	STRING {
+                 raise (Not_implemented "c_state")
+                 (*
 				  c_state($2->sym, $3->sym, $4->sym);
 				  has_code = has_state = 1; *)
 				}
-	| C_TRACK STRING STRING STRING { (*
+	| C_TRACK STRING STRING STRING {
+                 raise (Not_implemented "c_track")
+                 (*
 				  c_track($2->sym, $3->sym, $4->sym);
 				  has_code = has_state = 1; *)
 				}
 	;
 
-ccode	: C_CODE		{ (* Symbol *s;
+ccode	: C_CODE {
+                 raise (Not_implemented "c_code")
+                 (* Symbol *s;
 				  NamesNotAdded++;
 				  s = prep_inline(ZS, ZN);
 				  NamesNotAdded--;
@@ -334,7 +364,9 @@ ccode	: C_CODE		{ (* Symbol *s;
 				  $$->sym = s;
 				  has_code = 1; *)
 				}
-	| C_DECL		{ (* Symbol *s;
+	| C_DECL		{
+                 raise (Not_implemented "c_decl")
+                 (* Symbol *s;
 				  NamesNotAdded++;
 				  s = prep_inline(ZS, ZN);
 				  NamesNotAdded--;
@@ -344,7 +376,9 @@ ccode	: C_CODE		{ (* Symbol *s;
 				  has_code = 1; *)
 				}
 	;
-cexpr	: C_EXPR		{ (* Symbol *s;
+cexpr	: C_EXPR	{
+                 raise (Not_implemented "c_expr")
+                 (* Symbol *s;
 				  NamesNotAdded++;
 				  s = prep_inline(ZS, ZN);
 				  NamesNotAdded--;
@@ -371,9 +405,8 @@ sequence: step			{ (* if ($1) add_seq($1); *) }
 
 step    : one_decl		{ (* $$ = ZN; *) }
 	| XU vref_lst		{ (* setxus($2, $1->val); $$ = ZN; *) }
-	| NAME COLON one_decl	{ (* fatal("label preceding declaration,", (char * )0);
-    *) }
-	| NAME COLON XU		{ (* fatal("label predecing xr/xs claim,", 0); *) }
+	| NAME COLON one_decl	{ fatal "label preceding declaration," "" }
+	| NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
 	| stmnt			{ (* $$ = $1; *) }
 	| stmnt UNLESS stmnt	{ (* $$ = do_unless($1, $3); *) }
 	;
@@ -451,7 +484,9 @@ ivar    : vardcl           	{ (* $$ = $1;
 	;
 
 ch_init : LBRACE CONST RBRACE OF
-	  LCURLY typ_list RCURLY	{ (* if ($2->val) u_async++;
+	  LCURLY typ_list RCURLY	{
+                 raise (Not_implemented "channels")
+               (* if ($2->val) u_async++;
 				  else u_sync++;
         			  {	int i = cnt_mpars($6);
 					Mpars = max(Mpars, i);
@@ -515,18 +550,20 @@ stmnt	: Special		{ (* $$ = $1; initialization_ok = 0; *) }
 	;
 
 for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
-	  varref			{ (* $$ = $4; *) }
+	  varref		{ raise (Not_implemented "for") (* $$ = $4; *) }
 	;
 
-for_post: LCURLY sequence OS RCURLY {} ;
+for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
 Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
-	  rargs			{ (* Expand_Ok--; has_io++;
+	  rargs			{ raise (Not_implemented "rcv")
+                (* Expand_Ok--; has_io++;
 				  $$ = nn($1,  'r', $1, $4);
 				  trackchanuse($4, ZN, 'R'); *)
 				}
 	| varref SND		/* { (* Expand_Ok++; *) } */
-	  margs			{ (* Expand_Ok--; has_io++;
+	  margs			{ raise (Not_implemented "snd")
+               (* Expand_Ok--; has_io++;
 				  $$ = nn($1, 's', $1, $4);
 				  $$->val=0; trackchanuse($4, ZN, 'S');
 				  any_runs($4); *)
@@ -541,6 +578,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 	  for_post			{ (* $$ = for_body($5, 1); *)
 				}
 	| SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
+                    raise (Not_implemented "select")
 				  (* $$ = sel_index($3, $5, $7); *)
 				}
 	| IF options FI 	{ (* $$ = nn($1, IF, ZN, ZN);
@@ -599,7 +637,7 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 	| PRINTM LPAREN varref RPAREN	{ (* $$ = nn(ZN, PRINTM, $3, ZN); *) }
 	| PRINTM LPAREN CONST RPAREN	{ (* $$ = nn(ZN, PRINTM, $3, ZN); *) }
 	| ASSERT full_expr    	{ (* $$ = nn(ZN, ASSERT, $2, ZN); AST_track($2, 0); *) }
-	| ccode			{ (* $$ = $1; *) }
+	| ccode			{ raise (Not_implemented "ccode") (* $$ = $1; *) }
 	| varref R_RCV		/* { (* Expand_Ok++; *) } */
 	  rargs			{ (*Expand_Ok--; has_io++;
 				  $$ = nn($1,  'r', $1, $4);
@@ -607,19 +645,22 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				  trackchanuse($4, ZN, 'R'); *)
 				}
 	| varref RCV		/* { (* Expand_Ok++; *) } */
-	  LT rargs GT		{ (* Expand_Ok--; has_io++;
+	  LT rargs GT		{ raise (Not_implemented "rcv")
+               (* Expand_Ok--; has_io++;
 				  $$ = nn($1, 'r', $1, $5);
 				  $$->val = 2;	/* fifo poll */
 				  trackchanuse($5, ZN, 'R'); *)
 				}
 	| varref R_RCV		/* { (* Expand_Ok++; *) } */
-	  LT rargs GT		{ (* Expand_Ok--; has_io++;	/* rrcv poll */
+	  LT rargs GT		{ raise (Not_implemented "r_rcv")
+               (* Expand_Ok--; has_io++;	/* rrcv poll */
 				  $$ = nn($1, 'r', $1, $5);
 				  $$->val = 3; has_random = 1;
 				  trackchanuse($5, ZN, 'R'); *)
 				}
 	| varref O_SND		/* { (* Expand_Ok++; *) } */
-	  margs			{ (* Expand_Ok--; has_io++;
+	  margs			{ raise (Not_implemented "o_snd")
+               (* Expand_Ok--; has_io++;
 				  $$ = nn($1, 's', $1, $4);
 				  $$->val = has_sorted = 1;
 				  trackchanuse($4, ZN, 'S');
@@ -636,7 +677,9 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 	| D_STEP LCURLY		/* { (* open_seq(0);
 				  rem_Seq(); *)
 				} */
-          sequence OS RCURLY   	{ (* $$ = nn($1, D_STEP, ZN, ZN);
+          sequence OS RCURLY   	{
+                 raise (Not_implemented "d_step")
+                 (* $$ = nn($1, D_STEP, ZN, ZN);
         			  $$->sl = seqlist(close_seq(4), 0);
         			  make_atomic($$->sl->this, D_ATOM);
 				  unrem_Seq(); *)
@@ -647,7 +690,7 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
         			}
 	| INAME			/* { (* IArgs++; *) } */
 	  LPAREN args RPAREN		/* { (* pickup_inline($1->sym, $4); IArgs--; *) } */
-	  Stmnt			{ (* $$ = $7; *) }
+	  Stmnt			{ raise (Not_implemented "inline") (* $$ = $7; *) }
 	;
 
 options : option		{ (* $$->sl = seqlist($1->sq, 0); *) }
@@ -705,44 +748,68 @@ expr    : LPAREN expr RPAREN		{(*  $$ = $2;  *)}
 					(char * ) 0); *)
 				} */
 	  LPAREN args RPAREN
-	  Opt_priority		{ (* Expand_Ok--;
+	  Opt_priority		{
+                  raise (Not_implemented "run")
+               (* Expand_Ok--;
 				  $$ = nn($2, RUN, $5, ZN);
 				  $$->val = ($7) ? $7->val : 1;
 				  trackchanuse($5, $2, 'A'); trackrun($$); *)
 				}
-	| LEN LPAREN varref RPAREN	{(*  $$ = nn($3, LEN, $3, ZN);  *)}
-	| ENABLED LPAREN expr RPAREN	{ (* $$ = nn(ZN, ENABLED, $3, ZN);
-				  has_enabled++; *)
+	| LEN LPAREN varref RPAREN	{
+                  raise (Not_implemented "len")
+               (*  $$ = nn($3, LEN, $3, ZN);  *)}
+	| ENABLED LPAREN expr RPAREN	{
+                  raise (Not_implemented "enabled")
+                (* $$ = nn(ZN, ENABLED, $3, ZN);
+			 	   has_enabled++; *)
 				}
 	| varref RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{(* Expand_Ok--; has_io++;
-				  $$ = nn($1, 'R', $1, $5); *)
+	  LBRACE rargs RBRACE		{
+                  raise (Not_implemented "rcv")
+                (* Expand_Ok--; has_io++;
+				      $$ = nn($1, 'R', $1, $5); *)
 				}
 	| varref R_RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{(* Expand_Ok--; has_io++;
+	  LBRACE rargs RBRACE		{
+                  raise (Not_implemented "r_rcv")
+               (* Expand_Ok--; has_io++;
 				  $$ = nn($1, 'R', $1, $5);
 				  $$->val = has_random = 1; *)
 				}
 	| varref		{(*  $$ = $1; trapwonly($1 /*, "varref" */);  *)}
-	| cexpr			{(*  $$ = $1;  *)}
-	| CONST 		{(* $$ = nn(ZN,CONST,ZN,ZN);
+	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
+	| CONST 		{
+               (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)
 				}
-	| TIMEOUT		{(*  $$ = nn(ZN,TIMEOUT, ZN, ZN);  *)}
-	| NONPROGRESS		{(* $$ = nn(ZN,NONPROGRESS, ZN, ZN);
+	| TIMEOUT		{
+                   raise (Not_implemented "timeout")
+               (*  $$ = nn(ZN,TIMEOUT, ZN, ZN);  *)}
+	| NONPROGRESS		{
+                   raise (Not_implemented "nonprogress")
+                (* $$ = nn(ZN,NONPROGRESS, ZN, ZN);
 				  has_np++; *)
 				}
-	| PC_VAL LPAREN expr RPAREN	{ (* $$ = nn(ZN, PC_VAL, $3, ZN);
+	| PC_VAL LPAREN expr RPAREN	{
+                   raise (Not_implemented "pc_value")
+                (* $$ = nn(ZN, PC_VAL, $3, ZN);
 				  has_pcvalue++; *)
 				}
 	| PNAME LBRACE expr RBRACE AT NAME
-	  			{(*  $$ = rem_lab($1->sym, $3, $6->sym);  *)}
+	  			{  raise (Not_implemented "PNAME operations")
+                (*  $$ = rem_lab($1->sym, $3, $6->sym);  *)}
 	| PNAME LBRACE expr RBRACE COLON pfld
-	  			{(*  $$ = rem_var($1->sym, $3, $6->sym, $6->lft);  *)}
-	| PNAME AT NAME	{(*  $$ = rem_lab($1->sym, ZN, $3->sym);  *)}
-	| PNAME COLON pfld	{(*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
-	| ltl_expr		{(*  $$ = $1;  *)}
+	  			{  raise (Not_implemented "PNAME operations")
+                (*  $$ = rem_var($1->sym, $3, $6->sym, $6->lft);  *)}
+	| PNAME AT NAME	{
+                   raise (Not_implemented "PNAME operations")
+                (*  $$ = rem_lab($1->sym, ZN, $3->sym);  *)}
+	| PNAME COLON pfld	{
+                   raise (Not_implemented "PNAME operations")
+                (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
+	| ltl_expr	{  raise (Not_implemented "ltl_expr")
+            (*  $$ = $1;  *)}
 	;
 
 Opt_priority:	/* none */	{(*  $$ = ZN;  *)}
@@ -769,7 +836,7 @@ ltl_expr: expr UNTIL expr	{(*  $$ = nn(ZN, UNTIL,   $1, $3);  *)}
 	;
 
 	/* an Expr cannot be negated - to protect Probe expressions */
-Expr	: Probe			{(*  $$ = $1;  *)}
+Expr	: Probe			{raise (Not_implemented "Probe") (*  $$ = $1;  *)}
 	| LPAREN Expr RPAREN		{(*  $$ = $2;  *)}
 	| Expr AND Expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
 	| Expr AND expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
