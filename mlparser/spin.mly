@@ -81,6 +81,18 @@ let fatal msg payload =
     let f, l, c = curr_pos() in
     raise (Failure (Printf.sprintf "%s:%d,%d %s %s\n" f l c msg payload))
 ;;
+
+let nn_leaf sym typ =
+    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_leaf }
+;;
+
+let nn_list sym typ child =
+    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_list(child) }
+;;
+
+let nn_tree sym typ left right =
+    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_tree(left, right) }
+;;
 %}
 
 %token	ASSERT PRINT PRINTM
@@ -104,8 +116,8 @@ let fatal msg payload =
 %token  <string> INAME		        /* sym */
 %token	<string> STRING
 %token  CLAIM TRACE INIT	LTL	/* sym */
-%token  NE EQ LT GT LE GE OR AND BITNOT BITOR BITAND ASGN
-%token  MULT PLUS MINUS DIV MOD DECR INCR
+%token  NE EQ LT GT LE GE OR AND BITNOT BITOR BITXOR BITAND ASGN
+%token  MULT PLUS MINUS DIV MOD DECR INCR UMIN
 %token  LSHIFT RSHIFT
 %token  COLON DOT COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
 %token  O_SND SND RCV R_RCV AT
@@ -411,23 +423,28 @@ step    : one_decl		{ (* $$ = ZN; *) }
 	| stmnt UNLESS stmnt	{ (* $$ = do_unless($1, $3); *) }
 	;
 
-vis	: /* empty */		{ (* $$ = ZN; *) }
-	| HIDDEN		{ (* $$ = $1; *) }
-	| SHOW			{ (* $$ = $1; *) }
-	| ISLOCAL		{ (* $$ = $1; *)}
+vis	: /* empty */		{ }
+	| HIDDEN		{ raise (Not_implemented "hidden") }
+	| SHOW			{ raise (Not_implemented "show")   }
+	| ISLOCAL		{ raise (Not_implemented "local")  }
 	;
 
 asgn:	/* empty */ {}
     | ASGN {}
 	;
 
-one_decl: vis TYPE var_list	{ (* setptype($3, $2->val, $1);
+one_decl: vis TYPE var_list	{
+               (* setptype($3, $2->val, $1);
 				  $$ = $3; *)
 				}
-	| vis UNAME var_list	{ (* setutype($3, $2->sym, $1);
+	| vis UNAME var_list	{
+                  raise (Not_implemented "variables of user-defined types")
+               (* setutype($3, $2->sym, $1);
 				  $$ = expand($3, Expand_Ok); *)
 				}
-	| vis TYPE asgn LCURLY nlst RCURLY { (*
+	| vis TYPE asgn LCURLY nlst RCURLY {
+                  raise (Not_implemented "mtype = {...}")
+                 (*
 				  if ($2->val != MTYPE)
 					fatal("malformed declaration", 0);
 				  setmtype($5);
@@ -714,30 +731,53 @@ aname	: NAME			{ (* $$ = $1; *) }
 	| PNAME			{ (* $$ = $1; *) }
 	;
 
-expr    : LPAREN expr RPAREN		{(*  $$ = $2;  *)}
-	| expr PLUS expr		{(*  $$ = nn(ZN, '+', $1, $3);  *)}
-	| expr MINUS expr		{(*  $$ = nn(ZN, '-', $1, $3);  *)}
-	| expr MULT expr		{(*  $$ = nn(ZN, '*', $1, $3);  *)}
-	| expr DIV expr		{(*  $$ = nn(ZN, '/', $1, $3);  *)}
-	| expr MOD expr		{(*  $$ = nn(ZN, '%', $1, $3);  *)}
-	| expr BITAND expr		{(*  $$ = nn(ZN, '&', $1, $3);  *)}
-	| expr BITXOR expr		{(*  $$ = nn(ZN, '^', $1, $3);  *)}
-	| expr BITOR expr		{(*  $$ = nn(ZN, '|', $1, $3);  *)}
-	| expr GT expr		{(*  $$ = nn(ZN,  GT, $1, $3);  *)}
-	| expr LT expr		{(*  $$ = nn(ZN,  LT, $1, $3);  *)}
-	| expr GE expr		{(*  $$ = nn(ZN,  GE, $1, $3);  *)}
-	| expr LE expr		{(*  $$ = nn(ZN,  LE, $1, $3);  *)}
-	| expr EQ expr		{(*  $$ = nn(ZN,  EQ, $1, $3);  *)}
-	| expr NE expr		{(*  $$ = nn(ZN,  NE, $1, $3);  *)}
-	| expr AND expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| expr OR  expr		{(*  $$ = nn(ZN,  OR, $1, $3);  *)}
-	| expr LSHIFT expr	{(*  $$ = nn(ZN, LSHIFT,$1, $3);  *)}
-	| expr RSHIFT expr	{(*  $$ = nn(ZN, RSHIFT,$1, $3);  *)}
-	| BITNOT expr		{(*  $$ = nn(ZN, '~', $2, ZN);  *)}
-	| MINUS expr %prec UMIN	{(*  $$ = nn(ZN, UMIN, $2, ZN);  *)}
-	| SND expr %prec NEG	{(*  $$ = nn(ZN, '!', $2, ZN);  *)}
+expr    : LPAREN expr RPAREN		{ $2 (*  $$ = $2;  *)}
+	| expr PLUS expr		{ nn_tree ZSymb PLUS $1 $3
+                             (*  $$ = nn(ZN, '+', $1, $3);  *)}
+	| expr MINUS expr		{ nn_tree ZSymb MINUS $1 $3
+                             (*  $$ = nn(ZN, '-', $1, $3);  *)}
+	| expr MULT expr		{ nn_tree ZSymb MULT $1 $3
+                             (*  $$ = nn(ZN, '*', $1, $3);  *)}
+	| expr DIV expr		    { nn_tree ZSymb DIV $1 $3
+                             (*  $$ = nn(ZN, '/', $1, $3);  *)}
+	| expr MOD expr		    { nn_tree ZSymb MOD $1 $3
+                             (*  $$ = nn(ZN, '%', $1, $3);  *)}
+	| expr BITAND expr		{ nn_tree ZSymb BITAND $1 $3
+                             (*  $$ = nn(ZN, '&', $1, $3);  *)}
+	| expr BITXOR expr		{ nn_tree ZSymb BITXOR $1 $3
+                             (*  $$ = nn(ZN, '^', $1, $3);  *)}
+	| expr BITOR expr		{ nn_tree ZSymb BITOR $1 $3
+                             (*  $$ = nn(ZN, '|', $1, $3);  *)}
+	| expr GT expr		    { nn_tree ZSymb GT $1 $3
+                             (*  $$ = nn(ZN,  GT, $1, $3);  *)}
+	| expr LT expr		    { nn_tree ZSymb LT $1 $3
+                             (*  $$ = nn(ZN,  LT, $1, $3);  *)}
+	| expr GE expr		    { nn_tree ZSymb GE $1 $3
+                             (*  $$ = nn(ZN,  GE, $1, $3);  *)}
+	| expr LE expr		    { nn_tree ZSymb LE $1 $3
+                             (*  $$ = nn(ZN,  LE, $1, $3);  *)}
+	| expr EQ expr		    { nn_tree ZSymb EQ $1 $3
+                             (*  $$ = nn(ZN,  EQ, $1, $3);  *)}
+	| expr NE expr		    { nn_tree ZSymb NE $1 $3
+                             (*  $$ = nn(ZN,  NE, $1, $3);  *)}
+	| expr AND expr		    { nn_tree ZSymb AND $1 $3
+                             (*  $$ = nn(ZN, AND, $1, $3);  *)}
+	| expr OR  expr		    { nn_tree ZSymb OR $1 $3
+                             (*  $$ = nn(ZN,  OR, $1, $3);  *)}
+	| expr LSHIFT expr	    { nn_tree ZSymb LSHIFT $1 $3
+                             (*  $$ = nn(ZN, LSHIFT,$1, $3);  *)}
+	| expr RSHIFT expr	    { nn_tree ZSymb RSHIFT $1 $3
+                             (*  $$ = nn(ZN, RSHIFT,$1, $3);  *)}
+	| BITNOT expr		    { nn_list ZSymb BITNOT $2
+                             (*  $$ = nn(ZN, '~', $2, ZN);  *)}
+	| MINUS expr %prec UMIN	{ nn_list ZSymb UMIN $2
+                             (*  $$ = nn(ZN, UMIN, $2, ZN);  *)}
+	| SND expr %prec NEG	{ nn_list ZSymb SND $2
+                             (*  $$ = nn(ZN, '!', $2, ZN);  *)}
 
-	| LPAREN expr SEMI expr COLON expr RPAREN { (*
+	| LPAREN expr SEMI expr COLON expr RPAREN {
+                  raise (Not_implemented "ternary operator")
+                 (*
 				  $$ = nn(ZN,  OR, $4, $6);
 				  $$ = nn(ZN, '?', $2, $$); *)
 				}
@@ -776,9 +816,14 @@ expr    : LPAREN expr RPAREN		{(*  $$ = $2;  *)}
 				  $$ = nn($1, 'R', $1, $5);
 				  $$->val = has_random = 1; *)
 				}
-	| varref		{(*  $$ = $1; trapwonly($1 /*, "varref" */);  *)}
+	| varref	{
+                    $1 (* TODO: set HReadOnce later! *)
+                    (*  $$ = $1; trapwonly($1 /*, "varref" */);  *)}
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
-	| CONST 		{
+	| CONST 	{
+                    let n = nn_leaf ZSymb (CONST $1) in
+                    n.nval <- $1;
+                    n
                (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)
@@ -1031,11 +1076,5 @@ ltl_to_string(Lextok *n)
 	m->sym = lookup(formula);
 
 	return m;
-}
-
-void
-yyerror(char *fmt, ...)
-{
-	non_fatal(fmt, (char * ) 0);
 }
 *)

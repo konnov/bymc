@@ -25,6 +25,7 @@ rule token = parse
  | '&'                   { BITAND }
  | "||"                  { OR }
  | '|'                   { BITOR }
+ | '^'                   { BITXOR }
  | '~'                   { BITNOT }
  | '@'                   { AT }
  | '%'                   { MOD }
