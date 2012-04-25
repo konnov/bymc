@@ -743,7 +743,7 @@ expr    : LPAREN expr RPAREN		{ $2 (*  $$ = $2;  *)}
 	| expr MOD expr		    { nn_tree ZSymb MOD $1 $3
                              (*  $$ = nn(ZN, '%', $1, $3);  *)}
 	| expr BITAND expr		{ nn_tree ZSymb BITAND $1 $3
-                             (*  $$ = nn(ZN, '&', $1, $3);  *)}
+                             (*  $$ = nn(ZN, '&', $1, $3);  *)
 	| expr BITXOR expr		{ nn_tree ZSymb BITXOR $1 $3
                              (*  $$ = nn(ZN, '^', $1, $3);  *)}
 	| expr BITOR expr		{ nn_tree ZSymb BITOR $1 $3
