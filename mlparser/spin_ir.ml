@@ -19,8 +19,8 @@
 open Spin_types;;
 
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
-type hflag = HHide | HShow | HBitEquiv | HByteEquiv | HFormalPar
-           | HInlinePar | HTreatLocal | HReadOnce;;
+type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
+           | HFormalPar | HInlinePar | HTreatLocal | HReadOnce;;
 
 (* 't stands for the token type *)
 type 't lextok = {
@@ -101,10 +101,15 @@ class symb name_i =
         val name: string = name_i
         val mutable flags: hflag list = [] (* 'hidden' in Spin *)
 
+        method get_name = name
+
         method has_flag f = List.mem f flags
 
         method add_flag f =
-            flags <- if self#has_flag f then flags else f::flags
+            flags <-
+                if f != HNone && self#has_flag f
+                then flags
+                else f::flags
     end
 ;;
 
@@ -147,14 +152,29 @@ class var name_i =
     object
         inherit symb name_i
 
-        val isarray: bool = false (* set if decl specifies array bound *)
-        val nbits: int = 0        (* optional width specifier *)
-        val nel: int = 1          (* 1 if scalar, >1 if array *)
-        val ini: int = 0          (* initial value, or chan-def *)
+        val mutable isarray: bool = false (* set if decl specifies array bound *)
+        val mutable nbits: int = 0        (* optional width specifier *)
+        val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
+        val mutable ini: int = 0          (* initial value, or chan-def *)
+        
+        method set_isarray b = isarray <- b
+        method get_isarray = isarray
+
+        method set_nbits n = nbits <- n
+        method get_nbits = nbits
+
+        method set_num_elems n = nel <- n
+        method get_num_elems = nel
+
+        method set_ini i = ini <- i
+        method get_ini = ini
     end
 ;;
 
 
-type 't expr = Const of immediate | Var of var
-    | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr;;
+type 't expr = Nop | Const of immediate | Var of var
+    | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
+    | Decl of var * var_type * 't expr
+    | Seq of 't expr list | Atomic of 't expr list | D_step of 't expr list
+;;
 

@@ -395,31 +395,34 @@ cexpr	: C_EXPR	{
 	;
 
 body	: LCURLY			/* { (* open_seq(1); *) } */
-          sequence OS		/* { (* add_seq(Stop); *) } */
-          RCURLY			{ (* $$->sq = close_seq(0);
-				  if (scope_level != 0)
-				  {	non_fatal("missing '}' ?", 0);
-					scope_level = 0;
-				  } *)
-				}
+          sequence OS	/* { (* add_seq(Stop); *) } */
+          RCURLY			{
+              Seq $2
+           (* $$->sq = close_seq(0);
+			  if (scope_level != 0)
+			  {	non_fatal("missing '}' ?", 0);
+				scope_level = 0;
+			  } *)
+			}
 	;
 
-sequence: step			{ (* if ($1) add_seq($1); *) }
-	| sequence MS step	{ (* if ($3) add_seq($3); *) }
+sequence: step			{ $1 }
+	| sequence MS step	{ List.append $1 $3 }
 	;
 
-step    : one_decl		{ (* $$ = ZN; *) }
-	| XU vref_lst		{ (* setxus($2, $1->val); $$ = ZN; *) }
+step    : one_decl		{ $1 }
+	| XU vref_lst		{ raise (Not_implemented "XU vref_lst")
+        (* setxus($2, $1->val); $$ = ZN; *) }
 	| NAME COLON one_decl	{ fatal "label preceding declaration," "" }
 	| NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
-	| stmnt			{ (* $$ = $1; *) }
-	| stmnt UNLESS stmnt	{ (* $$ = do_unless($1, $3); *) }
+    | stmnt			    { [$1] }
+	| stmnt UNLESS stmnt	{ raise (Not_implemented "unless") }
 	;
 
-vis	: /* empty */		{ }
-	| HIDDEN		{ raise (Not_implemented "hidden") }
-	| SHOW			{ raise (Not_implemented "show")   }
-	| ISLOCAL		{ raise (Not_implemented "local")  }
+vis	: /* empty */	{ HNone }
+	| HIDDEN		{ HHide }
+	| SHOW			{ HShow }
+	| ISLOCAL		{ HTreatLocal }
 	;
 
 asgn:	/* empty */ {}
@@ -427,9 +430,11 @@ asgn:	/* empty */ {}
 	;
 
 one_decl: vis TYPE var_list	{
-               (* setptype($3, $2->val, $1);
-				  $$ = $3; *)
-				}
+        let f = $1 and t = $2 in
+        (List.map (fun (v, i) -> v#add_flag f; Decl(v, t, i)) $3)
+       (* setptype($3, $2->val, $1);
+          $$ = $3; *)
+    }
 	| vis UNAME var_list	{
                   raise (Not_implemented "variables of user-defined types")
                (* setutype($3, $2->sym, $1);
@@ -462,35 +467,47 @@ vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
 	| varref COMMA vref_lst	{ (* $$ = nn($1, XU, $1, $3); *) }
 	;
 
-var_list: ivar           	{ (* $$ = nn($1, TYPE, ZN, ZN); *) }
-	| ivar COMMA var_list	{ (* $$ = nn($1, TYPE, ZN, $3); *) }
+var_list: ivar           	{
+        [$1]
+        (* $$ = nn($1, TYPE, ZN, ZN); *)
+    }
+	| ivar COMMA var_list	{
+        $1 :: $3
+        (* $$ = nn($1, TYPE, ZN, $3); *)
+    }
 	;
 
-ivar    : vardcl           	{ (* $$ = $1;
-				  $1->sym->ini = nn(ZN,CONST,ZN,ZN);
-				  $1->sym->ini->val = 0; *)
-				}
-	| vardcl ASGN expr   	{ (* $$ = $1;
-				  $1->sym->ini = $3;
-				  trackvar($1,$3);
-				  if ($3->ntyp == CONST
-				  || ($3->ntyp == NAME && $3->sym->context))
-				  {	has_ini = 2; /* local init */
-				  } else
-				  {	has_ini = 1; /* possibly global */
-				  }
-				  if (!initialization_ok && split_decl)
-				  {	nochan_manip($1, $3, 0);
-				  	no_internals($1);
-					non_fatal(PART0 "'%s'" PART2, $1->sym->name);
-				  } *)
-				}
-	| vardcl ASGN ch_init	{ (* $1->sym->ini = $3;
-				  $$ = $1; has_ini = 1;
-				  if (!initialization_ok && split_decl)
-				  {	non_fatal(PART1 "'%s'" PART2, $1->sym->name);
-				  } *)
-				}
+ivar    : vardcl           	{
+        ($1, Nop)
+        (* $$ = $1;
+          $1->sym->ini = nn(ZN,CONST,ZN,ZN);
+          $1->sym->ini->val = 0; *)
+    }
+	| vardcl ASGN expr   	{
+        ($1, $3)
+        (* $$ = $1;
+          $1->sym->ini = $3;
+          trackvar($1,$3);
+          if ($3->ntyp == CONST
+          || ($3->ntyp == NAME && $3->sym->context))
+          {	has_ini = 2; /* local init */
+          } else
+          {	has_ini = 1; /* possibly global */
+          }
+          if (!initialization_ok && split_decl)
+          {	nochan_manip($1, $3, 0);
+            no_internals($1);
+            non_fatal(PART0 "'%s'" PART2, $1->sym->name);
+          } *)
+        }
+	| vardcl ASGN ch_init	{
+          raise (Not_implemented "var = ch_init")
+       (* $1->sym->ini = $3;
+          $$ = $1; has_ini = 1;
+          if (!initialization_ok && split_decl)
+          {	non_fatal(PART1 "'%s'" PART2, $1->sym->name);
+          } *)
+        }
 	;
 
 ch_init : LBRACE CONST RBRACE OF
@@ -506,16 +523,28 @@ ch_init : LBRACE CONST RBRACE OF
         			}
 	;
 
-vardcl  : NAME  		{ (* $1->sym->nel = 1; $$ = $1; *) }
-	| NAME COLON CONST	{ (* $1->sym->nbits = $3->val;
-				  if ($3->val >= 8*sizeof(long))
-				  {	non_fatal("width-field %s too large",
-						$1->sym->name);
-					$3->val = 8*sizeof(long)-1;
-				  }
-				  $1->sym->nel = 1; $$ = $1; *)
-				}
-	| NAME LBRACE CONST RBRACE	{ (* $1->sym->nel = $3->val; $1->sym->isarray = 1; $$ = $1; *) }
+vardcl  : NAME  		{
+        new var $1
+        (* $1->sym->nel = 1; $$ = $1; *) }
+	| NAME COLON CONST	{
+        let v = new var $1 in
+        v#set_nbits $3;
+        v
+        (* $1->sym->nbits = $3->val;
+          if ($3->val >= 8*sizeof(long))
+          {	non_fatal("width-field %s too large",
+                $1->sym->name);
+            $3->val = 8*sizeof(long)-1;
+          }
+          $1->sym->nel = 1; $$ = $1; *)
+        }
+	| NAME LBRACE CONST RBRACE	{
+        let v = new var $1 in
+        v#set_isarray true;
+        v#set_num_elems $3;
+        v
+        (* $1->sym->nel = $3->val; $1->sym->isarray = 1; $$ = $1; *)
+        }
 	;
 
 varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
@@ -688,7 +717,9 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 	| ELSE  		{ (* $$ = nn(ZN,ELSE,ZN,ZN); *)
 				}
 	| ATOMIC   LCURLY   	/* { (* open_seq(0); *) } */
-          sequence OS RCURLY   	{ (* $$ = nn($1, ATOMIC, ZN, ZN);
+          sequence OS RCURLY   	{
+                    Atomic $3
+                   (* $$ = nn($1, ATOMIC, ZN, ZN);
         			  $$->sl = seqlist(close_seq(3), 0);
         			  make_atomic($$->sl->this, 0); *)
         			}
@@ -696,14 +727,16 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				  rem_Seq(); *)
 				} */
           sequence OS RCURLY   	{
-                 raise (Not_implemented "d_step")
+                    D_step $3
                  (* $$ = nn($1, D_STEP, ZN, ZN);
         			  $$->sl = seqlist(close_seq(4), 0);
         			  make_atomic($$->sl->this, D_ATOM);
 				  unrem_Seq(); *)
         			}
 	| LCURLY			/* { (* open_seq(0); *) } */
-	  sequence OS RCURLY	{ (* $$ = nn(ZN, NON_ATOMIC, ZN, ZN);
+	  sequence OS RCURLY	{
+                    Seq $2
+                   (* $$ = nn(ZN, NON_ATOMIC, ZN, ZN);
         			  $$->sl = seqlist(close_seq(5), 0); *)
         			}
 	| INAME			/* { (* IArgs++; *) } */
@@ -716,7 +749,9 @@ options : option		{ (* $$->sl = seqlist($1->sq, 0); *) }
 	;
 
 option  : SEP   		/* { (* open_seq(0); *) } */
-          sequence OS		{ (* $$ = nn(ZN,0,ZN,ZN);
+          sequence OS		{
+                  Seq $2
+               (* $$ = nn(ZN,0,ZN,ZN);
 				  $$->sq = close_seq(6); *) }
 	;
 
@@ -728,53 +763,32 @@ MS	: SEMI			{ (* at least one semi-colon *) }
 	| MS SEMI		{ (* but more are okay too   *) }
 	;
 
-aname	: NAME			{ (* $$ = $1; *) }
-	| PNAME			{ (* $$ = $1; *) }
+aname	: NAME		{ $1 }
+	| PNAME			{ $1 }
 	;
 
 expr    : LPAREN expr RPAREN		{ $2 }
-	| expr PLUS expr		{ BinEx(PLUS, $1, $3)
-                             (*  $$ = nn(ZN, '+', $1, $3);  *)}
-	| expr MINUS expr		{ BinEx(MINUS, $1, $3)
-                             (*  $$ = nn(ZN, '-', $1, $3);  *)}
-	| expr MULT expr		{ BinEx(MULT, $1, $3)
-                             (*  $$ = nn(ZN, '*', $1, $3);  *)}
-	| expr DIV expr		    { BinEx(DIV, $1, $3)
-                             (*  $$ = nn(ZN, '/', $1, $3);  *)}
-	| expr MOD expr		    { BinEx(MOD, $1, $3)
-                             (*  $$ = nn(ZN, '%', $1, $3);  *)}
-	| expr BITAND expr		{ BinEx(BITAND, $1, $3)
-                             (*  $$ = nn(ZN, '&', $1, $3);  *)}
-	| expr BITXOR expr		{ BinEx(BITXOR, $1, $3)
-                             (*  $$ = nn(ZN, '^', $1, $3);  *)}
-	| expr BITOR expr		{ BinEx(BITOR, $1, $3)
-                             (*  $$ = nn(ZN, '|', $1, $3);  *)}
-	| expr GT expr		    { BinEx(GT, $1, $3)
-                             (*  $$ = nn(ZN,  GT, $1, $3);  *)}
-	| expr LT expr		    { BinEx(LT, $1, $3)
-                             (*  $$ = nn(ZN,  LT, $1, $3);  *)}
-	| expr GE expr		    { BinEx(GE, $1, $3)
-                             (*  $$ = nn(ZN,  GE, $1, $3);  *)}
-	| expr LE expr		    { BinEx(LE, $1, $3)
-                             (*  $$ = nn(ZN,  LE, $1, $3);  *)}
-	| expr EQ expr		    { BinEx(EQ, $1, $3)
-                             (*  $$ = nn(ZN,  EQ, $1, $3);  *)}
-	| expr NE expr		    { BinEx(NE, $1, $3)
-                             (*  $$ = nn(ZN,  NE, $1, $3);  *)}
-	| expr AND expr		    { BinEx(AND, $1, $3)
-                             (*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| expr OR  expr		    { BinEx(OR, $1, $3)
-                             (*  $$ = nn(ZN,  OR, $1, $3);  *)}
-	| expr LSHIFT expr	    { BinEx(LSHIFT, $1, $3)
-                             (*  $$ = nn(ZN, LSHIFT,$1, $3);  *)}
-	| expr RSHIFT expr	    { BinEx(RSHIFT, $1, $3)
-                             (*  $$ = nn(ZN, RSHIFT,$1, $3);  *)}
-	| BITNOT expr		    { UnEx(BITNOT, $2)
-                             (*  $$ = nn(ZN, '~', $2, ZN);  *)}
-	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2)
-                             (*  $$ = nn(ZN, UMIN, $2, ZN);  *)}
-	| SND expr %prec NEG	{ UnEx(NEG, $2)
-                             (*  $$ = nn(ZN, '!', $2, ZN);  *)}
+	| expr PLUS expr		{ BinEx(PLUS, $1, $3) }
+	| expr MINUS expr		{ BinEx(MINUS, $1, $3) }
+	| expr MULT expr		{ BinEx(MULT, $1, $3) }
+	| expr DIV expr		    { BinEx(DIV, $1, $3) }
+	| expr MOD expr		    { BinEx(MOD, $1, $3) }
+	| expr BITAND expr		{ BinEx(BITAND, $1, $3) }
+	| expr BITXOR expr		{ BinEx(BITXOR, $1, $3) }
+	| expr BITOR expr		{ BinEx(BITOR, $1, $3) }
+	| expr GT expr		    { BinEx(GT, $1, $3) }
+	| expr LT expr		    { BinEx(LT, $1, $3) }
+	| expr GE expr		    { BinEx(GE, $1, $3) }
+	| expr LE expr		    { BinEx(LE, $1, $3) }
+	| expr EQ expr		    { BinEx(EQ, $1, $3) }
+	| expr NE expr		    { BinEx(NE, $1, $3) }
+	| expr AND expr		    { BinEx(AND, $1, $3) }
+	| expr OR  expr		    { BinEx(OR, $1, $3) }
+	| expr LSHIFT expr	    { BinEx(LSHIFT, $1, $3) }
+	| expr RSHIFT expr	    { BinEx(RSHIFT, $1, $3) }
+	| BITNOT expr		    { UnEx(BITNOT, $2) }
+	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2) }
+	| SND expr %prec NEG	{ UnEx(NEG, $2) }
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")
                  (*
