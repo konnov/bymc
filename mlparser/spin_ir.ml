@@ -84,7 +84,7 @@ type 't element = {
 
 type 't zelement = Elem of 't element | ZElem;;
 
-type 't proc = {
+type 't process = {
     mutable name: 't zsymbol;
     mutable params: 't list;
     mutable seq: 't element list;   (* body *)
@@ -95,32 +95,66 @@ type 't proc = {
     mutable unsafe: int;            (* contains global var inits *)
 };;
 
-(* a process *)
-type proc = {
-    mutable name: string;
-};;
+(* a symbol of any origin *)
+class symb name_i =
+    object(self)
+        val name: string = name_i
+        val mutable flags: hflag list = [] (* 'hidden' in Spin *)
 
-type zproc = Proc of proc | ZProc;;
+        method has_flag f = List.mem f flags
+
+        method add_flag f =
+            flags <- if self#has_flag f then flags else f::flags
+    end
+;;
+
+exception Symbol_not_found of string;;
+
+(* a symbol table *)
+class symb_tab =
+    object
+        val tab: (string, symb) Hashtbl.t = Hashtbl.create 10
+
+        method add_symb name symb = Hashtbl.add tab name symb
+        method lookup name =
+            try
+                Hashtbl.find tab name
+            with Not_found ->
+                (* XXX: show the position in the file! *)
+                raise (Symbol_not_found
+                    (Printf.sprintf "The variable %s is not declared" name))
+    end
+;;
+
+(* a process *)
+class proc name_i =
+    object
+        inherit symb name_i
+        inherit symb_tab
+    end
+;;
+
+(* a constant value *)
+class immediate v_i =
+    object
+        val v: int = v_i
+    end
+;;
+
 
 (* a variable, not a generalized symbol *)
-type 't var = {
-    mutable name: string;
-    mutable hidden: hflag list;
-    mutable isarray: bool;      (* set if decl specifies array bound *)
-    mutable bscp: int;          (* block scope *)
-    mutable nbits: int;         (* optional width specifier *)
-    mutable nel: int;           (* 1 if scalar, >1 if array *)
-    mutable ini: 't;            (* initial value, or chan-def *)
-    mutable context: proc;      (* 0 if global, or procname *)
-};;
-
-(* either unary or binary operator *)
-class oper kind_i =
+class var name_i =
     object
-        val mutable kind = kind_i;
-        val mutable args = [];
+        inherit symb name_i
 
-        method set_args new_args = args <= new_args;
-        method get_args = args;
-    end;;
+        val isarray: bool = false (* set if decl specifies array bound *)
+        val nbits: int = 0        (* optional width specifier *)
+        val nel: int = 1          (* 1 if scalar, >1 if array *)
+        val ini: int = 0          (* initial value, or chan-def *)
+    end
+;;
+
+
+type 't expr = Const of immediate | Var of var
+    | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr;;
 

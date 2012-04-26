@@ -62,7 +62,10 @@ open Spin_ir;;
 
 exception Not_implemented of string;;
 
+(* we have to declare global objects, think of resetting them afterwards! *)
 let error_count = ref 0;;
+let global_scope = new symb_tab;;
+let current_scope = ref global_scope;;
 
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
@@ -80,18 +83,6 @@ let parse_error s =
 let fatal msg payload =
     let f, l, c = curr_pos() in
     raise (Failure (Printf.sprintf "%s:%d,%d %s %s\n" f l c msg payload))
-;;
-
-let nn_leaf sym typ =
-    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_leaf }
-;;
-
-let nn_list sym typ child =
-    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_list(child) }
-;;
-
-let nn_tree sym typ left right =
-    { ntyp = typ; nval = 0; sym = sym; subtree = Lextok_tree(left, right) }
 ;;
 %}
 
@@ -117,7 +108,7 @@ let nn_tree sym typ left right =
 %token	<string> STRING
 %token  CLAIM TRACE INIT	LTL	/* sym */
 %token  NE EQ LT GT LE GE OR AND BITNOT BITOR BITXOR BITAND ASGN
-%token  MULT PLUS MINUS DIV MOD DECR INCR UMIN
+%token  MULT PLUS MINUS DIV MOD DECR INCR
 %token  LSHIFT RSHIFT
 %token  COLON DOT COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
 %token  O_SND SND RCV R_RCV AT
@@ -127,6 +118,8 @@ let nn_tree sym typ left right =
 %token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
 %token  <string> MACRO_OTHER
 %token  EOF
+/* imaginary tokens */
+%token  UMIN NEG VARREF
 
 %right	ASGN
 %left	SND O_SND RCV R_RCV     /* SND doubles as boolean negation */
@@ -525,24 +518,32 @@ vardcl  : NAME  		{ (* $1->sym->nel = 1; $$ = $1; *) }
 	| NAME LBRACE CONST RBRACE	{ (* $1->sym->nel = $3->val; $1->sym->isarray = 1; $$ = $1; *) }
 	;
 
-varref	: cmpnd			{ (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
+varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
 	;
 
-pfld	: NAME			{ (* $$ = nn($1, NAME, ZN, ZN);
+pfld	: NAME {
+            !current_scope#lookup $1
+               (* $$ = nn($1, NAME, ZN, ZN);
 				  if ($1->sym->isarray && !in_for)
 				  {	non_fatal("missing array index for '%s'",
 						$1->sym->name);
 				  } *)
-				}
+			}
 	| NAME			/* { (* owner = ZS; *) } */
-	  LBRACE expr RBRACE		{ (* $$ = nn($1, NAME, $4, ZN); *) }
+	  LBRACE expr RBRACE
+            { raise (Not_implemented
+                "Array references, e.g., x[y] are not implemented")
+                (* $$ = nn($1, NAME, $4, ZN); *) }
 	;
 
 cmpnd	: pfld			/* { (* Embedded++;
 				  if ($1->sym->type == STRUCT)
 					owner = $1->sym->Snm; *)
 				} */
-	  sfld			{ (* $$ = $1; $$->rgt = $3;
+	  sfld
+            { raise (Not_implemented
+                "Structure member addressing, e.g., x.y is not implemented")
+			   (* $$ = $1; $$->rgt = $3;
 				  if ($3 && $1->sym->type != STRUCT)
 					$1->sym->type = STRUCT;
 				  Embedded--;
@@ -731,50 +732,49 @@ aname	: NAME			{ (* $$ = $1; *) }
 	| PNAME			{ (* $$ = $1; *) }
 	;
 
-expr    : LPAREN expr RPAREN		{ $2 (*  $$ = $2;  *)}
-	| expr PLUS expr		{ nn_tree ZSymb PLUS $1 $3
+expr    : LPAREN expr RPAREN		{ $2 }
+	| expr PLUS expr		{ BinEx(PLUS, $1, $3)
                              (*  $$ = nn(ZN, '+', $1, $3);  *)}
-	| expr MINUS expr		{ nn_tree ZSymb MINUS $1 $3
+	| expr MINUS expr		{ BinEx(MINUS, $1, $3)
                              (*  $$ = nn(ZN, '-', $1, $3);  *)}
-	| expr MULT expr		{ nn_tree ZSymb MULT $1 $3
+	| expr MULT expr		{ BinEx(MULT, $1, $3)
                              (*  $$ = nn(ZN, '*', $1, $3);  *)}
-	| expr DIV expr		    { nn_tree ZSymb DIV $1 $3
+	| expr DIV expr		    { BinEx(DIV, $1, $3)
                              (*  $$ = nn(ZN, '/', $1, $3);  *)}
-	| expr MOD expr		    { nn_tree ZSymb MOD $1 $3
+	| expr MOD expr		    { BinEx(MOD, $1, $3)
                              (*  $$ = nn(ZN, '%', $1, $3);  *)}
-	| expr BITAND expr		{ nn_tree ZSymb BITAND $1 $3
-                             (*  $$ = nn(ZN, '&', $1, $3);  *)
-	| expr BITXOR expr		{ nn_tree ZSymb BITXOR $1 $3
+	| expr BITAND expr		{ BinEx(BITAND, $1, $3)
+                             (*  $$ = nn(ZN, '&', $1, $3);  *)}
+	| expr BITXOR expr		{ BinEx(BITXOR, $1, $3)
                              (*  $$ = nn(ZN, '^', $1, $3);  *)}
-	| expr BITOR expr		{ nn_tree ZSymb BITOR $1 $3
+	| expr BITOR expr		{ BinEx(BITOR, $1, $3)
                              (*  $$ = nn(ZN, '|', $1, $3);  *)}
-	| expr GT expr		    { nn_tree ZSymb GT $1 $3
+	| expr GT expr		    { BinEx(GT, $1, $3)
                              (*  $$ = nn(ZN,  GT, $1, $3);  *)}
-	| expr LT expr		    { nn_tree ZSymb LT $1 $3
+	| expr LT expr		    { BinEx(LT, $1, $3)
                              (*  $$ = nn(ZN,  LT, $1, $3);  *)}
-	| expr GE expr		    { nn_tree ZSymb GE $1 $3
+	| expr GE expr		    { BinEx(GE, $1, $3)
                              (*  $$ = nn(ZN,  GE, $1, $3);  *)}
-	| expr LE expr		    { nn_tree ZSymb LE $1 $3
+	| expr LE expr		    { BinEx(LE, $1, $3)
                              (*  $$ = nn(ZN,  LE, $1, $3);  *)}
-	| expr EQ expr		    { nn_tree ZSymb EQ $1 $3
+	| expr EQ expr		    { BinEx(EQ, $1, $3)
                              (*  $$ = nn(ZN,  EQ, $1, $3);  *)}
-	| expr NE expr		    { nn_tree ZSymb NE $1 $3
+	| expr NE expr		    { BinEx(NE, $1, $3)
                              (*  $$ = nn(ZN,  NE, $1, $3);  *)}
-	| expr AND expr		    { nn_tree ZSymb AND $1 $3
+	| expr AND expr		    { BinEx(AND, $1, $3)
                              (*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| expr OR  expr		    { nn_tree ZSymb OR $1 $3
+	| expr OR  expr		    { BinEx(OR, $1, $3)
                              (*  $$ = nn(ZN,  OR, $1, $3);  *)}
-	| expr LSHIFT expr	    { nn_tree ZSymb LSHIFT $1 $3
+	| expr LSHIFT expr	    { BinEx(LSHIFT, $1, $3)
                              (*  $$ = nn(ZN, LSHIFT,$1, $3);  *)}
-	| expr RSHIFT expr	    { nn_tree ZSymb RSHIFT $1 $3
+	| expr RSHIFT expr	    { BinEx(RSHIFT, $1, $3)
                              (*  $$ = nn(ZN, RSHIFT,$1, $3);  *)}
-	| BITNOT expr		    { nn_list ZSymb BITNOT $2
+	| BITNOT expr		    { UnEx(BITNOT, $2)
                              (*  $$ = nn(ZN, '~', $2, ZN);  *)}
-	| MINUS expr %prec UMIN	{ nn_list ZSymb UMIN $2
+	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2)
                              (*  $$ = nn(ZN, UMIN, $2, ZN);  *)}
-	| SND expr %prec NEG	{ nn_list ZSymb SND $2
+	| SND expr %prec NEG	{ UnEx(NEG, $2)
                              (*  $$ = nn(ZN, '!', $2, ZN);  *)}
-
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")
                  (*
@@ -816,14 +816,17 @@ expr    : LPAREN expr RPAREN		{ $2 (*  $$ = $2;  *)}
 				  $$ = nn($1, 'R', $1, $5);
 				  $$->val = has_random = 1; *)
 				}
-	| varref	{
-                    $1 (* TODO: set HReadOnce later! *)
-                    (*  $$ = $1; trapwonly($1 /*, "varref" */);  *)}
+	| varref
+        {
+            let v = $1 in
+            (* TODO: should not be set in printf *)
+            v#add_flag HReadOnce;
+            Var v
+            (*  $$ = $1; trapwonly($1 /*, "varref" */);  *)
+        }
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
 	| CONST 	{
-                    let n = nn_leaf ZSymb (CONST $1) in
-                    n.nval <- $1;
-                    n
+                    Const(new immediate $1)
                (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)
@@ -861,8 +864,8 @@ Opt_priority:	/* none */	{(*  $$ = ZN;  *)}
 	| PRIORITY CONST	{(*  $$ = $2;  *)}
 	;
 
-full_expr:	expr		{(*  $$ = $1;  *)}
-	| Expr		{(*  $$ = $1;  *)}
+full_expr:	expr		{ $1 }
+	| Expr		{ $1 }
 	;
 
 ltl_expr: expr UNTIL expr	{(*  $$ = nn(ZN, UNTIL,   $1, $3);  *)}
@@ -882,13 +885,13 @@ ltl_expr: expr UNTIL expr	{(*  $$ = nn(ZN, UNTIL,   $1, $3);  *)}
 
 	/* an Expr cannot be negated - to protect Probe expressions */
 Expr	: Probe			{raise (Not_implemented "Probe") (*  $$ = $1;  *)}
-	| LPAREN Expr RPAREN		{(*  $$ = $2;  *)}
-	| Expr AND Expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| Expr AND expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| expr AND Expr		{(*  $$ = nn(ZN, AND, $1, $3);  *)}
-	| Expr OR  Expr		{(*  $$ = nn(ZN,  OR, $1, $3);  *)}
-	| Expr OR  expr		{(*  $$ = nn(ZN,  OR, $1, $3);  *)}
-	| expr OR  Expr		{(*  $$ = nn(ZN,  OR, $1, $3);  *)}
+	| LPAREN Expr RPAREN		{ $2 }
+	| Expr AND Expr		{ BinEx(AND, $1, $3) }
+	| Expr AND expr		{ BinEx(AND, $1, $3) }
+	| expr AND Expr		{ BinEx(AND, $1, $3) }
+	| Expr OR  Expr		{ BinEx(OR, $1, $3) }
+	| Expr OR  expr		{ BinEx(OR, $1, $3) }
+	| expr OR  Expr		{ BinEx(OR, $1, $3) }
 	;
 
 Probe	: FULL LPAREN varref RPAREN	{(*  $$ = nn($3,  FULL, $3, ZN);  *)}

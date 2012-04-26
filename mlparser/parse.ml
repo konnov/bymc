@@ -105,6 +105,7 @@ let token_s t =
       | BITXOR -> "BITXOR"
       | AND -> "AND"
       | OR -> "OR"
+      | NEG -> "NEG"
       | GE -> "GE"
       | LE -> "LE"
       | GT -> "GT"
@@ -114,6 +115,7 @@ let token_s t =
       | AT -> "AT"
       | LSHIFT -> "<<"
       | RSHIFT -> ">>"
+      | VARREF -> "VARREF"
       | EOF -> "EOF"
 ;;
 
