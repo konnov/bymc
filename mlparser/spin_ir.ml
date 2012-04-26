@@ -95,8 +95,27 @@ type 't proc = {
     mutable unsafe: int;            (* contains global var inits *)
 };;
 
+(* a process *)
+type proc = {
+    mutable name: string;
+};;
+
+type zproc = Proc of proc | ZProc;;
+
+(* a variable, not a generalized symbol *)
+type 't var = {
+    mutable name: string;
+    mutable hidden: hflag list;
+    mutable isarray: bool;      (* set if decl specifies array bound *)
+    mutable bscp: int;          (* block scope *)
+    mutable nbits: int;         (* optional width specifier *)
+    mutable nel: int;           (* 1 if scalar, >1 if array *)
+    mutable ini: 't;            (* initial value, or chan-def *)
+    mutable context: proc;      (* 0 if global, or procname *)
+};;
+
 (* either unary or binary operator *)
-class operator kind_i =
+class oper kind_i =
     object
         val mutable kind = kind_i;
         val mutable args = [];
