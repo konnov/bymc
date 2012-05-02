@@ -172,9 +172,16 @@ class var name_i =
 ;;
 
 
-type 't expr = Nop | Const of immediate | Var of var
+type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
     | Decl of var * var_type * 't expr
-    | Seq of 't expr list | Atomic of 't expr list | D_step of 't expr list
 ;;
 
+type 't stmt = Skip | Expr of 't expr
+    | Label of int
+    | Atomic_beg | Atomic_end | D_step_beg | D_step_end
+    | Goto of int | Goto_unresolved of string
+    | If of int list | Else
+    | Assert of 't expr | Assume of 't expr
+    | Print of string * 't expr list
+;;

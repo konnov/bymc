@@ -117,6 +117,8 @@ let token_s t =
       | RSHIFT -> ">>"
       | VARREF -> "VARREF"
       | EOF -> "EOF"
+      | ASSUME -> "ASSUME"
+      | SYMBOLIC -> "SYMBOLIC"
 ;;
 
 

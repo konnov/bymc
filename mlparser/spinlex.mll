@@ -115,7 +115,11 @@ rule token = parse
  | "unless"              { UNLESS }
  | "unsigned"            { TYPE TUNSIGNED }
  | "xr"                  { XU XR }
- | "xs"                  { XU XS } 
+ | "xs"                  { XU XS }
+ (* FORSYTE extensions { *)
+ | "assume"              { ASSUME } 
+ | "symbolic"            { SYMBOLIC } 
+ (* FORSYTE extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
                          { NAME (Lexing.lexeme lexbuf) }

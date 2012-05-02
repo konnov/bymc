@@ -57,15 +57,34 @@ static	char *ltl_name;
 static	int	Embedded = 0, inEventMap = 0, has_ini = 0;
 *)
 
+open Printf;;
+
 open Lexing;;
 open Spin_ir;;
 
 exception Not_implemented of string;;
 
 (* we have to declare global objects, think of resetting them afterwards! *)
-let error_count = ref 0;;
+let err_cnt = ref 0;;
+let label_next = ref 0;;
+let labels = Hashtbl.create 10;;
+let break_stack = ref [];;
 let global_scope = new symb_tab;;
 let current_scope = ref global_scope;;
+
+let mk_label () =
+    let n = !label_next in
+        label_next := (n + 1); n
+;;
+
+let push_break () =
+    let l = mk_label () in
+    break_stack := l :: !break_stack
+;;
+
+let pop_break () = break_stack := List.tl !break_stack ;;
+
+let top_break () = List.hd !break_stack;;
 
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
@@ -77,7 +96,7 @@ let curr_pos () =
 let parse_error s =
     let f, l, c = curr_pos() in
     Printf.printf "%s:%d,%d %s\n" f l c s;
-    error_count := !error_count + 1
+    err_cnt := !err_cnt + 1
 ;;
 
 let fatal msg payload =
@@ -118,6 +137,9 @@ let fatal msg payload =
 %token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
 %token  <string> MACRO_OTHER
 %token  EOF
+/* FORSYTE extensions { */
+%token  ASSUME SYMBOLIC
+/* FORSYTE extensions } */
 /* imaginary tokens */
 %token  UMIN NEG VARREF
 
@@ -397,7 +419,7 @@ cexpr	: C_EXPR	{
 body	: LCURLY			/* { (* open_seq(1); *) } */
           sequence OS	/* { (* add_seq(Stop); *) } */
           RCURLY			{
-              Seq $2
+              $2
            (* $$->sq = close_seq(0);
 			  if (scope_level != 0)
 			  {	non_fatal("missing '}' ?", 0);
@@ -410,12 +432,12 @@ sequence: step			{ $1 }
 	| sequence MS step	{ List.append $1 $3 }
 	;
 
-step    : one_decl		{ $1 }
+step    : one_decl		{ List.map (fun d -> Expr d) $1 }
 	| XU vref_lst		{ raise (Not_implemented "XU vref_lst")
         (* setxus($2, $1->val); $$ = ZN; *) }
 	| NAME COLON one_decl	{ fatal "label preceding declaration," "" }
 	| NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
-    | stmnt			    { [$1] }
+    | stmnt			    { $1 }
 	| stmnt UNLESS stmnt	{ raise (Not_implemented "unless") }
 	;
 
@@ -570,8 +592,7 @@ cmpnd	: pfld			/* { (* Embedded++;
 					owner = $1->sym->Snm; *)
 				} */
 	  sfld
-            { raise (Not_implemented
-                "Structure member addressing, e.g., x.y is not implemented")
+            {  $1
 			   (* $$ = $1; $$->rgt = $3;
 				  if ($3 && $1->sym->type != STRUCT)
 					$1->sym->type = STRUCT;
@@ -586,7 +607,10 @@ cmpnd	: pfld			/* { (* Embedded++;
 	;
 
 sfld	: /* empty */		{ (* $$ = ZN; *) }
-	| DOT cmpnd %prec DOT	{ (* $$ = nn(ZN, '.', $2, ZN); *) }
+	| DOT cmpnd %prec DOT	{
+         raise (Not_implemented
+                "Structure member addressing, e.g., x.y is not implemented")
+         (* $$ = nn(ZN, '.', $2, ZN); *) }
 	;
 
 stmnt	: Special		{ $1 (* $$ = $1; initialization_ok = 0; *) }
@@ -632,42 +656,71 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                     raise (Not_implemented "select")
 				  (* $$ = sel_index($3, $5, $7); *)
 				}
-	| IF options FI 	{ (* $$ = nn($1, IF, ZN, ZN);
-        			  $$->sl = $2->sl;
-				  prune_opts($$); *)
+	| IF options FI	{
+                let labs, seqs = (List.split $2) in
+                If(labs) :: (List.concat seqs)
+                (* $$ = nn($1, IF, ZN, ZN);
+        		 $$->sl = $2->sl;
+				 prune_opts($$); *)
         			}
-	| DO    		/* { (* pushbreak(); *) } */
-          options OD    	{ (* $$ = nn($1, DO, ZN, ZN);
-        			  $$->sl = $3->sl;
+	| do_begin 		/* one more rule as ocamlyacc does not support multiple
+                       actions like this: { (* pushbreak(); *) } */
+          options OD {
+                let entry_lab = top_break ()
+                    and labs, seqs = (List.split $2) in
+                let if_s = If(labs) :: (List.concat seqs) in
+                let do_s = List.rev ((Goto entry_lab) :: (List.rev if_s)) in
+                pop_break ();                
+                do_s
+
+                (* $$ = nn($1, DO, ZN, ZN);
+       			  $$->sl = $3->sl;
 				  prune_opts($$); *)
-        			}
-	| BREAK  		{ (* $$ = nn(ZN, GOTO, ZN, ZN);
+        		}
+	| BREAK     {
+                [Goto (top_break ())]
+                (* $$ = nn(ZN, GOTO, ZN, ZN);
 				  $$->sym = break_dest(); *)
-				}
-	| GOTO NAME		{ (* $$ = nn($2, GOTO, ZN, ZN);
-				  if ($2->sym->type != 0
-				  &&  $2->sym->type != LABEL) {
-				  	non_fatal("bad label-name %s",
-					$2->sym->name);
-				  }
-				  $2->sym->type = LABEL; *)
-				}
-	| NAME COLON stmnt	{ (* $$ = nn($1, ':',$3, ZN);
+			    }
+	| GOTO NAME		{
+        try
+            [Goto (Hashtbl.find labels $2)]
+        with Not_found ->
+            [Goto_unresolved $2] (* resolve it later *)
+         (* $$ = nn($2, GOTO, ZN, ZN);
+		  if ($2->sym->type != 0
+		  &&  $2->sym->type != LABEL) {
+		  	non_fatal("bad label-name %s",
+			$2->sym->name);
+		  }
+		  $2->sym->type = LABEL; *)
+		}
+	| NAME COLON stmnt	{
+        let label_no = mk_label () in
+        if Hashtbl.mem labels $1
+        then parse_error (sprintf "Label %s redeclared\n" $1)
+        else Hashtbl.add labels $1 label_no;
+        Label label_no :: $3
+                (* $$ = nn($1, ':',$3, ZN);
 				  if ($1->sym->type != 0
 				  &&  $1->sym->type != LABEL) {
 				  	non_fatal("bad label-name %s",
 					$1->sym->name);
 				  }
 				  $1->sym->type = LABEL; *)
-				}
+		}
 	;
 
-Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
+Stmnt	: varref ASGN full_expr	{
+                    [Expr (BinEx(ASGN, $1, $3))]
+                 (* $$ = nn($1, ASGN, $1, $3);
 				  trackvar($1, $3);
 				  nochan_manip($1, $3, 0);
 				  no_internals($1); *)
 				}
-	| varref INCR		{ (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
+	| varref INCR		{
+                    [Expr (BinEx(ASGN, $1, BinEx(PLUS, $1, Const 1)))]
+                 (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '+', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
 				  trackvar($1, $1);
@@ -675,7 +728,9 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				  if ($1->sym->type == CHAN)
 				   fatal("arithmetic on chan", (char * )0); *)
 				}
-	| varref DECR		{ (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
+	| varref DECR	{
+                    [Expr (BinEx(ASGN, $1, BinEx(MINUS, $1, Const 1)))]
+                 (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '-', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
 				  trackvar($1, $1);
@@ -684,13 +739,29 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				   fatal("arithmetic on chan id's", (char * )0); *)
 				}
 	| PRINT	LPAREN STRING	/* { (* realread = 0; *) } */
-	  prargs RPAREN		{ (* $$ = nn($3, PRINT, $5, ZN); realread = 1; *) }
-	| PRINTM LPAREN varref RPAREN	{ (* $$ = nn(ZN, PRINTM, $3, ZN); *) }
-	| PRINTM LPAREN CONST RPAREN	{ (* $$ = nn(ZN, PRINTM, $3, ZN); *) }
-	| ASSERT full_expr    	{ (* $$ = nn(ZN, ASSERT, $2, ZN); AST_track($2, 0); *) }
+	  prargs RPAREN	{
+                    [Print ($3, $4)]
+                    (* $$ = nn($3, PRINT, $5, ZN); realread = 1; *) }
+	| PRINTM LPAREN varref RPAREN	{
+                    (* do we actually need it? *)
+                    raise (Not_implemented "printm")
+                 (* $$ = nn(ZN, PRINTM, $3, ZN); *)
+                }
+	| PRINTM LPAREN CONST RPAREN	{
+                    raise (Not_implemented "printm")
+                 (* $$ = nn(ZN, PRINTM, $3, ZN); *)
+                }
+	| ASSUME full_expr    	{
+                    [Assume $2] (* FORSYTE ext. *)
+                }
+	| ASSERT full_expr    	{
+                    [Assert $2]
+                (* $$ = nn(ZN, ASSERT, $2, ZN); AST_track($2, 0); *) }
 	| ccode			{ raise (Not_implemented "ccode") (* $$ = $1; *) }
 	| varref R_RCV		/* { (* Expand_Ok++; *) } */
-	  rargs			{ (*Expand_Ok--; has_io++;
+	  rargs			{
+                    raise (Not_implemented "R_RCV")
+                (*Expand_Ok--; has_io++;
 				  $$ = nn($1,  'r', $1, $4);
 				  $$->val = has_random = 1;
 				  trackchanuse($4, ZN, 'R'); *)
@@ -717,12 +788,13 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				  trackchanuse($4, ZN, 'S');
 				  any_runs($4); *)
 				}
-	| full_expr		{ (* $$ = nn(ZN, 'c', $1, ZN); count_runs($$); *) }
-	| ELSE  		{ (* $$ = nn(ZN,ELSE,ZN,ZN); *)
+	| full_expr		{ [Expr $1]
+                     (* $$ = nn(ZN, 'c', $1, ZN); count_runs($$); *) }
+	| ELSE  		{ [Else] (* $$ = nn(ZN,ELSE,ZN,ZN); *)
 				}
 	| ATOMIC   LCURLY   	/* { (* open_seq(0); *) } */
           sequence OS RCURLY   	{
-                    Atomic $3
+                    Atomic_beg :: (List.rev (Atomic_end :: (List.rev $3)))
                    (* $$ = nn($1, ATOMIC, ZN, ZN);
         			  $$->sl = seqlist(close_seq(3), 0);
         			  make_atomic($$->sl->this, 0); *)
@@ -731,7 +803,7 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 				  rem_Seq(); *)
 				} */
           sequence OS RCURLY   	{
-                    D_step $3
+                    D_step_beg :: (List.rev (D_step_end :: (List.rev $3)))
                  (* $$ = nn($1, D_STEP, ZN, ZN);
         			  $$->sl = seqlist(close_seq(4), 0);
         			  make_atomic($$->sl->this, D_ATOM);
@@ -739,7 +811,7 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
         			}
 	| LCURLY			/* { (* open_seq(0); *) } */
 	  sequence OS RCURLY	{
-                    Seq $2
+                    $2
                    (* $$ = nn(ZN, NON_ATOMIC, ZN, ZN);
         			  $$->sl = seqlist(close_seq(5), 0); *)
         			}
@@ -748,15 +820,25 @@ Stmnt	: varref ASGN full_expr	{ (* $$ = nn($1, ASGN, $1, $3);
 	  Stmnt			{ raise (Not_implemented "inline") (* $$ = $7; *) }
 	;
 
-options : option		{ (* $$->sl = seqlist($1->sq, 0); *) }
-	| option options	{ (* $$->sl = seqlist($1->sq, $2->sl); *) }
+do_begin : DO { push_break () }
+;
+
+options : option		{
+            [$1]
+            (* $$->sl = seqlist($1->sq, 0); *) }
+	| option options	{
+            $1 :: $2
+            (* $$->sl = seqlist($1->sq, $2->sl); *) }
 	;
 
-option  : SEP   		/* { (* open_seq(0); *) } */
-          sequence OS		{
-                  Seq $2
-               (* $$ = nn(ZN,0,ZN,ZN);
-				  $$->sq = close_seq(6); *) }
+option_head : SEP   { mk_label () (* open_seq(0); *) }
+;
+
+option  : option_head
+          sequence OS	{
+            ($1, Label($1) :: $2)
+            (* $$ = nn(ZN,0,ZN,ZN);
+	    	  $$->sq = close_seq(6); *) }
 	;
 
 OS	: /* empty */ {}
@@ -951,11 +1033,11 @@ args    : /* empty */		{(*  $$ = ZN;  *)}
 	| arg			{(*  $$ = $1;  *)}
 	;
 
-prargs  : /* empty */		{(*  $$ = ZN;  *)}
-	| COMMA arg		{(*  $$ = $2;  *)}
+prargs  : /* empty */		{ [] (*  $$ = ZN;  *)}
+	| COMMA arg		{ $2 (*  $$ = $2;  *)}
 	;
 
-margs   : arg			{(*  $$ = $1;  *)}
+margs   : arg			{ (*  $$ = $1;  *)}
 	| expr LPAREN arg RPAREN	{(* if ($1->ntyp == ',')
 					$$ = tail_add($1, $3);
 				  else
@@ -963,12 +1045,15 @@ margs   : arg			{(*  $$ = $1;  *)}
 				}
 	;
 
-arg     : expr			{ (* if ($1->ntyp == ',')
+arg     : expr	{ $1
+                 (* if ($1->ntyp == ',')
 					$$ = $1;
 				  else
 				  	$$ = nn(ZN, ',', $1, ZN); *)
 				}
-	| expr COMMA arg		{ (* if ($1->ntyp == ',')
+	| expr COMMA arg {
+                (List.rev ($3 :: (List.rev $1)))
+                (* if ($1->ntyp == ',')
 					$$ = tail_add($1, $3);
 				  else
 				  	$$ = nn(ZN, ',', $1, $3); *)
