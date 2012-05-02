@@ -589,8 +589,8 @@ sfld	: /* empty */		{ (* $$ = ZN; *) }
 	| DOT cmpnd %prec DOT	{ (* $$ = nn(ZN, '.', $2, ZN); *) }
 	;
 
-stmnt	: Special		{ (* $$ = $1; initialization_ok = 0; *) }
-	| Stmnt			{ (* $$ = $1; initialization_ok = 0;
+stmnt	: Special		{ $1 (* $$ = $1; initialization_ok = 0; *) }
+	| Stmnt			{ $1 (* $$ = $1; initialization_ok = 0;
 				  if (inEventMap)
 				   non_fatal("not an event", (char * )0); *)
 				}
@@ -603,13 +603,13 @@ for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
 for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
 Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
-	  rargs			{ raise (Not_implemented "rcv")
+	  rargs		{ raise (Not_implemented "rcv")
                 (* Expand_Ok--; has_io++;
 				  $$ = nn($1,  'r', $1, $4);
 				  trackchanuse($4, ZN, 'R'); *)
 				}
 	| varref SND		/* { (* Expand_Ok++; *) } */
-	  margs			{ raise (Not_implemented "snd")
+	  margs		{ raise (Not_implemented "snd")
                (* Expand_Ok--; has_io++;
 				  $$ = nn($1, 's', $1, $4);
 				  $$->val=0; trackchanuse($4, ZN, 'S');
@@ -618,11 +618,15 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 	| for_pre COLON expr DOTDOT expr RPAREN	/* { (*
 				  for_setup($1, $3, $5); in_for = 0; *)
 				} */
-	  for_post			{ (* $$ = for_body($1, 1); *)
+	  for_post	{
+          raise (Not_implemented "for_post")
+          (* $$ = for_body($1, 1); *)
 				}
 	| for_pre IN varref RPAREN	/* { (* $$ = for_index($1, $3); in_for = 0; *)
 				} */
-	  for_post			{ (* $$ = for_body($5, 1); *)
+	  for_post	{
+          raise (Not_implemented "for_pre")
+          (* $$ = for_body($5, 1); *)
 				}
 	| SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
                     raise (Not_implemented "select")
