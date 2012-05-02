@@ -184,8 +184,8 @@ let _ =
         lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
         let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
 
-        let res = Spin.program lfun lexbuf in
-        printf "The outcome is %d\n" res; flush stdout
+        let units = Spin.program lfun lexbuf in
+        printf "#units: %d\n" (List.length units); flush stdout
 
         (*
         let t = ref EQ in

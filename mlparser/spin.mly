@@ -161,29 +161,29 @@ let fatal msg payload =
 %right	NEG UMIN BITNOT
 %left	DOT
 %start program
-%type <int> program
+%type <token Spin_ir.prog_unit list> program
 %%
 
 /** PROMELA Grammar Rules **/
 
-program	: units	EOF { 0 }
+program	: units	EOF { $1 }
 	;
 
-units	: unit {}
-    | units unit {}
+units	: unit      { [$1] }
+    | units unit    { List.append $1 [$2] }
 	;
 
-unit	: proc	/* proctype        */ {}
-    | init		/* init            */ {}
-	| claim		/* never claim        */ {}
-	| ltl		/* ltl formula        */ {}
-	| events	/* event assertions   */ {}
-	| one_decl	/* variables, chans   */ {}
-	| utype		/* user defined types */ {}
-	| c_fcts	/* c functions etc.   */ {}
-	| ns		/* named sequence     */ {}
-	| SEMI		/* optional separator */ {}
-	| error {}
+unit	: proc	/* proctype        */    { Proc $1 }
+    | init		/* init            */    { None }
+	| claim		/* never claim        */ { None }
+	| ltl		/* ltl formula        */ { None }
+	| events	/* event assertions   */ { None }
+	| one_decl	/* variables, chans   */ { None }
+	| utype		/* user defined types */ { None }
+	| c_fcts	/* c functions etc.   */ { None }
+	| ns		/* named sequence     */ { None }
+	| SEMI		/* optional separator */ { None }
+	| error { fatal "Error in the body" ""}
 	;
 
 proc	: inst		/* optional instantiator */
@@ -203,7 +203,12 @@ proc	: inst		/* optional instantiator */
 			} */
 	  Opt_priority
 	  Opt_enabler
-	  body		{ (* ProcList *rl;
+	  body	{
+                let p = new proc($3) in
+                p#set_stmts $9;
+                current_scope := global_scope;
+                p
+           (* ProcList *rl;
 			  if ($1 != ZN && $1->val > 0)
 			  {	int j;
 				rl = ready($3->sym, $6, $11->sq, $2->val, $10, A_PROC);
@@ -225,8 +230,12 @@ proc	: inst		/* optional instantiator */
 			}
 	;
 
-proctype: PROCTYPE	{ (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
-	| D_PROCTYPE	{ (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
+proctype: PROCTYPE	{
+        current_scope := new symb_tab;
+        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
+	| D_PROCTYPE	{
+        current_scope := new symb_tab;
+        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
 	;
 
 inst	: /* empty */	{ (* $$ = ZN; *) }
@@ -453,7 +462,16 @@ asgn:	/* empty */ {}
 
 one_decl: vis TYPE var_list	{
         let f = $1 and t = $2 in
-        (List.map (fun (v, i) -> v#add_flag f; Decl(v, t, i)) $3)
+        let ds = (List.map (fun (v, i) -> v#add_flag f; Decl(v, t, i)) $3) in
+        List.iter
+            (fun d ->
+                match d with
+                | Decl(v, t, i) ->
+                        !current_scope#add_symb v#get_name (v :> symb)
+                | _ -> raise (Failure "Not a Decl")
+            )
+            ds;
+        ds
        (* setptype($3, $2->val, $1);
           $$ = $3; *)
     }
@@ -573,7 +591,7 @@ varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
 	;
 
 pfld	: NAME {
-            !current_scope#lookup $1
+            (!current_scope#lookup $1)#as_var()
                (* $$ = nn($1, NAME, ZN, ZN);
 				  if ($1->sym->isarray && !in_for)
 				  {	non_fatal("missing array index for '%s'",
@@ -712,14 +730,15 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 	;
 
 Stmnt	: varref ASGN full_expr	{
-                    [Expr (BinEx(ASGN, $1, $3))]
+                    [Expr (BinEx(ASGN, Var $1, $3))]
                  (* $$ = nn($1, ASGN, $1, $3);
 				  trackvar($1, $3);
 				  nochan_manip($1, $3, 0);
 				  no_internals($1); *)
 				}
 	| varref INCR		{
-                    [Expr (BinEx(ASGN, $1, BinEx(PLUS, $1, Const 1)))]
+                    let v = Var $1 in
+                    [Expr (BinEx(ASGN, v, BinEx(PLUS, v, Const 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '+', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -729,7 +748,8 @@ Stmnt	: varref ASGN full_expr	{
 				   fatal("arithmetic on chan", (char * )0); *)
 				}
 	| varref DECR	{
-                    [Expr (BinEx(ASGN, $1, BinEx(MINUS, $1, Const 1)))]
+                    let v = Var $1 in
+                    [Expr (BinEx(ASGN, v, BinEx(MINUS, v, Const 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '-', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -926,7 +946,7 @@ expr    : LPAREN expr RPAREN		{ $2 }
         }
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
 	| CONST 	{
-                    Const(new immediate $1)
+                    Const $1
                (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)
@@ -1045,14 +1065,14 @@ margs   : arg			{ (*  $$ = $1;  *)}
 				}
 	;
 
-arg     : expr	{ $1
+    arg     : expr	{ [$1]
                  (* if ($1->ntyp == ',')
 					$$ = $1;
 				  else
 				  	$$ = nn(ZN, ',', $1, ZN); *)
 				}
 	| expr COMMA arg {
-                (List.rev ($3 :: (List.rev $1)))
+                $1 :: $3
                 (* if ($1->ntyp == ',')
 					$$ = tail_add($1, $3);
 				  else

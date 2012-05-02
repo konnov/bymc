@@ -95,6 +95,8 @@ type 't process = {
     mutable unsafe: int;            (* contains global var inits *)
 };;
 
+exception Invalid_type of string;;
+
 (* a symbol of any origin *)
 class symb name_i =
     object(self)
@@ -110,6 +112,35 @@ class symb name_i =
                 if f != HNone && self#has_flag f
                 then flags
                 else f::flags
+
+        (* is there a better way to do this? *)
+        method as_var: unit -> var =
+            raise (Invalid_type "symb is not var")
+    end
+and
+(* a variable, not a generalized symbol *)
+var name_i =
+    object(self)
+        inherit symb name_i
+
+        val mutable isarray: bool = false (* set if decl specifies array bound *)
+        val mutable nbits: int = 0        (* optional width specifier *)
+        val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
+        val mutable ini: int = 0          (* initial value, or chan-def *)
+        
+        method as_var () = (self :> var)
+
+        method set_isarray b = isarray <- b
+        method get_isarray = isarray
+
+        method set_nbits n = nbits <- n
+        method get_nbits = nbits
+
+        method set_num_elems n = nel <- n
+        method get_num_elems = nel
+
+        method set_ini i = ini <- i
+        method get_ini = ini
     end
 ;;
 
@@ -131,47 +162,8 @@ class symb_tab =
     end
 ;;
 
-(* a process *)
-class proc name_i =
-    object
-        inherit symb name_i
-        inherit symb_tab
-    end
-;;
 
-(* a constant value *)
-class immediate v_i =
-    object
-        val v: int = v_i
-    end
-;;
-
-
-(* a variable, not a generalized symbol *)
-class var name_i =
-    object
-        inherit symb name_i
-
-        val mutable isarray: bool = false (* set if decl specifies array bound *)
-        val mutable nbits: int = 0        (* optional width specifier *)
-        val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
-        val mutable ini: int = 0          (* initial value, or chan-def *)
-        
-        method set_isarray b = isarray <- b
-        method get_isarray = isarray
-
-        method set_nbits n = nbits <- n
-        method get_nbits = nbits
-
-        method set_num_elems n = nel <- n
-        method get_num_elems = nel
-
-        method set_ini i = ini <- i
-        method get_ini = ini
-    end
-;;
-
-
+(* XXX: move the variable type out of decl to var! *)
 type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
     | Decl of var * var_type * 't expr
@@ -185,3 +177,19 @@ type 't stmt = Skip | Expr of 't expr
     | Assert of 't expr | Assume of 't expr
     | Print of string * 't expr list
 ;;
+
+(* a process *)
+class ['t] proc name_i =
+    object
+        inherit symb name_i
+        inherit symb_tab
+
+        val mutable stmts: 't stmt list = []
+
+        method set_stmts s = stmts <- s
+        method get_stmts = stmts
+    end
+;;
+
+type 't prog_unit = Proc of 't proc | None;;
+
