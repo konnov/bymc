@@ -185,7 +185,9 @@ let _ =
         let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
 
         let units = Spin.program lfun lexbuf in
-        printf "#units: %d\n" (List.length units); flush stdout
+        printf "#units: %d\n" (List.length units);
+        let p u = printf "%s\n" (Spin_ir.prog_unit_s (fun e -> "[expr]") u) in
+        List.iter p units
 
         (*
         let t = ref EQ in

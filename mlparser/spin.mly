@@ -169,20 +169,20 @@ let fatal msg payload =
 program	: units	EOF { $1 }
 	;
 
-units	: unit      { [$1] }
-    | units unit    { List.append $1 [$2] }
+units	: unit      { $1 }
+    | units unit    { List.append $1 $2 }
 	;
 
-unit	: proc	/* proctype        */    { Proc $1 }
-    | init		/* init            */    { None }
-	| claim		/* never claim        */ { None }
-	| ltl		/* ltl formula        */ { None }
-	| events	/* event assertions   */ { None }
-	| one_decl	/* variables, chans   */ { None }
-	| utype		/* user defined types */ { None }
-	| c_fcts	/* c functions etc.   */ { None }
-	| ns		/* named sequence     */ { None }
-	| SEMI		/* optional separator */ { None }
+unit	: proc	/* proctype        */    { [Proc $1] }
+    | init		/* init            */    { [] }
+	| claim		/* never claim        */ { [] }
+	| ltl		/* ltl formula        */ { [] }
+	| events	/* event assertions   */ { [] }
+	| one_decl	/* variables, chans   */ { List.map (fun e -> Stmt e) $1 }
+	| utype		/* user defined types */ { [] }
+	| c_fcts	/* c functions etc.   */ { [] }
+	| ns		/* named sequence     */ { [] }
+	| SEMI		/* optional separator */ { [] }
 	| error { fatal "Error in the body" ""}
 	;
 
@@ -442,7 +442,7 @@ sequence: step			{ $1 }
 	| sequence MS step	{ List.append $1 $3 }
 	;
 
-step    : one_decl		{ List.map (fun d -> Expr d) $1 }
+step    : one_decl		{ $1 }
 	| XU vref_lst		{ raise (Not_implemented "XU vref_lst")
         (* setxus($2, $1->val); $$ = ZN; *) }
 	| NAME COLON one_decl	{ fatal "label preceding declaration," "" }
@@ -463,11 +463,12 @@ asgn:	/* empty */ {}
 
 one_decl: vis TYPE var_list	{
         let f = $1 and t = $2 in
-        let ds = (List.map (fun (v, i) -> v#add_flag f; Decl(v, t, i)) $3) in
+        let ds = (List.map
+            (fun (v, i) -> v#add_flag f; v#set_type t; Decl(v, i)) $3) in
         List.iter
             (fun d ->
                 match d with
-                | Decl(v, t, i) ->
+                | Decl(v, i) ->
                         !current_scope#add_symb v#get_name (v :> symb)
                 | _ -> raise (Failure "Not a Decl")
             )

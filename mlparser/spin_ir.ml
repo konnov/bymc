@@ -1,19 +1,11 @@
 (*
- * The intermediate representation of the Promela code parsed by yacc.
+ * The intermediate representation of the Promela code parsed by ocamlyacc.
  *
- * The code is translated into OCAML by Igor Konnov, 2012.
+ * Igor Konnov <konnov@forsyte.at>, 2012.
  *
- * This OCAML code is derivated from the original code of Spin 6.1.0
- * distributed on the following conditions:
-
-/* Copyright (c) 1989-2009 by Lucent Technologies, Bell Laboratories.     */
-/* All Rights Reserved.  This software is for educational purposes only.  */
-/* No guarantee whatsoever is expressed or implied by the distribution of */
-/* this code.  Permission is given to distribute this code provided that  */
-/* this introductory message is not removed and no monies are exchanged.  */
-/* Software written by Gerard J. Holzmann.  For tool documentation see:   */
-/*             http://spinroot.com/                                       */
-/* Send all bug-reports and/or questions to: bugs@spinroot.com            */
+ * The idea of this OCAML code was first derivated from the original
+ * code of Spin 6.1.0, but since then the code has been refactored a
+ * lot to fit into the OCAML concepts.
  *)
 
 open Spin_types;;
@@ -21,6 +13,10 @@ open Spin_types;;
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce;;
+
+(*
+
+ Spin-like types, too complicated
 
 (* 't stands for the token type *)
 type 't lextok = {
@@ -94,6 +90,7 @@ type 't process = {
     mutable det: int;               (* deterministic *)
     mutable unsafe: int;            (* contains global var inits *)
 };;
+*)
 
 exception Invalid_type of string;;
 
@@ -123,12 +120,16 @@ var name_i =
     object(self)
         inherit symb name_i
 
+        val mutable vtype = TINT
         val mutable isarray: bool = false (* set if decl specifies array bound *)
         val mutable nbits: int = 0        (* optional width specifier *)
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
         
         method as_var () = (self :> var)
+
+        method set_type t = vtype <- t
+        method get_type = vtype
 
         method set_isarray b = isarray <- b
         method get_isarray = isarray
@@ -169,13 +170,12 @@ class symb_tab =
 ;;
 
 
-(* XXX: move the variable type out of decl to var! *)
 type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
-    | Decl of var * var_type * 't expr
 ;;
 
 type 't stmt = Skip | Expr of 't expr
+    | Decl of var * 't expr
     | Label of int
     | Atomic_beg | Atomic_end | D_step_beg | D_step_end
     | Goto of int | Goto_unresolved of string
@@ -197,5 +197,15 @@ class ['t] proc name_i =
     end
 ;;
 
-type 't prog_unit = Proc of 't proc | None;;
+type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;
+
+let prog_unit_s expr_s u =
+    match u with
+    | Proc p -> Printf.sprintf "proctype %s" p#get_name
+    | Stmt Decl(v, e) ->
+        Printf.sprintf "decl %s %s = %s"
+            (var_type_s v#get_type) v#get_name (expr_s e)
+    | Stmt _ -> "Some stmt"
+    | None -> Printf.sprintf "None"
+;;
 
