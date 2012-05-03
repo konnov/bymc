@@ -1,125 +1,11 @@
 open Lexing;;
 open Printf;;
 
-open Spin;;
 open Spinlex;;
+open Spin;;
 open Spin_types;;
-
-let token_s t =
-    match t with
-      ASSERT -> "ASSERT"
-      | PRINT -> "PRINT"
-      | PRINTM -> "PRINTM"
-      | C_CODE -> "C_CODE"
-      | C_DECL -> "C_DECL"
-      | C_EXPR -> "C_EXPR"
-      | C_STATE -> "C_STATE"
-      | C_TRACK -> "C_TRACK"
-      | RUN -> "RUN"
-      | LEN -> "LEN"
-      | ENABLED -> "ENABLED"
-      | EVAL -> "EVAL"
-      | PC_VAL -> "PC_VAL"
-      | TYPEDEF -> "TYPEDEF"
-      | MTYPE -> "MTYPE"
-      | INLINE -> "INLINE"
-      | LABEL -> "LABEL"
-      | OF -> "OF"
-      | GOTO -> "GOTO"
-      | BREAK -> "BREAK"
-      | ELSE -> "ELSE"
-      | SEMI -> "SEMI"
-      | IF -> "IF"
-      | FI -> "FI"
-      | DO -> "DO"
-      | OD -> "OD"
-      | FOR -> "FOR"
-      | SELECT -> "SELECT"
-      | IN -> "IN"
-      | SEP -> "SEP"
-      | DOTDOT -> "DOTDOT"
-      | ATOMIC -> "ATOMIC"
-      | NON_ATOMIC -> "NON_ATOMIC"
-      | D_STEP -> "D_STEP"
-      | UNLESS -> "UNLESS"
-      | TIMEOUT -> "TIMEOUT"
-      | NONPROGRESS -> "NONPROGRESS"
-      | ACTIVE -> "ACTIVE"
-      | PROCTYPE -> "PROCTYPE"
-      | D_PROCTYPE -> "D_PROCTYPE"
-      | HIDDEN -> "HIDDEN"
-      | SHOW -> "SHOW"
-      | ISLOCAL -> "ISLOCAL"
-      | PRIORITY -> "PRIORITY"
-      | PROVIDED -> "PROVIDED"
-      | FULL -> "FULL"
-      | EMPTY -> "EMPTY"
-      | NFULL -> "NFULL"
-      | NEMPTY -> "NEMPTY"
-      | CONST i -> "CONST " ^ (string_of_int i)
-      | TYPE tp -> "TYPE" ^ (var_type_s tp)
-      | XU tp -> (xu_type_s tp)
-      | NAME s -> "NAME " ^ s
-      | UNAME s -> "NAME " ^ s
-      | PNAME s -> "NAME " ^ s
-      | INAME s -> "NAME " ^ s
-      | STRING s -> "STRING " ^ s
-      | CLAIM -> "CLAIM"
-      | TRACE -> "TRACE"
-      | INIT -> "INIT"
-      | LTL -> "LTL"
-      | DEFINE(n, v) -> (sprintf "DEFINE %s '%s'" n v)
-      | INCLUDE(filename) -> (sprintf "INCLUDE \"%s\"" filename)
-      | MACRO_IF -> "MACRO_IF"
-      | MACRO_IFDEF -> "MACRO_IFDEF"
-      | MACRO_ELSE -> "MACRO_ELSE"
-      | MACRO_ENDIF -> "MACRO_ENDIF"
-      | MACRO_OTHER name -> (sprintf "#%s" name)
-      | NOTRACE -> "NOTRACE"
-      | NEVER -> "NEVER"
-      | R_RCV -> "R_RCV"
-      | RCV -> "RCV"
-      | SND -> "SND"
-      | O_SND -> "O_SND"
-      | RPAREN -> "RPAREN"
-      | LPAREN -> "LPAREN"
-      | RBRACE -> "RBRACE"
-      | LBRACE -> "LBRACE"
-      | RCURLY -> "RCURLY"
-      | LCURLY -> "LCURLY"
-      | DOT -> "DOT"
-      | COMMA -> "COMMA"
-      | COLON -> "COLON"
-      | INCR -> "INCR"
-      | DECR -> "DECR"
-      | MOD -> "MOD"
-      | DIV -> "DIV"
-      | MINUS -> "MINUS"
-      | UMIN -> "UMIN"
-      | PLUS -> "PLUS"
-      | MULT -> "MULT"
-      | ASGN -> "ASGN"
-      | BITNOT -> "BITNOT"
-      | BITAND -> "BITAND"
-      | BITOR -> "BITOR"
-      | BITXOR -> "BITXOR"
-      | AND -> "AND"
-      | OR -> "OR"
-      | NEG -> "NEG"
-      | GE -> "GE"
-      | LE -> "LE"
-      | GT -> "GT"
-      | LT -> "LT"
-      | EQ -> "EQ"
-      | NE -> "NE"
-      | AT -> "AT"
-      | LSHIFT -> "<<"
-      | RSHIFT -> ">>"
-      | VARREF -> "VARREF"
-      | EOF -> "EOF"
-      | ASSUME -> "ASSUME"
-      | SYMBOLIC -> "SYMBOLIC"
-;;
+open Spin_ir;;
+open Spin_ir_dep;;
 
 
 (* lexer function decorated by a preprocessor *)
@@ -186,7 +72,7 @@ let _ =
 
         let units = Spin.program lfun lexbuf in
         printf "#units: %d\n" (List.length units);
-        let p u = printf "%s\n" (Spin_ir.prog_unit_s (fun e -> "[expr]") u) in
+        let p u = printf "%s\n" (prog_unit_s u) in
         List.iter p units
 
         (*

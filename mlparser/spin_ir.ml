@@ -199,13 +199,3 @@ class ['t] proc name_i =
 
 type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;
 
-let prog_unit_s expr_s u =
-    match u with
-    | Proc p -> Printf.sprintf "proctype %s" p#get_name
-    | Stmt Decl(v, e) ->
-        Printf.sprintf "decl %s %s = %s"
-            (var_type_s v#get_type) v#get_name (expr_s e)
-    | Stmt _ -> "Some stmt"
-    | None -> Printf.sprintf "None"
-;;
-

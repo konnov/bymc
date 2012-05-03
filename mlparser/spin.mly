@@ -68,7 +68,7 @@ exception Not_implemented of string;;
 let err_cnt = ref 0;;
 let label_next = ref 0;;
 let labels = Hashtbl.create 10;;
-let break_stack = ref [];;
+let lab_stack = ref [];;
 let global_scope = new symb_tab;;
 let current_scope = ref global_scope;;
 
@@ -77,14 +77,15 @@ let mk_label () =
         label_next := (n + 1); n
 ;;
 
-let push_break () =
-    let l = mk_label () in
-    break_stack := l :: !break_stack
+let push_new_labs () =
+    let e = mk_label () in (* one label for entry to do *)
+    let b = mk_label () in (* one label to break from do/if *)
+    lab_stack := (e, b) :: !lab_stack
 ;;
 
-let pop_break () = break_stack := List.tl !break_stack ;;
+let pop_labs () = lab_stack := List.tl !lab_stack ;;
 
-let top_break () = List.hd !break_stack;;
+let top_labs () = List.hd !lab_stack;;
 
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
@@ -676,9 +677,11 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                     raise (Not_implemented "select")
 				  (* $$ = sel_index($3, $5, $7); *)
 				}
-	| IF options FI	{
-                let labs, seqs = (List.split $2) in
-                If(labs) :: (List.concat seqs)
+	| if_begin options FI	{
+                let (elab, blab) = top_labs ()
+                    and labs, seqs = (List.split $2) in
+                pop_labs ();                
+                If(labs) :: (List.concat seqs) @ [Label elab]
                 (* $$ = nn($1, IF, ZN, ZN);
         		 $$->sl = $2->sl;
 				 prune_opts($$); *)
@@ -686,11 +689,11 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 	| do_begin 		/* one more rule as ocamlyacc does not support multiple
                        actions like this: { (* pushbreak(); *) } */
           options OD {
-                let entry_lab = top_break ()
+                let (elab, blab) = top_labs ()
                     and labs, seqs = (List.split $2) in
                 let if_s = If(labs) :: (List.concat seqs) in
-                let do_s = List.rev ((Goto entry_lab) :: (List.rev if_s)) in
-                pop_break ();                
+                let do_s = (Label elab) :: if_s @ [Label blab] in
+                pop_labs ();                
                 do_s
 
                 (* $$ = nn($1, DO, ZN, ZN);
@@ -698,7 +701,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 				  prune_opts($$); *)
         		}
 	| BREAK     {
-                [Goto (top_break ())]
+                let (_, blab) = top_labs () in [Goto blab]
                 (* $$ = nn(ZN, GOTO, ZN, ZN);
 				  $$->sym = break_dest(); *)
 			    }
@@ -842,7 +845,10 @@ Stmnt	: varref ASGN full_expr	{
 	  Stmnt			{ raise (Not_implemented "inline") (* $$ = $7; *) }
 	;
 
-do_begin : DO { push_break () }
+if_begin : IF { push_new_labs () }
+;
+
+do_begin : DO { push_new_labs () }
 ;
 
 options : option		{
@@ -858,7 +864,8 @@ option_head : SEP   { mk_label () (* open_seq(0); *) }
 
 option  : option_head
           sequence OS	{
-            ($1, Label($1) :: $2)
+            let (elab, _) = top_labs () in
+            ($1, Label($1) :: $2 @ [Goto elab])
             (* $$ = nn(ZN,0,ZN,ZN);
 	    	  $$->sq = close_seq(6); *) }
 	;
