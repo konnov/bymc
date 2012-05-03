@@ -232,6 +232,7 @@ proc	: inst		/* optional instantiator */
 
 proctype: PROCTYPE	{
         current_scope := new symb_tab;
+        !current_scope#set_parent global_scope
         (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
 	| D_PROCTYPE	{
         current_scope := new symb_tab;

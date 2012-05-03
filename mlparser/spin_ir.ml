@@ -148,17 +148,23 @@ exception Symbol_not_found of string;;
 
 (* a symbol table *)
 class symb_tab =
-    object
+    object(self)
         val tab: (string, symb) Hashtbl.t = Hashtbl.create 10
+        val mutable parent: symb_tab option = None
 
         method add_symb name symb = Hashtbl.add tab name symb
         method lookup name =
             try
                 Hashtbl.find tab name
             with Not_found ->
-                (* XXX: show the position in the file! *)
-                raise (Symbol_not_found
-                    (Printf.sprintf "The variable %s is not declared" name))
+                match parent with
+                | None -> (* XXX: show the position in the file! *)
+                    raise (Symbol_not_found
+                        (Printf.sprintf "Variable %s is not declared" name))
+                | Some p -> p#lookup name
+
+        method set_parent p = parent <- Some p
+        method get_parent = parent
     end
 ;;
 
