@@ -130,7 +130,7 @@ class symb name_i =
                 "" flags
 
         (* is there a better way to do this? *)
-        method as_var: unit -> var =
+        method as_var =
             raise (Invalid_type "symb is not var")
     end
 and
@@ -145,7 +145,7 @@ var name_i =
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
         
-        method as_var () = (self :> var)
+        method as_var = (self :> var)
 
         method set_type t = vtype <- t
         method get_type = vtype
@@ -207,15 +207,20 @@ type 't stmt = Skip | Expr of 't expr
 ;;
 
 (* a process *)
-class ['t] proc name_i =
+class ['t] proc name_i active_expr_i =
     object
         inherit symb name_i
         inherit symb_tab
 
         val mutable stmts: 't stmt list = []
+        (* a symbolic expression *)
+        val mutable active_expr: 't expr = active_expr_i
 
         method set_stmts s = stmts <- s
         method get_stmts = stmts
+
+        method set_active_expr e = active_expr <- e
+        method get_active_expr = active_expr
     end
 ;;
 

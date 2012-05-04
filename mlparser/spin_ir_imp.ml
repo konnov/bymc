@@ -159,7 +159,10 @@ let stmt_s s =
 let prog_unit_s u =
     match u with
     | Proc p ->
-        let h = (Printf.sprintf "proctype %s(...) {" p#get_name) in
+        let act = if p#get_active_expr <> (Const 0)
+            then Printf.sprintf "active[%s] " (expr_s p#get_active_expr)
+            else "" in
+        let h = (Printf.sprintf "%sproctype %s(...) {" act p#get_name) in
         let ss = List.fold_left
             (fun a s -> a ^ "\n" ^ (stmt_s s)) "" p#get_stmts in
         h ^ ss ^ "\n}"

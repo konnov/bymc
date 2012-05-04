@@ -87,6 +87,18 @@ let pop_labs () = lab_stack := List.tl !lab_stack ;;
 
 let top_labs () = List.hd !lab_stack;;
 
+(* it uses tokens, so we cannot move it outside *)
+let rec is_expr_symbolic e =
+    match e with
+    | Const _ -> true
+    | Var v -> v#is_symbolic
+    | UnEx (op, se) -> op = UMIN && is_expr_symbolic se
+    | BinEx (op, le, re) ->
+        (List.mem op [PLUS; MINUS; MULT; DIV; MOD])
+            && (is_expr_symbolic le) && (is_expr_symbolic re)
+    | _ -> false
+;;
+
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
     let fname = if p.pos_fname != "" then p.pos_fname else "<filename>" in
@@ -208,7 +220,7 @@ proc	: inst		/* optional instantiator */
 	  Opt_priority
 	  Opt_enabler
 	  body	{
-                let p = new proc($3) in
+                let p = new proc $3 $1 in
                 p#set_stmts $9;
                 current_scope := global_scope;
                 p
@@ -243,25 +255,19 @@ proctype: PROCTYPE	{
         (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
 	;
 
-inst	: /* empty */	{ (* $$ = ZN; *) }
-	| ACTIVE	{ (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
-	| ACTIVE LBRACE CONST RBRACE { (*
-			  $$ = nn(ZN,CONST,ZN,ZN); $$->val = $3->val;
-			  if ($3->val > 255)
-				non_fatal("max nr of processes is 255\n", ""); *)
-			}
-	| ACTIVE LBRACE NAME RBRACE { (*
-			  $$ = nn(ZN,CONST,ZN,ZN);
-			  $$->val = 0;
-			  if (!$3->sym->type)
-				fatal("undeclared variable %s",
-					$3->sym->name);
-			  else if ($3->sym->ini->ntyp != CONST)
-				fatal("need constant initializer for %s\n",
-					$3->sym->name);
-			  else
-				$$->val = $3->sym->ini->val; *)
-			}
+inst	: /* empty */	{ Const 0 }
+	| ACTIVE	{ Const 1 }
+    /* FORSYTE extension: any constant + a symbolic arith expression */
+    | ACTIVE LBRACE expr RBRACE {
+            match $3 with
+            | Const i -> Const i
+            | Var v ->
+                if (v#get_ini > 0)
+                then Const v#get_ini
+                else fatal "need constant initializer for" v#get_name
+            | _ -> if is_expr_symbolic $3 then $3 else
+                fatal "active [..] must be constant or symbolic" ""
+        }
 	;
 
 init	: INIT		/* { (* context = $1->sym; *) } */
@@ -598,7 +604,7 @@ varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
 	;
 
 pfld	: NAME {
-            (!current_scope#lookup $1)#as_var()
+            (!current_scope#lookup $1)#as_var
                (* $$ = nn($1, NAME, ZN, ZN);
 				  if ($1->sym->isarray && !in_for)
 				  {	non_fatal("missing array index for '%s'",
