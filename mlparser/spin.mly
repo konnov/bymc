@@ -515,33 +515,22 @@ one_decl: vis TYPE var_list	{
 
 decl_lst: one_decl       	{ $1 }
 	| one_decl SEMI
-	  decl_lst		{ $1 @ $3 }
+	  decl_lst		        { $1 @ $3 }
 	;
 
 decl    : /* empty */		{ [] }
-	| decl_lst      	{ $1 }
+	| decl_lst      	    { $1 }
 	;
 
 vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
 	| varref COMMA vref_lst	{ (* $$ = nn($1, XU, $1, $3); *) }
 	;
 
-var_list: ivar           	{
-        [$1]
-        (* $$ = nn($1, TYPE, ZN, ZN); *)
-    }
-	| ivar COMMA var_list	{
-        $1 :: $3
-        (* $$ = nn($1, TYPE, ZN, $3); *)
-    }
+var_list: ivar              { [$1] }
+	| ivar COMMA var_list	{ $1 :: $3 }
 	;
 
-ivar    : vardcl           	{
-        ($1, Nop)
-        (* $$ = $1;
-          $1->sym->ini = nn(ZN,CONST,ZN,ZN);
-          $1->sym->ini->val = 0; *)
-    }
+ivar    : vardcl           	{ ($1, Nop) }
 	| vardcl ASGN expr   	{
         ($1, $3)
         (* $$ = $1;
@@ -582,9 +571,7 @@ ch_init : LBRACE CONST RBRACE OF
         			}
 	;
 
-vardcl  : NAME  		{
-        new var $1
-        (* $1->sym->nel = 1; $$ = $1; *) }
+vardcl  : NAME  		{ new var $1 }
 	| NAME COLON CONST	{
         let v = new var $1 in
         v#set_nbits $3;
@@ -602,7 +589,6 @@ vardcl  : NAME  		{
         v#set_isarray true;
         v#set_num_elems $3;
         v
-        (* $1->sym->nel = $3->val; $1->sym->isarray = 1; $$ = $1; *)
         }
 	;
 
@@ -620,8 +606,7 @@ pfld	: NAME {
 	| NAME			/* { (* owner = ZS; *) } */
 	  LBRACE expr RBRACE
             { raise (Not_implemented
-                "Array references, e.g., x[y] are not implemented")
-                (* $$ = nn($1, NAME, $4, ZN); *) }
+                "Array references, e.g., x[y] are not implemented") }
 	;
 
 cmpnd	: pfld			/* { (* Embedded++;
@@ -643,7 +628,7 @@ cmpnd	: pfld			/* { (* Embedded++;
 				}
 	;
 
-sfld	: /* empty */		{ (* $$ = ZN; *) }
+sfld	: /* empty */		{ }
 	| DOT cmpnd %prec DOT	{
          raise (Not_implemented
                 "Structure member addressing, e.g., x.y is not implemented")
