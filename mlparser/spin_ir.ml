@@ -212,9 +212,13 @@ class ['t] proc name_i active_expr_i =
         inherit symb name_i
         inherit symb_tab
 
+        val mutable args: var list = []
         val mutable stmts: 't stmt list = []
         (* a symbolic expression *)
         val mutable active_expr: 't expr = active_expr_i
+
+        method set_args a = args <- a
+        method get_args = args
 
         method set_stmts s = stmts <- s
         method get_stmts = stmts

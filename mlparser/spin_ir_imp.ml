@@ -162,7 +162,11 @@ let prog_unit_s u =
         let act = if p#get_active_expr <> (Const 0)
             then Printf.sprintf "active[%s] " (expr_s p#get_active_expr)
             else "" in
-        let h = (Printf.sprintf "%sproctype %s(...) {" act p#get_name) in
+        let args = List.fold_left
+            (fun a arg -> Printf.sprintf
+                "%s %s %s;" a (var_type_s arg#get_type) arg#get_name)
+            "" p#get_args in
+        let h = (Printf.sprintf "%sproctype %s(%s) {" act p#get_name args) in
         let ss = List.fold_left
             (fun a s -> a ^ "\n" ^ (stmt_s s)) "" p#get_stmts in
         h ^ ss ^ "\n}"

@@ -221,6 +221,12 @@ proc	: inst		/* optional instantiator */
 	  Opt_enabler
 	  body	{
                 let p = new proc $3 $1 in
+                let unpack e =
+                    match e with    
+                    | Decl (v, i) -> v#add_flag HFormalPar; v
+                    | _ -> fatal "Not a decl in proctype args" p#get_name
+                in
+                p#set_args (List.map unpack $5);
                 p#set_stmts $9;
                 current_scope := global_scope;
                 p
@@ -507,13 +513,13 @@ one_decl: vis TYPE var_list	{
 				}
 	;
 
-decl_lst: one_decl       	{ (* $$ = nn(ZN, ',', $1, ZN); *) }
+decl_lst: one_decl       	{ $1 }
 	| one_decl SEMI
-	  decl_lst		{ (* $$ = nn(ZN, ',', $1, $3); *) }
+	  decl_lst		{ $1 @ $3 }
 	;
 
-decl    : /* empty */		{ (* $$ = ZN; *) }
-	| decl_lst      	{ (* $$ = $1; *) }
+decl    : /* empty */		{ [] }
+	| decl_lst      	{ $1 }
 	;
 
 vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
