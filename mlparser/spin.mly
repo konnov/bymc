@@ -184,6 +184,9 @@ unit	: proc	/* proctype        */    { [Proc $1] }
 	| c_fcts	/* c functions etc.   */ { [] }
 	| ns		/* named sequence     */ { [] }
 	| SEMI		/* optional separator */ { [] }
+	| ASSUME full_expr 	{ (* FORSYTE ext. *)
+            [Stmt (Assume $2)]
+        }
 	| error { fatal "Error in the body" ""}
 	;
 
@@ -456,6 +459,7 @@ vis	: /* empty */	{ HNone }
 	| HIDDEN		{ HHide }
 	| SHOW			{ HShow }
 	| ISLOCAL		{ HTreatLocal }
+    | SYMBOLIC      { HSymbolic }
 	;
 
 asgn:	/* empty */ {}

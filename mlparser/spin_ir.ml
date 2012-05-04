@@ -12,8 +12,22 @@ open Spin_types;;
 
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
-           | HFormalPar | HInlinePar | HTreatLocal | HReadOnce;;
+           | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
+           (* our extensions *)
+           | HSymbolic ;;
 
+let hflag_s f =
+    match f with
+    | HHide -> ":hide:"
+    | HShow -> ":show:"
+    | HBitEquiv -> ":biteq:"
+    | HByteEquiv -> ":byteeq:"
+    | HFormalPar -> ":formalpar:"
+    | HInlinePar -> ":inlinepar:"
+    | HTreatLocal -> ":local:"
+    | HReadOnce -> ":readonce:"
+    | HSymbolic -> ":symbolic:"
+    | HNone -> ""
 (*
 
  Spin-like types, too complicated
@@ -106,9 +120,14 @@ class symb name_i =
 
         method add_flag f =
             flags <-
-                if f != HNone && self#has_flag f
+                if f == HNone || self#has_flag f
                 then flags
-                else f::flags
+                else f :: flags
+        
+        method flags_s =
+            List.fold_left
+                (fun a f -> (if a <> "" then a^ " " else "") ^ (hflag_s f))
+                "" flags
 
         (* is there a better way to do this? *)
         method as_var: unit -> var =
@@ -142,6 +161,9 @@ var name_i =
 
         method set_ini i = ini <- i
         method get_ini = ini
+
+        method is_symbolic = self#has_flag HSymbolic
+        method set_symbolic = self#add_flag HSymbolic
     end
 ;;
 

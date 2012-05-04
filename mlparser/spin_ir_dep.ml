@@ -127,7 +127,7 @@ let token_s t =
 
 let rec expr_s e =
     match e with
-    | Nop -> "Nop"
+    | Nop -> "nop"
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | UnEx(tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
@@ -139,8 +139,8 @@ let stmt_s s =
     | Skip -> "skip"
     | Expr e -> sprintf "(%s)" (expr_s e)
     | Decl (v, e) ->
-        sprintf "decl %s %s = %s"
-            (var_type_s v#get_type) v#get_name (expr_s e)
+        sprintf "decl %s %s %s = %s"
+            v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
     | Label l -> sprintf "%d: " l
     | Atomic_beg -> "atomic {"
     | Atomic_end -> "} /* atomic */"
