@@ -5,7 +5,7 @@ open Spinlex;;
 open Spin;;
 open Spin_types;;
 open Spin_ir;;
-open Spin_ir_dep;;
+open Spin_ir_imp;;
 
 
 (* lexer function decorated by a preprocessor *)
