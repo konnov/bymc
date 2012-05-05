@@ -7,6 +7,7 @@ open Spin_types;;
 open Spin_ir;;
 open Spin_ir_imp;;
 
+open Cfg;;
 
 (* lexer function decorated by a preprocessor *)
 let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =

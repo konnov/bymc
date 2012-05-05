@@ -230,3 +230,10 @@ class ['t] proc name_i active_expr_i =
 
 type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;
 
+let resolve_label labels stmt =
+    match stmt with
+        | Goto_unresolved name ->
+            Goto (Hashtbl.find labels name)
+        | _ -> stmt
+;;
+

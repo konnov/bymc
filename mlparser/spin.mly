@@ -227,7 +227,7 @@ proc	: inst		/* optional instantiator */
                     | _ -> fatal "Not a decl in proctype args" p#get_name
                 in
                 p#set_args (List.map unpack $5);
-                p#set_stmts $9;
+                p#set_stmts (List.map (resolve_label labels) $9);
                 current_scope := global_scope;
                 p
            (* ProcList *rl;
