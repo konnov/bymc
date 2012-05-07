@@ -66,7 +66,7 @@ exception Not_implemented of string;;
 
 (* we have to declare global objects, think of resetting them afterwards! *)
 let err_cnt = ref 0;;
-let label_next = ref 0;;
+let label_next = ref 1;;
 let labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
 let global_scope = new symb_tab;;
