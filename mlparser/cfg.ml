@@ -28,12 +28,14 @@ class ['t] basic_block =
         method get_lead_lab =
             match List.hd seq with
                 | Label i -> i
-                | _ -> raise (Failure "The basic block is corrupted, no leading label")
+                | _ -> raise (Failure "Corrupted basic block, no leading label")
 
         method str =
             let exit_s = List.fold_left
-                (fun a i -> sprintf "%s%d; " a i) "" self#get_exit_labs in
-            (sprintf "Basic block %d [%s]:\n" self#get_lead_lab exit_s) ^
+                (fun a i ->
+                    sprintf "%s%s%d" a (if a <> "" then ", " else "") i) 
+                "" self#get_exit_labs in
+            (sprintf "Basic block %d [succs: %s]:\n" self#get_lead_lab exit_s) ^
             (List.fold_left (fun a s -> sprintf "%s%s\n" a (stmt_s s)) "" seq)
     end
 ;;
@@ -78,7 +80,7 @@ let basic_block_tbl_s bbs =
 
 let mk_cfg stmts =
     let seq_heads = collect_jump_targets stmts in
-    let cleaned = List.filter (* remove non-referenced labels *)
+    let cleaned = List.filter (* remove hanging unreferenced labels *)
         (fun s ->
             match s with
                 | Label i -> IntSet.mem i seq_heads
@@ -91,7 +93,6 @@ let mk_cfg stmts =
                     | _ -> false)
             (* add 0 in front to denote the entry label *)
             ((Label 0):: cleaned) in
-    
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
     List.iter
