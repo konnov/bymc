@@ -9,6 +9,8 @@ open Spin_ir_imp;;
 
 open Cfg;;
 
+let debug = false;;
+
 (* lexer function decorated by a preprocessor *)
 let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
     let tok = match !aux_bufs with
@@ -59,19 +61,21 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
 ;;
 
 
-let _ =
-    try
-        let filename, basename, dirname =
-        if Array.length Sys.argv > 1
-        then Sys.argv.(1), Filename.basename Sys.argv.(1),
-             Filename.dirname Sys.argv.(1)
-        else raise (Failure "Use: program filename")
-        in
-        let lexbuf = Lexing.from_channel (open_in filename) in
-        lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
-        let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
+let parse_promela filename basename dirname =
+    let lexbuf = Lexing.from_channel (open_in filename) in
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
+    let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
+    let units = Spin.program lfun lexbuf in
 
-        let units = Spin.program lfun lexbuf in
+    if debug then begin
+        (* (* DEBUGGING lex *)
+        let t = ref EQ in
+        while !t != EOF do
+            t := lfun lexbuf;
+            printf "%s\n" (token_s !t)
+        done
+        *)
+
         printf "#units: %d\n" (List.length units);
         let p u = printf "%s\n" (prog_unit_s u) in
         List.iter p units;
@@ -83,16 +87,8 @@ let _ =
                     let bbs = mk_cfg p#get_stmts in
                     Hashtbl.iter (fun _ bb -> printf "%s\n" bb#str) bbs
                 | _ -> () )
-            units
-
-        (*
-        let t = ref EQ in
-        while !t != EOF do
-            t := lfun lexbuf;
-            printf "%s\n" (token_s !t)
-        done
-        *)
-    with End_of_file ->
-        print_string "Premature end of file\n";
-        exit 1
+            units;
+        units
+    end
+    else units
 
