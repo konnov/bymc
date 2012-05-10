@@ -1,7 +1,7 @@
 open Printf;;
 
-open Abstract;;
 open Parse;;
+open Abstract;;
 
 let _ =
     try
@@ -14,9 +14,7 @@ let _ =
         let units = parse_promela filename basename dirname
         in
         printf "#units: %d\n" (List.length units);
-        let t = identify_var_roles units in
-        Hashtbl.iter
-            (fun v r -> printf "%s -> %s\n" v#get_name (var_role_s r)) t
+        do_abstraction units
     with End_of_file ->
         print_string "Premature end of file\n";
         exit 1
