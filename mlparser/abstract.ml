@@ -23,7 +23,7 @@ let identify_var_roles units =
         then Shared
         else if name = "pc"
         then Pc
-        else if (String.sub name 0 (min 5 (String.length name))) = "next_"
+        else if "next_" = (String.sub name 0 (min 5 (String.length name)))
         then Next
         else Local
     in
@@ -126,6 +126,7 @@ let find_thresholds_order globals assumps conds =
     in
     let solver = new yices_smt in
     solver#start;
+    (* solver#set_debug true; *)
     List.iter (fun e -> solver#append (sprintf "%s\n" e)) smt_exprs;
     solver#push_ctx;
     List.iter (fun c1 -> List.iter

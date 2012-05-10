@@ -20,7 +20,8 @@ class yices_smt =
         method start =
             let pin, pout = Unix.open_process "yices" in
             cin <- pin;
-            cout <- pout
+            cout <- pout;
+            fprintf cout "(set-verbosity! 0)\n"
         
         method stop =
             Unix.close_process (cin, cout)
@@ -29,11 +30,18 @@ class yices_smt =
             if debug then printf "%s\n" cmd;
             fprintf cout "%s\n" cmd
 
-        method push_ctx = fprintf cout "(push)\n"
+        method push_ctx = self#append "(push)\n"
 
-        method pop_ctx = fprintf cout "(pop)\n"
+        method pop_ctx = self#append "(pop)\n"
 
         method check =
+            (* the solver can print more messages, thus, sync! *)
+            fprintf cout "(echo \"sync\\n\")\n"; flush cout;
+            let stop = ref false in
+            while not !stop do
+                if "sync" = (input_line cin) then stop := true
+            done;
+
             fprintf cout "(status)\n"; (* it can be unsat already *)
             flush cout;
             if not (self#is_out_sat true)
@@ -46,6 +54,7 @@ class yices_smt =
 
         method is_out_sat ignore_errors =
             let l = input_line cin in
+            (*printf "%s\n" l;*)
             match l with
             | "sat" -> true
             | "ok" -> true
@@ -56,6 +65,7 @@ class yices_smt =
 
         method get_cin = cin
         method get_cout = cout
+        method set_debug flag = debug <- flag
     end
 ;;
 
