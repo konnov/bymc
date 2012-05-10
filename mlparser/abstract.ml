@@ -122,9 +122,33 @@ let find_thresholds_order globals assumps conds =
     let smt_exprs =
         List.append
             (List.map var_to_smt globals)
-            (List.map expr_to_smt assumps)
+            (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e)) assumps)
     in
-    smt_exprs
+    let solver = new yices_smt in
+    solver#start;
+    List.iter (fun e -> solver#append (sprintf "%s\n" e)) smt_exprs;
+    solver#push_ctx;
+    List.iter (fun c1 -> List.iter
+        (fun c2 ->
+            if c1 <> c2
+            then begin
+                solver#append (sprintf "(assert (< %s %s))\n"
+                    (expr_to_smt c1) (expr_to_smt c2));
+                (if solver#check
+                then printf "%s < %s\n" (expr_s c1) (expr_s c2)
+                else printf "!(%s < %s)\n" (expr_s c1) (expr_s c2));
+                solver#pop_ctx; solver#push_ctx
+            end
+        ) conds)
+        conds;
+    close_out solver#get_cout;
+    try
+        while true do
+            let l = input_line solver#get_cin in
+            printf "%s\n" l
+        done
+    with End_of_file ->
+        let _ = solver#stop in ()
 ;;
 
 let do_abstraction units =
@@ -146,8 +170,9 @@ let do_abstraction units =
     let conds = identify_conditions roles all_stmts in
     printf "Conditions:\n";
     List.iter (fun e -> printf "'%s'\n" (expr_s e)) conds;
-    let assumptions = extract_assumptions units in
-    List.iter (fun e -> printf "assume(%s)\n" (expr_s e)) assumptions;
+    let assumps = extract_assumptions units in
+    List.iter (fun e -> printf "assume(%s)\n" (expr_s e)) assumps;
     let globals = extract_globals units in
-    List.iter (fun v -> printf "var %s\n" v#get_name) globals
+    List.iter (fun v -> printf "var %s\n" v#get_name) globals;
+    find_thresholds_order globals assumps conds
 ;;
