@@ -778,7 +778,9 @@ Stmnt	: varref ASGN full_expr	{
                  (* $$ = nn(ZN, PRINTM, $3, ZN); *)
                 }
 	| ASSUME full_expr    	{
-                    [Assume $2] (* FORSYTE ext. *)
+                    if is_expr_symbolic $2
+                    then fatal "active [..] must be constant or symbolic" ""
+                    else [Assume $2] (* FORSYTE ext. *)
                 }
 	| ASSERT full_expr    	{
                     [Assert $2]

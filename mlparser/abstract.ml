@@ -4,6 +4,7 @@ open Parse;;
 open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
+open Smt;;
 
 type var_role = Pc | Shared | Local | Next;;
 
@@ -103,6 +104,28 @@ let identify_conditions var_roles stmts =
     Hashtbl.fold (fun text cond lst -> cond :: lst) tbl []
 ;;
 
+let rec extract_assumptions units =
+    match units with
+    | (Stmt (Assume e)) :: tl -> e :: (extract_assumptions tl)
+    | _ :: tl -> extract_assumptions tl
+    | [] -> []
+;;
+
+let rec extract_globals units =
+    match units with
+    | Stmt Decl (v, _) :: tl -> v :: (extract_globals tl)
+    | _ :: tl -> extract_globals tl
+    | [] -> []
+;;
+
+let find_thresholds_order globals assumps conds =
+    let smt_exprs =
+        List.append
+            (List.map var_to_smt globals)
+            (List.map expr_to_smt assumps)
+    in
+    smt_exprs
+;;
 
 let do_abstraction units =
     (* TODO: move it to abstract *)
@@ -122,5 +145,9 @@ let do_abstraction units =
     in
     let conds = identify_conditions roles all_stmts in
     printf "Conditions:\n";
-    List.iter (fun e -> printf "'%s'\n" (expr_s e)) conds
+    List.iter (fun e -> printf "'%s'\n" (expr_s e)) conds;
+    let assumptions = extract_assumptions units in
+    List.iter (fun e -> printf "assume(%s)\n" (expr_s e)) assumptions;
+    let globals = extract_globals units in
+    List.iter (fun v -> printf "var %s\n" v#get_name) globals
 ;;

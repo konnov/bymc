@@ -191,7 +191,6 @@ class symb_tab =
     end
 ;;
 
-
 type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
 ;;
