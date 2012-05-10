@@ -6,6 +6,9 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
 
+exception Skeleton_not_supported of string;;
+exception Abstraction_error of string;;
+
 type var_role = Pc | Shared | Local | Next;;
 
 let var_role_s r =
@@ -56,8 +59,6 @@ let rec is_expr_symbolic e =
             && (is_expr_symbolic le) && (is_expr_symbolic re)
     | _ -> false
 ;;
-
-exception Skeleton_not_supported of string;;
 
 let identify_conditions var_roles stmts =
     let on_cond v e =
@@ -118,7 +119,9 @@ let rec extract_globals units =
     | [] -> []
 ;;
 
-let find_thresholds_order globals assumps conds =
+let sort_thresholds globals assumps conds =
+    let id_map = Hashtbl.create 10 in
+    List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
     let smt_exprs =
         List.append
             (List.map var_to_smt globals)
@@ -129,27 +132,43 @@ let find_thresholds_order globals assumps conds =
     (* solver#set_debug true; *)
     List.iter (fun e -> solver#append (sprintf "%s\n" e)) smt_exprs;
     solver#push_ctx;
+    let cmp_tbl = Hashtbl.create 10 in
     List.iter (fun c1 -> List.iter
         (fun c2 ->
             if c1 <> c2
             then begin
-                solver#append (sprintf "(assert (< %s %s))\n"
+                solver#append (sprintf "(assert (not (< %s %s)))\n"
                     (expr_to_smt c1) (expr_to_smt c2));
-                (if solver#check
-                then printf "%s < %s\n" (expr_s c1) (expr_s c2)
-                else printf "!(%s < %s)\n" (expr_s c1) (expr_s c2));
+                if not solver#check
+                then (Hashtbl.add cmp_tbl
+                    ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
                 solver#pop_ctx; solver#push_ctx
             end
         ) conds)
         conds;
     close_out solver#get_cout;
-    try
-        while true do
-            let l = input_line solver#get_cin in
-            printf "%s\n" l
-        done
-    with End_of_file ->
-        let _ = solver#stop in ()
+    let _ = solver#stop in ();
+    List.iter (fun c1 -> List.iter (fun c2 ->
+        let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
+        if i1 <> i2
+        then if not (Hashtbl.mem cmp_tbl (i1, i2))
+            && not (Hashtbl.mem cmp_tbl (i2, i1))
+        then raise (Abstraction_error (sprintf "No order for %s and %s"
+            (expr_s c1) (expr_s c2))))
+        conds) conds;
+
+    List.sort
+        (fun c1 c2 ->
+            if c1 = c2
+            then 0
+            else
+                let i1 = (Hashtbl.find id_map c1)
+                    and i2 = (Hashtbl.find id_map c2) in
+                if (Hashtbl.mem cmp_tbl (i1, i2))
+                then -1
+                else 1
+        )
+        conds
 ;;
 
 let do_abstraction units =
@@ -169,11 +188,11 @@ let do_abstraction units =
         [] processes
     in
     let conds = identify_conditions roles all_stmts in
-    printf "Conditions:\n";
-    List.iter (fun e -> printf "'%s'\n" (expr_s e)) conds;
     let assumps = extract_assumptions units in
     List.iter (fun e -> printf "assume(%s)\n" (expr_s e)) assumps;
     let globals = extract_globals units in
     List.iter (fun v -> printf "var %s\n" v#get_name) globals;
-    find_thresholds_order globals assumps conds
+    let conds = sort_thresholds globals assumps conds in
+    printf "Ordered thresholds:";
+    List.iter (fun e -> printf " '%s';" (expr_s e)) conds;
 ;;
