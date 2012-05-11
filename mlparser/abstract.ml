@@ -171,8 +171,11 @@ let sort_thresholds globals assumps conds =
         conds
 ;;
 
+let translate_seq assumps globals conds stmts =
+    stmts
+;;
+
 let do_abstraction units =
-    (* TODO: move it to abstract *)
     let processes =
         List.fold_left
              (fun l u -> match u with
@@ -194,5 +197,5 @@ let do_abstraction units =
     List.iter (fun v -> printf "var %s\n" v#get_name) globals;
     let conds = sort_thresholds globals assumps conds in
     printf "Ordered thresholds:";
-    List.iter (fun e -> printf " '%s';" (expr_s e)) conds;
+    List.iter (fun e -> printf " '%s';" (expr_s e)) conds; print_endline ""
 ;;
