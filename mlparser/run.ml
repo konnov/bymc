@@ -11,6 +11,7 @@ let _ =
                  Filename.dirname Sys.argv.(1)
             else raise (Failure "Use: program filename")
         in
+        printf "> Parsing %s...\n" basename;
         let units = parse_promela filename basename dirname
         in
         printf "#units: %d\n" (List.length units);

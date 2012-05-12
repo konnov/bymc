@@ -19,6 +19,56 @@ let var_role_s r =
     | Next -> "next"
 ;;
 
+class ['tok] trans_context =
+    object(self)
+        val mutable globals: var list = []
+        val mutable assumps: 'tok expr list = []
+        val mutable var_roles: (var, var_role) Hashtbl.t = Hashtbl.create 1
+
+        (*
+          Run a solver prepopulated with a context.
+          The callee has to call solver#stop afterwards
+         *)
+        method run_solver =
+            let smt_exprs =
+                List.append
+                    (List.map var_to_smt globals)
+                    (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e))
+                        assumps)
+            in
+            let solver = new yices_smt in
+            solver#start;
+            (* solver#set_debug true; *)
+            List.iter solver#append smt_exprs;
+            solver
+
+        method get_globals = globals
+        method set_globals g = globals <- g
+        method get_var_roles = var_roles
+        method set_var_roles r = var_roles <- r
+        method get_assumps = assumps
+        method set_assumps a = assumps <- a
+    end
+;;
+
+class abs_domain conds_i =
+    object(self)
+        val mutable conds = conds_i             (* thresholds *)
+        val mutable val_map = Hashtbl.create 10 (* from a cond to a value *)
+
+        method print =
+            printf " # Abstract domain: \n";
+            Hashtbl.iter
+                (fun c v -> printf "   %s -> %s\n" v (expr_s c)) val_map
+        
+        initializer
+            List.iter
+                (fun c -> Hashtbl.add val_map c
+                    (sprintf "d%d" (Hashtbl.length val_map)))
+                conds
+    end
+;;
+
 let identify_var_roles units =
     let tbl = Hashtbl.create 10 in
     let assign_role is_local name =
@@ -119,18 +169,10 @@ let rec extract_globals units =
     | [] -> []
 ;;
 
-let sort_thresholds globals assumps conds =
+let sort_thresholds ctx conds =
     let id_map = Hashtbl.create 10 in
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
-    let smt_exprs =
-        List.append
-            (List.map var_to_smt globals)
-            (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e)) assumps)
-    in
-    let solver = new yices_smt in
-    solver#start;
-    (* solver#set_debug true; *)
-    List.iter (fun e -> solver#append (sprintf "%s\n" e)) smt_exprs;
+    let solver = ctx#run_solver in
     solver#push_ctx;
     let cmp_tbl = Hashtbl.create 10 in
     List.iter (fun c1 -> List.iter
@@ -175,27 +217,39 @@ let translate_seq assumps globals conds stmts =
     stmts
 ;;
 
-let do_abstraction units =
-    let processes =
-        List.fold_left
-             (fun l u -> match u with
-                | Proc p -> p :: l
-                | _ -> l)
+let mk_context units =
+    let ctx = new trans_context in
+    ctx#set_var_roles (identify_var_roles units);
+    print_endline " # Variable roles:";
+    Hashtbl.iter
+        (fun v r -> printf "   %s -> %s\n" v#get_name (var_role_s r))
+        ctx#get_var_roles;
+    ctx#set_assumps (extract_assumptions units);
+    print_endline " # Assumptions:";
+    List.iter (fun e -> printf "   assume(%s)\n" (expr_s e)) ctx#get_assumps;
+    ctx#set_globals (extract_globals units);
+    print_endline " # Globals:";
+    List.iter (fun v -> printf "   var %s\n" v#get_name) ctx#get_globals;
+    ctx
+;;
+
+let mk_domain units ctx =
+    printf "> Inferring an abstract domain...\n";
+    let all_stmts = List.fold_left
+        (fun l u ->
+            match u with
+            | Proc p -> List.append l p#get_stmts
+            | _ -> l
+        )
         [] units
     in
-    let roles = identify_var_roles units in
-    Hashtbl.iter
-        (fun v r -> printf "%s -> %s\n" v#get_name (var_role_s r)) roles;
-    let all_stmts = List.fold_left
-        (fun l p -> List.append l p#get_stmts)
-        [] processes
-    in
-    let conds = identify_conditions roles all_stmts in
-    let assumps = extract_assumptions units in
-    List.iter (fun e -> printf "assume(%s)\n" (expr_s e)) assumps;
-    let globals = extract_globals units in
-    List.iter (fun v -> printf "var %s\n" v#get_name) globals;
-    let conds = sort_thresholds globals assumps conds in
-    printf "Ordered thresholds:";
-    List.iter (fun e -> printf " '%s';" (expr_s e)) conds; print_endline ""
+    let conds = identify_conditions ctx#get_var_roles all_stmts in
+    let sorted_conds = sort_thresholds ctx conds in
+    new abs_domain(sorted_conds)
+;;
+
+let do_abstraction units =
+    let ctx = mk_context units in
+    let dom = mk_domain units ctx in
+    dom#print
 ;;
