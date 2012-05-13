@@ -134,6 +134,13 @@ let rec expr_s e =
     | BinEx(tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)
 ;;
 
+let op_of_expr e =
+    match e with
+    | UnEx (tok, _) -> tok
+    | BinEx (tok, _, _) -> tok
+    | _ -> EOF
+;;
+
 let stmt_s s =
     match s with
     | Skip -> "skip"

@@ -10,6 +10,8 @@
 
 open Spin_types;;
 
+module StringSet = Set.Make(String);;
+
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
@@ -195,6 +197,39 @@ type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
 ;;
 
+let expr_used_vars (expression: 't expr) : var list =
+    let rec find_used e =
+        match e with
+        | Var v -> if v#is_symbolic then [] else [v]
+        | UnEx (_, f) -> find_used f
+        | BinEx (_, f, g) -> List.append (find_used f) (find_used g)
+        | _ -> []
+    in
+    let used = (List.fast_sort
+        (fun vx vy ->
+            String.compare vx#get_name vy#get_name) (find_used expression)) in
+    (* remove duplicates, one could have used BatList.sort_unique *)
+    match used with
+    | [] -> []
+    | [hd] -> [hd]
+    | hd :: tl ->
+            hd :: (List.fold_left2
+                (fun l cur prev -> if cur <> prev then cur :: l else l)
+                []
+                tl
+                (hd :: (List.rev (List.tl (List.rev tl)))))
+;;
+
+
+let rec expr_exists func e =
+    if (func e)
+    then true
+    else match e with
+    | UnEx (_, f) -> expr_exists func f
+    | BinEx (_, f, g) -> (expr_exists func f) || (expr_exists func g)
+    | _ -> false
+;;
+
 type 't stmt = Skip | Expr of 't expr
     | Decl of var * 't expr
     | Label of int
@@ -224,6 +259,15 @@ class ['t] proc name_i active_expr_i =
 
         method set_active_expr e = active_expr <- e
         method get_active_expr = active_expr
+
+        method get_locals =
+            List.fold_left 
+                (fun l s ->
+                    match s with
+                    | Decl (v, _) -> v :: l
+                    | _ -> l)
+                []
+                stmts
     end
 ;;
 

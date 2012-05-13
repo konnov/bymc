@@ -1,6 +1,6 @@
 open Printf;;
 
-open Parse;;
+open Cfg;;
 open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
@@ -24,6 +24,7 @@ class ['tok] trans_context =
         val mutable globals: var list = []
         val mutable assumps: 'tok expr list = []
         val mutable var_roles: (var, var_role) Hashtbl.t = Hashtbl.create 1
+        val mutable label_ctr = 10000 (* start with a high label *)
 
         (*
           Run a solver prepopulated with a context.
@@ -38,9 +39,11 @@ class ['tok] trans_context =
             in
             let solver = new yices_smt in
             solver#start;
-            (* solver#set_debug true; *)
+            (* solver#set_debug true; *) (* see yices.log *)
             List.iter solver#append smt_exprs;
             solver
+
+        method get_role v = Hashtbl.find var_roles v
 
         method get_globals = globals
         method set_globals g = globals <- g
@@ -48,24 +51,101 @@ class ['tok] trans_context =
         method set_var_roles r = var_roles <- r
         method get_assumps = assumps
         method set_assumps a = assumps <- a
+
+        method next_label_counter =
+            let ctr = label_ctr in
+            label_ctr <- label_ctr + 1;
+            ctr
     end
 ;;
 
+exception Found of int;;
+
 class abs_domain conds_i =
     object(self)
-        val mutable conds = conds_i             (* thresholds *)
+        val mutable conds = conds_i      (* thresholds *)
+        (* triples of (abstract value, left cond, right cond) *)
+        val mutable cond_intervals = []
         val mutable val_map = Hashtbl.create 10 (* from a cond to a value *)
 
         method print =
             printf " # Abstract domain: \n";
             Hashtbl.iter
-                (fun c v -> printf "   %s -> %s\n" v (expr_s c)) val_map
+                (fun c i -> printf "   d%d -> %s\n" i (expr_s c)) val_map
         
         initializer
             List.iter
-                (fun c -> Hashtbl.add val_map c
-                    (sprintf "d%d" (Hashtbl.length val_map)))
-                conds
+                (fun c -> Hashtbl.add val_map c (Hashtbl.length val_map))
+                conds;
+            let _, tuples =
+                List.fold_left (fun (i, l) (a, b) -> (i + 1, (i, a, b) :: l))
+                    (0, [])
+                    (List.combine conds (List.append (List.tl conds) [Nop]))
+            in
+            cond_intervals <- tuples
+
+        method map_concrete (solver: yices_smt) (symb_expr: 't expr) =
+            try
+                List.iter
+                    (fun (_, l, r) ->
+                        solver#push_ctx;
+                        solver#append_assert
+                            (expr_to_smt (BinEx (GE, symb_expr, l)));
+                        if r <> Nop
+                        then solver#append_assert
+                            (expr_to_smt (BinEx (LT, symb_expr, r)));
+                        if solver#check
+                        then begin
+                            solver#pop_ctx;
+                            raise (Found (Hashtbl.find val_map l))
+                        end;
+                        solver#pop_ctx
+                    )
+                    cond_intervals;
+                raise (Abstraction_error
+                    (sprintf "No abstract value for %s" (expr_s symb_expr)))
+            with Found i ->
+                (Const i: Spin.token expr)
+
+        method find_abs_vals (solver: yices_smt) (symb_expr: 't expr)
+                : (Spin_ir.var * int) list list =
+            let used = expr_used_vars symb_expr in
+            if (List.length used) <> 2
+            (* XXX: nothing prevents us from handling multiple variables *)
+            then raise (Abstraction_error
+                (sprintf "Expression %s must have two free variables"
+                    (expr_s symb_expr)))
+            else
+            (* enumerate all possible abstract pairs that have a concretization
+               satisfying symb_expr
+             *)
+            begin
+                (* TODO: refactor, it is so complicated! *)
+                solver#push_ctx;
+                let matching_tuples = List.fold_left
+                    (fun lst triples (* of (abs_val, lcond, rcond) *) ->
+                        solver#push_ctx;
+                        List.iter2
+                            (fun var (i, l, r) ->
+                                solver#append_assert
+                                    (expr_to_smt (BinEx (GE, Var var, l)));
+                                if r <> Nop
+                                then solver#append_assert
+                                    (expr_to_smt (BinEx (LT, Var var, r)));
+                            ) used triples;
+                        solver#append_assert (expr_to_smt symb_expr);
+                        let exists_concrete = solver#check in
+                        solver#pop_ctx;
+                        if exists_concrete
+                        then (List.map2
+                            (fun var (i, _, _) -> (var, i)) used triples)
+                            :: lst
+                        else lst
+                    ) [] (Accums.mk_product cond_intervals 2)
+                in
+                solver#pop_ctx;
+                matching_tuples (* now pairs *)
+            end
     end
 ;;
 
@@ -74,7 +154,7 @@ let identify_var_roles units =
     let assign_role is_local name =
         if not is_local
         then Shared
-        else if name = "pc"
+        else if name = "pc" || name = "next_pc"
         then Pc
         else if "next_" = (String.sub name 0 (min 5 (String.length name)))
         then Next
@@ -169,17 +249,16 @@ let rec extract_globals units =
     | [] -> []
 ;;
 
-let sort_thresholds ctx conds =
+let sort_thresholds solver ctx conds =
     let id_map = Hashtbl.create 10 in
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
-    let solver = ctx#run_solver in
     solver#push_ctx;
     let cmp_tbl = Hashtbl.create 10 in
     List.iter (fun c1 -> List.iter
         (fun c2 ->
             if c1 <> c2
             then begin
-                solver#append (sprintf "(assert (not (< %s %s)))\n"
+                solver#append_assert (sprintf "(not (< %s %s))"
                     (expr_to_smt c1) (expr_to_smt c2));
                 if not solver#check
                 then (Hashtbl.add cmp_tbl
@@ -188,8 +267,7 @@ let sort_thresholds ctx conds =
             end
         ) conds)
         conds;
-    close_out solver#get_cout;
-    let _ = solver#stop in ();
+    solver#pop_ctx;
     List.iter (fun c1 -> List.iter (fun c2 ->
         let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
         if i1 <> i2
@@ -213,10 +291,6 @@ let sort_thresholds ctx conds =
         conds
 ;;
 
-let translate_seq assumps globals conds stmts =
-    stmts
-;;
-
 let mk_context units =
     let ctx = new trans_context in
     ctx#set_var_roles (identify_var_roles units);
@@ -233,23 +307,178 @@ let mk_context units =
     ctx
 ;;
 
-let mk_domain units ctx =
+let mk_domain solver ctx procs =
     printf "> Inferring an abstract domain...\n";
-    let all_stmts = List.fold_left
-        (fun l u ->
-            match u with
-            | Proc p -> List.append l p#get_stmts
-            | _ -> l
-        )
-        [] units
-    in
+    let all_stmts = List.concat (List.map (fun p -> p#get_stmts) procs) in
     let conds = identify_conditions ctx#get_var_roles all_stmts in
-    let sorted_conds = sort_thresholds ctx conds in
-    new abs_domain(sorted_conds)
+    let sorted_conds = sort_thresholds solver ctx conds in
+    new abs_domain sorted_conds
+;;
+
+(* The first phase of the abstraction takes place here *)
+let translate_stmt ctx dom solver s =
+    let non_symbolic e =
+        match e with
+        | Var v -> not v#is_symbolic
+        | _ -> false
+    in
+    let over_dom e =
+        match e with
+        | Var v -> v#is_symbolic || (ctx#get_role v) != Pc
+        | _ -> false
+    in
+    let translate_assign lhs rhs =
+        (* TODO: simplify for the case when rhs has only one variable *)
+        let is_next_var name =
+            let l = (String.length name) in
+            if l > 3
+            then "_nx" = (String.sub name (l - 3) 3)
+            else false
+        in
+        let rec substitute_vars to_nx e =
+            match e with
+            | Var v -> 
+                if to_nx
+                then Var (new var (v#get_name ^ "_nx")) (* add _nx *)
+                else if is_next_var v#get_name
+                    then Var (new var (String.sub v#get_name 0
+                        ((String.length v#get_name) - 3)))  (* remove _nx *)
+                    else e
+            | BinEx (tok, l, r) ->
+                    BinEx (tok,
+                        (substitute_vars to_nx l), (substitute_vars to_nx r))
+            | UnEx (tok, l) -> UnEx (tok, (substitute_vars to_nx l))
+            | _ -> e
+        in
+        (* add a suffix "_nx" to each variable in the left-hand side *)
+        let lhs_ren = (substitute_vars true lhs) in
+        let nx_used = expr_used_vars lhs_ren in
+        solver#push_ctx;
+        (* introduce those variables to the SMT solver *)
+        List.iter (fun v -> solver#append (var_to_smt v)) nx_used;
+        (* find matching combinations *)
+        let matching_vals =
+            (dom#find_abs_vals solver (BinEx (EQ, lhs_ren, rhs))) in
+        solver#pop_ctx;
+        (* create an if/fi enumerating all combinations of lhs and rhs *)
+        let labs = List.map (fun _ -> ctx#next_label_counter) matching_vals in
+        let exit_lab = ctx#next_label_counter in
+        let guarded_actions =
+            List.map2 (fun lab abs_tuple ->
+                let guard = List.fold_left
+                    (fun lits (var, abs_val) ->
+                        if not (is_next_var var#get_name)
+                        then let lit = BinEx (EQ, Var var, Const abs_val) in
+                            if lits = Nop then lit else BinEx (AND, lits, lit)
+                        else lits)
+                    Nop abs_tuple
+                in
+                let assigns = List.fold_left
+                    (fun seq (var, abs_val) ->
+                        if (is_next_var var#get_name)
+                        then let orig_var = (substitute_vars false (Var var)) in
+                            Expr (BinEx (ASGN, orig_var, Const abs_val)) :: seq
+                        else seq)
+                    [] abs_tuple
+                in
+                List.concat [[Label lab; Expr guard;]; assigns; [Goto exit_lab]])
+            labs matching_vals
+        in
+        If labs
+        :: (List.append (List.concat guarded_actions) [(Label exit_lab)])
+    in
+    let trans_rel_many_vars symb_expr =
+        let matching_vals = (dom#find_abs_vals solver symb_expr) in
+        (* create a disjunction of conjunctions enumerating abstract values:
+            (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)            *)
+        List.fold_left
+            (fun conjuncts abs_tuple ->
+                let conj = List.fold_left
+                    (fun lits (var, abs_val) ->
+                        let lit = BinEx (EQ, Var var, Const abs_val) in
+                        if lits = Nop
+                        then lit
+                        else BinEx (AND, lits, lit))
+                    Nop abs_tuple
+                in
+                if conjuncts = Nop
+                then conj
+                else BinEx (OR, conjuncts, conj))
+            Nop matching_vals
+    in
+    let rec translate_expr e =
+        match e with
+            (* boolean combination of arithmetic constraints *)
+            | BinEx (AND, lhs, rhs) ->
+                BinEx (AND, (translate_expr lhs), (translate_expr rhs))
+            | BinEx (OR, lhs, rhs) ->
+                BinEx (OR, (translate_expr lhs), (translate_expr rhs))
+            | UnEx  (NEG, lhs) ->
+                UnEx (NEG, (translate_expr lhs))
+            (* comparison against a constant,
+               comparison against a variable and a constant *)
+            | BinEx (LT, lhs, rhs)
+            | BinEx (LE, lhs, rhs)
+            | BinEx (GT, lhs, rhs)
+            | BinEx (GE, lhs, rhs)
+            | BinEx (EQ, lhs, rhs)
+            | BinEx (NE, lhs, rhs) ->
+                if (expr_exists non_symbolic lhs)
+                then if (expr_exists non_symbolic rhs)
+                    then trans_rel_many_vars e
+                    else BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
+                else BinEx ((op_of_expr e),
+                    (dom#map_concrete solver lhs), rhs)
+            | _ -> raise (Abstraction_error
+                (sprintf "No abstraction for: %s" (expr_s e)))
+    in
+    match s with
+    | Expr e ->
+        if not (expr_exists over_dom e)
+        then [s]
+        else begin
+        (* different kinds of expressions must be treated differently *)
+            match e with
+            | BinEx (ASGN, lhs, rhs) ->
+                if (expr_exists non_symbolic rhs)
+                then
+                    if (match rhs with | Var _ -> true | _ -> false)
+                    (* foo = bar; keep untouched *)
+                    then [s]
+                    (* analyze all possible values of the right-hand side *)
+                    else (translate_assign lhs rhs)
+                (* just substitute one abstract value on the right-hand side *)
+                else [Expr (BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))]
+            | _ -> [Expr (translate_expr e)]
+        end                
+    | _ -> [s]
 ;;
 
 let do_abstraction units =
+    let procs = List.fold_left
+        (fun l u -> match u with
+            | Proc p -> p :: l
+            | _ -> l
+        ) [] units
+    in
     let ctx = mk_context units in
-    let dom = mk_domain units ctx in
-    dom#print
+    let solver = ctx#run_solver in
+    let dom = mk_domain solver ctx procs in
+    dom#print;
+    (* TODO: instead of printing it, we should construct new processes *)
+    List.iter
+        (fun p ->
+            solver#push_ctx;
+            List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
+            let body = List.concat
+                (List.map (translate_stmt ctx dom solver) p#get_stmts) in
+            (*
+            let blocks = mk_cfg body in
+            Hashtbl.iter (fun _ blk -> print_endline blk#str) blocks;
+            *)
+            printf "\n -> Abstract skel of proctype %s\n\n" p#get_name;
+            List.iter (fun s -> print_endline (stmt_s s)) body;
+            solver#pop_ctx
+        ) procs;
+    solver#stop        
 ;;

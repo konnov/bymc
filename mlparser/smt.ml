@@ -15,39 +15,47 @@ class yices_smt =
         val mutable pid = 0
         val mutable cin = stdin
         val mutable cout = stdout
+        val mutable clog = stdout
         val mutable debug = false
 
         method start =
             let pin, pout = Unix.open_process "yices" in
             cin <- pin;
             cout <- pout;
+            clog <- open_out "yices.log";
             fprintf cout "(set-verbosity! 0)\n"
         
         method stop =
+            close_out clog;
             Unix.close_process (cin, cout)
+
 
         method append cmd =
             if debug then printf "%s\n" cmd;
-            fprintf cout "%s\n" cmd
+            fprintf cout "%s\n" cmd;
+            fprintf clog "%s\n" cmd; flush clog
 
-        method push_ctx = self#append "(push)\n"
+        method append_assert expr_as_str =
+            self#append (sprintf "(assert %s)" expr_as_str)
 
-        method pop_ctx = self#append "(pop)\n"
+        method push_ctx = self#append "(push)"
+
+        method pop_ctx = self#append "(pop)"
 
         method check =
             (* the solver can print more messages, thus, sync! *)
-            fprintf cout "(echo \"sync\\n\")\n"; flush cout;
+            self#append "(echo \"sync\\n\")"; flush cout;
             let stop = ref false in
             while not !stop do
                 if "sync" = (input_line cin) then stop := true
             done;
 
-            fprintf cout "(status)\n"; (* it can be unsat already *)
+            self#append "(status)"; (* it can be unsat already *)
             flush cout;
             if not (self#is_out_sat true)
             then false
             else begin
-                fprintf cout "(check)\n";
+                self#append "(check)";
                 flush cout;
                 self#is_out_sat false
             end
@@ -106,7 +114,7 @@ let rec expr_to_smt e =
         | LT    -> sprintf "(< %s %s)" (expr_to_smt l) (expr_to_smt r)
         | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | EQ    -> sprintf "(== %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | NE    -> sprintf "(!= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
