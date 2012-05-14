@@ -690,10 +690,15 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 	| do_begin 		/* one more rule as ocamlyacc does not support multiple
                        actions like this: { (* pushbreak(); *) } */
           options OD {
-                let (elab, blab) = top_labs ()
-                    and labs, seqs = (List.split $2) in
-                let if_s = If (labs, elab) :: (List.concat seqs) in
-                let do_s = (Label elab) :: if_s @ [Label blab] in
+                (* use of elab/entry_lab is redundant, but we want
+                   if/fi and do/od look similar as some algorithms
+                   can cut off gotos at the end of an option *)
+                let (exit_lab, break_lab) = top_labs ()
+                    and labs, seqs = (List.split $2)
+                    and entry_lab = mk_label() in
+                let if_s = If (labs, exit_lab) :: (List.concat seqs) in
+                let do_s = (Label entry_lab) :: if_s
+                    @ [Label exit_lab; Goto entry_lab; Label break_lab] in
                 pop_labs ();                
                 do_s
 

@@ -125,6 +125,8 @@ class symb name_i =
                 if f == HNone || self#has_flag f
                 then flags
                 else f :: flags
+
+        method get_flags = flags
         
         method flags_s =
             List.fold_left

@@ -19,11 +19,29 @@ let var_type_promela tp =
       | TMTYPE -> "mtype"
 ;;
 
+let hflag_promela f =
+    match f with
+    | HHide -> "hide"
+    | HShow -> "show"
+    | HBitEquiv -> ""
+    | HByteEquiv -> ":"
+    | HFormalPar -> ""
+    | HInlinePar -> ""
+    | HTreatLocal -> "local"
+    | HReadOnce -> ""
+    | HSymbolic -> "symbolic"
+    | HNone -> ""
+;;
+
 let write_stmt cout level s =
     match s with
     | Expr e -> fprintf cout "%s%s;\n" (indent level) (expr_s e)
     | Decl (v, i) ->
-        fprintf cout "%s%s %s%s;\n" (indent level)
+        let flags_as_s =
+            (Accums.str_join " " (List.map hflag_promela v#get_flags))
+        in
+        fprintf cout "%s%s%s %s%s;\n" (indent level)
+            (if flags_as_s <> "" then flags_as_s ^ " " else "")
             (var_type_promela v#get_type) v#get_name
             (if i != Nop then " = " ^ (expr_s i) else "")
     | Label lab -> fprintf cout "lab%d:\n" lab
@@ -51,11 +69,15 @@ let rec write_cfg_blocks cout blocks level guard_first stop_lab blk =
         let skip_lab = ref guard_first in (* skip leading labels *)
         blk#set_visit_flag true;
         let visit_stmt s =
+            let lvl = if !skip_lab
+                    then 2
+                    else (if guard_first then (level + 2) else level) in
+            let tab = (indent lvl) in
             match s with
             | Goto lab ->
                 if lab <> stop_lab
                 then begin
-                    fprintf cout "%sgoto lab%d;\n" (indent level) lab;
+                    fprintf cout "%sgoto lab%d;\n" tab lab;
                     (* actually, one successor *)
                     List.iter
                         (write_cfg_blocks cout blocks level false stop_lab)
@@ -64,17 +86,17 @@ let rec write_cfg_blocks cout blocks level guard_first stop_lab blk =
                 (* else ignore, it is the exit from a guarded option of if *)
             | If (_, exit_lab) ->
                 (* if/fi does not allow us to use a depth-first search *)
-                fprintf cout "%sif\n" (indent level);
+                fprintf cout "%sif\n" tab;
                 List.iter
                     (write_cfg_blocks cout blocks (level + 2) true exit_lab)
                     blk#get_succ;
-                fprintf cout "%sfi;\n" (indent level);
+                fprintf cout "%sfi;\n" tab;
                 write_cfg_blocks cout blocks level false stop_lab
                     (Hashtbl.find blocks exit_lab)
             | Label _ ->
                 if not !skip_lab
-                then write_stmt cout level s;
-            | _ -> write_stmt cout (if !skip_lab then 2 else level) s;
+                then write_stmt cout lvl s;
+            | _ -> write_stmt cout lvl s;
                 skip_lab := false
         in
         List.iter visit_stmt blk#get_seq
@@ -84,7 +106,7 @@ let rec write_cfg_blocks cout blocks level guard_first stop_lab blk =
 let write_proc cout level p =
     let tab = indent level in
     if p#get_active_expr != Nop
-    then fprintf cout "%sactive[%s] " tab (expr_s p#get_active_expr);
+    then fprintf cout "\n%sactive[%s] " tab (expr_s p#get_active_expr);
     let args_s = Accums.str_join ", "
         (List.map
             (fun v -> (var_type_promela v#get_type) ^ " " ^ v#get_name)
@@ -94,7 +116,7 @@ let write_proc cout level p =
     Hashtbl.iter (fun _ blk -> printf "%s\n" blk#str) blocks;
     write_cfg_blocks cout blocks (level + 2) false (-1) (Hashtbl.find blocks 0);
     Hashtbl.iter (fun _ blk -> blk#set_visit_flag false) blocks;
-    fprintf cout "%s}\n" tab;
+    fprintf cout "%s}\n\n" tab;
 ;;
 
 let write_unit cout level u =

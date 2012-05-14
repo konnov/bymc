@@ -14,4 +14,7 @@ let rec mk_product lst n =
 
 (* like String.join in python *)
 let str_join sep list_of_strings =
-    List.fold_left (fun res s -> if res = "" then s else sep ^ s) "" list_of_strings;;
+    List.fold_left
+        (fun res s -> if res <> "" then (res ^ sep ^ s) else res ^ s)
+        "" list_of_strings
+;;
