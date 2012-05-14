@@ -682,7 +682,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                 let (elab, blab) = top_labs ()
                     and labs, seqs = (List.split $2) in
                 pop_labs ();                
-                If(labs) :: (List.concat seqs) @ [Label elab]
+                If (labs, elab) :: (List.concat seqs) @ [Label elab]
                 (* $$ = nn($1, IF, ZN, ZN);
         		 $$->sl = $2->sl;
 				 prune_opts($$); *)
@@ -692,7 +692,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
           options OD {
                 let (elab, blab) = top_labs ()
                     and labs, seqs = (List.split $2) in
-                let if_s = If(labs) :: (List.concat seqs) in
+                let if_s = If (labs, elab) :: (List.concat seqs) in
                 let do_s = (Label elab) :: if_s @ [Label blab] in
                 pop_labs ();                
                 do_s

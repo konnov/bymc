@@ -12,6 +12,8 @@ class ['t] basic_block =
     object(self)
         val mutable seq: 't stmt list = []
         val mutable succ: 't basic_block list = []
+        (* this flag can be used to traverse along basic blocks *)
+        val mutable visit_flag = false
 
         method set_seq s = seq <- s
         method get_seq = seq
@@ -19,10 +21,13 @@ class ['t] basic_block =
         method set_succ s = succ <- s
         method get_succ = succ
 
+        method set_visit_flag f = visit_flag <- f
+        method get_visit_flag = visit_flag
+
         method get_exit_labs =
             match List.hd (List.rev seq) with
                 | Goto i -> [i]
-                | If is -> is
+                | If (is, _) -> is
                 | _ -> [] (* an exit block *)
 
         method get_lead_lab =
@@ -40,12 +45,39 @@ class ['t] basic_block =
     end
 ;;
 
+(* collect labels standing one next to each other *)
+let replace_neighb_labels stmts =
+    let neighb = Hashtbl.create 10
+    in
+    List.iter2
+        (fun s1 s2 ->
+            match s1, s2 with
+            | Label i, Label j ->
+                if Hashtbl.mem neighb i
+                (* add the neighbor of i *)
+                then Hashtbl.add neighb j (Hashtbl.find neighb i)
+                (* add i itself *)
+                else Hashtbl.add neighb j i
+            | _ -> ()
+        )
+        (List.rev (List.tl (List.rev stmts))) (List.tl stmts);
+    let sub_lab i = if (Hashtbl.mem neighb i) then Hashtbl.find neighb i else i
+    in
+    List.map
+        (fun s ->
+            match s with
+            | Goto i -> Goto (sub_lab i)
+            | If (targs, exit) -> If ((List.map sub_lab targs), (sub_lab exit))
+            | _ -> s
+        ) stmts
+;;
+
 let collect_jump_targets stmts =
     List.fold_left
         (fun targs stmt ->
             match stmt with
                 | Goto i -> IntSet.add i targs
-                | If is  -> List.fold_right IntSet.add is targs
+                | If (is, _)  -> List.fold_right IntSet.add is targs
                 | _      -> targs
         )
         IntSet.empty
@@ -62,7 +94,8 @@ let separate is_sep list_i =
             | hd :: tl ->
                 let res = sep_rec tl in
                 match res with
-                    | [] -> if is_sep hd then [[]; [hd]] else [[hd]]
+                    | [] ->
+                        if is_sep hd then [[]; [hd]] else [[hd]]
                     | hdl :: tll ->
                         if is_sep hd
                         then [] :: (hd :: hdl) :: tll
@@ -79,13 +112,14 @@ let basic_block_tbl_s bbs =
 ;;
 
 let mk_cfg stmts =
-    let seq_heads = collect_jump_targets stmts in
+    let stmts_r = replace_neighb_labels stmts in
+    let seq_heads = collect_jump_targets stmts_r in
     let cleaned = List.filter (* remove hanging unreferenced labels *)
         (fun s ->
             match s with
                 | Label i -> IntSet.mem i seq_heads
                 | _ -> true)
-        stmts in
+        stmts_r in
     let seq_list = separate
             (fun s ->
                 match s with (* separate by jump targets *)

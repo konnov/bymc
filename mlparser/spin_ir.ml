@@ -235,7 +235,7 @@ type 't stmt = Skip | Expr of 't expr
     | Label of int
     | Atomic_beg | Atomic_end | D_step_beg | D_step_end
     | Goto of int | Goto_unresolved of string
-    | If of int list | Else
+    | If of int list (* condition labels *) * int (* exit label *) | Else
     | Assert of 't expr | Assume of 't expr
     | Print of string * 't expr list
 ;;

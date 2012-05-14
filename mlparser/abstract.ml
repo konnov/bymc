@@ -384,7 +384,7 @@ let translate_stmt ctx dom solver s =
                 List.concat [[Label lab; Expr guard;]; assigns; [Goto exit_lab]])
             labs matching_vals
         in
-        If labs
+        If (labs, exit_lab)
         :: (List.append (List.concat guarded_actions) [(Label exit_lab)])
     in
     let trans_rel_many_vars symb_expr =
@@ -465,23 +465,18 @@ let do_abstraction units =
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx procs in
     dom#print;
-    (* TODO: instead of printing it, we should construct new processes *)
     let new_procs = List.map
         (fun p ->
             solver#push_ctx;
             List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
             let body = List.concat
                 (List.map (translate_stmt ctx dom solver) p#get_stmts) in
-            (*
-            let blocks = mk_cfg body in
-            Hashtbl.iter (fun _ blk -> print_endline blk#str) blocks;
-            *)
             printf "\n -> Abstract skel of proctype %s\n\n" p#get_name;
             List.iter (fun s -> print_endline (stmt_s s)) body;
             solver#pop_ctx;
             Proc (proc_replace_body p body)
         ) procs;
     in
-    solver#stop;
+    let _ = solver#stop in
     (List.append other_units new_procs)
 ;;

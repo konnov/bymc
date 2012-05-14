@@ -2,6 +2,7 @@ open Printf;;
 
 open Parse;;
 open Abstract;;
+open Writer;;
 
 let _ =
     try
@@ -16,7 +17,9 @@ let _ =
         in
         printf "#units: %d\n" (List.length units);
         let new_units = do_abstraction units in
-        ()
+        let fo = open_out "abs1.prm" in
+        List.iter (write_unit fo 0) new_units;
+        close_out fo
     with End_of_file ->
         print_string "Premature end of file\n";
         exit 1

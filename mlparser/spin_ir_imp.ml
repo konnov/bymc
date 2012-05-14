@@ -155,7 +155,8 @@ let stmt_s s =
     | D_step_end -> "} /* d_step */"
     | Goto l -> sprintf "goto %d" l
     | Goto_unresolved ls -> sprintf "goto_unres %s" ls
-    | If ls -> "if " ^ (List.fold_left (sprintf "%s %d") "" ls)
+    | If (ls, exitl) ->
+        sprintf "if %s -> %d" (List.fold_left (sprintf "%s %d") "" ls) exitl
     | Else -> "else"
     | Assert e -> "assert " ^ (expr_s e)
     | Assume e -> "assume " ^ (expr_s e)
