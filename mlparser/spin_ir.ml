@@ -271,6 +271,13 @@ class ['t] proc name_i active_expr_i =
     end
 ;;
 
+let proc_replace_body p new_body =
+    let new_p = new proc p#get_name p#get_active_expr in
+    new_p#set_args p#get_args;
+    new_p#set_stmts new_body;
+    new_p
+;;
+
 type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;
 
 let resolve_label labels stmt =

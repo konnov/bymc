@@ -15,7 +15,8 @@ let _ =
         let units = parse_promela filename basename dirname
         in
         printf "#units: %d\n" (List.length units);
-        do_abstraction units
+        let new_units = do_abstraction units in
+        ()
     with End_of_file ->
         print_string "Premature end of file\n";
         exit 1

@@ -455,18 +455,18 @@ let translate_stmt ctx dom solver s =
 ;;
 
 let do_abstraction units =
-    let procs = List.fold_left
-        (fun l u -> match u with
-            | Proc p -> p :: l
-            | _ -> l
-        ) [] units
+    let procs, other_units = List.fold_left
+        (fun (lp, lo) u -> match u with
+            | Proc p -> (p :: lp, lo)
+            | _ -> (lp, u :: lo)
+        ) ([], []) units
     in
     let ctx = mk_context units in
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx procs in
     dom#print;
     (* TODO: instead of printing it, we should construct new processes *)
-    List.iter
+    let new_procs = List.map
         (fun p ->
             solver#push_ctx;
             List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
@@ -478,7 +478,10 @@ let do_abstraction units =
             *)
             printf "\n -> Abstract skel of proctype %s\n\n" p#get_name;
             List.iter (fun s -> print_endline (stmt_s s)) body;
-            solver#pop_ctx
+            solver#pop_ctx;
+            Proc (proc_replace_body p body)
         ) procs;
-    solver#stop        
+    in
+    solver#stop;
+    (List.append other_units new_procs)
 ;;
