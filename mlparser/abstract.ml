@@ -5,6 +5,7 @@ open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
+open Analysis;;
 
 exception Skeleton_not_supported of string;;
 exception Abstraction_error of string;;
