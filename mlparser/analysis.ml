@@ -39,7 +39,7 @@ let lub_int_role x y =
     | _, UnboundedInt -> UnboundedInt
     | (IntervalInt (a, b)), (IntervalInt (c, d)) ->
         IntervalInt ((min a c), (max b  d))
-in
+;;
 
 let join_int_roles lhs rhs =
     let res = Hashtbl.create (Hashtbl.length lhs) in
@@ -59,10 +59,12 @@ let join_int_roles lhs rhs =
 let transfer_roles stmt input =
     let output = Hashtbl.create (Hashtbl.length input)
     in
-    let rec eval expr = function
+    let rec eval expr = 
+        match expr with
         | Const v -> IntervalInt (v, v)
-        | Var v -> if Hashtbl.mem input v then Hashtbl.find input v else Undefined
-        | UnEx child -> eval child
+        | Var var ->
+            if Hashtbl.mem input var then Hashtbl.find input var else Undefined
+        | UnEx (_, _) -> Undefined
         | BinEx (ASGN, Var var, rhs) ->
             let rhs_val = eval rhs in
             Hashtbl.add output var rhs_val;
@@ -72,10 +74,12 @@ let transfer_roles stmt input =
         | BinEx (_, _, _) -> Undefined
         | _ -> Undefined       
     in
-    match stmt with
-    | Decl (var, init_expr) -> Hashtbl.add var (eval init_expr)
-    | Expr expr -> let _ = eval expr
-    | _ -> ();
+    begin
+        match stmt with
+        | Decl (var, init_expr) -> Hashtbl.add output var (eval init_expr)
+        | Expr expr -> let _ = eval expr in ()
+        | _ -> ()
+    end;
     output
 ;;
 
