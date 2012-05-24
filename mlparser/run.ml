@@ -3,6 +3,7 @@ open Printf;;
 open Parse;;
 open Abstract;;
 open Writer;;
+open Debug;;
 
 let _ =
     try
@@ -12,15 +13,15 @@ let _ =
                  Filename.dirname Sys.argv.(1)
             else raise (Failure "Use: program filename")
         in
-        printf "> Parsing %s...\n" basename;
+        log INFO (sprintf "> Parsing %s..." basename);
         let units = parse_promela filename basename dirname
         in
-        printf "#units: %d\n" (List.length units);
+        log DEBUG (sprintf "#units: %d" (List.length units));
         let new_units = do_abstraction units in
         let fo = open_out "abs1.prm" in
         List.iter (write_unit fo 0) new_units;
         close_out fo
     with End_of_file ->
-        print_string "Premature end of file\n";
+        log ERROR "Premature end of file";
         exit 1
 

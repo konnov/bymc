@@ -18,3 +18,25 @@ let str_join sep list_of_strings =
         (fun res s -> if res <> "" then (res ^ sep ^ s) else res ^ s)
         "" list_of_strings
 ;;
+
+(*
+   check two hash tables for element equality as standard "=" works
+   only on the hash tables of the same capacity!
+ *)
+let hashtbl_eq lhs rhs =
+    if (Hashtbl.length lhs) <> (Hashtbl.length rhs)
+    then false
+    else
+        let subset_eq l r =
+            Hashtbl.iter
+                (fun k v ->
+                    if (Hashtbl.find r k) <> v then raise Not_found)
+                l
+        in
+        try
+            subset_eq lhs rhs;
+            subset_eq rhs lhs;
+            true
+        with Not_found ->
+            false
+;;

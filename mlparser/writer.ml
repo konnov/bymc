@@ -2,6 +2,7 @@
 
 open Printf;;
 
+open Debug;;
 open Spin_ir;;
 open Spin_ir_imp;;
 open Spin_types;;
@@ -113,7 +114,7 @@ let write_proc cout level p =
         p#get_args) in
     fprintf cout "proctype %s(%s) {\n" p#get_name args_s;
     let blocks = Cfg.mk_cfg p#get_stmts in
-    Hashtbl.iter (fun _ blk -> printf "%s\n" blk#str) blocks;
+    Hashtbl.iter (fun _ blk -> log DEBUG (sprintf "%s\n" blk#str)) blocks;
     write_cfg_blocks cout blocks (level + 2) false (-1) (Hashtbl.find blocks 0);
     Hashtbl.iter (fun _ blk -> blk#set_visit_flag false) blocks;
     fprintf cout "%s}\n\n" tab;

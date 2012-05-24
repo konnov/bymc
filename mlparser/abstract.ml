@@ -6,6 +6,7 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
 open Analysis;;
+open Debug;;
 
 exception Skeleton_not_supported of string;;
 exception Abstraction_error of string;;
@@ -70,9 +71,10 @@ class abs_domain conds_i =
         val mutable val_map = Hashtbl.create 10 (* from a cond to a value *)
 
         method print =
-            printf " # Abstract domain: \n";
+            log INFO " # Abstract domain:";
             Hashtbl.iter
-                (fun c i -> printf "   d%d -> %s\n" i (expr_s c)) val_map
+                (fun c i -> log INFO (sprintf "   d%d -> %s" i (expr_s c)))
+                val_map
         
         initializer
             List.iter
@@ -151,6 +153,28 @@ class abs_domain conds_i =
 ;;
 
 let identify_var_roles units =
+    let int_roles = List.fold_left
+        (fun sum einheit ->
+            match einheit with
+            | Proc proc ->
+                let cfg = Cfg.mk_cfg proc#get_stmts in
+                let int_roles =
+                    visit_cfg (visit_basic_block transfer_roles)
+                        join_int_roles cfg (mk_bottom_val ())
+                in
+                let body_sum = join_all_blocks join_int_roles
+                    (mk_bottom_val ()) int_roles
+                in
+                join_int_roles sum body_sum
+            | _ -> sum
+        ) (mk_bottom_val ()) units
+    in
+    log INFO " # Integer roles...";
+    Hashtbl.iter
+        (fun v r ->
+            log INFO (sprintf "    %s: %s" v#get_name (int_role_s r)))
+        int_roles;
+
     let tbl = Hashtbl.create 10 in
     let assign_role is_local name =
         if not is_local
@@ -295,21 +319,27 @@ let sort_thresholds solver ctx conds =
 let mk_context units =
     let ctx = new trans_context in
     ctx#set_var_roles (identify_var_roles units);
-    print_endline " # Variable roles:";
+    log INFO " # Variable roles:";
     Hashtbl.iter
-        (fun v r -> printf "   %s -> %s\n" v#get_name (var_role_s r))
+        (fun v r ->
+            log INFO (sprintf "   %s -> %s" v#get_name (var_role_s r)))
         ctx#get_var_roles;
     ctx#set_assumps (extract_assumptions units);
-    print_endline " # Assumptions:";
-    List.iter (fun e -> printf "   assume(%s)\n" (expr_s e)) ctx#get_assumps;
+    log INFO " # Assumptions:";
+    List.iter
+        (fun e -> log INFO (sprintf "   assume(%s)" (expr_s e)))
+        ctx#get_assumps;
     ctx#set_globals (extract_globals units);
-    print_endline " # Globals:";
-    List.iter (fun v -> printf "   var %s\n" v#get_name) ctx#get_globals;
+    log INFO " # Globals:";
+    List.iter
+        (fun v -> log INFO (sprintf "   var %s" v#get_name))
+        ctx#get_globals;
     ctx
 ;;
 
 let mk_domain solver ctx procs =
-    printf "> Inferring an abstract domain...\n";
+    log INFO "> Extracting an abstract domain...";
+   
     let all_stmts = List.concat (List.map (fun p -> p#get_stmts) procs) in
     let conds = identify_conditions ctx#get_var_roles all_stmts in
     let sorted_conds = sort_thresholds solver ctx conds in
@@ -465,15 +495,15 @@ let do_abstraction units =
     let ctx = mk_context units in
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx procs in
-    dom#print;
+    if may_log INFO then dom#print;
     let new_procs = List.map
         (fun p ->
             solver#push_ctx;
             List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
             let body = List.concat
                 (List.map (translate_stmt ctx dom solver) p#get_stmts) in
-            printf "\n -> Abstract skel of proctype %s\n\n" p#get_name;
-            List.iter (fun s -> print_endline (stmt_s s)) body;
+            log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
+            List.iter (fun s -> log DEBUG (stmt_s s)) body;
             solver#pop_ctx;
             Proc (proc_replace_body p body)
         ) procs;

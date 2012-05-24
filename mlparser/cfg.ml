@@ -2,6 +2,7 @@ open Printf;;
 
 open Spin_ir;;
 open Spin_ir_imp;;
+open Debug;;
 
 module IntSet = Set.Make (struct
  type t = int

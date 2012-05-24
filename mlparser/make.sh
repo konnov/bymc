@@ -1,3 +1,5 @@
 #!/bin/sh
 
-ocamlbuild -lib str -lib unix ./run.native
+DEBUG="-cflags -g"
+
+ocamlbuild $DEBUG -lib str -lib unix ./run.native
