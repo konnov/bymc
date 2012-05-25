@@ -50,6 +50,8 @@ let join_all_blocks join_fun init_vals bb_vals =
 ;;
 
 (* special kind of analysis *)
+
+(* int or bounded int *)
 type int_role = IntervalInt of int * int | UnboundedInt | Undefined;;
 
 let int_role_s = function

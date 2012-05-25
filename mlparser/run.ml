@@ -7,6 +7,8 @@ open Debug;;
 
 let _ =
     try
+        current_verbosity_level := INFO;
+
         let filename, basename, dirname =
             if Array.length Sys.argv > 1
             then Sys.argv.(1), Filename.basename Sys.argv.(1),
