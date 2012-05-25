@@ -49,7 +49,7 @@ let join_all_blocks join_fun init_vals bb_vals =
     Hashtbl.fold (fun _ vals sum -> join_fun sum vals) bb_vals init_vals 
 ;;
 
-(* special kind of analysis *)
+(* special kinds of analysis *)
 
 (* int or bounded int *)
 type int_role = IntervalInt of int * int | UnboundedInt | Undefined;;

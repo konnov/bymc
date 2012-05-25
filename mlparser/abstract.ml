@@ -6,6 +6,7 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
 open Analysis;;
+open Skel_struc;;
 open Debug;;
 
 exception Skeleton_not_supported of string;;
@@ -174,6 +175,11 @@ let identify_var_roles units =
         (fun v r ->
             log INFO (sprintf "    %s: %s" v#get_name (int_role_s r)))
         int_roles;
+
+    (*
+    use a skeleton here:
+    let regtbl = extract_skel cfg
+    *)
 
     let tbl = Hashtbl.create 10 in
     let assign_role is_local name =

@@ -13,6 +13,7 @@ class ['t] basic_block =
     object(self)
         val mutable seq: 't stmt list = []
         val mutable succ: 't basic_block list = []
+        val mutable pred: 't basic_block list = []
         (* this flag can be used to traverse along basic blocks *)
         val mutable visit_flag = false
 
@@ -21,6 +22,9 @@ class ['t] basic_block =
 
         method set_succ s = succ <- s
         method get_succ = succ
+
+        method set_pred p = pred <- p
+        method get_pred = pred
 
         method set_visit_flag f = visit_flag <- f
         method get_visit_flag = visit_flag
@@ -43,6 +47,20 @@ class ['t] basic_block =
                 "" self#get_exit_labs in
             (sprintf "Basic block %d [succs: %s]:\n" self#get_lead_lab exit_s) ^
             (List.fold_left (fun a s -> sprintf "%s%s\n" a (stmt_s s)) "" seq)
+    end
+;;
+
+class ['t, 'attr] attr_basic_block a =
+    object(self)
+        inherit ['t] basic_block as super
+
+        val mutable attr: 'attr = a
+
+        method as_basic_block = (self :> ('t) basic_block)
+
+        method set_attr a = attr <- a
+        
+        method get_attr = attr
     end
 ;;
 
@@ -138,10 +156,15 @@ let mk_cfg stmts =
                 b#set_seq seq; Hashtbl.add blocks i b
             | _ -> raise (Failure "Broken head: expected (Label i) :: tl"))
         seq_list;
-    (* connect them *)
+    (* set successors *)
     Hashtbl.iter
-        (fun i bb -> bb#set_succ
+        (fun _ bb -> bb#set_succ
             (List.map (Hashtbl.find blocks) bb#get_exit_labs))
+        blocks;
+    (* set predecessors *)
+    Hashtbl.iter
+        (fun _ bb ->
+            List.iter (fun s -> s#set_pred (bb :: s#get_pred)) bb#get_succ)
         blocks;
     (* return the hash table: heading_label: int -> basic_block *)
     blocks
