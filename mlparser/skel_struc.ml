@@ -8,6 +8,13 @@ open Cfg;;
 
 type region = RegInit | RegGuard | RegAtomic | RegEnd;;
 
+let region_s = function
+    | RegInit -> "init"
+    | RegGuard -> "guard"
+    | RegAtomic -> "atomic"
+    | RegEnd -> "end"
+;;
+
 (*
     Here we check that a control flow graph has the following structure:
 
@@ -34,7 +41,8 @@ let extract_skel cfg =
     let rec search prev_reg bb =
         let exists f = List.exists f bb#get_seq in
         if not bb#get_visit_flag
-        then bb#set_visit_flag true; 
+        then begin
+            bb#set_visit_flag true; 
             let my_reg, next_reg = match prev_reg with
             | RegInit ->
                 if (List.length bb#get_pred) > 1
@@ -54,8 +62,9 @@ let extract_skel cfg =
             
             | RegEnd -> RegEnd, RegEnd
             in
-            Hashtbl.add regtbl bb my_reg;
+            Hashtbl.add regtbl bb#get_lead_lab my_reg;
             List.iter (search next_reg) bb#get_succ
+        end
     in
     search RegInit (Hashtbl.find cfg 0);
     regtbl

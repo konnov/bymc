@@ -7,19 +7,26 @@ open Spin_ir_imp;;
 open Smt;;
 open Analysis;;
 open Skel_struc;;
+open Accums;;
 open Debug;;
 
 exception Skeleton_not_supported of string;;
 exception Abstraction_error of string;;
 
-type var_role = Pc | Shared | Local | Next;;
+type var_role =
+    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch;;
 
 let var_role_s r =
     match r with
-    | Pc -> "pc"
-    | Shared -> "shared"
-    | Local -> "local"
-    | Next -> "next"
+    | BoundedInt (a, b) -> sprintf "bound[%d, %d]" a b
+    | SharedUnbounded -> "shared-unbound"
+    | LocalUnbounded -> "local-unbound"
+    | Scratch -> "scratch"
+;;
+
+let is_bounded_int = function
+    | BoundedInt (_, _) -> true
+    | _ -> false
 ;;
 
 class ['tok] trans_context =
@@ -154,59 +161,62 @@ class abs_domain conds_i =
 ;;
 
 let identify_var_roles units =
-    let int_roles = List.fold_left
-        (fun sum einheit ->
-            match einheit with
-            | Proc proc ->
-                let cfg = Cfg.mk_cfg proc#get_stmts in
-                let int_roles =
-                    visit_cfg (visit_basic_block transfer_roles)
-                        join_int_roles cfg (mk_bottom_val ())
-                in
-                let body_sum = join_all_blocks join_int_roles
-                    (mk_bottom_val ()) int_roles
-                in
-                join_int_roles sum body_sum
-            | _ -> sum
-        ) (mk_bottom_val ()) units
+    let roles = Hashtbl.create 10
     in
-    log INFO " # Integer roles...";
+    let fill_roles proc =
+        let cfg = Cfg.mk_cfg proc#get_stmts in
+        let int_roles =
+            visit_cfg (visit_basic_block transfer_roles)
+                join_int_roles cfg (mk_bottom_val ()) in
+        let body_sum = join_all_blocks join_int_roles
+            (mk_bottom_val ()) int_roles in
+        let regtbl = extract_skel cfg in
+        let end_bbs = List.filter
+            (fun bb -> RegEnd = (Hashtbl.find regtbl bb#get_lead_lab))
+            (hashtbl_vals cfg)
+        in
+        Hashtbl.iter
+            (fun v r ->
+                let new_role =
+                if List.for_all
+                    (fun bb ->
+                        let loc_roles = Hashtbl.find int_roles bb#get_lead_lab in
+                        match Hashtbl.find loc_roles v with
+                            | IntervalInt (a, b) -> a = b   (* const *)
+                            | _ -> false                    (* mutating *)
+                    ) end_bbs
+                then Scratch
+                else match Hashtbl.find body_sum v with
+                    | IntervalInt (a, b) -> BoundedInt (a, b)
+                    | UnboundedInt -> LocalUnbounded
+                    | Undefined ->
+                        raise (Abstraction_error
+                            (sprintf "Undefined type for %s" v#get_name))
+                in
+                Hashtbl.replace roles v new_role (* XXX: can we lose types? *)
+            )
+            body_sum;
+    in
+    List.iter (function Proc proc -> fill_roles proc | _ -> ()) units;
+
+    let replace_global = function
+        | Decl (v, e) -> (* global declaration *)
+            if not v#is_symbolic
+            then if LocalUnbounded <> (Hashtbl.find roles v)
+            then raise (Abstraction_error
+                    (sprintf "Shared variable %s is not unbounded" v#get_name))
+            else Hashtbl.replace roles v SharedUnbounded
+        | _ -> ()
+    in
+    List.iter (function | Stmt s -> replace_global s | _ -> ()) units;
+
+    log INFO " # Variable roles...";
     Hashtbl.iter
         (fun v r ->
-            log INFO (sprintf "    %s: %s" v#get_name (int_role_s r)))
-        int_roles;
+            log INFO (sprintf "    %s: %s" v#get_name (var_role_s r)))
+        roles;
 
-    (*
-    use a skeleton here:
-    let regtbl = extract_skel cfg
-    *)
-
-    let tbl = Hashtbl.create 10 in
-    let assign_role is_local name =
-        if not is_local
-        then Shared
-        else if name = "pc" || name = "next_pc"
-        then Pc
-        else if "next_" = (String.sub name 0 (min 5 (String.length name)))
-        then Next
-        else Local
-    in
-    let process_stmt is_local s =
-        match s with
-            | Decl (v, e) ->
-                if not v#is_symbolic
-                then Hashtbl.add tbl v (assign_role is_local v#get_name)
-            | _ -> ()
-    in
-    List.iter
-        (fun u ->
-            match u with
-            | Stmt s -> process_stmt false s
-            | Proc p -> List.iter (process_stmt true) p#get_stmts
-            | _ -> ()
-        )
-        units;
-    tbl
+    roles
 ;;
 
 (* XXX: copied from spin.mly *)
@@ -224,7 +234,7 @@ let rec is_expr_symbolic e =
 let identify_conditions var_roles stmts =
     let on_cond v e =
         let r = Hashtbl.find var_roles v in
-        if (r = Local || r = Next) && (is_expr_symbolic e)
+        if (r = LocalUnbounded || r = Scratch) && (is_expr_symbolic e)
         then [e]
         else []
     in
@@ -361,7 +371,8 @@ let translate_stmt ctx dom solver s =
     in
     let over_dom e =
         match e with
-        | Var v -> v#is_symbolic || (ctx#get_role v) != Pc
+        | Var v ->
+            v#is_symbolic || (is_bounded_int (ctx#get_role v))
         | _ -> false
     in
     let translate_assign lhs rhs =

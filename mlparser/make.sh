@@ -1,5 +1,5 @@
 #!/bin/sh
 
-DEBUG="-cflags -g"
+DEBUG="-cflag -g -lflag -g"
 
 ocamlbuild $DEBUG -lib str -lib unix ./run.native

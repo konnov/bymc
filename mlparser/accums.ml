@@ -40,3 +40,9 @@ let hashtbl_eq lhs rhs =
         with Not_found ->
             false
 ;;
+
+let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl [];;
+
+let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl [];;
+
+
