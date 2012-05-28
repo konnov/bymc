@@ -20,7 +20,7 @@ let _ =
         in
         log DEBUG (sprintf "#units: %d" (List.length units));
         let new_units = do_abstraction units in
-        let fo = open_out "abs1.prm" in
+        let fo = open_out "abs.prm" in
         List.iter (write_unit fo 0) new_units;
         close_out fo
     with End_of_file ->

@@ -8,6 +8,7 @@ open Smt;;
 open Analysis;;
 open Skel_struc;;
 open Accums;;
+open Writer;;
 open Debug;;
 
 exception Skeleton_not_supported of string;;
@@ -94,6 +95,8 @@ class abs_domain conds_i =
                     (List.combine conds (List.append (List.tl conds) [Nop]))
             in
             cond_intervals <- tuples
+
+        method length = List.length conds
 
         method map_concrete (solver: yices_smt) (symb_expr: 't expr) =
             try
@@ -510,6 +513,13 @@ let do_interval_abstraction ctx dom solver procs =
         ) procs;
 ;;
 
+let do_counter_abstraction ctx dom solver units = 
+    let ctr_arr = new var "ktr" in
+    ctr_arr#set_isarray true;
+    ctr_arr#set_num_elems dom#length;
+    Stmt (Decl (ctr_arr, Nop)) :: units
+;;
+
 let do_abstraction units =
     let procs, other_units = List.fold_left
         (fun (lp, lo) u -> match u with
@@ -522,6 +532,13 @@ let do_abstraction units =
     let dom = mk_domain solver ctx procs in
     if may_log INFO then dom#print;
     let new_procs = do_interval_abstraction ctx dom solver procs in
+    (* debug output *)
+    let fo = open_out "abs_interval.prm" in
+    List.iter (write_unit fo 0) (List.append other_units new_procs);
+    close_out fo;
+    (* end of debug output *)
+    let new_units = do_counter_abstraction ctx dom solver
+        (List.append other_units new_procs) in
     let _ = solver#stop in
-    (List.append other_units new_procs)
+    new_units
 ;;

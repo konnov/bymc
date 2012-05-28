@@ -41,9 +41,10 @@ let write_stmt cout level s =
         let flags_as_s =
             (Accums.str_join " " (List.map hflag_promela v#get_flags))
         in
-        fprintf cout "%s%s%s %s%s;\n" (indent level)
+        fprintf cout "%s%s%s %s%s%s;\n" (indent level)
             (if flags_as_s <> "" then flags_as_s ^ " " else "")
             (var_type_promela v#get_type) v#get_name
+            (if v#get_isarray then sprintf "[%d]" v#get_num_elems else "")
             (if i != Nop then " = " ^ (expr_s i) else "")
     | Label lab -> fprintf cout "lab%d:\n" lab
     | Else -> fprintf cout "else ->\n"
