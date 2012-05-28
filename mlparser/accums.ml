@@ -1,4 +1,4 @@
-(* Like batteries, but our own *)
+(* Like batteries, but our own. Useful functions that do not fit elsewhere. *)
 
 (* make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =
@@ -45,4 +45,12 @@ let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl [];;
 
 let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl [];;
 
+let bits_to_fit n =                                                             
+    let rec f b m =
+        if n <= m
+        then b
+        else f (b + 1) (2 * m)
+    in
+    f 1 2
+;;
 

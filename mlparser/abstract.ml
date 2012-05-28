@@ -210,12 +210,6 @@ let identify_var_roles units =
     in
     List.iter (function | Stmt s -> replace_global s | _ -> ()) units;
 
-    log INFO " # Variable roles...";
-    Hashtbl.iter
-        (fun v r ->
-            log INFO (sprintf "    %s: %s" v#get_name (var_role_s r)))
-        roles;
-
     roles
 ;;
 
@@ -502,6 +496,20 @@ let translate_stmt ctx dom solver s =
     | _ -> [s]
 ;;
 
+let do_interval_abstraction ctx dom solver procs = 
+    List.map
+        (fun p ->
+            solver#push_ctx;
+            List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
+            let body = List.concat
+                (List.map (translate_stmt ctx dom solver) p#get_stmts) in
+            log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
+            List.iter (fun s -> log DEBUG (stmt_s s)) body;
+            solver#pop_ctx;
+            Proc (proc_replace_body p body)
+        ) procs;
+;;
+
 let do_abstraction units =
     let procs, other_units = List.fold_left
         (fun (lp, lo) u -> match u with
@@ -513,18 +521,7 @@ let do_abstraction units =
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx procs in
     if may_log INFO then dom#print;
-    let new_procs = List.map
-        (fun p ->
-            solver#push_ctx;
-            List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
-            let body = List.concat
-                (List.map (translate_stmt ctx dom solver) p#get_stmts) in
-            log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
-            List.iter (fun s -> log DEBUG (stmt_s s)) body;
-            solver#pop_ctx;
-            Proc (proc_replace_body p body)
-        ) procs;
-    in
+    let new_procs = do_interval_abstraction ctx dom solver procs in
     let _ = solver#stop in
     (List.append other_units new_procs)
 ;;
