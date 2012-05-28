@@ -25,8 +25,9 @@ let var_role_s r =
     | Scratch -> "scratch"
 ;;
 
-let is_bounded_int = function
-    | BoundedInt (_, _) -> true
+let is_unbounded_int = function
+    | SharedUnbounded
+    | LocalUnbounded -> true
     | _ -> false
 ;;
 
@@ -369,7 +370,7 @@ let translate_stmt ctx dom solver s =
     let over_dom e =
         match e with
         | Var v ->
-            v#is_symbolic || (is_bounded_int (ctx#get_role v))
+            v#is_symbolic || (is_unbounded_int (ctx#get_role v))
         | _ -> false
     in
     let translate_assign lhs rhs =
@@ -514,6 +515,11 @@ let do_interval_abstraction ctx dom solver procs =
 ;;
 
 let do_counter_abstraction ctx dom solver units = 
+    let abstract_proc p =
+        let cfg = Cfg.mk_cfg p#get_stmts in
+        let regtbl = extract_skel cfg in
+        p
+    in
     let ctr_arr = new var "ktr" in
     ctr_arr#set_isarray true;
     ctr_arr#set_num_elems dom#length;
@@ -533,7 +539,7 @@ let do_abstraction units =
     if may_log INFO then dom#print;
     let new_procs = do_interval_abstraction ctx dom solver procs in
     (* debug output *)
-    let fo = open_out "abs_interval.prm" in
+    let fo = open_out "abs-interval.prm" in
     List.iter (write_unit fo 0) (List.append other_units new_procs);
     close_out fo;
     (* end of debug output *)
