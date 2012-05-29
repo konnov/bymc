@@ -67,6 +67,14 @@ let parse_promela filename basename dirname =
     let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
     let units = Spin.program lfun lexbuf in
 
+    (* postprocess: remove artifacts that complicate further processing *)
+    let units = List.map
+        (function
+            | Proc p ->
+                Proc (proc_replace_body p (merge_neighb_labels p#get_stmts))
+            | _ as u -> u )
+        units
+    in
     if debug then begin
         (* (* DEBUGGING lex *)
         let t = ref EQ in
@@ -81,14 +89,12 @@ let parse_promela filename basename dirname =
         List.iter p units;
 
         List.iter
-            (fun u ->
-                match u with
+            (function
                 | Proc p ->
                     let bbs = mk_cfg p#get_stmts in
                     Hashtbl.iter (fun _ bb -> printf "%s\n" bb#str) bbs
                 | _ -> () )
             units;
-        units
-    end
-    else units
+    end;
+    units
 

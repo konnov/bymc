@@ -609,7 +609,6 @@ labXXX:
                 :: (List.concat (List.map2 make_opt index_vals opt_labs)) in
         proc_replace_body p (prefix @ select_reg @ [Label exit_lab] @ suffix)
     in
-        
     let new_units =
         List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)
         units in

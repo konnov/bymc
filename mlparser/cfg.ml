@@ -67,7 +67,7 @@ class ['t, 'attr] attr_basic_block a =
 ;;
 
 (* collect labels standing one next to each other *)
-let replace_neighb_labels stmts =
+let merge_neighb_labels stmts =
     let neighb = Hashtbl.create 10
     in
     List.iter2
@@ -133,7 +133,7 @@ let basic_block_tbl_s bbs =
 ;;
 
 let mk_cfg stmts =
-    let stmts_r = replace_neighb_labels stmts in
+    let stmts_r = merge_neighb_labels stmts in
     let seq_heads = collect_jump_targets stmts_r in
     let cleaned = List.filter (* remove hanging unreferenced labels *)
         (fun s ->
