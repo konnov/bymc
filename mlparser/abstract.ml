@@ -569,28 +569,17 @@ class ctr_abs_ctx dom t_ctx =
 
 let do_counter_abstraction ctx dom solver units =
     let ctr_ctx = new ctr_abs_ctx dom ctx in
-    let abstract_proc p =
-        let cfg = Cfg.mk_cfg p#get_stmts in
-        let regtbl = extract_skel cfg in
-        let domtr = find_dominator
-            (List.filter
-                (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
-                (hashtbl_vals cfg))
-        in
-        let prefix, ell, suffix =
-            list_separate (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts
-        in
+    let mk_counter_guard label_before exit_lab =
         let index_vals = range 0 ctr_ctx#get_ctr_dim in
-        (*
+(*
 labXXX:
   if
     :: ktr[0] > 0 -> pc = ...; nrcvd = ...;
     :: ktr[1] > 0 -> ...
     ...
   fi
-         *)
+ *)
         let opt_labs = List.map (fun _ -> mk_uniq_label ()) index_vals in
-        let exit_lab = mk_uniq_label () in
         let make_opt idx lab =
             let guard =
                 (BinEx (GT,
@@ -604,10 +593,50 @@ labXXX:
                     (ctr_ctx#unpack_const idx) [])
                 @ [Goto exit_lab] 
         in
-        let select_reg =
-            (List.hd ell) :: If (opt_labs, exit_lab)
-                :: (List.concat (List.map2 make_opt index_vals opt_labs)) in
-        proc_replace_body p (prefix @ select_reg @ [Label exit_lab] @ suffix)
+        label_before :: If (opt_labs, exit_lab)
+            :: (List.concat (List.map2 make_opt index_vals opt_labs))
+    in
+    let replace_update regtbl stmts =
+        let all_update_blocks = (* must be one actually *)
+            Hashtbl.fold
+                (fun id reg lst -> if reg = RegUpdate then id :: lst else lst)
+                regtbl [] in
+        let update_block_id = List.hd (List.rev all_update_blocks) in
+        (* TODO: use our separate function here! *)
+        let _, new_stmts = List.fold_left
+            (fun (met, sts) s ->
+                let new_s =
+                    if met
+                    then (match s with
+                        | Expr (BinEx (ASGN, Var var, rhs)) ->
+                            begin
+                                match (ctx#get_role var) with
+                                | LocalUnbounded
+                                | BoundedInt (_, _) ->
+                                    Expr (BinEx (ASGN, Var var, Const 0))
+                                | _ -> s
+                            end
+                        | _ -> s)
+                    else s in
+                if s = Label update_block_id
+                then (true, s :: sts)
+                else (met, new_s :: sts))
+            (false, []) stmts in
+        List.rev new_stmts
+    in
+    let abstract_proc p =
+        let cfg = Cfg.mk_cfg p#get_stmts in
+        let regtbl = extract_skel cfg in
+        let domtr = find_dominator
+            (List.filter
+                (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
+                (hashtbl_vals cfg)) in
+        let prefix, ell, suffix =
+            list_separate (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts in
+        let exit_lab = mk_uniq_label () in
+        let new_body = (prefix @ (mk_counter_guard (List.hd ell) exit_lab)
+             @ [Label exit_lab] @ (replace_update regtbl suffix)) in
+        proc_replace_body p new_body
     in
     let new_units =
         List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)

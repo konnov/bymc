@@ -6,31 +6,38 @@
 open Spin_ir;;
 open Cfg;;
 
-type region = RegInit | RegGuard | RegAtomic | RegEnd;;
+type region = RegInit | RegGuard | RegCompute | RegUpdate | RegEnd;;
 
 let region_s = function
     | RegInit -> "init"
     | RegGuard -> "guard"
-    | RegAtomic -> "atomic"
+    | RegCompute -> "compute"
+    | RegUpdate -> "update"
     | RegEnd -> "end"
 ;;
 
 (*
     Here we check that a control flow graph has the following structure:
 
-    RegInit{ }
+    RegInit[ ]
 
-    RegGuard{
+    RegGuard[
 main:
     if
-        :: guard } -> RegAtomic{
-            ...
-        }
+        :: guard ] ->
+            atomic {
+                RegCompute[
+                ...
+                ]
+                RegUpdate[
+                ...
+                ]
+            }
     fi;
 
-    RegEnd{
+    RegEnd[
     goto main
-    }
+    ]
 
     This can be done by performing structural analysis (see Muchnik),
     but here we do a simple check up and extraction of the regions.
@@ -52,13 +59,15 @@ let extract_skel cfg =
 
             | RegGuard ->
                 if exists (function Atomic_beg -> true | _ -> false)
-                then RegAtomic, RegAtomic
+                then RegCompute, RegCompute
                 else RegGuard, RegGuard
 
-            | RegAtomic ->
+            | RegCompute ->
                 if exists (function Atomic_end -> true | _ -> false)
-                then RegAtomic, RegEnd
-                else RegAtomic, RegAtomic
+                then RegUpdate, RegEnd
+                else RegCompute, RegCompute
+
+            | RegUpdate -> raise (Failure "There must be one update region")
             
             | RegEnd -> RegEnd, RegEnd
             in
