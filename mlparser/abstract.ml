@@ -25,8 +25,13 @@ let var_role_s r =
     | Scratch -> "scratch"
 ;;
 
-let is_unbounded_int = function
+let is_unbounded = function
     | SharedUnbounded
+    | LocalUnbounded -> true
+    | _ -> false
+;;
+
+let is_local_unbounded = function
     | LocalUnbounded -> true
     | _ -> false
 ;;
@@ -36,7 +41,6 @@ class ['tok] trans_context =
         val mutable globals: var list = []
         val mutable assumps: 'tok expr list = []
         val mutable var_roles: (var, var_role) Hashtbl.t = Hashtbl.create 1
-        val mutable label_ctr = 10000 (* start with a high label *)
 
         (*
           Run a solver prepopulated with a context.
@@ -55,6 +59,23 @@ class ['tok] trans_context =
             List.iter solver#append smt_exprs;
             solver
 
+        method find_pc =
+            let is_pc role =
+                match role with
+                | BoundedInt (_, _) -> true
+                | _ -> false
+            in
+            let pcs =
+                (Hashtbl.fold
+                    (fun v r lst -> if is_pc r then v :: lst else lst)
+                    var_roles []) in
+            match pcs with
+            | [v] -> v
+            | [] -> raise (Abstraction_error "No variable like pc is found.")
+            | _ :: (_ :: _) -> 
+                 raise (Abstraction_error
+                        "More than one bounded variable. Which is pc?")
+
         method get_role v = Hashtbl.find var_roles v
 
         method get_globals = globals
@@ -63,11 +84,6 @@ class ['tok] trans_context =
         method set_var_roles r = var_roles <- r
         method get_assumps = assumps
         method set_assumps a = assumps <- a
-
-        method next_label_counter =
-            let ctr = label_ctr in
-            label_ctr <- label_ctr + 1;
-            ctr
     end
 ;;
 
@@ -361,16 +377,14 @@ let mk_domain solver ctx procs =
 ;;
 
 (* The first phase of the abstraction takes place here *)
+(* TODO: refactor it, should be simplified *)
 let translate_stmt ctx dom solver s =
-    let non_symbolic e =
-        match e with
+    let non_symbolic = function
         | Var v -> not v#is_symbolic
         | _ -> false
     in
-    let over_dom e =
-        match e with
-        | Var v ->
-            v#is_symbolic || (is_unbounded_int (ctx#get_role v))
+    let over_dom = function
+        | Var v -> v#is_symbolic || (is_unbounded (ctx#get_role v))
         | _ -> false
     in
     let translate_assign lhs rhs =
@@ -407,8 +421,8 @@ let translate_stmt ctx dom solver s =
             (dom#find_abs_vals solver (BinEx (EQ, lhs_ren, rhs))) in
         solver#pop_ctx;
         (* create an if/fi enumerating all combinations of lhs and rhs *)
-        let labs = List.map (fun _ -> ctx#next_label_counter) matching_vals in
-        let exit_lab = ctx#next_label_counter in
+        let labs = List.map (fun _ -> mk_uniq_label ()) matching_vals in
+        let exit_lab = mk_uniq_label () in
         let guarded_actions =
             List.map2 (fun lab abs_tuple ->
                 let guard = List.fold_left
@@ -514,16 +528,92 @@ let do_interval_abstraction ctx dom solver procs =
         ) procs;
 ;;
 
-let do_counter_abstraction ctx dom solver units = 
+class ctr_abs_ctx dom t_ctx =
+    object
+        val mutable pc_var: var = t_ctx#find_pc
+        val mutable pc_size = 0
+        val mutable ctr_var = new var "ktr"
+        val mutable local_vars = []
+        
+        initializer
+            pc_size <-
+                (match t_ctx#get_role t_ctx#find_pc with
+                | BoundedInt (a, b) -> b - a + 1
+                | _ -> raise (Abstraction_error "pc variable is not bounded"));
+            local_vars <- Hashtbl.fold
+                (fun v r lst -> if is_local_unbounded r then v :: lst else lst)
+                t_ctx#get_var_roles [];
+            ctr_var#set_isarray true;
+            ctr_var#set_num_elems
+                ((List.length local_vars) * dom#length * pc_size)
+           
+        method get_pc = pc_var
+        method get_pc_size = pc_size
+        method get_locals = local_vars
+        method get_ctr = ctr_var
+        method get_ctr_dim =
+            ((List.length local_vars) * dom#length * pc_size)
+
+        method unpack_const i =
+            let valuation = Hashtbl.create ((List.length local_vars) + 1) in
+            Hashtbl.add valuation pc_var (i mod pc_size);
+            let _ =
+                List.fold_left
+                    (fun j var ->
+                        Hashtbl.add valuation var (j mod dom#length);
+                        j / dom#length)
+                    (i / pc_size) local_vars in
+            valuation
+    end
+;;
+
+let do_counter_abstraction ctx dom solver units =
+    let ctr_ctx = new ctr_abs_ctx dom ctx in
     let abstract_proc p =
         let cfg = Cfg.mk_cfg p#get_stmts in
         let regtbl = extract_skel cfg in
-        p
+        let domtr = find_dominator
+            (List.filter
+                (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
+                (hashtbl_vals cfg))
+        in
+        let prefix, ell, suffix =
+            list_separate (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts
+        in
+        let index_vals = range 0 ctr_ctx#get_ctr_dim in
+        (*
+labXXX:
+  if
+    :: ktr[0] > 0 -> pc = ...; nrcvd = ...;
+    :: ktr[1] > 0 -> ...
+    ...
+  fi
+         *)
+        let opt_labs = List.map (fun _ -> mk_uniq_label ()) index_vals in
+        let exit_lab = mk_uniq_label () in
+        let make_opt idx lab =
+            let guard =
+                (BinEx (GT,
+                    BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx),
+                    Const 0))
+            in
+            [Label lab; Expr guard]
+                @ (Hashtbl.fold
+                    (fun var value lst -> 
+                        Expr (BinEx (ASGN, Var var, Const value)) :: lst)
+                    (ctr_ctx#unpack_const idx) [])
+                @ [Goto exit_lab] 
+        in
+        let select_reg =
+            (List.hd ell) :: If (opt_labs, exit_lab)
+                :: (List.concat (List.map2 make_opt index_vals opt_labs)) in
+        proc_replace_body p (prefix @ select_reg @ [Label exit_lab] @ suffix)
     in
-    let ctr_arr = new var "ktr" in
-    ctr_arr#set_isarray true;
-    ctr_arr#set_num_elems dom#length;
-    Stmt (Decl (ctr_arr, Nop)) :: units
+        
+    let new_units =
+        List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)
+        units in
+    (Stmt (Decl (ctr_ctx#get_ctr, Nop))) :: new_units
 ;;
 
 let do_abstraction units =

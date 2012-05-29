@@ -120,6 +120,7 @@ let token_s t =
       | LSHIFT -> "<<"
       | RSHIFT -> ">>"
       | VARREF -> "VARREF"
+      | ARRAY_DEREF -> "ARRAY_DEREF"
       | EOF -> "EOF"
       | ASSUME -> "ASSUME"
       | SYMBOLIC -> "SYMBOLIC"
@@ -130,8 +131,10 @@ let rec expr_s e =
     | Nop -> "nop"
     | Const i -> string_of_int i
     | Var v -> v#get_name
-    | UnEx(tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
-    | BinEx(tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)
+    | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
+    | BinEx (ARRAY_DEREF, arr, idx) ->
+            sprintf "%s[%s]" (expr_s arr) (expr_s idx)
+    | BinEx (tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)
 ;;
 
 let op_of_expr e =

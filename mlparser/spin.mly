@@ -66,20 +66,14 @@ exception Not_implemented of string;;
 
 (* we have to declare global objects, think of resetting them afterwards! *)
 let err_cnt = ref 0;;
-let label_next = ref 1;;
 let labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
 let global_scope = new symb_tab;;
 let current_scope = ref global_scope;;
 
-let mk_label () =
-    let n = !label_next in
-        label_next := (n + 1); n
-;;
-
 let push_new_labs () =
-    let e = mk_label () in (* one label for entry to do *)
-    let b = mk_label () in (* one label to break from do/if *)
+    let e = mk_uniq_label () in (* one label for entry to do *)
+    let b = mk_uniq_label () in (* one label to break from do/if *)
     lab_stack := (e, b) :: !lab_stack
 ;;
 
@@ -154,7 +148,7 @@ let fatal msg payload =
 %token  ASSUME SYMBOLIC
 /* FORSYTE extensions } */
 /* imaginary tokens */
-%token  UMIN NEG VARREF
+%token  UMIN NEG VARREF ARRAY_DEREF
 
 %right	ASGN
 %left	SND O_SND RCV R_RCV     /* SND doubles as boolean negation */
@@ -695,7 +689,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                    can cut off gotos at the end of an option *)
                 let (exit_lab, break_lab) = top_labs ()
                     and labs, seqs = (List.split $2)
-                    and entry_lab = mk_label() in
+                    and entry_lab = mk_uniq_label() in
                 let if_s = If (labs, exit_lab) :: (List.concat seqs) in
                 let do_s = (Label entry_lab) :: if_s
                     @ [Label exit_lab; Goto entry_lab; Label break_lab] in
@@ -725,7 +719,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
 		  $2->sym->type = LABEL; *)
 		}
 	| NAME COLON stmnt	{
-        let label_no = mk_label () in
+        let label_no = mk_uniq_label () in
         if Hashtbl.mem labels $1
         then parse_error (sprintf "Label %s redeclared\n" $1)
         else Hashtbl.add labels $1 label_no;
@@ -867,7 +861,7 @@ options : option		{
             (* $$->sl = seqlist($1->sq, $2->sl); *) }
 	;
 
-option_head : SEP   { mk_label () (* open_seq(0); *) }
+option_head : SEP   { mk_uniq_label () (* open_seq(0); *) }
 ;
 
 option  : option_head

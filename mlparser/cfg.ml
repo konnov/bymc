@@ -4,6 +4,8 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Debug;;
 
+exception CfgError of string;;
+
 module IntSet = Set.Make (struct
  type t = int
  let compare a b = a - b
@@ -38,7 +40,7 @@ class ['t] basic_block =
         method get_lead_lab =
             match List.hd seq with
                 | Label i -> i
-                | _ -> raise (Failure "Corrupted basic block, no leading label")
+                | _ -> raise (CfgError "Corrupted basic block, no leading label")
 
         method str =
             let exit_s = List.fold_left
@@ -154,7 +156,7 @@ let mk_cfg stmts =
             | (Label i) :: tl ->
                 let b = new basic_block in
                 b#set_seq seq; Hashtbl.add blocks i b
-            | _ -> raise (Failure "Broken head: expected (Label i) :: tl"))
+            | _ -> raise (CfgError "Broken head: expected (Label i) :: tl"))
         seq_list;
     (* set successors *)
     Hashtbl.iter
@@ -168,3 +170,25 @@ let mk_cfg stmts =
         blocks;
     (* return the hash table: heading_label: int -> basic_block *)
     blocks
+;;
+
+(* This is a very naive implementation. We do not expect it to be run
+   on hundreds of basic blocks. If this happens, implement an algorithm
+   from Muchnik
+ *)
+let find_dominator bbs =
+    let all_labs =
+        List.fold_left (fun set bb -> IntSet.add bb#get_lead_lab set)
+            IntSet.empty bbs in
+    let doms = List.fold_left
+        (fun set bb ->
+            List.fold_left
+                (fun new_set succ -> IntSet.remove succ#get_lead_lab new_set)
+                set bb#get_succ
+        ) all_labs bbs
+    in
+    match IntSet.elements doms with
+    | [one_lab] -> List.find (fun bb -> bb#get_lead_lab = one_lab) bbs
+    | [] -> raise (CfgError "No dominators found for a set of basic blocks")
+    | _ -> raise (CfgError "Several dominators for a set of basic blocks")
+;;

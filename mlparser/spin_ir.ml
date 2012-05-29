@@ -289,3 +289,11 @@ let resolve_label labels stmt =
         | _ -> stmt
 ;;
 
+(* here we use a global variable to generate unique variables everywhere *)
+let label_next = ref 1;;
+
+let mk_uniq_label () =
+    let n = !label_next in
+        label_next := (n + 1); n
+;;
+

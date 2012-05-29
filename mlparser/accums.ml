@@ -19,6 +19,39 @@ let str_join sep list_of_strings =
         "" list_of_strings
 ;;
 
+(* separate a list into three parts:
+    before a matching element, the matching element, the tail.
+    If an element is not found, then two last resulting lists are empty.
+ *)
+let list_separate match_fun lst =
+    List.fold_left
+        (fun (hl, el, tl) e ->
+            match (hl, el, tl) with
+            | (_, [some], _) ->
+                if not (match_fun e)
+                then (hl, el, tl @ [e])
+                else raise (Failure
+                    "list_separate found several matching elements")
+            | (_, [], []) ->
+                if match_fun e
+                then (hl, [e], tl)
+                else (hl @ [e], [], tl)
+            | _ -> raise
+                (Failure "Logic error: impossible combination of arguments")
+        ) ([], [], []) lst
+;;
+
+(* Python-like range *)                                                         
+let rec range i j =
+    if j <= i then [] else i :: (range (i + 1) j);;
+
+let rec rev_range i j =
+    if j <= i then [] else (j - 1) :: (rev_range i (j - 1));;
+
+let str_contains str substr =
+    let re = Str.regexp_string substr in
+    try ((Str.search_forward re str 0) >= 0) with Not_found -> false;;
+
 (*
    check two hash tables for element equality as standard "=" works
    only on the hash tables of the same capacity!
