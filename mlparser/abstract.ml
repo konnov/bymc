@@ -597,13 +597,15 @@ labXXX:
             :: (List.concat (List.map2 make_opt index_vals opt_labs))
     in
     let replace_update regtbl stmts =
-        let all_update_blocks = (* must be one actually *)
+        let all_update_blocks =
             Hashtbl.fold
                 (fun id reg lst -> if reg = RegUpdate then id :: lst else lst)
                 regtbl [] in
+        assert ((List.length all_update_blocks) = 1);
         let update_block_id = List.hd (List.rev all_update_blocks) in
         let prefix, ell, suffix =
-            list_separate (fun s -> s = Label update_block_id) stmts in
+            list_cut (fun s -> s = Label update_block_id) stmts in
+        (* all local variables should be reset to 0 *)
         let new_suffix =
             List.map
                 (function
@@ -618,6 +620,8 @@ labXXX:
                     | _ as s -> s)
                 suffix
         in
+        (* TODO: use copy pairs to find next_pc, next_rcvd *)
+        (* TODO: add ktr[..]++, ktr[..]-- *)
         prefix @ ell @ new_suffix
     in
     let abstract_proc p =
@@ -628,7 +632,7 @@ labXXX:
                 (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
                 (hashtbl_vals cfg)) in
         let prefix, ell, suffix =
-            list_separate (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts in
+            list_cut (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts in
         let exit_lab = mk_uniq_label () in
         let new_body = (prefix @ (mk_counter_guard (List.hd ell) exit_lab)
              @ [Label exit_lab] @ (replace_update regtbl suffix)) in

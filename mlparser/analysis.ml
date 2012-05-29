@@ -127,3 +127,14 @@ let transfer_roles stmt input =
     output
 ;;
 
+(*
+  Find assignments like: x = y.
+ *)
+let find_copy_pairs stmts =
+    let pairs = Hashtbl.create 8 in
+    List.iter
+        (function
+            | Expr (BinEx (ASGN, Var x, Var y)) -> Hashtbl.add pairs x y
+            | _ -> ()
+        ) stmts
+;;

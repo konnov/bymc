@@ -23,7 +23,7 @@ let str_join sep list_of_strings =
     before a matching element, the matching element, the tail.
     If an element is not found, then two last resulting lists are empty.
  *)
-let list_separate match_fun lst =
+let list_cut match_fun lst =
     List.fold_left
         (fun (hl, el, tl) e ->
             match (hl, el, tl) with
@@ -31,7 +31,7 @@ let list_separate match_fun lst =
                 if not (match_fun e)
                 then (hl, el, tl @ [e])
                 else raise (Failure
-                    "list_separate found several matching elements")
+                    "list_cut found several matching elements")
             | (_, [], []) ->
                 if match_fun e
                 then (hl, [e], tl)
