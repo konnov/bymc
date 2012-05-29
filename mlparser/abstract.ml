@@ -602,27 +602,23 @@ labXXX:
                 (fun id reg lst -> if reg = RegUpdate then id :: lst else lst)
                 regtbl [] in
         let update_block_id = List.hd (List.rev all_update_blocks) in
-        (* TODO: use our separate function here! *)
-        let _, new_stmts = List.fold_left
-            (fun (met, sts) s ->
-                let new_s =
-                    if met
-                    then (match s with
-                        | Expr (BinEx (ASGN, Var var, rhs)) ->
-                            begin
-                                match (ctx#get_role var) with
-                                | LocalUnbounded
-                                | BoundedInt (_, _) ->
-                                    Expr (BinEx (ASGN, Var var, Const 0))
-                                | _ -> s
-                            end
-                        | _ -> s)
-                    else s in
-                if s = Label update_block_id
-                then (true, s :: sts)
-                else (met, new_s :: sts))
-            (false, []) stmts in
-        List.rev new_stmts
+        let prefix, ell, suffix =
+            list_separate (fun s -> s = Label update_block_id) stmts in
+        let new_suffix =
+            List.map
+                (function
+                    | Expr (BinEx (ASGN, Var var, rhs)) as s ->
+                        begin
+                            match (ctx#get_role var) with
+                            | LocalUnbounded
+                            | BoundedInt (_, _) ->
+                                Expr (BinEx (ASGN, Var var, Const 0))
+                            | _ -> s
+                        end
+                    | _ as s -> s)
+                suffix
+        in
+        prefix @ ell @ new_suffix
     in
     let abstract_proc p =
         let cfg = Cfg.mk_cfg p#get_stmts in
