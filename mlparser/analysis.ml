@@ -134,7 +134,9 @@ let find_copy_pairs stmts =
     let pairs = Hashtbl.create 8 in
     List.iter
         (function
-            | Expr (BinEx (ASGN, Var x, Var y)) -> Hashtbl.add pairs x y
+            | Expr (BinEx (ASGN, Var x, Var y)) ->
+                    Hashtbl.add pairs x y
             | _ -> ()
-        ) stmts
+        ) stmts;
+    pairs
 ;;

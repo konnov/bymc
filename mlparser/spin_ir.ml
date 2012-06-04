@@ -199,6 +199,11 @@ type 't expr = Nop | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
 ;;
 
+let is_var = function
+    | Var _ -> true
+    | _ -> false
+;;
+
 let expr_used_vars (expression: 't expr) : var list =
     let rec find_used e =
         match e with
@@ -278,6 +283,16 @@ let proc_replace_body p new_body =
     new_p#set_args p#get_args;
     new_p#set_stmts new_body;
     new_p
+;;
+
+let map_vars map_fun ex =
+    let rec sub = function
+    | Var v -> map_fun v
+    | UnEx (t, l) -> UnEx (t, sub l)
+    | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+    | _ as e -> e
+    in
+    sub ex
 ;;
 
 type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;

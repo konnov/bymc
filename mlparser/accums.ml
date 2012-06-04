@@ -78,6 +78,12 @@ let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl [];;
 
 let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl [];;
 
+let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
+    let inv = Hashtbl.create (Hashtbl.length tbl) in
+    Hashtbl.iter (fun k v -> Hashtbl.add inv v k) tbl;
+    inv
+;;
+
 let bits_to_fit n =                                                             
     let rec f b m =
         if n <= m
