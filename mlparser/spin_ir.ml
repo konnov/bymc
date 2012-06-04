@@ -247,6 +247,11 @@ type 't stmt = Skip | Expr of 't expr
     | Print of string * 't expr list
 ;;
 
+let is_decl = function
+    | Decl (_, _) -> true
+    | _ -> false
+;;
+
 (* a process *)
 class ['t] proc name_i active_expr_i =
     object

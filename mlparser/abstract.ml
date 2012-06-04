@@ -177,6 +177,40 @@ class abs_domain conds_i =
                 solver#pop_ctx;
                 matching_tuples (* now pairs *)
             end
+
+        (*
+          distribute n abstract values x_i over the abstract domain s.t.
+          sum_{i=1}^n \gamma(x_i) = num_active_processes
+         *)
+        method scatter_abs_vals (solver: yices_smt)
+                (num_expr: 't expr) (n: int) : int list list =
+            let combinations = (Accums.mk_product cond_intervals n) in
+            let sat_triples_list = List.filter
+                (fun comb ->
+                    solver#push_ctx;
+                    let vars = List.map
+                        (fun i -> (new var (sprintf "_a%d" i))) (range 0 n) in
+                    List.iter (fun v -> solver#append (var_to_smt v)) vars;
+                    List.iter2
+                        (fun v (i, l, r) ->
+                            solver#append_assert
+                                (expr_to_smt (BinEx (GE, Var v, l)));
+                            if r <> Nop
+                            then solver#append_assert
+                                (expr_to_smt (BinEx (LT, Var v, r)));
+                        ) vars comb;
+                    let sum = List.fold_left
+                        (fun e v ->
+                            if e = Nop then Var v else BinEx (PLUS, Var v, e)
+                        ) Nop vars in
+                    let sum_eq = BinEx (EQ, num_expr, sum) in
+                    solver#append_assert (expr_to_smt sum_eq);
+                    let exists_concrete = solver#check in
+                    solver#pop_ctx;
+                    exists_concrete
+                ) combinations in
+            let extr_num triples = List.map (fun (i, _, _) -> i) triples in
+            List.map extr_num sat_triples_list
     end
 ;;
 
@@ -600,42 +634,134 @@ class ctr_abs_ctx dom t_ctx =
                         if subex = Nop
                         then Var var
                         else BinEx (PLUS,
-                                    BinEx (MULT, subex, Const dom#length),
-                                    Var var)
+                            BinEx (MULT, subex, Const dom#length),
+                            Var var)
                     ) Nop (List.rev local_vars)
             in
             BinEx (PLUS, BinEx (MULT, ex, Const pc_size), Var pc_var)
+
+        method pack_vals_to_index valuation =
+            let idx = List.fold_left
+                (fun sum var ->
+                    (sum * dom#length) + (Hashtbl.find valuation var)
+                 ) 0 (List.rev local_vars)
+            in
+            (idx * pc_size + (Hashtbl.find valuation pc_var))
     end
 ;;
 
-let do_counter_abstraction ctx dom solver units =
-    let ctr_ctx = new ctr_abs_ctx dom ctx in
-    let mk_counter_guard label_before exit_lab =
-        let index_vals = range 0 ctr_ctx#get_ctr_dim in
+let mk_nondet_choice lab_pre lab_post seq_list =
 (*
 labXXX:
-  if
-    :: ktr[0] > 0 -> pc = ...; nrcvd = ...;
-    :: ktr[1] > 0 -> ...
-    ...
-  fi
- *)
-        let opt_labs = List.map (fun _ -> mk_uniq_label ()) index_vals in
-        let make_opt idx lab =
+if
+    :: seq_0;
+    :: seq_1
+...
+fi
+*)
+    let opt_labs = List.map (fun _ -> mk_uniq_label ()) seq_list in
+    let make_opt lab seq = Label lab :: seq @ [Goto lab_post] in
+    (Label lab_pre) :: If (opt_labs, lab_post)
+        :: (List.concat (List.map2 make_opt opt_labs seq_list))
+;;
+
+let do_counter_abstraction t_ctx dom solver units =
+    let ctr_ctx = new ctr_abs_ctx dom t_ctx in
+    let mk_counter_guard label_pre label_post =
+        let make_opt idx =
             let guard =
                 (BinEx (GT,
                     BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx),
                     Const 0))
             in
-            [Label lab; Expr guard]
-                @ (Hashtbl.fold
+            Expr guard :: (* and then assignments *)
+                (Hashtbl.fold
                     (fun var value lst -> 
                         Expr (BinEx (ASGN, Var var, Const value)) :: lst)
                     (ctr_ctx#unpack_const idx) [])
-                @ [Goto exit_lab] 
         in
-        label_before :: If (opt_labs, exit_lab)
-            :: (List.concat (List.map2 make_opt index_vals opt_labs))
+        let indices = range 0 ctr_ctx#get_ctr_dim in
+        mk_nondet_choice label_pre label_post (List.map make_opt indices)
+    in
+    let replace_init dominator regtbl active_expr all_stmts prefix =
+        let cfg = Cfg.mk_cfg all_stmts in
+        let int_roles =
+            visit_cfg (visit_basic_block transfer_roles)
+            join_int_roles cfg (mk_bottom_val ()) in
+        let last_vals =
+            List.fold_left
+                (fun accum bb ->
+                    if RegInit = (Hashtbl.find regtbl bb#get_lead_lab)
+                    then join_int_roles accum
+                        (Hashtbl.find int_roles bb#get_lead_lab)
+                    else accum
+                ) (mk_bottom_val ()) (hashtbl_vals cfg) in
+        let last_local_vals =
+            Hashtbl.fold
+                (fun v r lst ->
+                    match t_ctx#get_role v with
+                    | LocalUnbounded
+                    | BoundedInt (_, _) -> (v, r) :: lst
+                    | _ -> lst
+                ) last_vals [] in
+        let mk_prod left right =
+            if left = []
+            then List.map (fun x -> [x]) right
+            else List.concat
+                (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
+        let init_locals =
+            List.fold_left
+                (fun lst (v, r) ->
+                    match r with
+                    | IntervalInt (a, b) ->
+                        let pairs =
+                            List.map (fun i -> (v, i)) (range a (b + 1)) in
+                        mk_prod lst pairs
+                    | _ ->
+                        let m = sprintf
+                            "Unbounded after abstraction: %s" v#get_name in
+                        raise (Abstraction_error m)
+                ) [] last_local_vals in
+        let size_dist_list =
+            dom#scatter_abs_vals solver active_expr (List.length init_locals) in
+        let option_list =
+            List.map
+                (fun dist ->
+                    List.map2
+                        (fun local_vals abs_size ->
+                            let valuation = Hashtbl.create (List.length dist) in
+                            List.iter
+                                (fun (var, i) ->
+                                    Hashtbl.add valuation var i
+                                ) local_vals;
+                            let idx = ctr_ctx#pack_vals_to_index valuation in
+                            let lhs =
+                                BinEx (ARRAY_DEREF,
+                                    Var ctr_ctx#get_ctr, Const idx) in
+                            Expr (BinEx (ASGN, lhs, Const abs_size))
+                        ) init_locals dist
+                )
+                size_dist_list
+        in
+        let label_pre = dominator#get_lead_lab in
+        let label_post = mk_uniq_label () in
+        let decls = List.filter is_decl prefix in
+        decls @ (mk_nondet_choice label_pre label_post option_list)
+        @ [Label label_post]
+        (*
+        List.iter
+            (fun d -> 
+                printf "init_distr:\n";
+                List.iter2
+                    (fun locals count ->
+                        printf "   %d -> " count;
+                        List.iter
+                            (fun (v, i) -> printf "%s = %d; " v#get_name i)
+                            locals;
+                        printf "\n";
+                    ) init_locals d
+            ) size_dist_list;
+        *)
     in
     let replace_update regtbl stmts =
         let all_update_blocks =
@@ -652,7 +778,7 @@ labXXX:
                 (function
                     | Expr (BinEx (ASGN, Var var, rhs)) as s ->
                         begin
-                            match (ctx#get_role var) with
+                            match t_ctx#get_role var with
                             | LocalUnbounded
                             | BoundedInt (_, _) ->
                                 Expr (BinEx (ASGN, Var var, Const 0))
@@ -686,16 +812,27 @@ labXXX:
     let abstract_proc p =
         let cfg = Cfg.mk_cfg p#get_stmts in
         let regtbl = extract_skel cfg in
-        let domtr = find_dominator
+        let dominator = find_dominator
             (List.filter
                 (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
                 (hashtbl_vals cfg)) in
         let prefix, ell, suffix =
-            list_cut (fun s -> s = Label (domtr#get_lead_lab)) p#get_stmts in
-        let exit_lab = mk_uniq_label () in
-        let new_body = (prefix @ (mk_counter_guard (List.hd ell) exit_lab)
-             @ [Label exit_lab] @ (replace_update regtbl suffix)) in
-        proc_replace_body p new_body
+            list_cut (fun s -> s = Label (dominator#get_lead_lab)) p#get_stmts
+        in
+        let lab_pre =
+            match (List.hd ell) with
+            | Label i -> i
+            | _ -> raise (Abstraction_error "Dominator label is not a label!")
+        in
+        let lab_post = mk_uniq_label () in
+        let new_prefix =
+            replace_init dominator regtbl p#get_active_expr p#get_stmts prefix
+        in
+        let new_body = (new_prefix @ (mk_counter_guard lab_pre lab_post)
+             @ [Label lab_post] @ (replace_update regtbl suffix)) in
+        let new_proc = proc_replace_body p new_body in
+        new_proc#set_active_expr (Const 1);
+        new_proc
     in
     let new_units =
         List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)
