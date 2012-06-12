@@ -12,6 +12,14 @@ open Spin_types;;
 
 module StringSet = Set.Make(String);;
 
+(* here we use a global variable to generate unique variables everywhere *)
+let label_next = ref 1;;
+
+let mk_uniq_label () =
+    let n = !label_next in
+        label_next := (n + 1); n
+;;
+
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
@@ -227,7 +235,6 @@ let expr_used_vars (expression: 't expr) : var list =
                 (hd :: (List.rev (List.tl (List.rev tl)))))
 ;;
 
-
 let rec expr_exists func e =
     if (func e)
     then true
@@ -237,7 +244,9 @@ let rec expr_exists func e =
     | _ -> false
 ;;
 
-type 't stmt = Skip | Expr of 't expr
+(* a low-level statement, no block structure preserved *)
+type 't stmt =
+      Skip | Expr of 't expr
     | Decl of var * 't expr
     | Label of int
     | Atomic_beg | Atomic_end | D_step_beg | D_step_end
@@ -245,6 +254,81 @@ type 't stmt = Skip | Expr of 't expr
     | If of int list (* condition labels *) * int (* exit label *) | Else
     | Assert of 't expr | Assume of 't expr
     | Print of string * 't expr list
+;;
+
+(* a statement with an identifier attached to it *)
+type 't l_stmt = Lstmt of int * 't stmt;;
+
+let label_stmts stmts =
+    List.fold_left
+        (fun (lst, i) s -> ((Lstmt (i, s) :: lst), i + 1))
+        ([], 0) stmts
+;;
+
+(* A middle-level statement, the block structure is still in place.
+   Each statement has an identifier attached
+ *)
+type 't mir_stmt =
+      MSkip of int | MExpr of int * 't expr
+    | MDecl of int * var * 't expr
+    | MLabel of int * int
+    | MAtomic of int * 't mir_stmt list | MD_step of int * 't mir_stmt list
+    | MGoto of int * int
+    | MIf of int * 't mir_option list
+    | MAssert of int * 't expr
+    | MAssume of int * 't expr
+    | MPrint of int * string * 't expr list
+and 't mir_option =
+      MOptGuarded of 't mir_stmt list
+    | MOptElse of 't mir_stmt list
+;;
+
+let mir_to_lir stmts =
+    let rec make_one tl s =
+        match s with
+        | MIf (id, options) ->
+            let exit_lab = mk_uniq_label () in
+            let labs_seqs = List.map (make_option exit_lab) options in
+            let opt_labs, opt_seqs = List.split labs_seqs in
+            Lstmt (id, If (opt_labs, exit_lab))
+                :: ((List.concat opt_seqs) @ ((Lstmt (-1, Label exit_lab)) :: tl))
+        | MAtomic (id, seq) ->
+            let new_seq = List.fold_left make_one [] seq in
+            Lstmt (id, Atomic_beg) :: new_seq @ (Lstmt (-1, Atomic_end) :: tl)
+        | MD_step (id, seq) ->
+            let new_seq = List.fold_left make_one [] seq in
+            Lstmt (id, D_step_beg) :: new_seq @ (Lstmt (-1, D_step_end) :: tl)
+        | MGoto (id, i) -> Lstmt (id, Goto i) :: tl
+        | MLabel (id, i) -> Lstmt (id, Label i) :: tl
+        | MDecl (id, v, i) -> Lstmt (id, Decl (v, i)) :: tl
+        | MExpr (id, e) -> Lstmt (id, Expr e) :: tl
+        | MSkip id -> Lstmt (id, Skip) :: tl
+        | MAssert (id, e) -> Lstmt (id, Assert e) :: tl
+        | MAssume (id, e) -> Lstmt (id, Assume e) :: tl
+        | MPrint (id, s, args) -> Lstmt (id, Print (s, args)) :: tl
+    and
+        make_option exit_lab opt =
+        let is_else, seq = match opt with
+            | MOptGuarded sts -> (false, sts)
+            | MOptElse sts -> (true, sts)
+        in
+        let opt_lab = mk_uniq_label () in
+        let body = List.fold_left make_one [] seq in
+        let body = if is_else then Lstmt (-1, Else) :: body else body in
+        let new_seq = 
+            ((Lstmt (-1, Label opt_lab) :: body) @ [(Lstmt (-1, Goto exit_lab))])
+        in
+        (opt_lab, new_seq)
+    in
+    let lstmts = List.fold_left make_one [] stmts in
+    List.fold_left (* assign unique negative ids instead of just -1's *)
+        (fun (min_id, tl) ms ->
+            match ms with
+                | Lstmt (-1, s) ->
+                    (min_id - 1, Lstmt (min_id, s) :: tl)
+                | _ ->
+                    (min_id, ms :: tl)
+        ) (-1, []) lstmts
 ;;
 
 let is_decl = function
@@ -307,13 +391,5 @@ let resolve_label labels stmt =
         | Goto_unresolved name ->
             Goto (Hashtbl.find labels name)
         | _ -> stmt
-;;
-
-(* here we use a global variable to generate unique variables everywhere *)
-let label_next = ref 1;;
-
-let mk_uniq_label () =
-    let n = !label_next in
-        label_next := (n + 1); n
 ;;
 
