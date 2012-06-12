@@ -343,7 +343,7 @@ class ['t] proc name_i active_expr_i =
         inherit symb_tab
 
         val mutable args: var list = []
-        val mutable stmts: 't stmt list = []
+        val mutable stmts: 't mir_stmt list = []
         (* a symbolic expression *)
         val mutable active_expr: 't expr = active_expr_i
 
@@ -360,7 +360,7 @@ class ['t] proc name_i active_expr_i =
             List.fold_left 
                 (fun l s ->
                     match s with
-                    | Decl (v, _) -> v :: l
+                    | MDecl (_, v, _) -> v :: l
                     | _ -> l)
                 []
                 stmts
@@ -384,12 +384,5 @@ let map_vars map_fun ex =
     sub ex
 ;;
 
-type 't prog_unit = Proc of 't proc | Stmt of 't stmt | None;;
-
-let resolve_label labels stmt =
-    match stmt with
-        | Goto_unresolved name ->
-            Goto (Hashtbl.find labels name)
-        | _ -> stmt
-;;
+type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt | None;;
 

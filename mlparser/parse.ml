@@ -68,6 +68,7 @@ let parse_promela filename basename dirname =
     let units = Spin.program lfun lexbuf in
 
     (* postprocess: remove artifacts that complicate further processing *)
+    (*
     let units = List.map
         (function
             | Proc p ->
@@ -75,6 +76,7 @@ let parse_promela filename basename dirname =
             | _ as u -> u )
         units
     in
+    *)
     if debug then begin
         (* (* DEBUGGING lex *)
         let t = ref EQ in
@@ -88,6 +90,7 @@ let parse_promela filename basename dirname =
         let p u = printf "%s\n" (prog_unit_s u) in
         List.iter p units;
 
+        (*
         List.iter
             (function
                 | Proc p ->
@@ -95,6 +98,7 @@ let parse_promela filename basename dirname =
                     Hashtbl.iter (fun _ bb -> printf "%s\n" bb#str) bbs
                 | _ -> () )
             units;
+        *)
     end;
     units
 

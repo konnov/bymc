@@ -167,6 +167,39 @@ let stmt_s s =
         sprintf "print \"%s\"%s" s
             (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
 
+let rec mir_stmt_s s =
+    let seq_s seq = 
+        List.fold_left (fun t s -> t ^ (mir_stmt_s s) ^ "\n") "" seq
+    in
+    match s with
+    | MSkip id -> sprintf "<%3d> skip" id
+    | MExpr (id, e) -> sprintf "<%3d> (%s)" id (expr_s e)
+    | MDecl (id, v, e) ->
+        sprintf "<%3d> decl %s %s %s = %s"
+            id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
+    | MLabel (id, l) -> sprintf "<%3d> %d: " id l
+    | MAtomic (id, stmts) ->
+        (sprintf "<%3d> atomic {\n" id) ^ (seq_s stmts) ^ "}"
+    | MD_step (id, stmts) ->
+        (sprintf "<%3d> d_step {\n" id) ^ (seq_s stmts) ^ "}"
+    | MGoto (id, l) -> sprintf "<%3d> goto %d" id l
+    | MIf (id, opts) ->
+        sprintf "<%3d> if\n" id
+        ^
+        (List.fold_left
+            (fun t o ->
+                match o with
+                | MOptGuarded seq -> "  :: " ^ (seq_s seq)
+                | MOptElse seq -> "  :: else -> " ^ (seq_s seq)
+            ) "" opts)
+        ^
+        "fi"
+    | MAssert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
+    | MAssume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
+    | MPrint (id, s, es) ->
+        sprintf "<%3d> print \"%s\"%s"
+            id s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
+
 let prog_unit_s u =
     match u with
     | Proc p ->
@@ -179,10 +212,10 @@ let prog_unit_s u =
             "" p#get_args in
         let h = (Printf.sprintf "%sproctype %s(%s) {" act p#get_name args) in
         let ss = List.fold_left
-            (fun a s -> a ^ "\n" ^ (stmt_s s)) "" p#get_stmts in
+            (fun a s -> a ^ "\n" ^ (mir_stmt_s s)) "" p#get_stmts in
         h ^ ss ^ "\n}"
 
-    | Stmt s -> (stmt_s s)
+    | Stmt s -> mir_stmt_s s
     | None -> Printf.sprintf "skip\n"
 ;;
 

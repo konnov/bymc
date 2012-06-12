@@ -1,7 +1,7 @@
 open Printf;;
 
 open Parse;;
-open Abstract;;
+(*open Abstract;;*)
 open Writer;;
 open Debug;;
 
@@ -19,7 +19,7 @@ let _ =
         let units = parse_promela filename basename dirname
         in
         log DEBUG (sprintf "#units: %d" (List.length units));
-        let new_units = do_abstraction units in
+        let new_units = units (* do_abstraction units *) in
         let fo = open_out "abs-counter.prm" in
         List.iter (write_unit fo 0) new_units;
         close_out fo
