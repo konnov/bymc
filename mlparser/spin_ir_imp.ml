@@ -146,26 +146,26 @@ let op_of_expr e =
 
 let stmt_s s =
     match s with
-    | Skip -> "skip"
-    | Expr e -> sprintf "(%s)" (expr_s e)
-    | Decl (v, e) ->
+    | Skip _ -> "skip"
+    | Expr (_, e) -> sprintf "(%s)" (expr_s e)
+    | Decl (_, v, e) ->
         sprintf "decl %s %s %s = %s"
             v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
-    | Label l -> sprintf "%d: " l
-    | Atomic_beg -> "atomic {"
-    | Atomic_end -> "} /* atomic */"
-    | D_step_beg -> "d_step {"
-    | D_step_end -> "} /* d_step */"
-    | Goto l -> sprintf "goto %d" l
-    | Goto_unresolved ls -> sprintf "goto_unres %s" ls
-    | If (ls, exitl) ->
+    | Label (_, l) -> sprintf "%d: " l
+    | Atomic_beg _ -> "atomic {"
+    | Atomic_end _ -> "} /* atomic */"
+    | D_step_beg _ -> "d_step {"
+    | D_step_end _ -> "} /* d_step */"
+    | Goto (_, l) -> sprintf "goto %d" l
+    | If (_, ls, exitl) ->
         sprintf "if %s -> %d" (List.fold_left (sprintf "%s %d") "" ls) exitl
-    | Else -> "else"
-    | Assert e -> "assert " ^ (expr_s e)
-    | Assume e -> "assume " ^ (expr_s e)
-    | Print (s, es) ->
+    | Else _ -> "else"
+    | Assert (_, e) -> "assert " ^ (expr_s e)
+    | Assume (_, e) -> "assume " ^ (expr_s e)
+    | Print (_, s, es) ->
         sprintf "print \"%s\"%s" s
             (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
+;;
 
 let rec mir_stmt_s s =
     let seq_s seq = 

@@ -244,29 +244,62 @@ let rec expr_exists func e =
     | _ -> false
 ;;
 
-(* a low-level statement, no block structure preserved *)
+(*
+ A low-level statement, no block structure preserved.
+ The first field is always the identifier of a statement.
+ Negative identifiers label auxillary statements added during the translation
+ from MIR to LIR.
+ *)
 type 't stmt =
-      Skip | Expr of 't expr
-    | Decl of var * 't expr
-    | Label of int
-    | Atomic_beg | Atomic_end | D_step_beg | D_step_end
-    | Goto of int | Goto_unresolved of string
-    | If of int list (* condition labels *) * int (* exit label *) | Else
-    | Assert of 't expr | Assume of 't expr
-    | Print of string * 't expr list
+      Skip of int
+    | Expr of int * 't expr
+    | Decl of int * var * 't expr
+    | Label of int * int
+    | Atomic_beg of int | Atomic_end of int
+    | D_step_beg of int | D_step_end of int
+    | Goto of int * int
+    | If of int * int list (* condition labels *) * int (* exit label *)
+    | Else of int
+    | Assert of int * 't expr | Assume of int * 't expr
+    | Print of int * string * 't expr list
 ;;
 
-(* a statement with an identifier attached to it *)
-type 't l_stmt = Lstmt of int * 't stmt;;
+let stmt_id = function
+      Skip id -> id
+    | Expr (id, _) -> id
+    | Decl (id, _, _) -> id
+    | Label (id, _) -> id
+    | Atomic_beg id -> id
+    | Atomic_end id -> id
+    | D_step_beg id -> id
+    | D_step_end id -> id
+    | Goto (id, _) -> id
+    | If (id, _, _) -> id
+    | Else id -> id
+    | Assert (id, _) -> id
+    | Assume (id, _) -> id
+    | Print (id, _, _) -> id
+;;
 
-let label_stmts stmts =
-    List.fold_left
-        (fun (lst, i) s -> ((Lstmt (i, s) :: lst), i + 1))
-        ([], 0) stmts
+let replace_stmt_id new_id = function
+      Skip _ -> Skip new_id
+    | Expr (_, e) -> Expr (new_id, e)
+    | Decl (_, v, e) -> Decl (new_id, v, e)
+    | Label (_, l) -> Label (new_id, l)
+    | Atomic_beg _ -> Atomic_beg new_id
+    | Atomic_end _ -> Atomic_end new_id
+    | D_step_beg _ -> D_step_beg new_id
+    | D_step_end _ -> D_step_end new_id
+    | Goto (_, l) -> Goto (new_id, l)
+    | If (_, opt_labs, exit_lab) -> If (new_id, opt_labs, exit_lab)
+    | Else _ -> Else new_id
+    | Assert (_, e) -> Assert (new_id, e)
+    | Assume (_, e) -> Assume (new_id, e)
+    | Print (_, f, a) -> Print (new_id, f, a)
 ;;
 
 (* A middle-level statement, the block structure is still in place.
-   Each statement has an identifier attached
+   Each statement has an identifier attached.
  *)
 type 't mir_stmt =
       MSkip of int | MExpr of int * 't expr
@@ -283,29 +316,29 @@ and 't mir_option =
     | MOptElse of 't mir_stmt list
 ;;
 
-let mir_to_lir stmts =
+let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
     let rec make_one tl s =
         match s with
         | MIf (id, options) ->
             let exit_lab = mk_uniq_label () in
             let labs_seqs = List.map (make_option exit_lab) options in
             let opt_labs, opt_seqs = List.split labs_seqs in
-            Lstmt (id, If (opt_labs, exit_lab))
-                :: ((List.concat opt_seqs) @ ((Lstmt (-1, Label exit_lab)) :: tl))
+            If (id, opt_labs, exit_lab)
+                :: ((List.concat opt_seqs) @ (Label (-1, exit_lab) :: tl))
         | MAtomic (id, seq) ->
             let new_seq = List.fold_left make_one [] seq in
-            Lstmt (id, Atomic_beg) :: new_seq @ (Lstmt (-1, Atomic_end) :: tl)
+            Atomic_beg id :: new_seq @ Atomic_end (-1) :: tl
         | MD_step (id, seq) ->
             let new_seq = List.fold_left make_one [] seq in
-            Lstmt (id, D_step_beg) :: new_seq @ (Lstmt (-1, D_step_end) :: tl)
-        | MGoto (id, i) -> Lstmt (id, Goto i) :: tl
-        | MLabel (id, i) -> Lstmt (id, Label i) :: tl
-        | MDecl (id, v, i) -> Lstmt (id, Decl (v, i)) :: tl
-        | MExpr (id, e) -> Lstmt (id, Expr e) :: tl
-        | MSkip id -> Lstmt (id, Skip) :: tl
-        | MAssert (id, e) -> Lstmt (id, Assert e) :: tl
-        | MAssume (id, e) -> Lstmt (id, Assume e) :: tl
-        | MPrint (id, s, args) -> Lstmt (id, Print (s, args)) :: tl
+            D_step_beg id :: new_seq @ D_step_end (-1) :: tl
+        | MGoto (id, i) -> Goto (id, i) :: tl
+        | MLabel (id, i) -> Label (id, i) :: tl
+        | MDecl (id, v, i) -> Decl (id, v, i) :: tl
+        | MExpr (id, e) -> Expr (id, e) :: tl
+        | MSkip id -> Skip id :: tl
+        | MAssert (id, e) -> Assert (id, e) :: tl
+        | MAssume (id, e) -> Assume (id, e) :: tl
+        | MPrint (id, s, args) -> Print (id, s, args) :: tl
     and
         make_option exit_lab opt =
         let is_else, seq = match opt with
@@ -314,25 +347,32 @@ let mir_to_lir stmts =
         in
         let opt_lab = mk_uniq_label () in
         let body = List.fold_left make_one [] seq in
-        let body = if is_else then Lstmt (-1, Else) :: body else body in
+        let body = if is_else then Else (-1) :: body else body in
         let new_seq = 
-            ((Lstmt (-1, Label opt_lab) :: body) @ [(Lstmt (-1, Goto exit_lab))])
+            ((Label (-1, opt_lab) :: body) @ [Goto (-1, exit_lab)])
         in
         (opt_lab, new_seq)
     in
     let lstmts = List.fold_left make_one [] stmts in
-    List.fold_left (* assign unique negative ids instead of just -1's *)
-        (fun (min_id, tl) ms ->
-            match ms with
-                | Lstmt (-1, s) ->
-                    (min_id - 1, Lstmt (min_id, s) :: tl)
-                | _ ->
-                    (min_id, ms :: tl)
+    (* assign unique negative ids instead of just -1's *)
+    let _, res = List.fold_left
+        (fun (min_id, tl) s ->
+            let s_id = stmt_id s in
+            if s_id = -1
+            then (min_id - 1, (replace_stmt_id min_id s) :: tl)
+            else (min_id, s :: tl)
         ) (-1, []) lstmts
+    in
+    res
+;;
+
+(* find the first statement with a non-negative id *)
+let first_normal_stmt seq =
+    List.find (fun s -> (stmt_id s) >= 0) seq
 ;;
 
 let is_decl = function
-    | Decl (_, _) -> true
+    | Decl (_, _, _) -> true
     | _ -> false
 ;;
 
@@ -367,7 +407,7 @@ class ['t] proc name_i active_expr_i =
     end
 ;;
 
-let proc_replace_body p new_body =
+let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
     let new_p = new proc p#get_name p#get_active_expr in
     new_p#set_args p#get_args;
     new_p#set_stmts new_body;

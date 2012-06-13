@@ -33,13 +33,13 @@ class ['t] basic_block =
 
         method get_exit_labs =
             match List.hd (List.rev seq) with
-                | Goto i -> [i]
-                | If (is, _) -> is
+                | Goto (_, i) -> [i]
+                | If (_, is, _) -> is
                 | _ -> [] (* an exit block *)
 
         method get_lead_lab =
             match List.hd seq with
-                | Label i -> i
+                | Label (_, i) -> i
                 | _ -> raise (CfgError "Corrupted basic block, no leading label")
 
         method str =
@@ -73,7 +73,7 @@ let merge_neighb_labels stmts =
     List.iter2
         (fun s1 s2 ->
             match s1, s2 with
-            | Label i, Label j ->
+            | Label (_, i), Label (_, j) ->
                 if Hashtbl.mem neighb i
                 (* add the neighbor of i *)
                 then Hashtbl.add neighb j (Hashtbl.find neighb i)
@@ -87,8 +87,10 @@ let merge_neighb_labels stmts =
     List.map
         (fun s ->
             match s with
-            | Goto i -> Goto (sub_lab i)
-            | If (targs, exit) -> If ((List.map sub_lab targs), (sub_lab exit))
+            | Goto (id, i) ->
+                    Goto (id, sub_lab i)
+            | If (id, targs, exit) ->
+                    If (id, (List.map sub_lab targs), (sub_lab exit))
             | _ -> s
         ) stmts
 ;;
@@ -97,8 +99,8 @@ let collect_jump_targets stmts =
     List.fold_left
         (fun targs stmt ->
             match stmt with
-                | Goto i -> IntSet.add i targs
-                | If (is, _)  -> List.fold_right IntSet.add is targs
+                | Goto (_, i) -> IntSet.add i targs
+                | If (_, is, _)  -> List.fold_right IntSet.add is targs
                 | _      -> targs
         )
         IntSet.empty
@@ -138,26 +140,27 @@ let mk_cfg stmts =
     let cleaned = List.filter (* remove hanging unreferenced labels *)
         (fun s ->
             match s with
-                | Label i -> IntSet.mem i seq_heads
+                | Label (_, i) ->
+                    IntSet.mem i seq_heads
                 | _ -> true)
         stmts_r in
     let seq_list = separate
             (fun s ->
                 match s with (* separate by jump targets *)
-                    | Label i -> IntSet.mem i seq_heads
+                    | Label (_, i) -> IntSet.mem i seq_heads
                     | _ -> false)
             (* add 0 in front to denote the entry label *)
-            ((Label 0):: cleaned) in
+            (Label (-1, 0) :: cleaned) in
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
     List.iter
         (fun seq ->
             match seq with
-            | (Label i) :: tl ->
+            | Label (_, i) :: tl ->
                 let b = new basic_block in
                 b#set_seq seq; Hashtbl.add blocks i b
-            | _ -> raise (CfgError "Broken head: expected (Label i) :: tl"))
-        seq_list;
+            | _ -> raise (CfgError "Broken head: expected (Label i) :: tl")
+        ) seq_list;
     (* set successors *)
     Hashtbl.iter
         (fun _ bb -> bb#set_succ

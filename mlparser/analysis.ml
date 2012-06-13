@@ -8,23 +8,32 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Debug;;
 
+exception Analysis_error of string;;
+
 (* general analysis *)
 let mk_bottom_val () = Hashtbl.create 10 ;;
 
-let visit_basic_block transfer_fun bb in_vals =
-    List.fold_left (fun res stmt -> transfer_fun stmt res) in_vals bb#get_seq
+let visit_basic_block transfer_fun stmt_vals bb in_vals =
+    let transfer_stmt input stmt =
+        let id = stmt_id stmt in
+        let output = transfer_fun stmt input in
+        Hashtbl.replace stmt_vals id output;
+        output
+    in
+    List.fold_left transfer_stmt in_vals bb#get_seq
 ;;
 
 let visit_cfg visit_bb_fun join_fun cfg entry_vals =
     (* imperative because of Hahstbl :-( *)
     let bb_vals = Hashtbl.create 10 in
+    let stmt_vals = Hashtbl.create 10 in
     let visit_once (basic_blk, in_vals) = 
         let id = basic_blk#get_lead_lab in
         let old_vals =
             try Hashtbl.find bb_vals id with Not_found -> mk_bottom_val ()
         in
         let new_vals = join_fun old_vals
-            (visit_bb_fun basic_blk (join_fun old_vals in_vals))
+            (visit_bb_fun stmt_vals basic_blk (join_fun old_vals in_vals))
         in
         if not (Accums.hashtbl_eq old_vals new_vals)
         then begin
@@ -42,7 +51,7 @@ let visit_cfg visit_bb_fun join_fun cfg entry_vals =
     let entry = Hashtbl.find cfg 0 in
     Hashtbl.add bb_vals entry#get_lead_lab entry_vals;
     visit (Hashtbl.fold (fun _ bb lst -> (bb, mk_bottom_val ()) :: lst) cfg []);
-    bb_vals
+    stmt_vals
 ;;
 
 let join_all_blocks join_fun init_vals bb_vals =
@@ -118,8 +127,9 @@ let transfer_roles stmt input =
     in
     begin
         match stmt with
-        | Decl (var, init_expr) -> Hashtbl.replace output var (eval init_expr)
-        | Expr expr -> let _ = eval expr in ()
+        | Decl (_, var, init_expr) ->
+                Hashtbl.replace output var (eval init_expr)
+        | Expr (_, expr) -> let _ = eval expr in ()
         | _ -> ()
     end;
     print_int_roles "input = " input;
@@ -134,7 +144,7 @@ let find_copy_pairs stmts =
     let pairs = Hashtbl.create 8 in
     List.iter
         (function
-            | Expr (BinEx (ASGN, Var x, Var y)) ->
+            | Expr (_, BinEx (ASGN, Var x, Var y)) ->
                     Hashtbl.add pairs x y
             | _ -> ()
         ) stmts;

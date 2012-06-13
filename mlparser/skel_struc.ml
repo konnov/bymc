@@ -53,17 +53,17 @@ let extract_skel cfg =
             let my_reg, next_reg = match prev_reg with
             | RegInit ->
                 if (List.length bb#get_pred) > 1
-                    && exists (function If (_, _) -> true | _ -> false)
+                    && exists (function If (_, _, _) -> true | _ -> false)
                 then RegGuard, RegGuard
                 else RegInit, RegInit
 
             | RegGuard ->
-                if exists (function Atomic_beg -> true | _ -> false)
+                if exists (function Atomic_beg _ -> true | _ -> false)
                 then RegCompute, RegCompute
                 else RegGuard, RegGuard
 
             | RegCompute ->
-                if exists (function Atomic_end -> true | _ -> false)
+                if exists (function Atomic_end _ -> true | _ -> false)
                 then RegUpdate, RegEnd
                 else RegCompute, RegCompute
 
