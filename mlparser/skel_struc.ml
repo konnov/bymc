@@ -16,6 +16,46 @@ let region_s = function
     | RegEnd -> "end"
 ;;
 
+type skel_struc = {
+    decl: 't mir_stmt list;
+    init: 't mir_stmt list;
+    guard: 't mir_stmt list;
+    comp: 't mir_stmt list;
+    update: 't mir_stmt list
+};;
+
+(*
+  Here we check that a process body has the following structure:
+ 
+  declarations;
+  init_statements;
+  main:
+  if
+    :: guard ->
+      atomic {
+        computation;
+        updates;
+      }
+  fi;
+  goto main;
+
+  The mentioned sections are extracted from the sequence.
+ *)
+let extract_skel proc_body =
+    let decls, non_decls = List.filter is_mdecl proc_body in
+    let cfg = Cfg.mk_cfg non_decls in
+    let rec search bb =
+        let exists f = List.exists f bb#get_seq in
+        if not bb#get_visit_flag
+        then begin
+            bb#set_visit_flag true; 
+            List.iter search bb#get_succ
+        end
+        else bb
+    in
+
+;;
+
 (*
     Here we check that a control flow graph has the following structure:
 
@@ -42,6 +82,7 @@ main:
     This can be done by performing structural analysis (see Muchnik),
     but here we do a simple check up and extraction of the regions.
  *)
+(*
 let extract_skel cfg =
     let regtbl = Hashtbl.create (Hashtbl.length cfg) in
     Hashtbl.iter (fun _ bb -> bb#set_visit_flag false) cfg;
@@ -78,3 +119,4 @@ let extract_skel cfg =
     search RegInit (Hashtbl.find cfg 0);
     regtbl
 ;;
+*)

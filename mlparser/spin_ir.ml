@@ -376,6 +376,11 @@ let is_decl = function
     | _ -> false
 ;;
 
+let is_mdecl = function
+    | MDecl (_, _, _) -> true
+    | _ -> false
+;;
+
 (* a process *)
 class ['t] proc name_i active_expr_i =
     object

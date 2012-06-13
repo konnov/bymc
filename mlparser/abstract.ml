@@ -656,7 +656,7 @@ if
 ...
 fi
 *)
-    [MIf (-1, List.map (fun seq -> MOptGuarded seq) seq_list)]
+    MIf (-1, List.map (fun seq -> MOptGuarded seq) seq_list)
 ;;
 
 let do_counter_abstraction t_ctx dom solver units =
@@ -675,7 +675,7 @@ let do_counter_abstraction t_ctx dom solver units =
                     (ctr_ctx#unpack_const idx) [])
         in
         let indices = range 0 ctr_ctx#get_ctr_dim in
-        mk_nondet_choice (List.map make_opt indices)
+        [mk_nondet_choice (List.map make_opt indices)]
     in
     let replace_init dominator regtbl active_expr all_stmts prefix =
         let cfg = Cfg.mk_cfg all_stmts in
@@ -740,7 +740,7 @@ let do_counter_abstraction t_ctx dom solver units =
         let label_pre = dominator#get_lead_lab in
         let label_post = mk_uniq_label () in
         let decls = List.filter is_decl prefix in
-        decls @ (mk_nondet_choice option_list)
+        decls @ [mk_nondet_choice option_list]
         @ [MLabel (-1, label_post)]
         (*
         List.iter
