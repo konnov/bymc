@@ -316,8 +316,22 @@ and 't mir_option =
     | MOptElse of 't mir_stmt list
 ;;
 
+let m_stmt_id = function
+      MSkip id -> id
+    | MExpr (id, _) -> id
+    | MDecl (id, _, _) -> id
+    | MLabel (id, _) -> id
+    | MAtomic (id, _) -> id
+    | MD_step (id, _) -> id
+    | MGoto (id, _) -> id
+    | MIf (id, _) -> id
+    | MAssert (id, _) -> id
+    | MAssume (id, _) -> id
+    | MPrint (id, _, _) -> id
+;;
+
 let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
-    let rec make_one tl s =
+    let rec make_one s tl =
         match s with
         | MIf (id, options) ->
             let exit_lab = mk_uniq_label () in
@@ -326,10 +340,10 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
             If (id, opt_labs, exit_lab)
                 :: ((List.concat opt_seqs) @ (Label (-1, exit_lab) :: tl))
         | MAtomic (id, seq) ->
-            let new_seq = List.fold_left make_one [] seq in
+            let new_seq = List.fold_right make_one seq [] in
             Atomic_beg id :: new_seq @ Atomic_end (-1) :: tl
         | MD_step (id, seq) ->
-            let new_seq = List.fold_left make_one [] seq in
+            let new_seq = List.fold_right make_one seq [] in
             D_step_beg id :: new_seq @ D_step_end (-1) :: tl
         | MGoto (id, i) -> Goto (id, i) :: tl
         | MLabel (id, i) -> Label (id, i) :: tl
@@ -346,22 +360,22 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
             | MOptElse sts -> (true, sts)
         in
         let opt_lab = mk_uniq_label () in
-        let body = List.fold_left make_one [] seq in
+        let body = List.fold_right make_one seq [] in
         let body = if is_else then Else (-1) :: body else body in
         let new_seq = 
             ((Label (-1, opt_lab) :: body) @ [Goto (-1, exit_lab)])
         in
         (opt_lab, new_seq)
     in
-    let lstmts = List.fold_left make_one [] stmts in
+    let lstmts = List.fold_right make_one stmts [] in
     (* assign unique negative ids instead of just -1's *)
-    let _, res = List.fold_left
-        (fun (min_id, tl) s ->
+    let _, res = List.fold_right
+        (fun s (min_id, tl) ->
             let s_id = stmt_id s in
             if s_id = -1
             then (min_id - 1, (replace_stmt_id min_id s) :: tl)
             else (min_id, s :: tl)
-        ) (-1, []) lstmts
+        ) lstmts (-1, []) 
     in
     res
 ;;

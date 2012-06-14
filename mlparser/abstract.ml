@@ -184,6 +184,9 @@ class abs_domain conds_i =
          *)
         method scatter_abs_vals (solver: yices_smt)
                 (num_expr: 't expr) (n: int) : int list list =
+            if n > 4
+            then raise (Abstraction_error "scatter_abs_vals for n > 4");
+            
             let combinations = (Accums.mk_product cond_intervals n) in
             let sat_triples_list = List.filter
                 (fun comb ->
@@ -215,30 +218,23 @@ class abs_domain conds_i =
 ;;
 
 let identify_var_roles units =
-    let roles = Hashtbl.create 10
-    in
+    let roles = Hashtbl.create 10 in
     let fill_roles proc =
         let cfg = Cfg.mk_cfg (mir_to_lir proc#get_stmts) in
         let (int_roles: (int, (var, int_role) Hashtbl.t) Hashtbl.t) =
             visit_cfg (visit_basic_block transfer_roles)
                 join_int_roles cfg (mk_bottom_val ()) in
         let body_sum =
-            join_all_blocks join_int_roles (mk_bottom_val ()) int_roles in
-        let regtbl = extract_skel cfg in
-        let end_bbs = List.filter
-            (fun bb -> RegEnd = (Hashtbl.find regtbl bb#get_lead_lab))
-            (hashtbl_vals cfg)
-        in
+            join_all_locs join_int_roles (mk_bottom_val ()) int_roles in
+        let skel = extract_skel proc#get_stmts in
         Hashtbl.iter
             (fun v r ->
-                let new_role =
-                if List.for_all
-                    (fun bb ->
-                        let loc_roles = Hashtbl.find int_roles (bb#get_lead_lab) in
-                        match Hashtbl.find loc_roles v with
-                            | IntervalInt (a, b) -> a = b   (* const *)
-                            | _ -> false                    (* mutating *)
-                    ) end_bbs
+                let loc_roles = Hashtbl.find int_roles (m_stmt_id skel.guard) in
+                let is_const = match Hashtbl.find loc_roles v with
+                    | IntervalInt (a, b) -> a = b   (* const *)
+                    | _ -> false                    (* mutating *)
+                in
+                let new_role = if is_const
                 then Scratch
                 else match Hashtbl.find body_sum v with
                     | IntervalInt (a, b) -> BoundedInt (a, b)
@@ -248,8 +244,7 @@ let identify_var_roles units =
                             (sprintf "Undefined type for %s" v#get_name))
                 in
                 Hashtbl.replace roles v new_role (* XXX: can we lose types? *)
-            )
-            body_sum;
+            ) body_sum;
     in
     List.iter (function Proc proc -> fill_roles proc | _ -> ()) units;
 
@@ -405,7 +400,7 @@ let mk_domain solver ctx procs =
     log INFO "> Extracting an abstract domain...";
    
     let all_stmts = List.concat (List.map (fun p -> p#get_stmts) procs) in
-    let conds = identify_conditions ctx#get_var_roles all_stmts in
+    let conds = identify_conditions ctx#get_var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver ctx conds in
     new abs_domain sorted_conds
 ;;
@@ -483,12 +478,12 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
             MOptGuarded (MExpr (-1, guard) :: assigns)
         ) labs expr_abs_vals
     in
-    [MIf (-1, guarded_actions)]
+    MIf (-1, guarded_actions)
 ;;
 
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
-let translate_stmt ctx dom solver s =
+let translate_stmt ctx dom solver stmt =
     let non_symbolic = function
         | Var v -> not v#is_symbolic
         | _ -> false
@@ -549,10 +544,10 @@ let translate_stmt ctx dom solver s =
             | _ -> raise (Abstraction_error
                 (sprintf "No abstraction for: %s" (expr_s e)))
     in
-    match s with
-    | MExpr (id, e) ->
+    let rec abs_stmt = function
+    | MExpr (id, e) as s ->
         if not (expr_exists over_dom e)
-        then [s]
+        then s
         else begin
         (* different kinds of expressions must be treated differently *)
             match e with
@@ -561,17 +556,35 @@ let translate_stmt ctx dom solver s =
                 then
                     if (match rhs with | Var _ -> true | _ -> false)
                     (* foo = bar; keep untouched *)
-                    then [s]
+                    then s
                     (* analyze all possible values of the right-hand side *)
                     else let expr_abs_vals =
                         mk_expr_abstraction solver dom
                             (fun e -> is_var e && not (is_expr_symbolic e)) rhs
                     in (mk_assign_unfolding lhs expr_abs_vals)
                 (* just substitute one abstract value on the right-hand side *)
-                else [MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))]
-            | _ -> [MExpr (id, translate_expr e)]
+                else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
+            | _ -> MExpr (id, translate_expr e)
         end                
-    | _ -> [s]
+
+    | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
+
+    | MD_step (id, seq) -> MD_step (id, (abs_seq seq))
+
+    | MIf (id, opts) ->
+        let abs_opt = function
+            | MOptGuarded seq -> MOptGuarded (abs_seq seq)
+            | MOptElse seq -> MOptElse (abs_seq seq)
+        in
+        MIf (id, List.map abs_opt opts)
+
+    | _ as s -> s
+
+    and
+    abs_seq seq =
+        List.fold_right (fun s l -> (abs_stmt s) :: l) seq []
+    in
+    abs_stmt stmt 
 ;;
 
 let do_interval_abstraction ctx dom solver procs = 
@@ -579,8 +592,7 @@ let do_interval_abstraction ctx dom solver procs =
         (fun p ->
             solver#push_ctx;
             List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
-            let body = List.concat
-                (List.map (translate_stmt ctx dom solver) p#get_stmts) in
+            let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
             log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
             List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
             solver#pop_ctx;
@@ -639,12 +651,18 @@ class ctr_abs_ctx dom t_ctx =
             BinEx (PLUS, BinEx (MULT, ex, Const pc_size), Var pc_var)
 
         method pack_vals_to_index valuation =
-            let idx = List.fold_left
-                (fun sum var ->
-                    (sum * dom#length) + (Hashtbl.find valuation var)
-                 ) 0 (List.rev local_vars)
+            let get_val var =
+                try
+                    Hashtbl.find valuation var
+                with Not_found ->
+                    raise (Failure
+                        (sprintf "Valuation of %s not found" var#get_name))
             in
-            (idx * pc_size + (Hashtbl.find valuation pc_var))
+            let idx = List.fold_left
+                (fun sum var -> (sum * dom#length) + (get_val var)
+                ) 0 (List.rev local_vars)
+            in
+            (idx * pc_size + (get_val pc_var))
     end
 ;;
 
@@ -659,9 +677,30 @@ fi
     MIf (-1, List.map (fun seq -> MOptGuarded seq) seq_list)
 ;;
 
+let rec remove_bad_statements stmts =
+    let pred s =
+        match s with
+        | MPrint (_, _, _) -> false
+        | _ -> true
+    in
+    let rec rem_s = function
+        | MAtomic (id, seq) -> MAtomic (id, remove_bad_statements seq)
+        | MD_step (id, seq) -> MD_step (id, remove_bad_statements seq)
+        | MIf (id, opts) ->
+            let on_opt = function
+                | MOptGuarded seq -> MOptGuarded (remove_bad_statements seq)
+                | MOptElse seq -> MOptElse (remove_bad_statements seq)
+            in
+            MIf (id, (List.map on_opt opts))
+        | _ as s -> s
+    in
+    let filter l s = if pred s then (rem_s s) :: l else l in
+    List.rev (List.fold_left filter [] stmts)
+;;
+
 let do_counter_abstraction t_ctx dom solver units =
     let ctr_ctx = new ctr_abs_ctx dom t_ctx in
-    let mk_counter_guard label_pre label_post =
+    let counter_guard =
         let make_opt idx =
             let guard =
                 (BinEx (GT,
@@ -677,27 +716,18 @@ let do_counter_abstraction t_ctx dom solver units =
         let indices = range 0 ctr_ctx#get_ctr_dim in
         [mk_nondet_choice (List.map make_opt indices)]
     in
-    let replace_init dominator regtbl active_expr all_stmts prefix =
-        let cfg = Cfg.mk_cfg all_stmts in
+    let replace_init guard active_expr decls init_stmts =
+        (* TODO: simplify/refactor *)
+        printf "\n\nINIT PART\n";
+        List.iter
+            (fun s -> printf "%s\n" (stmt_s s))
+            (mir_to_lir (decls @ init_stmts));
+        let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
         let int_roles =
             visit_cfg (visit_basic_block transfer_roles)
-                join_int_roles cfg (mk_bottom_val ()) in
-        let last_vals =
-            List.fold_left
-                (fun accum bb ->
-                    if RegInit = (Hashtbl.find regtbl bb#get_lead_lab)
-                    then join_int_roles accum
-                        (Hashtbl.find int_roles bb#get_lead_lab)
-                    else accum
-                ) (mk_bottom_val ()) (hashtbl_vals cfg) in
-        let last_local_vals =
-            Hashtbl.fold
-                (fun v r lst ->
-                    match t_ctx#get_role v with
-                    | LocalUnbounded
-                    | BoundedInt (_, _) -> (v, r) :: lst
-                    | _ -> lst
-                ) last_vals [] in
+                join_int_roles init_cfg (mk_bottom_val ()) in
+        let init_sum =
+            join_all_locs join_int_roles (mk_bottom_val ()) int_roles in
         let mk_prod left right =
             if left = []
             then List.map (fun x -> [x]) right
@@ -705,7 +735,15 @@ let do_counter_abstraction t_ctx dom solver units =
                 (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
         let init_locals =
             List.fold_left
-                (fun lst (v, r) ->
+                (fun lst v ->
+                    let r =
+                        try Hashtbl.find init_sum v
+                        with Not_found ->
+                            let m = (sprintf
+                                "Variable %s not found in the init section"
+                                v#get_name) in
+                            raise (Abstraction_error m)
+                    in
                     match r with
                     | IntervalInt (a, b) ->
                         let pairs =
@@ -715,7 +753,8 @@ let do_counter_abstraction t_ctx dom solver units =
                         let m = sprintf
                             "Unbounded after abstraction: %s" v#get_name in
                         raise (Abstraction_error m)
-                ) [] last_local_vals in
+                ) [] (ctr_ctx#get_pc :: ctr_ctx#get_locals)
+        in
         let size_dist_list =
             dom#scatter_abs_vals solver active_expr (List.length init_locals) in
         let option_list =
@@ -734,14 +773,9 @@ let do_counter_abstraction t_ctx dom solver units =
                                     Var ctr_ctx#get_ctr, Const idx) in
                             MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
                         ) init_locals dist
-                )
-                size_dist_list
+                ) size_dist_list
         in
-        let label_pre = dominator#get_lead_lab in
-        let label_post = mk_uniq_label () in
-        let decls = List.filter is_decl prefix in
-        decls @ [mk_nondet_choice option_list]
-        @ [MLabel (-1, label_post)]
+        [mk_nondet_choice option_list]
         (*
         List.iter
             (fun d -> 
@@ -757,31 +791,23 @@ let do_counter_abstraction t_ctx dom solver units =
             ) size_dist_list;
         *)
     in
-    let replace_update regtbl stmts =
-        let all_update_blocks =
-            Hashtbl.fold
-                (fun id reg lst -> if reg = RegUpdate then id :: lst else lst)
-                regtbl [] in
-        assert ((List.length all_update_blocks) = 1);
-        let update_block_id = List.hd (List.rev all_update_blocks) in
-        let prefix, ell, suffix =
-            list_cut (fun s -> s = Label update_block_id) stmts in
+    let replace_update update stmts =
         (* all local variables should be reset to 0 *)
-        let new_suffix =
+        let new_update =
             List.map
                 (function
-                    | Expr (BinEx (ASGN, Var var, rhs)) as s ->
+                    | MExpr (_1, BinEx (ASGN, Var var, rhs)) as s ->
                         begin
                             match t_ctx#get_role var with
                             | LocalUnbounded
                             | BoundedInt (_, _) ->
-                                Expr (BinEx (ASGN, Var var, Const 0))
+                                MExpr (-1, BinEx (ASGN, Var var, Const 0))
                             | _ -> s
                         end
-                    | _ as s -> s)
-                suffix
+                    | _ as s -> s
+                ) update
         in
-        let prev_next_pairs = find_copy_pairs suffix in
+        let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
         (* XXX: it might break with several process prototypes *)
         let prev_idx_ex = ctr_ctx#pack_index_expr in
         let next_idx_ex =
@@ -790,41 +816,33 @@ let do_counter_abstraction t_ctx dom solver units =
                     try Var (Hashtbl.find prev_next_pairs v)
                     with Not_found -> Var v
                 ) prev_idx_ex in
-        (* TODO: add ktr[..]++, ktr[..]-- *)
         let mk_ctr_ex idx_ex tok =
             let ktr_i = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, idx_ex) in
             let expr_abs_vals =
                 mk_expr_abstraction solver dom
                     (function | BinEx (ARRAY_DEREF, _, _) -> true | _ -> false)
                     (BinEx (tok, ktr_i, Const 1)) in
-            (mk_assign_unfolding ktr_i expr_abs_vals)
+            [mk_assign_unfolding ktr_i expr_abs_vals]
         in
-        prefix @ ell
-            @ (mk_ctr_ex prev_idx_ex MINUS)
-            @ (mk_ctr_ex next_idx_ex PLUS) @ new_suffix
+        (mk_ctr_ex prev_idx_ex MINUS)
+            @ (mk_ctr_ex next_idx_ex PLUS)
+            @ new_update
     in
     let abstract_proc p =
-        let cfg = Cfg.mk_cfg p#get_stmts in
-        let regtbl = extract_skel cfg in
-        let dominator = find_dominator
-            (List.filter
-                (fun bb -> RegGuard = (Hashtbl.find regtbl bb#get_lead_lab))
-                (hashtbl_vals cfg)) in
-        let cut_stmt_id = stmt_id (first_normal_stmt (dominator#get_seq)) in
-        let prefix, ell, suffix =
-            list_cut (fun s -> cut_stmt_id = (stmt_id s)) p#get_stmts
+        let body = remove_bad_statements p#get_stmts in
+        let skel = extract_skel body in
+        let main_lab = mk_uniq_label () in
+        let new_init =
+            replace_init skel.guard p#get_active_expr skel.decl skel.init
         in
-        let lab_pre =
-            match (List.hd ell) with
-            | Label i -> i
-            | _ -> raise (Abstraction_error "Dominator label is not a label!")
+        let new_update = replace_update skel.update body in
+        let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
+        let new_body = 
+            skel.decl @ new_init @ [MLabel (-1, main_lab)]
+            @ counter_guard @
+            [MIf (-1, [MOptGuarded ([skel.guard; new_comp_upd]); MOptElse []]);
+             MGoto (-1, main_lab)]
         in
-        let lab_post = mk_uniq_label () in
-        let new_prefix =
-            replace_init dominator regtbl p#get_active_expr p#get_stmts prefix
-        in
-        let new_body = (new_prefix @ (mk_counter_guard lab_pre lab_post)
-             @ [Label lab_post] @ (replace_update regtbl suffix)) in
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         new_proc
@@ -832,7 +850,7 @@ let do_counter_abstraction t_ctx dom solver units =
     let new_units =
         List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)
         units in
-    (Stmt (Decl (ctr_ctx#get_ctr, Nop))) :: new_units
+    (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop))) :: new_units
 ;;
 
 let do_abstraction units =

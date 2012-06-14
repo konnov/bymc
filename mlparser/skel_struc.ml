@@ -6,23 +6,15 @@
 open Spin_ir;;
 open Cfg;;
 
-type region = RegInit | RegGuard | RegCompute | RegUpdate | RegEnd;;
-
-let region_s = function
-    | RegInit -> "init"
-    | RegGuard -> "guard"
-    | RegCompute -> "compute"
-    | RegUpdate -> "update"
-    | RegEnd -> "end"
-;;
-
-type skel_struc = {
+type 't skel_struc = {
     decl: 't mir_stmt list;
     init: 't mir_stmt list;
-    guard: 't mir_stmt list;
+    guard: 't mir_stmt;
     comp: 't mir_stmt list;
     update: 't mir_stmt list
 };;
+
+exception Skel_error of string;;
 
 (*
   Here we check that a process body has the following structure:
@@ -40,83 +32,54 @@ type skel_struc = {
   goto main;
 
   The mentioned sections are extracted from the sequence.
+  This is to be generalized in the future.
  *)
 let extract_skel proc_body =
-    let decls, non_decls = List.filter is_mdecl proc_body in
-    let cfg = Cfg.mk_cfg non_decls in
-    let rec search bb =
-        let exists f = List.exists f bb#get_seq in
-        if not bb#get_visit_flag
-        then begin
-            bb#set_visit_flag true; 
-            List.iter search bb#get_succ
-        end
-        else bb
+    let decls, non_decls = List.partition is_mdecl proc_body in
+    List.iter
+        (fun s -> Printf.printf "  %s\n" (Spin_ir_imp.stmt_s s))
+        (mir_to_lir proc_body);
+    let cfg = Cfg.mk_cfg (mir_to_lir proc_body) in
+    let loop = match (comp_sccs cfg#entry) with
+    | [] -> raise (Skel_error "Skeleton does not have the main loop")
+    | [one_scc] -> one_scc
+    | _ as sccs ->
+        List.iter
+            (fun scc ->
+                Printf.printf " *** SCC ***\n";
+                List.iter (fun b -> Printf.printf "  %s\n" b#str) scc
+            ) sccs;
+        raise (Skel_error "Skeleton has more than one loop inside")
     in
-
+    (* the last elem of the first block is supposed to be 'if' *)
+    let if_id = match (List.hd (List.rev (List.hd loop)#get_seq)) with
+    | If (id, _, _) -> id
+    | _ ->
+        Printf.printf " *** LOOP ***\n";
+        List.iter (fun b -> Printf.printf "  %s\n" b#str) loop;
+        raise (Skel_error "The main loop does not start with 'if'")
+    in
+    let init_s, if_s, rest_s =
+        Accums.list_cut (fun s -> (m_stmt_id s) = if_id) non_decls
+    in
+    let guard, opt_body = match if_s with
+    | [MIf (_, [MOptGuarded seq])] ->
+            List.hd seq, List.tl seq
+    | _ -> raise (Skel_error "The main loop must be guarded by the only option")
+    in
+    let atomic_body = match opt_body with
+    | [MAtomic (_, atomic_body)] -> atomic_body
+    | _ -> raise (Skel_error "The computation must be protected by atomic")
+    in
+    let hd, el, tl =
+        Accums.list_cut_ignore (* cut it by the first non-expression *)
+            (function
+                | MExpr (_, _) -> false
+                | _ -> true
+            ) (List.rev atomic_body)
+    in
+    let update = List.rev hd in
+    let comp = List.rev (el @ tl) in
+    { decl = decls; init = init_s; guard = guard; comp = comp; update = update }
 ;;
 
-(*
-    Here we check that a control flow graph has the following structure:
-
-    RegInit[ ]
-
-    RegGuard[
-main:
-    if
-        :: guard ] ->
-            atomic {
-                RegCompute[
-                ...
-                ]
-                RegUpdate[
-                ...
-                ]
-            }
-    fi;
-
-    RegEnd[
-    goto main
-    ]
-
-    This can be done by performing structural analysis (see Muchnik),
-    but here we do a simple check up and extraction of the regions.
- *)
-(*
-let extract_skel cfg =
-    let regtbl = Hashtbl.create (Hashtbl.length cfg) in
-    Hashtbl.iter (fun _ bb -> bb#set_visit_flag false) cfg;
-    let rec search prev_reg bb =
-        let exists f = List.exists f bb#get_seq in
-        if not bb#get_visit_flag
-        then begin
-            bb#set_visit_flag true; 
-            let my_reg, next_reg = match prev_reg with
-            | RegInit ->
-                if (List.length bb#get_pred) > 1
-                    && exists (function If (_, _, _) -> true | _ -> false)
-                then RegGuard, RegGuard
-                else RegInit, RegInit
-
-            | RegGuard ->
-                if exists (function Atomic_beg _ -> true | _ -> false)
-                then RegCompute, RegCompute
-                else RegGuard, RegGuard
-
-            | RegCompute ->
-                if exists (function Atomic_end _ -> true | _ -> false)
-                then RegUpdate, RegEnd
-                else RegCompute, RegCompute
-
-            | RegUpdate -> raise (Failure "There must be one update region")
-            
-            | RegEnd -> RegEnd, RegEnd
-            in
-            Hashtbl.add regtbl bb#get_lead_lab my_reg;
-            List.iter (search next_reg) bb#get_succ
-        end
-    in
-    search RegInit (Hashtbl.find cfg 0);
-    regtbl
-;;
-*)

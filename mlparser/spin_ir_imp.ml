@@ -146,24 +146,25 @@ let op_of_expr e =
 
 let stmt_s s =
     match s with
-    | Skip _ -> "skip"
-    | Expr (_, e) -> sprintf "(%s)" (expr_s e)
-    | Decl (_, v, e) ->
-        sprintf "decl %s %s %s = %s"
-            v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
-    | Label (_, l) -> sprintf "%d: " l
-    | Atomic_beg _ -> "atomic {"
-    | Atomic_end _ -> "} /* atomic */"
-    | D_step_beg _ -> "d_step {"
-    | D_step_end _ -> "} /* d_step */"
-    | Goto (_, l) -> sprintf "goto %d" l
-    | If (_, ls, exitl) ->
-        sprintf "if %s -> %d" (List.fold_left (sprintf "%s %d") "" ls) exitl
-    | Else _ -> "else"
-    | Assert (_, e) -> "assert " ^ (expr_s e)
-    | Assume (_, e) -> "assume " ^ (expr_s e)
-    | Print (_, s, es) ->
-        sprintf "print \"%s\"%s" s
+    | Skip id -> sprintf "<%3d> skip" id
+    | Expr (id, e) -> sprintf "<%3d> (%s)" id (expr_s e)
+    | Decl (id, v, e) ->
+        sprintf "<%3d> decl %s %s %s = %s"
+            id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
+    | Label (id, l) -> sprintf "<%3d> %d: " id l
+    | Atomic_beg id -> sprintf "<%3d> atomic {" id
+    | Atomic_end id -> sprintf "<%3d> } /* atomic */" id
+    | D_step_beg id -> sprintf "<%3d> d_step {" id
+    | D_step_end id -> sprintf "<%3d> } /* d_step */" id
+    | Goto (id, l) -> sprintf "<%3d> goto %d" id l
+    | If (id, ls, exitl) ->
+        sprintf "<%3d> if %s -> %d"
+            id (List.fold_left (sprintf "%s %d") "" ls) exitl
+    | Else id -> sprintf "<%3d> else" id
+    | Assert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
+    | Assume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
+    | Print (id, s, es) ->
+        sprintf "<%3d> print \"%s\"%s" id s
             (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
 ;;
 
@@ -179,21 +180,19 @@ let rec mir_stmt_s s =
             id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
     | MLabel (id, l) -> sprintf "<%3d> %d: " id l
     | MAtomic (id, stmts) ->
-        (sprintf "<%3d> atomic {\n" id) ^ (seq_s stmts) ^ "}"
+        sprintf "<%3d> atomic {\n%s\n }" id (seq_s stmts)
     | MD_step (id, stmts) ->
-        (sprintf "<%3d> d_step {\n" id) ^ (seq_s stmts) ^ "}"
+        sprintf "<%3d> d_step {\n%s\n }" id (seq_s stmts)
     | MGoto (id, l) -> sprintf "<%3d> goto %d" id l
     | MIf (id, opts) ->
-        sprintf "<%3d> if\n" id
-        ^
-        (List.fold_left
+        let inner = (List.fold_left
             (fun t o ->
                 match o with
                 | MOptGuarded seq -> "  :: " ^ (seq_s seq)
                 | MOptElse seq -> "  :: else -> " ^ (seq_s seq)
             ) "" opts)
-        ^
-        "fi"
+        in
+        sprintf "<%3d> if\n%s\n fi" id inner
     | MAssert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | MAssume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
     | MPrint (id, s, es) ->

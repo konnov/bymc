@@ -66,6 +66,16 @@ class ['t, 'attr] attr_basic_block a =
     end
 ;;
 
+class ['t] control_flow_graph i_entry i_blocks =
+    object(self)
+        val m_blocks: (int, 't basic_block) Hashtbl.t = i_blocks
+        val m_entry: 't basic_block = i_entry
+
+        method blocks = m_blocks
+        method entry = m_entry
+    end
+;;
+
 (* collect labels standing one next to each other *)
 let merge_neighb_labels stmts =
     let neighb = Hashtbl.create 10
@@ -138,12 +148,10 @@ let mk_cfg stmts =
     let stmts_r = merge_neighb_labels stmts in
     let seq_heads = collect_jump_targets stmts_r in
     let cleaned = List.filter (* remove hanging unreferenced labels *)
-        (fun s ->
-            match s with
-                | Label (_, i) ->
-                    IntSet.mem i seq_heads
-                | _ -> true)
-        stmts_r in
+        (function
+            | Label (_, i) -> IntSet.mem i seq_heads
+            | _ -> true
+        ) stmts_r in
     let seq_list = separate
             (fun s ->
                 match s with (* separate by jump targets *)
@@ -153,14 +161,17 @@ let mk_cfg stmts =
             (Label (-1, 0) :: cleaned) in
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
-    List.iter
-        (fun seq ->
-            match seq with
-            | Label (_, i) :: tl ->
-                let b = new basic_block in
-                b#set_seq seq; Hashtbl.add blocks i b
-            | _ -> raise (CfgError "Broken head: expected (Label i) :: tl")
-        ) seq_list;
+    let mk_bb seq =
+        match seq with
+        | Label (_, i) :: _ ->
+            let bb = new basic_block in
+            bb#set_seq seq;
+            Hashtbl.add blocks i bb;
+            bb
+        | _ -> raise (CfgError "Broken head: expected (Label i) :: tl")
+    in
+    let entry = mk_bb (List.hd seq_list) in
+    List.iter (fun seq -> let _ = mk_bb seq in ()) (List.tl seq_list);
     (* set successors *)
     Hashtbl.iter
         (fun _ bb -> bb#set_succ
@@ -172,7 +183,7 @@ let mk_cfg stmts =
             List.iter (fun s -> s#set_pred (bb :: s#get_pred)) bb#get_succ)
         blocks;
     (* return the hash table: heading_label: int -> basic_block *)
-    blocks
+    new control_flow_graph entry blocks
 ;;
 
 (* This is a very naive implementation. We do not expect it to be run
@@ -194,4 +205,70 @@ let find_dominator bbs =
     | [one_lab] -> List.find (fun bb -> bb#get_lead_lab = one_lab) bbs
     | [] -> raise (CfgError "No dominators found for a set of basic blocks")
     | _ -> raise (CfgError "Several dominators for a set of basic blocks")
+;;
+
+type label = { node_num: int; low: int; on_stack: bool };;
+
+(*
+  A function to find strongly connected components by Tarjan's algorithm.
+  We ignore singleton sets.
+
+  Imperative code like in the book by Aho et al.
+ *)
+let comp_sccs first_bb =
+    let labels = Hashtbl.create 10 in
+    let set_lab b l = Hashtbl.replace labels b#get_lead_lab l in
+    let get_lab b = Hashtbl.find labels b#get_lead_lab in
+    let has_lab b = Hashtbl.mem labels b#get_lead_lab in
+    let sccs = ref [] in
+    let stack = ref [] in
+    let counter = ref 0 in
+    let next_num () =
+        let n = !counter in
+        counter := n + 1; n
+    in
+    let rec search b =
+        let num = next_num () in
+        set_lab b { node_num = num; low = num; on_stack = true };
+        log DEBUG (sprintf " PUSH %d # %d!\n" b#get_lead_lab num);
+        stack := b :: !stack;
+        List.iter
+            (fun w ->
+                if not (has_lab w)
+                then begin
+                    let res = search w in
+                    let lab_w, lab_b = get_lab w, get_lab b in
+                    set_lab b { lab_b with low = (min lab_w.low lab_b.low) };
+                    res
+                end
+                else begin
+                    let lab_w, lab_b = get_lab w, get_lab b in
+                    if (lab_w.node_num < lab_b.node_num) && lab_w.on_stack
+                    then set_lab b
+                        { lab_b with low = (min lab_w.low lab_b.low) }
+                end
+            ) b#get_succ;
+        
+        let lab_b = get_lab b in
+        if lab_b.node_num = lab_b.low
+        then begin
+            log DEBUG (sprintf " UNWIND %d at %d!\n" num b#get_lead_lab);
+            let hd, el, tl = Accums.list_cut
+                (fun b -> (get_lab b).node_num = lab_b.node_num)
+                !stack
+            in
+            if (hd <> []) then sccs := (List.rev (hd @ el)) :: !sccs;
+            stack := tl;
+            List.iter
+                (fun b ->
+                    log DEBUG (sprintf " POPPED: %d\n" b#get_lead_lab);
+                    let l = get_lab b in
+                    set_lab b { l with on_stack = false }
+                ) (hd @ el)
+        end
+    in
+    let fn = next_num () in
+    set_lab first_bb { node_num = fn; low = fn; on_stack = true };
+    search first_bb;
+    !sccs
 ;;

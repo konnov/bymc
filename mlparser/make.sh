@@ -2,4 +2,8 @@
 
 DEBUG="-cflag -g -lflag -g"
 
-ocamlbuild $DEBUG -lib str -lib unix ./run.native
+if [ "x$BYTE" = "x" ]; then
+    ocamlbuild $DEBUG -lib str -lib unix ./run.native
+else
+    ocamlbuild $DEBUG -lib str -lib unix ./run.byte
+fi

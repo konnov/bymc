@@ -15,10 +15,8 @@ let mk_bottom_val () = Hashtbl.create 10 ;;
 
 let visit_basic_block transfer_fun stmt_vals bb in_vals =
     let transfer_stmt input stmt =
-        let id = stmt_id stmt in
-        let output = transfer_fun stmt input in
-        Hashtbl.replace stmt_vals id output;
-        output
+        Hashtbl.replace stmt_vals (stmt_id stmt) input;
+        transfer_fun stmt input
     in
     List.fold_left transfer_stmt in_vals bb#get_seq
 ;;
@@ -29,16 +27,19 @@ let visit_cfg visit_bb_fun join_fun cfg entry_vals =
     let stmt_vals = Hashtbl.create 10 in
     let visit_once (basic_blk, in_vals) = 
         let id = basic_blk#get_lead_lab in
-        let old_vals =
-            try Hashtbl.find bb_vals id with Not_found -> mk_bottom_val ()
+        let new_vals, changed =
+            try
+                let oldv = Hashtbl.find bb_vals id in
+                let newv = join_fun oldv in_vals in
+                (newv, not (Accums.hashtbl_eq oldv newv))
+            with Not_found ->
+                (mk_bottom_val (), true)
         in
-        let new_vals = join_fun old_vals
-            (visit_bb_fun stmt_vals basic_blk (join_fun old_vals in_vals))
-        in
-        if not (Accums.hashtbl_eq old_vals new_vals)
+        if changed
         then begin
             Hashtbl.replace bb_vals id new_vals;
-            List.map (fun s -> (s, new_vals)) basic_blk#get_succ
+            let out_vals = (visit_bb_fun stmt_vals basic_blk new_vals) in
+            List.map (fun s -> (s, out_vals)) basic_blk#get_succ
         end
         else []
     in
@@ -48,14 +49,14 @@ let visit_cfg visit_bb_fun join_fun cfg entry_vals =
             let next_open = visit_once hd in
             visit tl; visit next_open
     in
-    let entry = Hashtbl.find cfg 0 in
-    Hashtbl.add bb_vals entry#get_lead_lab entry_vals;
-    visit (Hashtbl.fold (fun _ bb lst -> (bb, mk_bottom_val ()) :: lst) cfg []);
+    visit (Hashtbl.fold
+        (fun _ bb lst -> (bb, mk_bottom_val ()) :: lst)
+        cfg#blocks []);
     stmt_vals
 ;;
 
-let join_all_blocks join_fun init_vals bb_vals =
-    Hashtbl.fold (fun _ vals sum -> join_fun sum vals) bb_vals init_vals 
+let join_all_locs join_fun init_vals loc_vals =
+    Hashtbl.fold (fun _ vals sum -> join_fun sum vals) loc_vals init_vals 
 ;;
 
 (* special kinds of analysis *)
@@ -129,7 +130,8 @@ let transfer_roles stmt input =
         match stmt with
         | Decl (_, var, init_expr) ->
                 Hashtbl.replace output var (eval init_expr)
-        | Expr (_, expr) -> let _ = eval expr in ()
+        | Expr (_, expr) ->
+                let _ = eval expr in ()
         | _ -> ()
     end;
     print_int_roles "input = " input;

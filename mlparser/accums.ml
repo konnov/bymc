@@ -23,12 +23,12 @@ let str_join sep list_of_strings =
     before a matching element, the matching element, the tail.
     If an element is not found, then two last resulting lists are empty.
  *)
-let list_cut match_fun lst =
+let list_cut_general ignore_dups match_fun lst =
     List.fold_left
         (fun (hl, el, tl) e ->
             match (hl, el, tl) with
             | (_, [some], _) ->
-                if not (match_fun e)
+                if not (match_fun e) || ignore_dups
                 then (hl, el, tl @ [e])
                 else raise (Failure
                     "list_cut found several matching elements")
@@ -40,6 +40,10 @@ let list_cut match_fun lst =
                 (Failure "Logic error: impossible combination of arguments")
         ) ([], [], []) lst
 ;;
+
+let list_cut match_fun lst = list_cut_general false match_fun lst;;
+
+let list_cut_ignore match_fun lst = list_cut_general true match_fun lst;;
 
 (* Python-like range *)                                                         
 let rec range i j =
@@ -77,6 +81,8 @@ let hashtbl_eq lhs rhs =
 let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl [];;
 
 let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl [];;
+
+let hashtbl_as_list tbl = Hashtbl.fold (fun k v s -> (k, v) :: s) tbl [];;
 
 let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
     let inv = Hashtbl.create (Hashtbl.length tbl) in
