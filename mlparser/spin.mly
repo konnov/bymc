@@ -1022,7 +1022,7 @@ prop_expr    :
 	| prop_expr EQ prop_expr		{ BinEx(EQ, $1, $3) }
 	| prop_expr NE prop_expr		{ BinEx(NE, $1, $3) }
     | NAME /* proctype */ COLON NAME
-        { Var (new var $3) (* XXX: remember the proctype*) }
+        { Var (new var $3) (* TODO: remember the proctype*) }
 	| NAME
         {
             try
