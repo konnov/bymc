@@ -63,6 +63,7 @@ open Lexing;;
 open Spin_ir;;
 
 exception Not_implemented of string;;
+exception Parse_error of string;;
 
 (* we have to declare global objects, think of resetting them afterwards! *)
 let err_cnt = ref 0;;
@@ -154,7 +155,7 @@ let fatal msg payload =
 %token  <string> MACRO_OTHER
 %token  EOF
 /* FORSYTE extensions { */
-%token  ASSUME SYMBOLIC
+%token  ASSUME SYMBOLIC ALL SOME
 /* FORSYTE extensions } */
 /* imaginary tokens */
 %token  UMIN NEG VARREF ARRAY_DEREF
@@ -199,10 +200,13 @@ unit	: proc	/* proctype        */    { [Proc $1] }
 	| c_fcts	/* c functions etc.   */ { [] }
 	| ns		/* named sequence     */ { [] }
 	| SEMI		/* optional separator */ { [] }
-	| ASSUME full_expr 	{ (* FORSYTE ext. *)
+    /* FORSYTE extensions */
+    | prop_decl /* atomic propositions */ { [Stmt $1] }
+	| ASSUME full_expr /* assumptions */
+        {
             [Stmt (MAssume (new_id (), $2))]
         }
-	| error { fatal "Error in the body" ""}
+	| error { fatal "Unexpected top-level statement" ""}
 	;
 
 proc	: inst		/* optional instantiator */
@@ -993,7 +997,41 @@ expr    : LPAREN expr RPAREN		{ $2 }
                 (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
 	| ltl_expr	{  raise (Not_implemented "ltl_expr")
             (*  $$ = $1;  *)}
-	;
+    ;
+
+/* FORSYTE extension */
+prop_decl:
+    ATOMIC NAME ASGN atomic_prop { MDeclProp (new_id (), new var($2), $4) }
+    ;
+
+/* FORSYTE extension */
+atomic_prop:
+      ALL LPAREN prop_expr RPAREN { PropAll ($3)  }
+    | SOME LPAREN prop_expr RPAREN { PropSome ($3) }
+    ;
+
+prop_expr    : 
+	  prop_expr PLUS prop_expr		{ BinEx(PLUS, $1, $3) }
+	| prop_expr MINUS prop_expr		{ BinEx(MINUS, $1, $3) }
+	| prop_expr MULT prop_expr		{ BinEx(MULT, $1, $3) }
+	| prop_expr DIV prop_expr		{ BinEx(DIV, $1, $3) }
+	| prop_expr GT prop_expr		{ BinEx(GT, $1, $3) }
+	| prop_expr LT prop_expr		{ BinEx(LT, $1, $3) }
+	| prop_expr GE prop_expr		{ BinEx(GE, $1, $3) }
+	| prop_expr LE prop_expr		{ BinEx(LE, $1, $3) }
+	| prop_expr EQ prop_expr		{ BinEx(EQ, $1, $3) }
+	| prop_expr NE prop_expr		{ BinEx(NE, $1, $3) }
+    | NAME /* proctype */ COLON NAME
+        { Var (new var $3) (* XXX: remember the proctype*) }
+	| NAME
+        {
+            try
+                Var (global_scope#find_or_error $1)#as_var
+            with Not_found ->
+                fatal "prop_expr: " (sprintf "Undefined global variable %s" $1)
+        }
+	| CONST { Const $1 }
+    ;
 
 Opt_priority:	/* none */	{(*  $$ = ZN;  *)}
 	| PRIORITY CONST	{(*  $$ = $2;  *)}

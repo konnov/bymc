@@ -119,6 +119,8 @@ rule token = parse
  (* FORSYTE extensions { *)
  | "assume"              { ASSUME } 
  | "symbolic"            { SYMBOLIC } 
+ | "all"                 { ALL } 
+ | "some"                { SOME } 
  (* FORSYTE extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*

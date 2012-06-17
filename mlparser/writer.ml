@@ -48,6 +48,12 @@ let rec write_stmt cout lvl s =
             (var_type_promela v#get_type) v#get_name
             (if v#get_isarray then sprintf "[%d]" v#get_num_elems else "")
             (if e != Nop then " = " ^ (expr_s e) else "")
+    | MDeclProp (_, v, PropAll e) ->
+            printf "#define %s ALL(%s)\n" v#get_name (expr_s e)
+    | MDeclProp (_, v, PropSome e) ->
+            printf "#define %s SOME(%s)\n" v#get_name (expr_s e)
+    | MDeclProp (_, v, PropGlob e) ->
+            printf "#define %s (%s)\n" v#get_name (expr_s e)
     | MLabel (_, l) -> fprintf cout "lab%d:\n" l
     | MAtomic (_, seq) ->
             fprintf cout "%satomic {\n" tab;

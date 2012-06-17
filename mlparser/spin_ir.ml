@@ -198,6 +198,8 @@ class symb_tab =
                         (Printf.sprintf "Variable %s is not declared" name))
                 | Some p -> p#lookup name
 
+        method find_or_error name = Hashtbl.find tab name
+
         method set_parent p = parent <- Some p
         method get_parent = parent
     end
@@ -311,6 +313,11 @@ type 't mir_stmt =
     | MAssert of int * 't expr
     | MAssume of int * 't expr
     | MPrint of int * string * 't expr list
+    | MDeclProp of int * var * 't atomic_expr
+and 't atomic_expr =
+      PropAll of 't expr
+    | PropSome of 't expr
+    | PropGlob of 't expr (* refers to global variables only *)
 and 't mir_option =
       MOptGuarded of 't mir_stmt list
     | MOptElse of 't mir_stmt list

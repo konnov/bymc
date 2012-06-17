@@ -124,6 +124,8 @@ let token_s t =
       | EOF -> "EOF"
       | ASSUME -> "ASSUME"
       | SYMBOLIC -> "SYMBOLIC"
+      | ALL -> "all"
+      | SOME -> "some"
 ;;
 
 let rec expr_s e =
@@ -178,6 +180,12 @@ let rec mir_stmt_s s =
     | MDecl (id, v, e) ->
         sprintf "<%3d> decl %s %s %s = %s"
             id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
+    | MDeclProp (id, v, PropAll e) ->
+            sprintf "<%3d> prop %s = all %s" id v#get_name (expr_s e)
+    | MDeclProp (id, v, PropSome e) ->
+            sprintf "<%3d> prop %s = some %s" id v#get_name (expr_s e)
+    | MDeclProp (id, v, PropGlob e) ->
+            sprintf "<%3d> prop %s = glob %s" id v#get_name (expr_s e)
     | MLabel (id, l) -> sprintf "<%3d> %d: " id l
     | MAtomic (id, stmts) ->
         sprintf "<%3d> atomic {\n%s\n }" id (seq_s stmts)
