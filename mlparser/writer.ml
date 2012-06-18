@@ -81,7 +81,7 @@ let rec write_stmt cout lvl s =
     | MAssert (_, e) -> fprintf cout "%sassert(%s);\n" tab (expr_s e)
     | MAssume (_, e) -> fprintf cout "%sassume(%s);\n" tab (expr_s e)
     | MPrint (_, s, es) ->
-            fprintf cout "%sprintf(\"%s\", %s);\n"
+            fprintf cout "%sprintf(\"%s\"%s);\n"
                 tab s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
 ;;
   

@@ -159,7 +159,7 @@ var name_i =
 
         (* a forward reference to a context (a process) that has not been
            defined yet *)
-        val mutable m_forward_ref: string = "" 
+        val mutable m_proc_name: string = "" 
         
         method as_var = (self :> var)
 
@@ -181,8 +181,8 @@ var name_i =
         method is_symbolic = self#has_flag HSymbolic
         method set_symbolic = self#add_flag HSymbolic
 
-        method forward_ref = m_forward_ref
-        method set_forward_ref r = m_forward_ref <- r
+        method proc_name = m_proc_name
+        method set_proc_name r = m_proc_name <- r
     end
 ;;
 
@@ -206,6 +206,8 @@ class symb_tab =
                 | Some p -> p#lookup name
 
         method find_or_error name = Hashtbl.find tab name
+
+        method get_symbs = Accums.hashtbl_as_list tab
 
         method set_parent p = parent <- Some p
         method get_parent = parent
@@ -413,7 +415,7 @@ let is_mdecl = function
 
 (* a process *)
 class ['t] proc name_i active_expr_i =
-    object
+    object(self)
         inherit symb name_i
         inherit symb_tab
 
@@ -430,6 +432,9 @@ class ['t] proc name_i active_expr_i =
 
         method set_active_expr e = active_expr <- e
         method get_active_expr = active_expr
+
+        method add_all_symbs (tab: symb_tab) =
+            List.iter (fun (k, v) -> self#add_symb k v) tab#get_symbs
 
         method get_locals =
             List.fold_left 

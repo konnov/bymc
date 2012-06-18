@@ -597,7 +597,15 @@ let translate_stmt ctx dom solver stmt =
 ;;
 
 let trans_prop_decl ctx dom solver decl_expr =
-    let on_e e = translate_expr ctx dom solver e in
+    let on_e e =
+        let used_vars = expr_used_vars e in
+        let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
+        solver#push_ctx;
+        List.iter solver#append (List.map var_to_smt locals);
+        let abs_ex = translate_expr ctx dom solver e in
+        solver#pop_ctx;
+        abs_ex
+    in
     match decl_expr with
         | MDeclProp (id, v, PropAll e) ->
             if not (expr_exists (over_dom ctx) e)

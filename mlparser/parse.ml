@@ -65,25 +65,29 @@ let postprocess all_units u =
         | UnEx (t, e1) -> UnEx (t, bind_var e1)
         | BinEx (t, e1, e2) -> BinEx (t, bind_var e1, bind_var e2)
         | Var v ->
+            let is_ref_proc = function
+                | Proc p -> p#get_name = v#proc_name
+                | _ -> false
+            in
+            if v#proc_name = ""
+            then Var v
+            else
             begin
                 let host =
                     try 
-                        List.find
-                        (function
-                            | Proc p -> p#get_name == v#forward_ref
-                            | _ -> false
-                        ) all_units
+                        List.find is_ref_proc all_units
                     with Not_found ->
                         raise (Failure
-                            (sprintf "Process %s not found" v#forward_ref))
+                            (sprintf "Process %s not found" v#proc_name))
                 in
                 try
                     let bound = (proc_of_unit host)#lookup v#get_name in
+                    bound#as_var#set_proc_name v#proc_name;
                     Var bound#as_var
-                with Not_found ->
+                with Symbol_not_found _ ->
                     raise (Failure
-                        (sprintf "Process %s does not have var %s"
-                            v#forward_ref v#get_name))
+                        (sprintf "Process %s does not have variable %s"
+                            v#proc_name v#get_name))
             end
 
         | _ as e -> e

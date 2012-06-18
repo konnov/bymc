@@ -234,9 +234,10 @@ proc	: inst		/* optional instantiator */
                     | _ -> fatal "Not a decl in proctype args" p#get_name
                 in
                 p#set_args (List.map unpack $5);
-                    p#set_stmts $9;
-                    current_scope := global_scope;
-                    p
+                p#set_stmts $9;
+                p#add_all_symbs !current_scope;
+                current_scope := global_scope;
+                p
                (* ProcList *rl;
                   if ($1 != ZN && $1->val > 0)
                   {	int j;
@@ -1026,7 +1027,7 @@ prop_expr    :
     | NAME /* proctype */ COLON NAME
         {
             let v = new var $3 in
-            v#set_forward_ref $1;
+            v#set_proc_name $1;
             Var (v) (* TODO: remember the proctype*)
         }
 	| NAME
