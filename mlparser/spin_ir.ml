@@ -156,6 +156,10 @@ var name_i =
         val mutable nbits: int = 0        (* optional width specifier *)
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
+
+        (* a forward reference to a context (a process) that has not been
+           defined yet *)
+        val mutable m_forward_ref: string = "" 
         
         method as_var = (self :> var)
 
@@ -176,6 +180,9 @@ var name_i =
 
         method is_symbolic = self#has_flag HSymbolic
         method set_symbolic = self#add_flag HSymbolic
+
+        method forward_ref = m_forward_ref
+        method set_forward_ref r = m_forward_ref <- r
     end
 ;;
 
@@ -335,6 +342,7 @@ let m_stmt_id = function
     | MAssert (id, _) -> id
     | MAssume (id, _) -> id
     | MPrint (id, _, _) -> id
+    | MDeclProp (id, _, _) -> id
 ;;
 
 let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
@@ -360,6 +368,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MAssert (id, e) -> Assert (id, e) :: tl
         | MAssume (id, e) -> Assume (id, e) :: tl
         | MPrint (id, s, args) -> Print (id, s, args) :: tl
+        | MDeclProp (id, _, _) -> Expr (id, Nop) :: tl
     and
         make_option exit_lab opt =
         let is_else, seq = match opt with
@@ -452,3 +461,7 @@ let map_vars map_fun ex =
 
 type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt | None;;
 
+let proc_of_unit = function
+    | Proc p -> p
+    | _ -> raise (Failure "Expected Proc p, found other unit")
+;;

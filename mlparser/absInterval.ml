@@ -184,7 +184,7 @@ class abs_domain conds_i =
          *)
         method scatter_abs_vals (solver: yices_smt)
                 (num_expr: 't expr) (n: int) : int list list =
-            if n > 4
+            if n > 4 (* the magic number which means explosion of variants *)
             then raise (Abstraction_error "scatter_abs_vals for n > 4");
             
             let combinations = (Accums.mk_product cond_intervals n) in
@@ -396,10 +396,13 @@ let mk_context units =
     ctx
 ;;
 
-let mk_domain solver ctx procs =
+let mk_domain solver ctx units =
     log INFO "> Extracting an abstract domain...";
-   
-    let all_stmts = List.concat (List.map (fun p -> p#get_stmts) procs) in
+    let collect_stmts l = function
+        | Proc p -> p#get_stmts @ l
+        | _ -> l
+    in
+    let all_stmts = List.fold_left collect_stmts [] units in
     let conds = identify_conditions ctx#get_var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver ctx conds in
     new abs_domain sorted_conds
@@ -462,7 +465,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
         List.map2 (fun lab abs_tuple ->
             let guard = List.fold_left
                 (fun lits (ex, abs_val) ->
-                    if not (is_out_var ex) (* XXX: magic name! *)
+                    if not (is_out_var ex)
                     then let lit = BinEx (EQ, ex, Const abs_val) in
                         if lits = Nop then lit else BinEx (AND, lits, lit)
                     else lits (* skip this var *))
@@ -481,24 +484,23 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
     MIf (-1, guarded_actions)
 ;;
 
-(* The first phase of the abstraction takes place here *)
-(* TODO: refactor it, should be simplified *)
-let translate_stmt ctx dom solver stmt =
-    let non_symbolic = function
-        | Var v -> not v#is_symbolic
-        | _ -> false
-    in
-    let over_dom = function
-        | Var v ->
-            begin
-                try
-                    v#is_symbolic || (is_unbounded (ctx#get_role v))
-                with Not_found ->
-                    raise (Abstraction_error
-                        (sprintf "No role for %s" v#get_name))
-            end
-        | _ -> false
-    in
+let over_dom ctx = function
+    | Var v ->
+        begin
+            try
+                v#is_symbolic || (is_unbounded (ctx#get_role v))
+            with Not_found ->
+                raise (Abstraction_error (sprintf "No role for %s" v#get_name))
+        end
+    | _ -> false
+;;
+
+let non_symbolic = function
+    | Var v -> not v#is_symbolic
+    | _ -> false
+;;
+
+let rec translate_expr ctx dom solver e =
     let trans_rel_many_vars symb_expr =
         let matching_vals = (dom#find_abs_vals solver symb_expr) in
         (* create a disjunction of conjunctions enumerating abstract values:
@@ -518,35 +520,42 @@ let translate_stmt ctx dom solver stmt =
                 else BinEx (OR, conjuncts, conj))
             Nop matching_vals
     in
-    let rec translate_expr e =
-        match e with
-            (* boolean combination of arithmetic constraints *)
-            | BinEx (AND, lhs, rhs) ->
-                BinEx (AND, (translate_expr lhs), (translate_expr rhs))
-            | BinEx (OR, lhs, rhs) ->
-                BinEx (OR, (translate_expr lhs), (translate_expr rhs))
-            | UnEx  (NEG, lhs) ->
-                UnEx (NEG, (translate_expr lhs))
-            (* comparison against a constant,
-               comparison against a variable and a constant *)
-            | BinEx (LT, lhs, rhs)
-            | BinEx (LE, lhs, rhs)
-            | BinEx (GT, lhs, rhs)
-            | BinEx (GE, lhs, rhs)
-            | BinEx (EQ, lhs, rhs)
-            | BinEx (NE, lhs, rhs) ->
-                if (expr_exists non_symbolic lhs)
-                then if (expr_exists non_symbolic rhs)
-                    then trans_rel_many_vars e
-                    else BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
-                else BinEx ((op_of_expr e),
-                    (dom#map_concrete solver lhs), rhs)
-            | _ -> raise (Abstraction_error
-                (sprintf "No abstraction for: %s" (expr_s e)))
-    in
+    match e with
+        (* boolean combination of arithmetic constraints *)
+        | BinEx (AND, lhs, rhs) ->
+            BinEx (AND,
+                (translate_expr ctx dom solver lhs),
+                (translate_expr ctx dom solver rhs))
+        | BinEx (OR, lhs, rhs) ->
+            BinEx (OR,
+                (translate_expr ctx dom solver lhs),
+                (translate_expr ctx dom solver rhs))
+        | UnEx  (NEG, lhs) ->
+            UnEx (NEG, (translate_expr ctx dom solver lhs))
+        (* comparison against a constant,
+           comparison against a variable and a constant *)
+        | BinEx (LT, lhs, rhs)
+        | BinEx (LE, lhs, rhs)
+        | BinEx (GT, lhs, rhs)
+        | BinEx (GE, lhs, rhs)
+        | BinEx (EQ, lhs, rhs)
+        | BinEx (NE, lhs, rhs) ->
+            if (expr_exists non_symbolic lhs)
+            then if (expr_exists non_symbolic rhs)
+                then trans_rel_many_vars e
+                else BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
+            else BinEx ((op_of_expr e),
+                (dom#map_concrete solver lhs), rhs)
+        | _ -> raise (Abstraction_error
+            (sprintf "No abstraction for: %s" (expr_s e)))
+;;
+
+(* The first phase of the abstraction takes place here *)
+(* TODO: refactor it, should be simplified *)
+let translate_stmt ctx dom solver stmt =
     let rec abs_stmt = function
     | MExpr (id, e) as s ->
-        if not (expr_exists over_dom e)
+        if not (expr_exists (over_dom ctx) e)
         then s
         else begin
         (* different kinds of expressions must be treated differently *)
@@ -564,7 +573,7 @@ let translate_stmt ctx dom solver stmt =
                     in (mk_assign_unfolding lhs expr_abs_vals)
                 (* just substitute one abstract value on the right-hand side *)
                 else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
-            | _ -> MExpr (id, translate_expr e)
+            | _ -> MExpr (id, translate_expr ctx dom solver e)
         end                
 
     | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
@@ -587,9 +596,27 @@ let translate_stmt ctx dom solver stmt =
     abs_stmt stmt 
 ;;
 
-let do_interval_abstraction ctx dom solver procs = 
-    List.map
-        (fun p ->
+let trans_prop_decl ctx dom solver decl_expr =
+    let on_e e = translate_expr ctx dom solver e in
+    match decl_expr with
+        | MDeclProp (id, v, PropAll e) ->
+            if not (expr_exists (over_dom ctx) e)
+            then decl_expr
+            else MDeclProp (id, v, PropAll (on_e e))
+        | MDeclProp (id, v, PropSome e) ->
+            if not (expr_exists (over_dom ctx) e)
+            then decl_expr
+            else MDeclProp (id, v, PropSome (on_e e))
+        | MDeclProp (id, v, PropGlob e) ->
+            if not (expr_exists (over_dom ctx) e)
+            then decl_expr
+            else MDeclProp (id, v, PropGlob (on_e e))
+        | _ -> decl_expr
+;;
+
+let do_interval_abstraction ctx dom solver units = 
+    let on_unit = function
+        | Proc p ->
             solver#push_ctx;
             List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
             let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
@@ -597,6 +624,12 @@ let do_interval_abstraction ctx dom solver procs =
             List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
             solver#pop_ctx;
             Proc (proc_replace_body p body)
-        ) procs;
+
+        | Stmt (MDeclProp (_, _, _) as d) ->
+            Stmt (trans_prop_decl ctx dom solver d)
+
+        | _ as u -> u
+    in
+    List.map on_unit units
 ;;
 

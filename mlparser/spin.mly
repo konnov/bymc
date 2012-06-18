@@ -1001,7 +1001,9 @@ expr    : LPAREN expr RPAREN		{ $2 }
 
 /* FORSYTE extension */
 prop_decl:
-    ATOMIC NAME ASGN atomic_prop { MDeclProp (new_id (), new var($2), $4) }
+    ATOMIC NAME ASGN atomic_prop {
+        MDeclProp (new_id (), new var($2), $4)
+    }
     ;
 
 /* FORSYTE extension */
@@ -1022,7 +1024,11 @@ prop_expr    :
 	| prop_expr EQ prop_expr		{ BinEx(EQ, $1, $3) }
 	| prop_expr NE prop_expr		{ BinEx(NE, $1, $3) }
     | NAME /* proctype */ COLON NAME
-        { Var (new var $3) (* TODO: remember the proctype*) }
+        {
+            let v = new var $3 in
+            v#set_forward_ref $1;
+            Var (v) (* TODO: remember the proctype*)
+        }
 	| NAME
         {
             try

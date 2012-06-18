@@ -60,6 +60,45 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
       | _ -> tok
 ;;
 
+let postprocess all_units u =
+    let rec bind_var = function
+        | UnEx (t, e1) -> UnEx (t, bind_var e1)
+        | BinEx (t, e1, e2) -> BinEx (t, bind_var e1, bind_var e2)
+        | Var v ->
+            begin
+                let host =
+                    try 
+                        List.find
+                        (function
+                            | Proc p -> p#get_name == v#forward_ref
+                            | _ -> false
+                        ) all_units
+                    with Not_found ->
+                        raise (Failure
+                            (sprintf "Process %s not found" v#forward_ref))
+                in
+                try
+                    let bound = (proc_of_unit host)#lookup v#get_name in
+                    Var bound#as_var
+                with Not_found ->
+                    raise (Failure
+                        (sprintf "Process %s does not have var %s"
+                            v#forward_ref v#get_name))
+            end
+
+        | _ as e -> e
+    in
+    (* Proc (proc_replace_body p (merge_neighb_labels p#get_stmts)) *)
+    let on_atomic = function
+        | PropAll e -> PropAll (bind_var e)
+        | PropSome e -> PropSome (bind_var e)
+        | PropGlob e -> PropGlob (bind_var e)
+    in
+    match u with
+    | Stmt (MDeclProp (id, v, ae)) ->
+        Stmt (MDeclProp (id, v, on_atomic ae))
+    | _ as u -> u
+;;
 
 let parse_promela filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
@@ -67,16 +106,8 @@ let parse_promela filename basename dirname =
     let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
     let units = Spin.program lfun lexbuf in
 
-    (* postprocess: remove artifacts that complicate further processing *)
-    (*
-    let units = List.map
-        (function
-            | Proc p ->
-                Proc (proc_replace_body p (merge_neighb_labels p#get_stmts))
-            | _ as u -> u )
-        units
-    in
-    *)
+    (* postprocess: check late variable bindings and remove artifacts *)
+    let units = List.map (postprocess units) units in
     if debug then begin
         (* (* DEBUGGING lex *)
         let t = ref EQ in
