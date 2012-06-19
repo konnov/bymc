@@ -86,6 +86,9 @@ class ['tok] trans_context =
             with Not_found ->
                 false
 
+        method get_shared =
+            List.filter (fun v -> not v#is_symbolic) globals
+
         method get_var_roles = var_roles
         method set_var_roles r = var_roles <- r
         method get_assumps = assumps

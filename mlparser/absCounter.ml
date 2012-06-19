@@ -163,6 +163,16 @@ let do_counter_abstraction t_ctx dom solver units =
     let deref_ctr e =
         BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, e)
     in
+    let mk_print_stmt prev_idx next_idx =
+        let n = ctr_ctx#get_ctr_dim in
+        let m = List.length t_ctx#get_shared in
+        let str = sprintf "{%%d->%%d:%s}\\n"
+            (String.concat "," (Accums.n_copies (n + m) "%d")) in
+        let mk_deref i = deref_ctr (Const i) in
+        let es = (List.map mk_deref (range 0 n))
+            @ (List.map (fun v -> Var v) t_ctx#get_shared) in
+        MPrint (-1, str, prev_idx :: next_idx :: es)
+    in
     let counter_guard =
         let make_opt idx =
             let guard =
@@ -238,14 +248,7 @@ let do_counter_abstraction t_ctx dom solver units =
                         ) init_locals dist
                 ) size_dist_list
         in
-        let print_stmt =
-            let n = ctr_ctx#get_ctr_dim in
-            let str = sprintf "{%s}\\n"
-                (String.concat "," (Accums.n_copies n "%d")) in
-            let mk_deref i = deref_ctr (Const i) in
-            MPrint (-1, str, (List.map mk_deref (range 0 n)))
-        in
-        [mk_nondet_choice option_list; print_stmt]
+        [mk_nondet_choice option_list; mk_print_stmt (Const 0) (Const 0)]
         (*
         List.iter
             (fun d -> 
@@ -294,11 +297,7 @@ let do_counter_abstraction t_ctx dom solver units =
                     (BinEx (tok, ktr_i, Const 1)) in
             [mk_assign_unfolding ktr_i expr_abs_vals]
         in
-        let print_stmt =
-            MPrint (-1, "{%d#%d->%d#%d}\\n",
-                [prev_idx_ex; deref_ctr prev_idx_ex;
-                 next_idx_ex; deref_ctr next_idx_ex])
-        in
+        let print_stmt = mk_print_stmt prev_idx_ex next_idx_ex in
         (mk_ctr_ex prev_idx_ex MINUS)
             @ (mk_ctr_ex next_idx_ex PLUS)
             @ [print_stmt]
