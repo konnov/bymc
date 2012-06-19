@@ -11,7 +11,7 @@ open Skel_struc;;
 open AbsInterval;;
 
 class ctr_abs_ctx dom t_ctx =
-    object
+    object(self)
         val mutable pc_var: var = t_ctx#find_pc
         val mutable pc_size = 0
         val mutable ctr_var = new var "ktr"
@@ -73,6 +73,10 @@ class ctr_abs_ctx dom t_ctx =
                 ) 0 (List.rev local_vars)
             in
             (idx * pc_size + (get_val pc_var))
+
+        method all_indices_for check_val_fun =
+            let has_v i = (check_val_fun (self#unpack_const i)) in
+            List.filter has_v (range 0 self#get_ctr_dim)
     end
 ;;
 
@@ -107,6 +111,52 @@ let rec remove_bad_statements stmts =
     let filter l s = if pred s then (rem_s s) :: l else l in
     List.rev (List.fold_left filter [] stmts)
 ;;
+
+let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
+    let mk_cons tok indices =
+        let add_cons e idx =
+            let ke = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx) in
+            if e = Nop
+            then BinEx (tok, ke, Const 0)
+            else BinEx (AND, e, BinEx (tok, ke, Const 0)) in
+        List.fold_left add_cons Nop indices
+    in
+    let mk_all check_fun =
+        mk_cons EQ (ctr_ctx#all_indices_for (fun m -> not (check_fun m))) in
+    let mk_some check_fun =
+        mk_cons NE (ctr_ctx#all_indices_for check_fun) in
+    let rec t_e mk_fun = function
+        | BinEx (EQ, Var v, Const c) as e ->
+            if not (t_ctx#is_global v)
+            then mk_fun (fun m -> c = (Hashtbl.find m v))
+            else e
+        | BinEx (EQ, Const c, Var v) ->
+            t_e mk_fun (BinEx (EQ, Var v, Const c))
+        | BinEx (NE, Var v, Const c) as e ->
+            if not (t_ctx#is_global v)
+            then mk_fun (fun m -> c <> (Hashtbl.find m v))
+            else e
+        | BinEx (NE, Const c, Var v) ->
+            t_e mk_fun (BinEx (NE, Var v, Const c))
+        | BinEx (AND, l, r) ->
+            BinEx (AND, t_e mk_fun l, t_e mk_fun r)
+        | BinEx (OR, l, r) ->
+            BinEx (OR, t_e mk_fun l, t_e mk_fun r)
+        | UnEx (NEG, s) ->
+            UnEx (NEG, t_e mk_fun s)
+        | _ as e ->
+            raise (Abstraction_error
+                (sprintf "Don't know how to do counter abstraction for %s"
+                    (expr_s e)))
+    in
+    match decl_expr with
+        | MDeclProp (id, v, PropAll e) ->
+            MDeclProp (id, v, PropGlob (t_e mk_all e))
+        | MDeclProp (id, v, PropSome e) ->
+            MDeclProp (id, v, PropGlob (t_e mk_some e))
+        | _ -> decl_expr
+;;
+
 
 let do_counter_abstraction t_ctx dom solver units =
     let ctr_ctx = new ctr_abs_ctx dom t_ctx in
@@ -257,9 +307,20 @@ let do_counter_abstraction t_ctx dom solver units =
         new_proc#set_active_expr (Const 1);
         new_proc
     in
-    let new_units =
-        List.map (function Proc p -> Proc (abstract_proc p) | _ as u -> u)
-        units in
-    (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop))) :: new_units
+    let abs_unit = function
+        | Proc p ->
+            Proc (abstract_proc p)
+        | Stmt (MDeclProp (_, _, _) as d) ->
+            Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
+        | _ as u -> u
+    in
+    let new_units = List.map abs_unit units in
+    let keep_unit = function
+        | Stmt (MDecl (_, v, _)) -> not v#is_symbolic
+        | Stmt (MAssume (_, _)) -> false
+        | _ -> true
+    in
+    (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop)))
+        :: (List.filter keep_unit new_units)
 ;;
 

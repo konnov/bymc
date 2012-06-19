@@ -80,6 +80,12 @@ class ['tok] trans_context =
 
         method get_globals = globals
         method set_globals g = globals <- g
+        method is_global v =
+            try
+                v = (List.find ((=) v) globals)
+            with Not_found ->
+                false
+
         method get_var_roles = var_roles
         method set_var_roles r = var_roles <- r
         method get_assumps = assumps
