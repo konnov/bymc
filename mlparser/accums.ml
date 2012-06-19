@@ -90,6 +90,14 @@ let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
     inv
 ;;
 
+let n_copies n e =
+    let rec gen = function
+    | 0 -> []
+    | i -> e :: (gen (i - 1))
+    in
+    gen n
+;;
+
 let bits_to_fit n =                                                             
     let rec f b m =
         if n <= m
