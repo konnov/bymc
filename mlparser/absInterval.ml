@@ -89,6 +89,8 @@ class ['tok] trans_context =
 
 exception Found of int;;
 
+type abs_type = ExistAbs | UnivAbs;;
+
 class abs_domain conds_i =
     object(self)
         val mutable conds = conds_i      (* thresholds *)
@@ -138,7 +140,8 @@ class abs_domain conds_i =
             with Found i ->
                 (Const i: Spin.token expr)
 
-        method find_abs_vals (solver: yices_smt) (symb_expr: 't expr)
+        method find_abs_vals
+                (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)
                 : (Spin_ir.var * int) list list =
             let used = expr_used_vars symb_expr in
             if (List.length used) <> 2
@@ -151,23 +154,32 @@ class abs_domain conds_i =
                satisfying symb_expr
              *)
             begin
+                let append_cons var (i, l, r) =
+                    solver#append_assert
+                        (expr_to_smt (BinEx (GE, Var var, l)));
+                    if r <> Nop
+                    then solver#append_assert
+                        (expr_to_smt (BinEx (LT, Var var, r)))
+                in
                 (* TODO: refactor, it is so complicated! *)
                 solver#push_ctx;
                 let matching_tuples = List.fold_left
                     (fun lst triples (* of (abs_val, lcond, rcond) *) ->
                         solver#push_ctx;
-                        List.iter2
-                            (fun var (i, l, r) ->
-                                solver#append_assert
-                                    (expr_to_smt (BinEx (GE, Var var, l)));
-                                if r <> Nop
-                                then solver#append_assert
-                                    (expr_to_smt (BinEx (LT, Var var, r)));
-                            ) used triples;
-                        solver#append_assert (expr_to_smt symb_expr);
-                        let exists_concrete = solver#check in
+                        List.iter2 append_cons used triples;
+                        let satisfies =
+                            if at = ExistAbs
+                            then begin
+                                solver#append_assert (expr_to_smt symb_expr);
+                                solver#check
+                            end else begin
+                                let neg = UnEx (NEG, symb_expr) in
+                                solver#append_assert (expr_to_smt neg);
+                                not (solver#check)
+                            end
+                        in
                         solver#pop_ctx;
-                        if exists_concrete
+                        if satisfies
                         then (List.map2
                             (fun var (i, _, _) -> (var, i)) used triples)
                             :: lst
@@ -440,7 +452,7 @@ let mk_expr_abstraction solver dom is_leaf_fun expr =
     List.iter (fun v -> solver#append (var_to_smt v)) vars_used;
     (* find matching combinations *)
     let matching_vals =
-        (dom#find_abs_vals solver
+        (dom#find_abs_vals ExistAbs solver
             (BinEx (EQ, Var (new var "_res"), expr_ren))) in
     solver#pop_ctx;
     let inv_map = hashtbl_inverse mapping in
@@ -500,9 +512,9 @@ let non_symbolic = function
     | _ -> false
 ;;
 
-let rec translate_expr ctx dom solver e =
+let translate_expr ctx dom solver atype expr =
     let trans_rel_many_vars symb_expr =
-        let matching_vals = (dom#find_abs_vals solver symb_expr) in
+        let matching_vals = (dom#find_abs_vals atype solver symb_expr) in
         (* create a disjunction of conjunctions enumerating abstract values:
             (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)            *)
         List.fold_left
@@ -520,18 +532,14 @@ let rec translate_expr ctx dom solver e =
                 else BinEx (OR, conjuncts, conj))
             Nop matching_vals
     in
-    match e with
+    let rec trans_e = function
         (* boolean combination of arithmetic constraints *)
         | BinEx (AND, lhs, rhs) ->
-            BinEx (AND,
-                (translate_expr ctx dom solver lhs),
-                (translate_expr ctx dom solver rhs))
+            BinEx (AND, (trans_e lhs), (trans_e rhs))
         | BinEx (OR, lhs, rhs) ->
-            BinEx (OR,
-                (translate_expr ctx dom solver lhs),
-                (translate_expr ctx dom solver rhs))
+            BinEx (OR, (trans_e lhs), (trans_e rhs))
         | UnEx  (NEG, lhs) ->
-            UnEx (NEG, (translate_expr ctx dom solver lhs))
+            UnEx (NEG, (trans_e lhs))
         (* comparison against a constant,
            comparison against a variable and a constant *)
         | BinEx (LT, lhs, rhs)
@@ -539,7 +547,7 @@ let rec translate_expr ctx dom solver e =
         | BinEx (GT, lhs, rhs)
         | BinEx (GE, lhs, rhs)
         | BinEx (EQ, lhs, rhs)
-        | BinEx (NE, lhs, rhs) ->
+        | BinEx (NE, lhs, rhs) as e ->
             if (expr_exists non_symbolic lhs)
             then if (expr_exists non_symbolic rhs)
                 then trans_rel_many_vars e
@@ -547,7 +555,9 @@ let rec translate_expr ctx dom solver e =
             else BinEx ((op_of_expr e),
                 (dom#map_concrete solver lhs), rhs)
         | _ -> raise (Abstraction_error
-            (sprintf "No abstraction for: %s" (expr_s e)))
+            (sprintf "No abstraction for: %s" (expr_s expr)))
+    in
+    trans_e expr
 ;;
 
 (* The first phase of the abstraction takes place here *)
@@ -573,7 +583,7 @@ let translate_stmt ctx dom solver stmt =
                     in (mk_assign_unfolding lhs expr_abs_vals)
                 (* just substitute one abstract value on the right-hand side *)
                 else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
-            | _ -> MExpr (id, translate_expr ctx dom solver e)
+            | _ -> MExpr (id, translate_expr ctx dom solver ExistAbs e)
         end                
 
     | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
@@ -602,7 +612,7 @@ let trans_prop_decl ctx dom solver decl_expr =
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
         solver#push_ctx;
         List.iter solver#append (List.map var_to_smt locals);
-        let abs_ex = translate_expr ctx dom solver e in
+        let abs_ex = translate_expr ctx dom solver UnivAbs e in
         solver#pop_ctx;
         abs_ex
     in
