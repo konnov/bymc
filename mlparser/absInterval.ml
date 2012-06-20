@@ -284,41 +284,47 @@ let identify_var_roles units =
 ;;
 
 (* XXX: copied from spin.mly *)
-let rec is_expr_symbolic e =
+let rec has_expr_symbolic e =
     match e with
     | Const _ -> true
     | Var v -> v#is_symbolic
-    | UnEx (op, se) -> op = UMIN && is_expr_symbolic se
+    | UnEx (op, se) -> op = UMIN && has_expr_symbolic se
     | BinEx (op, le, re) ->
         (List.mem op [PLUS; MINUS; MULT; DIV; MOD])
-            && (is_expr_symbolic le) && (is_expr_symbolic re)
+            && (has_expr_symbolic le) && (has_expr_symbolic re)
     | _ -> false
 ;;
 
 let identify_conditions var_roles stmts =
-    let on_cond v e =
+    let is_threshold v e =
         let r = Hashtbl.find var_roles v in
-        if (r = LocalUnbounded || r = Scratch) && (is_expr_symbolic e)
-        then [e]
-        else []
+        (r = LocalUnbounded || r = Scratch) && (has_expr_symbolic e)
     in
     let rec on_expr e =
         match e with
         | BinEx(AND, l, r) -> List.append (on_expr l) (on_expr r)
         | BinEx(OR, l, r)  -> List.append (on_expr l) (on_expr r)
         | UnEx(NEG, l)     -> on_expr l
-        | BinEx(LT, Var v, e) -> on_cond v e
-        | BinEx(GE, Var v, e) -> on_cond v e
-        | BinEx(LE, e, Var v) -> on_cond v e
-        | BinEx(GT, e, Var v) -> on_cond v e
+        | BinEx(LT, Var v, e) -> if is_threshold v e then [e] else []
+        | BinEx(GE, Var v, e) -> if is_threshold v e then [e] else []
+        | BinEx(LE, e, Var v) -> if is_threshold v e then [e] else []
+        | BinEx(GT, e, Var v) -> if is_threshold v e then [e] else []
         | BinEx(LE, Var v, e) ->
-            raise (Skeleton_not_supported "var <= expr")
+            if is_threshold v e
+            then raise (Skeleton_not_supported "var <= expr")
+            else []
         | BinEx(GE, e, Var v) ->
-            raise (Skeleton_not_supported "expr >= var")
+            if is_threshold v e
+            then raise (Skeleton_not_supported "expr >= var")
+            else []
         | BinEx(GT, Var v, e) ->
-            raise (Skeleton_not_supported "var > expr")
+            if is_threshold v e
+            then raise (Skeleton_not_supported "var > expr")
+            else []
         | BinEx(LT, e, Var v) ->
-            raise (Skeleton_not_supported "expr < var")
+            if is_threshold v e
+            then raise (Skeleton_not_supported "expr < var")
+            else []
         | _ -> []
     in
     let rec on_stmts sts = match sts with
@@ -588,7 +594,7 @@ let translate_stmt ctx dom solver stmt =
                     (* analyze all possible values of the right-hand side *)
                     else let expr_abs_vals =
                         mk_expr_abstraction solver dom
-                            (fun e -> is_var e && not (is_expr_symbolic e)) rhs
+                            (fun e -> is_var e && not (has_expr_symbolic e)) rhs
                     in (mk_assign_unfolding lhs expr_abs_vals)
                 (* just substitute one abstract value on the right-hand side *)
                 else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))

@@ -113,18 +113,18 @@ let rec remove_bad_statements stmts =
 ;;
 
 let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
-    let mk_cons tok indices =
+    let mk_cons tok sep indices =
         let add_cons e idx =
             let ke = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx) in
             if e = Nop
             then BinEx (tok, ke, Const 0)
-            else BinEx (AND, e, BinEx (tok, ke, Const 0)) in
+            else BinEx (sep, e, BinEx (tok, ke, Const 0)) in
         List.fold_left add_cons Nop indices
     in
     let mk_all check_fun =
-        mk_cons EQ (ctr_ctx#all_indices_for (fun m -> not (check_fun m))) in
+        mk_cons EQ AND (ctr_ctx#all_indices_for (fun m -> not (check_fun m))) in
     let mk_some check_fun =
-        mk_cons NE (ctr_ctx#all_indices_for check_fun) in
+        mk_cons NE OR (ctr_ctx#all_indices_for check_fun) in
     let rec t_e mk_fun = function
         | BinEx (EQ, Var v, Const c) as e ->
             if not (t_ctx#is_global v)
@@ -189,7 +189,7 @@ let do_counter_abstraction t_ctx dom solver units =
         let indices = range 0 ctr_ctx#get_ctr_dim in
         [mk_nondet_choice (List.map make_opt indices)]
     in
-    let replace_init guard active_expr decls init_stmts =
+    let replace_init active_expr decls init_stmts =
         (* TODO: simplify/refactor *)
         printf "\n\nINIT PART\n";
         List.iter
@@ -308,14 +308,16 @@ let do_counter_abstraction t_ctx dom solver units =
         let skel = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init =
-            replace_init skel.guard p#get_active_expr skel.decl skel.init
+            replace_init p#get_active_expr skel.decl skel.init
         in
         let new_update = replace_update skel.update body in
         let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
         let new_body = 
             skel.decl @ new_init @ [MLabel (-1, main_lab)]
             @ counter_guard @
-            [MIf (-1, [MOptGuarded ([skel.guard; new_comp_upd]); MOptElse []]);
+            [MIf (-1,
+                [MOptGuarded ([(*skel.guard; *) new_comp_upd]);
+                 MOptGuarded [MExpr (-1, Nop)]]);
              MGoto (-1, main_lab)]
         in
         let new_proc = proc_replace_body p new_body in

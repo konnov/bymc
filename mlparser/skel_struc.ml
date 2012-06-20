@@ -62,9 +62,9 @@ let extract_skel proc_body =
     let init_s, if_s, rest_s =
         Accums.list_cut (fun s -> (m_stmt_id s) = if_id) non_decls
     in
-    let guard, opt_body = match if_s with
+    let (*guard, *) opt_body = match if_s with
     | [MIf (_, [MOptGuarded seq])] ->
-            List.hd seq, List.tl seq
+            seq (* List.hd seq, List.tl seq *)
     | _ -> raise (Skel_error "The main loop must be guarded by the only option")
     in
     let atomic_body = match opt_body with
@@ -80,6 +80,7 @@ let extract_skel proc_body =
     in
     let update = List.rev hd in
     let comp = List.rev (el @ tl) in
-    { decl = decls; init = init_s; guard = guard; comp = comp; update = update }
+    { decl = decls; init = init_s;
+      guard = MExpr (-1, Nop) (*guard*); comp = comp; update = update }
 ;;
 
