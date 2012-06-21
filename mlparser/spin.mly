@@ -69,7 +69,6 @@ exception Parse_error of string;;
 let err_cnt = ref 0;;
 let stmt_cnt = ref 0;;
 let met_else = ref false;;
-let labels = Hashtbl.create 10;;
 let fwd_labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
 let global_scope = new symb_tab;;
@@ -237,6 +236,7 @@ proc	: inst		/* optional instantiator */
                 p#set_stmts $9;
                 p#add_all_symbs !current_scope;
                 current_scope := global_scope;
+                Hashtbl.clear fwd_labels;
                 p
                (* ProcList *rl;
                   if ($1 != ZN && $1->val > 0)
@@ -726,8 +726,9 @@ proc	: inst		/* optional instantiator */
                     }
         | GOTO NAME		{
             try
-                [MGoto (new_id (), (Hashtbl.find labels $2))]
-            with Not_found ->
+                let l = !current_scope#lookup $2 in
+                [MGoto (new_id (), l#as_label#get_num)]
+            with Symbol_not_found _ ->
                 let label_no = mk_uniq_label () in
                 Hashtbl.add fwd_labels $2 label_no;
                 [MGoto (new_id (), label_no)] (* resolve it later *)
@@ -741,21 +742,17 @@ proc	: inst		/* optional instantiator */
 		}
 	| NAME COLON stmnt	{
         let label_no =
-            if Hashtbl.mem labels $1
-            then begin parse_error (sprintf "Label %s redeclared\n" $1); 0 end
-            else if Hashtbl.mem fwd_labels $1
-            then Hashtbl.find fwd_labels $1
-            else (mk_uniq_label ())
+            try
+                let _ = (!current_scope)#lookup $1 in
+                fatal "" (sprintf "Label %s redeclared\n" $1)
+            with Symbol_not_found _ ->
+                if Hashtbl.mem fwd_labels $1
+                then Hashtbl.find fwd_labels $1
+                else mk_uniq_label ()
         in
-        Hashtbl.add labels $1 label_no;
+        !current_scope#add_symb
+            $1 ((new label $1 label_no) :> symb);
         MLabel (new_id (), label_no) :: $3
-                (* $$ = nn($1, ':',$3, ZN);
-				  if ($1->sym->type != 0
-				  &&  $1->sym->type != LABEL) {
-				  	non_fatal("bad label-name %s",
-					$1->sym->name);
-				  }
-				  $1->sym->type = LABEL; *)
 		}
 	;
 

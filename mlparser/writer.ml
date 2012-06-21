@@ -34,7 +34,7 @@ let hflag_promela f =
     | HNone -> ""
 ;;
 
-let rec write_stmt cout lvl s =
+let rec write_stmt cout lvl lab_tab s =
     let tab = (indent lvl) in
     match s with
     | MSkip _ -> fprintf cout "%sskip;\n" tab;
@@ -54,28 +54,39 @@ let rec write_stmt cout lvl s =
             fprintf cout "#define %s SOME(%s)\n" v#get_name (expr_s e)
     | MDeclProp (_, v, PropGlob e) ->
             fprintf cout "#define %s (%s)\n" v#get_name (expr_s e)
-    | MLabel (_, l) -> fprintf cout "lab%d:\n" l
+    | MLabel (_, l) ->
+            if Hashtbl.mem lab_tab l
+            then fprintf cout "%s:\n" (Hashtbl.find lab_tab l)
+            else fprintf cout "lab%d:\n" l
     | MAtomic (_, seq) ->
             fprintf cout "%satomic {\n" tab;
-            List.iter (write_stmt cout (lvl + 2)) seq;
+            List.iter (write_stmt cout (lvl + 2) lab_tab) seq;
             fprintf cout "%s}\n" tab
     | MD_step (_, seq) ->
             fprintf cout "%sd_step {\n" tab;
-            List.iter (write_stmt cout (lvl + 2)) seq;
+            List.iter (write_stmt cout (lvl + 2) lab_tab) seq;
             fprintf cout "%s}\n" tab
-    | MGoto (_, l) -> fprintf cout "%sgoto lab%d;\n" tab l
+    | MGoto (_, l) ->
+            if Hashtbl.mem lab_tab l
+            then fprintf cout "%sgoto %s;\n"
+                tab (Hashtbl.find lab_tab l)
+            else fprintf cout "%sgoto lab%d;\n" tab l
     | MIf (_, opts) ->
             fprintf cout "%sif\n" tab;
             List.iter
                 (function
                     | MOptGuarded seq ->
-                            fprintf cout "%s  :: " tab;
-                            write_stmt cout 0 (List.hd seq);
-                            List.iter (write_stmt cout (lvl + 4)) (List.tl seq);
+                        fprintf cout "%s  :: " tab;
+                        write_stmt cout 0 lab_tab (List.hd seq);
+                        List.iter
+                            (write_stmt cout (lvl + 4) lab_tab)
+                            (List.tl seq);
 
                     | MOptElse seq ->
                             fprintf cout "%s  :: else ->\n" tab;
-                            List.iter (write_stmt cout (lvl + 4)) seq;
+                            List.iter
+                                (write_stmt cout (lvl + 4) lab_tab)
+                                seq;
                 ) opts;
             fprintf cout "%sfi;\n" tab;
     | MAssert (_, e) -> fprintf cout "%sassert(%s);\n" tab (expr_s e)
@@ -89,18 +100,23 @@ let write_proc cout lvl p =
     let tab = indent lvl in
     if p#get_active_expr != Nop
     then fprintf cout "\n%sactive[%s] " tab (expr_s p#get_active_expr);
+
     let args_s = Accums.str_join ", "
         (List.map
             (fun v -> (var_type_promela v#get_type) ^ " " ^ v#get_name)
         p#get_args) in
     fprintf cout "proctype %s(%s) {\n" p#get_name args_s;
-    List.iter (write_stmt cout (lvl + 2)) p#get_stmts;
+    let labels = Hashtbl.create 10 in
+    Hashtbl.iter
+        (fun n l -> Hashtbl.add labels l#get_num n)
+        p#labels_as_hash;
+    List.iter (write_stmt cout (lvl + 2) labels) p#get_stmts;
     fprintf cout "%s}\n\n" tab;
 ;;
 
 let write_unit cout lvl u =
     match u with
-    | Stmt s -> write_stmt cout lvl s
+    | Stmt s -> write_stmt cout lvl (Hashtbl.create 0) s
     | Proc p -> write_proc cout lvl p
     | _ -> ()
 ;;

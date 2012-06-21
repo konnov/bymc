@@ -118,11 +118,15 @@ type 't process = {
 
 exception Invalid_type of string;;
 
+type sym_type = SymGen | SymVar | SymLab;;
+
 (* a symbol of any origin *)
 class symb name_i =
     object(self)
         val name: string = name_i
         val mutable flags: hflag list = [] (* 'hidden' in Spin *)
+
+        method get_sym_type = SymGen
 
         method get_name = name
 
@@ -144,6 +148,10 @@ class symb name_i =
         (* is there a better way to do this? *)
         method as_var =
             raise (Invalid_type "symb is not var")
+
+        (* is there a better way to do this? *)
+        method as_label =
+            raise (Invalid_type "symb is not label")
     end
 and
 (* a variable, not a generalized symbol *)
@@ -160,6 +168,8 @@ var name_i =
         (* a forward reference to a context (a process) that has not been
            defined yet *)
         val mutable m_proc_name: string = "" 
+
+        method get_sym_type = SymVar
         
         method as_var = (self :> var)
 
@@ -183,6 +193,20 @@ var name_i =
 
         method proc_name = m_proc_name
         method set_proc_name r = m_proc_name <- r
+    end
+and
+(* a label mapped to an integer *)
+label name_i num_i =
+    object(self)
+        inherit symb name_i
+
+        val mutable num: int = num_i
+
+        method get_sym_type = SymLab
+        
+        method as_label = (self :> label)
+
+        method get_num = num
     end
 ;;
 
@@ -435,6 +459,17 @@ class ['t] proc name_i active_expr_i =
 
         method add_all_symbs (tab: symb_tab) =
             List.iter (fun (k, v) -> self#add_symb k v) tab#get_symbs
+
+        method labels_as_hash =
+            let symbs = List.filter
+                (fun (_, s) -> SymLab = s#get_sym_type)
+                self#get_symbs in
+            let tbl = Hashtbl.create (List.length symbs) in
+            List.iter
+                (fun (_, s) ->
+                    Hashtbl.add tbl s#get_name s#as_label)
+                symbs;
+            tbl
 
         method get_locals =
             List.fold_left 
