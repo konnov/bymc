@@ -234,7 +234,7 @@ proc	: inst		/* optional instantiator */
                 in
                 p#set_args (List.map unpack $5);
                 p#set_stmts $9;
-                p#add_all_symbs !current_scope;
+                p#add_all_symb (List.map (fun (_, s) -> s) !current_scope#get_symbs);
                 current_scope := global_scope;
                 Hashtbl.clear fwd_labels;
                 p

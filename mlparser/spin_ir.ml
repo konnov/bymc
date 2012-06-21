@@ -219,6 +219,9 @@ class symb_tab =
         val mutable parent: symb_tab option = None
 
         method add_symb name symb = Hashtbl.add tab name symb
+        method add_all_symb symb_list =
+            List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
+
         method lookup name =
             try
                 Hashtbl.find tab name
@@ -457,9 +460,6 @@ class ['t] proc name_i active_expr_i =
         method set_active_expr e = active_expr <- e
         method get_active_expr = active_expr
 
-        method add_all_symbs (tab: symb_tab) =
-            List.iter (fun (k, v) -> self#add_symb k v) tab#get_symbs
-
         method labels_as_hash =
             let symbs = List.filter
                 (fun (_, s) -> SymLab = s#get_sym_type)
@@ -486,6 +486,7 @@ let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
     let new_p = new proc p#get_name p#get_active_expr in
     new_p#set_args p#get_args;
     new_p#set_stmts new_body;
+    (new_p :> symb_tab)#add_all_symb (List.map (fun (_, s) -> s) p#get_symbs);
     new_p
 ;;
 
