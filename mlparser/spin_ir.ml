@@ -506,3 +506,16 @@ let proc_of_unit = function
     | Proc p -> p
     | _ -> raise (Failure "Expected Proc p, found other unit")
 ;;
+
+let collect_final_labs (stmts: 't mir_stmt list)
+        : ('t mir_stmt list * 't mir_stmt list) =
+    let rec collect = function
+    | MLabel (_, _) as s :: tl ->
+        let ls, os = collect tl in
+        (s :: ls, os)
+    | _ as lst ->
+        ([], lst)
+    in
+    let ls, os = collect (List.rev stmts) in
+    (List.rev os, List.rev ls)
+;;

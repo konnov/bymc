@@ -313,7 +313,8 @@ let do_counter_abstraction t_ctx dom solver units =
         let new_update = replace_update skel.update body in
         let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
         let new_body = 
-            skel.decl @ new_init @ [MLabel (-1, main_lab)]
+            skel.decl @ new_init @ skel.loop_prefix
+            @ [MLabel (-1, main_lab)]
             @ counter_guard @
             [MIf (-1,
                 [MOptGuarded ([(*skel.guard; *) new_comp_upd]);

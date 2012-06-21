@@ -9,6 +9,7 @@ open Cfg;;
 type 't skel_struc = {
     decl: 't mir_stmt list;
     init: 't mir_stmt list;
+    loop_prefix: 't mir_stmt list;
     guard: 't mir_stmt;
     comp: 't mir_stmt list;
     update: 't mir_stmt list
@@ -62,6 +63,7 @@ let extract_skel proc_body =
     let init_s, if_s, rest_s =
         Accums.list_cut (fun s -> (m_stmt_id s) = if_id) non_decls
     in
+    let init_s, prefix_s = collect_final_labs init_s in
     let (*guard, *) opt_body = match if_s with
     | [MIf (_, [MOptGuarded seq])] ->
             seq (* List.hd seq, List.tl seq *)
@@ -80,7 +82,7 @@ let extract_skel proc_body =
     in
     let update = List.rev hd in
     let comp = List.rev (el @ tl) in
-    { decl = decls; init = init_s;
+    { decl = decls; init = init_s; loop_prefix = prefix_s;
       guard = MExpr (-1, Nop) (*guard*); comp = comp; update = update }
 ;;
 
