@@ -157,6 +157,42 @@ let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
         | _ -> decl_expr
 ;;
 
+(* TODO: find out the values at the end of the init_stmts,
+   not the accumulated values
+   *)
+let find_init_local_vals ctr_ctx decls init_stmts =
+    let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
+    let int_roles =
+        visit_cfg (visit_basic_block transfer_roles)
+            join_int_roles init_cfg (mk_bottom_val ()) in
+    let init_sum =
+        join_all_locs join_int_roles (mk_bottom_val ()) int_roles in
+    let mk_prod left right =
+        if left = []
+        then List.map (fun x -> [x]) right
+        else List.concat
+            (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
+    List.fold_left
+        (fun lst v ->
+            let r =
+                try Hashtbl.find init_sum v
+                with Not_found ->
+                    let m = (sprintf
+                        "Variable %s not found in the init section"
+                        v#get_name) in
+                    raise (Abstraction_error m)
+            in
+            match r with
+            | IntervalInt (a, b) ->
+                let pairs =
+                    List.map (fun i -> (v, i)) (range a (b + 1)) in
+                mk_prod lst pairs
+            | _ ->
+                let m = sprintf
+                    "Unbounded after abstraction: %s" v#get_name in
+                raise (Abstraction_error m)
+        ) [] (ctr_ctx#get_pc :: ctr_ctx#get_locals)
+;;
 
 let do_counter_abstraction t_ctx dom solver units =
     let ctr_ctx = new ctr_abs_ctx dom t_ctx in
@@ -190,40 +226,7 @@ let do_counter_abstraction t_ctx dom solver units =
         [mk_nondet_choice (List.map make_opt indices)]
     in
     let replace_init active_expr decls init_stmts =
-        (* TODO: simplify/refactor *)
-        let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
-        let int_roles =
-            visit_cfg (visit_basic_block transfer_roles)
-                join_int_roles init_cfg (mk_bottom_val ()) in
-        let init_sum =
-            join_all_locs join_int_roles (mk_bottom_val ()) int_roles in
-        let mk_prod left right =
-            if left = []
-            then List.map (fun x -> [x]) right
-            else List.concat
-                (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
-        let init_locals =
-            List.fold_left
-                (fun lst v ->
-                    let r =
-                        try Hashtbl.find init_sum v
-                        with Not_found ->
-                            let m = (sprintf
-                                "Variable %s not found in the init section"
-                                v#get_name) in
-                            raise (Abstraction_error m)
-                    in
-                    match r with
-                    | IntervalInt (a, b) ->
-                        let pairs =
-                            List.map (fun i -> (v, i)) (range a (b + 1)) in
-                        mk_prod lst pairs
-                    | _ ->
-                        let m = sprintf
-                            "Unbounded after abstraction: %s" v#get_name in
-                        raise (Abstraction_error m)
-                ) [] (ctr_ctx#get_pc :: ctr_ctx#get_locals)
-        in
+        let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
         let size_dist_list =
             dom#scatter_abs_vals solver active_expr (List.length init_locals) in
         let option_list =
