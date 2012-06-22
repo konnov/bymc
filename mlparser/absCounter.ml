@@ -203,7 +203,7 @@ class virtual ctr_funcs ctr_ctx =
         method virtual mk_init:
             token expr -> token mir_stmt list -> token mir_stmt list
             -> token mir_stmt list
-        method virtual mk_ctr_ex:
+        method virtual mk_counter_update:
             token -> token expr -> token mir_stmt list
 
         method deref_ctr e =
@@ -229,32 +229,34 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             let size_dist_list =
                 dom#scatter_abs_vals
                     solver active_expr (List.length init_locals) in
+            let mk_option local_vals abs_size =
+                let valuation = Hashtbl.create 10 in
+                List.iter
+                    (fun (var, i) ->
+                        Hashtbl.add valuation var i
+                    ) local_vals;
+                let idx = ctr_ctx#pack_vals_to_index valuation in
+                let lhs =
+                    BinEx (ARRAY_DEREF,
+                        Var ctr_ctx#get_ctr, Const idx) in
+                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
+            in
             let option_list =
                 List.map
-                    (fun dist ->
-                        List.map2
-                            (fun local_vals abs_size ->
-                                let valuation = Hashtbl.create (List.length dist) in
-                                List.iter
-                                    (fun (var, i) ->
-                                        Hashtbl.add valuation var i
-                                    ) local_vals;
-                                let idx = ctr_ctx#pack_vals_to_index valuation in
-                                let lhs =
-                                    BinEx (ARRAY_DEREF,
-                                        Var ctr_ctx#get_ctr, Const idx) in
-                                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
-                            ) init_locals dist
+                    (fun d -> List.map2 mk_option init_locals d
                     ) size_dist_list
             in
             [mk_nondet_choice option_list;
              self#mk_print_stmt (Const 0) (Const 0)]
 
-        method mk_ctr_ex tok idx_ex =
+        method mk_counter_update tok idx_ex =
             let ktr_i = self#deref_ctr idx_ex in
+            let is_deref = function
+                | BinEx (ARRAY_DEREF, _, _) -> true
+                | _ -> false
+            in
             let expr_abs_vals =
-                mk_expr_abstraction solver dom
-                    (function | BinEx (ARRAY_DEREF, _, _) -> true | _ -> false)
+                mk_expr_abstraction solver dom is_deref
                     (BinEx (tok, ktr_i, Const 1)) in
             [mk_assign_unfolding ktr_i expr_abs_vals]
     end;;
@@ -302,8 +304,8 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                     with Not_found -> Var v
                 ) prev_idx_ex in
         let print_stmt = funcs#mk_print_stmt prev_idx_ex next_idx_ex in
-        (funcs#mk_ctr_ex MINUS prev_idx_ex)
-        @ (funcs#mk_ctr_ex PLUS next_idx_ex)
+        (funcs#mk_counter_update MINUS prev_idx_ex)
+        @ (funcs#mk_counter_update PLUS next_idx_ex)
         @ [print_stmt]
         @ new_update
     in
