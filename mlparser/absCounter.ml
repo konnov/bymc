@@ -261,6 +261,50 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             [mk_assign_unfolding ktr_i expr_abs_vals]
     end;;
 
+class vass_funcs dom t_ctx ctr_ctx solver =
+    object(self)
+        inherit ctr_funcs ctr_ctx 
+
+        method mk_print_stmt prev_idx next_idx =
+            let n = ctr_ctx#get_ctr_dim in
+            let m = List.length t_ctx#get_shared in
+            let str = sprintf "{%%d->%%d:%s}\\n"
+                (String.concat "," (Accums.n_copies (n + m) "%d")) in
+            let mk_deref i = self#deref_ctr (Const i) in
+            let es = (List.map mk_deref (range 0 n))
+                @ (List.map (fun v -> Var v) t_ctx#get_shared) in
+            MPrint (-1, str, prev_idx :: next_idx :: es)
+
+        method mk_init active_expr decls init_stmts =
+            let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
+            let size_dist_list =
+                dom#scatter_abs_vals
+                    solver active_expr (List.length init_locals) in
+            let mk_option local_vals abs_size =
+                let valuation = Hashtbl.create 10 in
+                List.iter
+                    (fun (var, i) ->
+                        Hashtbl.add valuation var i
+                    ) local_vals;
+                let idx = ctr_ctx#pack_vals_to_index valuation in
+                let lhs =
+                    BinEx (ARRAY_DEREF,
+                        Var ctr_ctx#get_ctr, Const idx) in
+                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
+            in
+            let option_list =
+                List.map
+                    (fun d -> List.map2 mk_option init_locals d
+                    ) size_dist_list
+            in
+            [mk_nondet_choice option_list;
+             self#mk_print_stmt (Const 0) (Const 0)]
+
+        method mk_counter_update tok idx_ex =
+            let ktr_i = self#deref_ctr idx_ex in
+            [MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Const 1)))]
+    end;;
+
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let counter_guard =
         let make_opt idx =
