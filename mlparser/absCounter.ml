@@ -176,7 +176,7 @@ let do_counter_abstraction t_ctx dom solver units =
     let counter_guard =
         let make_opt idx =
             let guard =
-                (BinEx (GT,
+                (BinEx (NE,
                     BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx),
                     Const 0))
             in
@@ -191,10 +191,6 @@ let do_counter_abstraction t_ctx dom solver units =
     in
     let replace_init active_expr decls init_stmts =
         (* TODO: simplify/refactor *)
-        printf "\n\nINIT PART\n";
-        List.iter
-            (fun s -> printf "%s\n" (stmt_s s))
-            (mir_to_lir (decls @ init_stmts));
         let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
         let int_roles =
             visit_cfg (visit_basic_block transfer_roles)
@@ -249,20 +245,6 @@ let do_counter_abstraction t_ctx dom solver units =
                 ) size_dist_list
         in
         [mk_nondet_choice option_list; mk_print_stmt (Const 0) (Const 0)]
-        (*
-        List.iter
-            (fun d -> 
-                printf "init_distr:\n";
-                List.iter2
-                    (fun locals count ->
-                        printf "   %d -> " count;
-                        List.iter
-                            (fun (v, i) -> printf "%s = %d; " v#get_name i)
-                            locals;
-                        printf "\n";
-                    ) init_locals d
-            ) size_dist_list;
-        *)
     in
     let replace_update update stmts =
         (* all local variables should be reset to 0 *)
@@ -315,11 +297,11 @@ let do_counter_abstraction t_ctx dom solver units =
         let new_body = 
             skel.decl @ new_init @ skel.loop_prefix
             @ [MLabel (-1, main_lab)]
-            @ counter_guard @
-            [MIf (-1,
+            @ counter_guard
+            @ [MIf (-1,
                 [MOptGuarded ([(*skel.guard; *) new_comp_upd]);
                  MOptGuarded [MExpr (-1, Nop)]]);
-             MGoto (-1, main_lab)]
+               MGoto (-1, main_lab)]
         in
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
