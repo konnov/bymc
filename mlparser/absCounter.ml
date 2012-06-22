@@ -80,6 +80,7 @@ class ctr_abs_ctx dom t_ctx =
     end
 ;;
 
+
 let mk_nondet_choice seq_list =
 (*
 if
@@ -194,21 +195,71 @@ let find_init_local_vals ctr_ctx decls init_stmts =
         ) [] (ctr_ctx#get_pc :: ctr_ctx#get_locals)
 ;;
 
-let do_counter_abstraction t_ctx dom solver units =
-    let ctr_ctx = new ctr_abs_ctx dom t_ctx in
-    let deref_ctr e =
-        BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, e)
-    in
-    let mk_print_stmt prev_idx next_idx =
-        let n = ctr_ctx#get_ctr_dim in
-        let m = List.length t_ctx#get_shared in
-        let str = sprintf "{%%d->%%d:%s}\\n"
-            (String.concat "," (Accums.n_copies (n + m) "%d")) in
-        let mk_deref i = deref_ctr (Const i) in
-        let es = (List.map mk_deref (range 0 n))
-            @ (List.map (fun v -> Var v) t_ctx#get_shared) in
-        MPrint (-1, str, prev_idx :: next_idx :: es)
-    in
+(* abstraction of functions different in VASS and our counter abstraction *)
+class virtual ctr_funcs ctr_ctx =
+    object
+        method virtual mk_print_stmt:
+            token expr -> token expr -> token mir_stmt
+        method virtual mk_init:
+            token expr -> token mir_stmt list -> token mir_stmt list
+            -> token mir_stmt list
+        method virtual mk_ctr_ex:
+            token -> token expr -> token mir_stmt list
+
+        method deref_ctr e =
+            BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, e)
+    end;;
+
+class abs_ctr_funcs dom t_ctx ctr_ctx solver =
+    object(self)
+        inherit ctr_funcs ctr_ctx 
+
+        method mk_print_stmt prev_idx next_idx =
+            let n = ctr_ctx#get_ctr_dim in
+            let m = List.length t_ctx#get_shared in
+            let str = sprintf "{%%d->%%d:%s}\\n"
+                (String.concat "," (Accums.n_copies (n + m) "%d")) in
+            let mk_deref i = self#deref_ctr (Const i) in
+            let es = (List.map mk_deref (range 0 n))
+                @ (List.map (fun v -> Var v) t_ctx#get_shared) in
+            MPrint (-1, str, prev_idx :: next_idx :: es)
+
+        method mk_init active_expr decls init_stmts =
+            let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
+            let size_dist_list =
+                dom#scatter_abs_vals
+                    solver active_expr (List.length init_locals) in
+            let option_list =
+                List.map
+                    (fun dist ->
+                        List.map2
+                            (fun local_vals abs_size ->
+                                let valuation = Hashtbl.create (List.length dist) in
+                                List.iter
+                                    (fun (var, i) ->
+                                        Hashtbl.add valuation var i
+                                    ) local_vals;
+                                let idx = ctr_ctx#pack_vals_to_index valuation in
+                                let lhs =
+                                    BinEx (ARRAY_DEREF,
+                                        Var ctr_ctx#get_ctr, Const idx) in
+                                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
+                            ) init_locals dist
+                    ) size_dist_list
+            in
+            [mk_nondet_choice option_list;
+             self#mk_print_stmt (Const 0) (Const 0)]
+
+        method mk_ctr_ex tok idx_ex =
+            let ktr_i = self#deref_ctr idx_ex in
+            let expr_abs_vals =
+                mk_expr_abstraction solver dom
+                    (function | BinEx (ARRAY_DEREF, _, _) -> true | _ -> false)
+                    (BinEx (tok, ktr_i, Const 1)) in
+            [mk_assign_unfolding ktr_i expr_abs_vals]
+    end;;
+
+let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let counter_guard =
         let make_opt idx =
             let guard =
@@ -224,30 +275,6 @@ let do_counter_abstraction t_ctx dom solver units =
         in
         let indices = range 0 ctr_ctx#get_ctr_dim in
         [mk_nondet_choice (List.map make_opt indices)]
-    in
-    let replace_init active_expr decls init_stmts =
-        let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
-        let size_dist_list =
-            dom#scatter_abs_vals solver active_expr (List.length init_locals) in
-        let option_list =
-            List.map
-                (fun dist ->
-                    List.map2
-                        (fun local_vals abs_size ->
-                            let valuation = Hashtbl.create (List.length dist) in
-                            List.iter
-                                (fun (var, i) ->
-                                    Hashtbl.add valuation var i
-                                ) local_vals;
-                            let idx = ctr_ctx#pack_vals_to_index valuation in
-                            let lhs =
-                                BinEx (ARRAY_DEREF,
-                                    Var ctr_ctx#get_ctr, Const idx) in
-                            MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
-                        ) init_locals dist
-                ) size_dist_list
-        in
-        [mk_nondet_choice option_list; mk_print_stmt (Const 0) (Const 0)]
     in
     let replace_update update stmts =
         (* all local variables should be reset to 0 *)
@@ -274,26 +301,17 @@ let do_counter_abstraction t_ctx dom solver units =
                     try Var (Hashtbl.find prev_next_pairs v)
                     with Not_found -> Var v
                 ) prev_idx_ex in
-        let mk_ctr_ex idx_ex tok =
-            let ktr_i = deref_ctr idx_ex in
-            let expr_abs_vals =
-                mk_expr_abstraction solver dom
-                    (function | BinEx (ARRAY_DEREF, _, _) -> true | _ -> false)
-                    (BinEx (tok, ktr_i, Const 1)) in
-            [mk_assign_unfolding ktr_i expr_abs_vals]
-        in
-        let print_stmt = mk_print_stmt prev_idx_ex next_idx_ex in
-        (mk_ctr_ex prev_idx_ex MINUS)
-            @ (mk_ctr_ex next_idx_ex PLUS)
-            @ [print_stmt]
-            @ new_update
+        let print_stmt = funcs#mk_print_stmt prev_idx_ex next_idx_ex in
+        (funcs#mk_ctr_ex MINUS prev_idx_ex)
+        @ (funcs#mk_ctr_ex PLUS next_idx_ex)
+        @ [print_stmt]
+        @ new_update
     in
     let abstract_proc p =
         let body = remove_bad_statements p#get_stmts in
         let skel = extract_skel body in
         let main_lab = mk_uniq_label () in
-        let new_init =
-            replace_init p#get_active_expr skel.decl skel.init
+        let new_init = funcs#mk_init p#get_active_expr skel.decl skel.init
         in
         let new_update = replace_update skel.update body in
         let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
