@@ -268,14 +268,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
         inherit ctr_funcs ctr_ctx 
 
         method mk_print_stmt prev_idx next_idx =
-            let n = ctr_ctx#get_ctr_dim in
-            let m = List.length t_ctx#get_shared in
-            let str = sprintf "{%%d->%%d:%s}\\n"
-                (String.concat "," (Accums.n_copies (n + m) "%d")) in
-            let mk_deref i = self#deref_ctr (Const i) in
-            let es = (List.map mk_deref (range 0 n))
-                @ (List.map (fun v -> Var v) t_ctx#get_shared) in
-            MPrint (-1, str, prev_idx :: next_idx :: es)
+            MPrint (-1, "CHECK_HERE", [])
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
