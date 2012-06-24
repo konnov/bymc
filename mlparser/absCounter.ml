@@ -36,6 +36,8 @@ class ctr_abs_ctx dom t_ctx =
         method get_ctr_dim =
             ((List.length local_vars) * dom#length * pc_size)
 
+        method var_vec = (self#get_pc :: self#get_locals)
+
         method unpack_const i =
             let valuation = Hashtbl.create ((List.length local_vars) + 1) in
             Hashtbl.add valuation pc_var (i mod pc_size);
@@ -192,7 +194,7 @@ let find_init_local_vals ctr_ctx decls init_stmts =
                 let m = sprintf
                     "Unbounded after abstraction: %s" v#get_name in
                 raise (Abstraction_error m)
-        ) [] (ctr_ctx#get_pc :: ctr_ctx#get_locals)
+        ) [] ctr_ctx#var_vec
 ;;
 
 (* abstraction of functions different in VASS and our counter abstraction *)
@@ -277,28 +279,28 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
-            let size_dist_list =
-                dom#scatter_abs_vals
-                    solver active_expr (List.length init_locals) in
-            let mk_option local_vals abs_size =
-                let valuation = Hashtbl.create 10 in
-                List.iter
-                    (fun (var, i) ->
-                        Hashtbl.add valuation var i
-                    ) local_vals;
-                let idx = ctr_ctx#pack_vals_to_index valuation in
-                let lhs =
-                    BinEx (ARRAY_DEREF,
-                        Var ctr_ctx#get_ctr, Const idx) in
-                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
+            let has_val valuation =
+                let same_var (x, (i: int)) = (i = (Hashtbl.find valuation x)) in
+                let same_asgn lst = List.for_all same_var lst in
+                try List.exists same_asgn init_locals
+                with Not_found -> false
             in
-            let option_list =
-                List.map
-                    (fun d -> List.map2 mk_option init_locals d
-                    ) size_dist_list
+            let indices = ctr_ctx#all_indices_for has_val in
+            let sum_fun e i =
+                let ctr_ex = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const i)
+                in
+                if e = Nop then ctr_ex else BinEx (PLUS, e, ctr_ex)
             in
-            [mk_nondet_choice option_list;
-             self#mk_print_stmt (Const 0) (Const 0)]
+            let sum_ex = List.fold_left sum_fun Nop indices in
+            let sum_eq_n = MAssume (-1, BinEx (EQ, active_expr, sum_ex)) in
+            let other_indices =
+                List.filter (fun i -> not (List.mem i indices))
+                    (range 0 ctr_ctx#get_ctr_dim) in
+            let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun Nop i)) in
+            let other0 = List.map mk_oth other_indices in
+            (* TODO: add an assumption that all other values stay zero *)
+            sum_eq_n :: other0
+                @ [self#mk_print_stmt (Const 0) (Const 0)]
 
         method mk_counter_update tok idx_ex =
             let ktr_i = self#deref_ctr idx_ex in
