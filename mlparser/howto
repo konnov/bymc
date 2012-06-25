@@ -1,0 +1,15 @@
+Just in case you want to play with our abstraction, do the following:
+
+cd theta/tools/mlparser
+./make.sh
+OCAMLRUNPARAM=b ./run.native ../../promela/bcast_symb.pml
+view original.prm
+view abs-interval.prm
+view abs-counter.prm
+spin -a -N ../../promela/univ_unforg.never abs-counter.prm
+gcc -o pan pan.c && ./pan -a -m1000000
+# counterex.
+spin -t -N ../../promela/univ_unforg.never abs-counter.prm | grep '{'
+
+Properties:
+promela/univ_{unforg,corr,relay}.never
