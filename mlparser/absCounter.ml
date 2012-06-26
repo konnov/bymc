@@ -375,7 +375,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         | Proc p ->
             let new_proc = (abstract_proc p) in
             let vs = t_ctx#get_globals in
-            let ssa = mk_ssa vs (mk_cfg (mir_to_lir new_proc#get_stmts)) in
+            let lirs = (mir_to_lir new_proc#get_stmts) in
+            List.iter (fun s -> printf " ~~~ %s\n" (stmt_s s)) lirs;
+            let ssa = mk_ssa vs (mk_cfg lirs) in
             Proc new_proc
         | Stmt (MDeclProp (_, _, _) as d) ->
             Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)

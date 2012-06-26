@@ -25,7 +25,7 @@ let print_nos head vals =
     then begin
         printf " %s { " head;
         Hashtbl.iter
-            (fun var aval -> printf "%s: %s; " var#get_name (var_nos_s aval))
+            (fun var aval -> printf "%s: [%s]; " var#get_name (var_nos_s aval))
             vals;
         printf "}\n";
     end
@@ -42,11 +42,9 @@ let transfer_nos stmt input =
         | Expr (_, BinEx (ASGN, Var v, _)) ->
                 begin
                 try
-                    let nos =
-                        Hashtbl.find input v
-                    in
-                    let new_no = List.fold_left max 0 nos in
-                    Hashtbl.add output v [new_no]
+                    let nos = Hashtbl.find input v in
+                    let new_no = 1 + (List.fold_left max 0 nos) in
+                    Hashtbl.replace output v [new_no]
                 with Not_found -> ()
                     (* raise (Failure (sprintf "Not found %s" v#get_name))
                     *)
@@ -60,9 +58,7 @@ let transfer_nos stmt input =
 
 let mk_ssa vars cfg =
     (* initial indices assigned to variables *)
-    let init_var_nums  = Hashtbl.create 10 in
-    List.iter (fun v -> Hashtbl.add init_var_nums v [0]) vars;
     visit_cfg (visit_basic_block transfer_nos)
-        (join lub_var_nos) cfg init_var_nums
-;;
+        (join lub_var_nos) cfg (Hashtbl.create 10)
+;
 

@@ -37,6 +37,7 @@ let visit_cfg visit_bb_fun join_fun cfg entry_vals =
         in
         if changed
         then begin
+            log DEBUG ("ELEM CHANGED, PROPAGATING RESULTS");
             Hashtbl.replace bb_vals id new_vals;
             let out_vals = (visit_bb_fun stmt_vals basic_blk new_vals) in
             List.map (fun s -> (s, out_vals)) basic_blk#get_succ
@@ -96,14 +97,15 @@ let join lub_fun lhs rhs =
     let res = Hashtbl.create (Hashtbl.length lhs) in
     Hashtbl.iter
         (fun var value ->
-            if Hashtbl.mem rhs var
-            then Hashtbl.replace res var (lub_fun value (Hashtbl.find rhs var))
-            else Hashtbl.add res var value)
-        lhs;
+            let newv = if Hashtbl.mem rhs var
+            then (lub_fun value (Hashtbl.find rhs var))
+            else value in
+            Hashtbl.add res var newv
+        ) lhs;
     Hashtbl.iter
         (fun var value ->
-            if not (Hashtbl.mem res var) then Hashtbl.add res var value)
-        rhs;
+            if not (Hashtbl.mem res var) then Hashtbl.add res var value
+        ) rhs;
     res
 ;;
 

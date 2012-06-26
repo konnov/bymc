@@ -67,8 +67,8 @@ let hashtbl_eq lhs rhs =
         let subset_eq l r =
             Hashtbl.iter
                 (fun k v ->
-                    if (Hashtbl.find r k) <> v then raise Not_found)
-                l
+                    if (Hashtbl.find r k) <> v then raise Not_found
+                ) l
         in
         try
             subset_eq lhs rhs;

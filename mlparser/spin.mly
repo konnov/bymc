@@ -1008,6 +1008,7 @@ prop_decl:
 atomic_prop:
       ALL LPAREN prop_expr RPAREN { PropAll ($3)  }
     | SOME LPAREN prop_expr RPAREN { PropSome ($3) }
+    | LPAREN prop_expr RPAREN { PropGlob ($2) }
     ;
 
 prop_expr    : 
