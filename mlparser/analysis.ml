@@ -92,19 +92,18 @@ let print_int_roles head vals =
     end
 ;;
 
-let join_int_roles lhs rhs =
+let join lub_fun lhs rhs =
     let res = Hashtbl.create (Hashtbl.length lhs) in
     Hashtbl.iter
         (fun var value ->
             if Hashtbl.mem rhs var
-            then Hashtbl.replace res var (lub_int_role value (Hashtbl.find rhs var))
+            then Hashtbl.replace res var (lub_fun value (Hashtbl.find rhs var))
             else Hashtbl.add res var value)
         lhs;
     Hashtbl.iter
         (fun var value ->
             if not (Hashtbl.mem res var) then Hashtbl.add res var value)
         rhs;
-    print_int_roles " join = " res;
     res
 ;;
 

@@ -5,7 +5,9 @@ open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
+open Cfg;;
 open Analysis;;
+open Ssa;;
 open Skel_struc;;
 
 open AbsInterval;;
@@ -167,9 +169,9 @@ let find_init_local_vals ctr_ctx decls init_stmts =
     let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
     let int_roles =
         visit_cfg (visit_basic_block transfer_roles)
-            join_int_roles init_cfg (mk_bottom_val ()) in
+            (join lub_int_role) init_cfg (mk_bottom_val ()) in
     let init_sum =
-        join_all_locs join_int_roles (mk_bottom_val ()) int_roles in
+        join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
     let mk_prod left right =
         if left = []
         then List.map (fun x -> [x]) right
@@ -371,7 +373,10 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     in
     let abs_unit = function
         | Proc p ->
-            Proc (abstract_proc p)
+            let new_proc = (abstract_proc p) in
+            let vs = t_ctx#get_globals in
+            let ssa = mk_ssa vs (mk_cfg (mir_to_lir new_proc#get_stmts)) in
+            Proc new_proc
         | Stmt (MDeclProp (_, _, _) as d) ->
             Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
         | _ as u -> u
