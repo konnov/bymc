@@ -244,7 +244,7 @@ let identify_var_roles units =
         let cfg = Cfg.mk_cfg (mir_to_lir proc#get_stmts) in
         let (int_roles: (int, (var, int_role) Hashtbl.t) Hashtbl.t) =
             visit_cfg (visit_basic_block transfer_roles)
-                (join lub_int_role) cfg (mk_bottom_val ()) in
+                (join lub_int_role) (print_int_roles "roles") cfg in
         let body_sum =
             join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
         let skel = extract_skel proc#get_stmts in

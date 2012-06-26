@@ -161,17 +161,35 @@ let mk_cfg stmts =
             (Label (-1, 0) :: cleaned) in
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
-    let mk_bb seq =
-        match seq with
-        | Label (_, i) :: _ ->
-            let bb = new basic_block in
-            bb#set_seq seq;
-            Hashtbl.add blocks i bb;
-            bb
+    let mk_bb seq next_seq =
+        let has_terminator =
+            match (List.hd (List.rev seq)) with
+            | Goto (_, _) -> true
+            | If (_, _, _) -> true
+            | _ -> false
+        in
+        let get_entry_lab = function
+        | Label (_, i) :: _ -> i
         | _ -> raise (CfgError "Broken head: expected (Label i) :: tl")
+        in
+        let entry_lab = (get_entry_lab seq) in
+        let body = if not has_terminator
+        then seq @ [Goto (-1, (get_entry_lab next_seq))]
+        else seq in
+        let bb = new basic_block in
+        bb#set_seq body;
+        Hashtbl.add blocks entry_lab bb;
+        bb
     in
+    (*
     let entry = mk_bb (List.hd seq_list) in
+    *)
+    let bbs = List.map2 mk_bb
+        seq_list ((List.tl seq_list) @ [[Label (-1, 0)]]) in
+    (*
     List.iter (fun seq -> let _ = mk_bb seq in ()) (List.tl seq_list);
+     *)
+    let entry = List.hd bbs in
     (* set successors *)
     Hashtbl.iter
         (fun _ bb -> bb#set_succ

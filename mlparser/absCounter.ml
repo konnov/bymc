@@ -169,7 +169,7 @@ let find_init_local_vals ctr_ctx decls init_stmts =
     let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
     let int_roles =
         visit_cfg (visit_basic_block transfer_roles)
-            (join lub_int_role) init_cfg (mk_bottom_val ()) in
+            (join lub_int_role) (print_int_roles "local roles") init_cfg in
     let init_sum =
         join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
     let mk_prod left right =

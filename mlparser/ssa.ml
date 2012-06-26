@@ -38,7 +38,7 @@ let transfer_nos stmt input =
     begin
         match stmt with
         | Decl (_, v, i) ->
-                Hashtbl.add output v [0]
+                Hashtbl.replace output v [0]
         | Expr (_, BinEx (ASGN, Var v, _)) ->
                 begin
                 try
@@ -59,6 +59,6 @@ let transfer_nos stmt input =
 let mk_ssa vars cfg =
     (* initial indices assigned to variables *)
     visit_cfg (visit_basic_block transfer_nos)
-        (join lub_var_nos) cfg (Hashtbl.create 10)
+        (join lub_var_nos) (print_nos "ssa_nums") cfg
 ;
 

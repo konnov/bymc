@@ -21,7 +21,7 @@ let visit_basic_block transfer_fun stmt_vals bb in_vals =
     List.fold_left transfer_stmt in_vals bb#get_seq
 ;;
 
-let visit_cfg visit_bb_fun join_fun cfg entry_vals =
+let visit_cfg visit_bb_fun join_fun print_fun cfg =
     (* imperative because of Hahstbl :-( *)
     let bb_vals = Hashtbl.create 10 in
     let stmt_vals = Hashtbl.create 10 in
@@ -33,16 +33,21 @@ let visit_cfg visit_bb_fun join_fun cfg entry_vals =
                 let newv = join_fun oldv in_vals in
                 (newv, not (Accums.hashtbl_eq oldv newv))
             with Not_found ->
-                (mk_bottom_val (), true)
+                (in_vals, true)
         in
         if changed
         then begin
             log DEBUG ("ELEM CHANGED, PROPAGATING RESULTS");
+            log DEBUG "INPUT: "; (print_fun new_vals);
             Hashtbl.replace bb_vals id new_vals;
             let out_vals = (visit_bb_fun stmt_vals basic_blk new_vals) in
-            List.map (fun s -> (s, out_vals)) basic_blk#get_succ
+            log DEBUG "OUTPUT: "; (print_fun out_vals);
+            let next = List.map (fun bb_s -> (bb_s, out_vals)) basic_blk#get_succ
+            in
+            log DEBUG (sprintf "#SUCCS: %d" (List.length next));
+            next
         end
-        else []
+        else [] (* nothing more to process *)
     in
     let rec visit = function
         | [] -> ()
