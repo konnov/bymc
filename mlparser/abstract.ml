@@ -19,9 +19,7 @@ let do_abstraction units =
 
     if may_log INFO then dom#print;
     let new_units = do_interval_abstraction ctx dom solver units in
-    (* debug output *)
     write_to_file "abs-interval.prm" new_units;
-    (* end of debug output *)
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
     let vass_units =

@@ -36,8 +36,13 @@ let print_var_version head vals =
 
 let transfer_var_version tbl stmt input =
     log DEBUG (sprintf "  %%%s;" (stmt_s stmt));
-    let output = Hashtbl.copy input
+    let output = Hashtbl.create (Hashtbl.length input) in
+    let copy_elem var ver =
+        if ver.out_ver = -1
+        then Hashtbl.add output var ver
+        else Hashtbl.add output var { out_ver = -1; in_vers = [ver.out_ver] }
     in
+    Hashtbl.iter copy_elem input;
     begin
         match stmt with
         | Decl (id, v, i) ->
@@ -65,6 +70,32 @@ let transfer_var_version tbl stmt input =
     print_var_version "#s input = " input;
     print_var_version "#s output = " output;
     output
+;;
+
+let comp_dom_frontiers cfg =
+    let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
+    let idom_tbl = comp_idoms cfg in
+    let idom_tree = comp_idom_tree idom_tbl in
+    let visit_node n =
+        let visit_y s df_n =
+            if n <> (Hashtbl.find idom_tbl s)
+            then IntSet.add s df_n
+            else df_n in
+        let df_n = List.fold_right visit_y (cfg#find n)#succ_labs IntSet.empty 
+        in
+        let propagate_up df_n z =
+            IntSet.fold visit_y (Hashtbl.find df z) df_n in
+        let children = Hashtbl.find idom_tree n in
+        let df_n = List.fold_left propagate_up df_n children in
+        Hashtbl.add df n df_n
+    in
+    let rec bottom_up node =
+        let children = Hashtbl.find idom_tree node in
+        List.iter bottom_up children;
+        visit_node node
+    in
+    bottom_up 0;
+    df
 ;;
 
 let mk_ssa vars cfg =

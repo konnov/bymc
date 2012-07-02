@@ -9,6 +9,7 @@ open Cfg;;
 open Analysis;;
 open Ssa;;
 open Skel_struc;;
+open Debug;;
 
 open AbsInterval;;
 
@@ -376,6 +377,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             let new_proc = (abstract_proc p) in
             let vs = t_ctx#get_globals in
             let lirs = (mir_to_lir new_proc#get_stmts) in
+            if may_log DEBUG then print_detailed_cfg (mk_cfg lirs);
             List.iter (fun s -> printf " ~~~ %s\n" (stmt_s s)) lirs;
             let ssa = mk_ssa vs (mk_cfg lirs) in
             Proc new_proc

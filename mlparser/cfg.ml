@@ -24,9 +24,11 @@ class ['t] basic_block =
 
         method set_succ s = succ <- s
         method get_succ = succ
+        method succ_labs = List.map (fun bb -> bb#label) succ
 
         method set_pred p = pred <- p
         method get_pred = pred
+        method pred_labs = List.map (fun bb -> bb#label) pred
 
         method set_visit_flag f = visit_flag <- f
         method get_visit_flag = visit_flag
@@ -37,10 +39,13 @@ class ['t] basic_block =
                 | If (_, is, _) -> is
                 | _ -> [] (* an exit block *)
 
+        (* deprecated, use label *)
         method get_lead_lab =
             match List.hd seq with
                 | Label (_, i) -> i
                 | _ -> raise (CfgError "Corrupted basic block, no leading label")
+
+        method label = self#get_lead_lab
 
         method str =
             let exit_s = List.fold_left
@@ -72,7 +77,11 @@ class ['t] control_flow_graph i_entry i_blocks =
         val m_entry: 't basic_block = i_entry
 
         method blocks = m_blocks
+        method block_list = Accums.hashtbl_vals m_blocks
+        method block_labs = Accums.hashtbl_keys m_blocks
         method entry = m_entry
+
+        method find lab = Hashtbl.find m_blocks lab
     end
 ;;
 
@@ -135,13 +144,6 @@ let separate is_sep list_i =
                         else (hd :: hdl) :: tll
     in (* clean hanging empty sets *)
     List.filter (fun l -> l <> []) (sep_rec list_i)
-;;
-
-let basic_block_tbl_s bbs =
-    Hashtbl.iter
-        (fun i bb -> printf "\nBasic block %d:\n" i;
-            List.iter (fun s -> printf "%s\n" (stmt_s s)) bb#get_seq)
-        bbs
 ;;
 
 let mk_cfg stmts =
@@ -290,3 +292,92 @@ let comp_sccs first_bb =
     search first_bb;
     !sccs
 ;;
+
+(*
+Compute dominators for a node. The algorithm is copied as it is.
+
+S. Muchnik. Advanced Compiler Design and Implementation, p. 182, Fig. 7.14.
+*)
+let comp_doms cfg =
+    let domin = Hashtbl.create (Hashtbl.length cfg#blocks) in
+    let all = List.fold_left
+        (fun s bb -> IntSet.add bb#label s) IntSet.empty cfg#block_list in
+    let all_but_0 = IntSet.remove 0 all in
+    let init_domin n = if n <> 0 then all else IntSet.singleton 0 in
+    IntSet.iter (fun n -> Hashtbl.add domin n (init_domin n)) all;
+    let change = ref true in
+    while !change do
+        change := false;
+        let update n =
+            let t = List.fold_left
+                (fun s bb_lab ->
+                    IntSet.inter (Hashtbl.find domin bb_lab) s
+                ) all (cfg#find n)#pred_labs in
+            let n_doms = IntSet.union t (IntSet.singleton n) in
+            if n_doms <> (Hashtbl.find domin n) then
+            begin
+                change := true;
+                Hashtbl.replace domin n n_doms
+            end
+        in
+        IntSet.iter update all_but_0
+    done;
+    domin
+;;
+
+(*
+Compute immediate dominators for a node.
+Minor changes made to write it in OCaml.
+
+S. Muchnik. Advanced Compiler Design and Implementation, p. 182, Fig. 7.15.
+*)
+let comp_idoms cfg =
+    let all = List.fold_left
+        (fun s bb -> IntSet.add bb#label s) IntSet.empty cfg#block_list in
+    let all_but_0 = IntSet.remove 0 all in
+    let domin = comp_doms cfg in
+    let tmp = Hashtbl.create (Hashtbl.length domin) in
+    let init_tmp n =
+        Hashtbl.add tmp n (IntSet.remove n (Hashtbl.find domin n)) in
+    List.iter init_tmp cfg#block_labs;
+    let update n s t =
+        if IntSet.mem t (Hashtbl.find tmp s)
+        then Hashtbl.replace tmp n (IntSet.remove t (Hashtbl.find tmp n)) in
+    let inner2 n s =
+        IntSet.iter (update n s) (IntSet.remove s (Hashtbl.find tmp n)) in
+    let inner n =
+        IntSet.iter (inner2 n) (Hashtbl.find tmp n) in
+    IntSet.iter inner all_but_0;
+    let idom = Hashtbl.create (Hashtbl.length cfg#blocks) in
+    let add_idom n idom_set =
+        assert ((IntSet.cardinal idom_set) <= 1);
+        let dom = if n = 0
+            then -1
+            else (List.hd (IntSet.elements idom_set)) in
+        Hashtbl.add idom n dom in
+    Hashtbl.iter add_idom tmp;
+    idom
+;;
+
+let comp_idom_tree idoms =
+    let children = Hashtbl.create (Hashtbl.length idoms) in
+    Hashtbl.iter (fun n _ -> Hashtbl.add children n []) idoms;
+    let add n idom =
+        Hashtbl.add children idom (n :: (Hashtbl.find children idom)) in
+    Hashtbl.iter add idoms;
+    children
+;;
+
+let print_detailed_cfg cfg =
+    printf "\nDetailed CFG\n";
+    let idom = comp_idoms cfg in
+    let print_blk i bb =
+        let bb_s blk = string_of_int blk#label in
+        let succ_s = String.concat ", " (List.map bb_s bb#get_succ) in
+        printf "\nBasic block %d [idom = %d, succ = %s]:\n"
+            i (Hashtbl.find idom i) succ_s;
+        List.iter (fun s -> printf "  %s\n" (stmt_s s)) bb#get_seq
+    in
+    Hashtbl.iter print_blk cfg#blocks
+;;
+
