@@ -13,7 +13,7 @@ let write_to_file name units =
 
 let _ =
     try
-        current_verbosity_level := DEBUG (*INFO*);
+        current_verbosity_level := INFO (*INFO*);
 
         let filename, basename, dirname =
             if Array.length Sys.argv > 1

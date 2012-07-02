@@ -95,6 +95,8 @@ let rec expr_to_smt e =
     | Nop -> ""
     | Const i -> string_of_int i
     | Var v -> v#get_name
+    | Phi (lhs, rhs) ->
+            raise (Failure "Phi to SMT is not supported yet")
     | UnEx (tok, f) ->
         begin match tok with
         | UMIN -> sprintf "(- %s)" (expr_to_smt f)

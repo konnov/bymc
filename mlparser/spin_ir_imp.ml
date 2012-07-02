@@ -139,6 +139,10 @@ let rec expr_s e =
     | BinEx (AND, f, g) -> sprintf "(%s && %s)" (expr_s f) (expr_s g)
     | BinEx (OR, f, g) -> sprintf "(%s || %s)" (expr_s f) (expr_s g)
     | BinEx (tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)
+    | Phi (lhs, rhs) ->
+            let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
+            in
+            sprintf "%s = phi(%s)" lhs#get_name rhs_s
 ;;
 
 let op_of_expr e =

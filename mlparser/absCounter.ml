@@ -375,11 +375,10 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let abs_unit = function
         | Proc p ->
             let new_proc = (abstract_proc p) in
-            let vs = t_ctx#get_globals in
+            let vs = ctr_ctx#get_pc :: ctr_ctx#get_locals @ t_ctx#get_shared in
             let lirs = (mir_to_lir new_proc#get_stmts) in
-            if may_log DEBUG then print_detailed_cfg (mk_cfg lirs);
-            List.iter (fun s -> printf " ~~~ %s\n" (stmt_s s)) lirs;
-            let ssa = mk_ssa vs (mk_cfg lirs) in
+            let cfg = place_phi vs (mk_cfg lirs) in
+            print_detailed_cfg cfg;
             Proc new_proc
         | Stmt (MDeclProp (_, _, _) as d) ->
             Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)

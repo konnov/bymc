@@ -57,6 +57,8 @@ class ['t] basic_block =
     end
 ;;
 
+let bb_lab bb = bb#label;;
+
 class ['t, 'attr] attr_basic_block a =
     object(self)
         inherit ['t] basic_block as super
@@ -361,9 +363,10 @@ let comp_idoms cfg =
 
 let comp_idom_tree idoms =
     let children = Hashtbl.create (Hashtbl.length idoms) in
-    Hashtbl.iter (fun n _ -> Hashtbl.add children n []) idoms;
+    Hashtbl.iter (fun _ idom -> Hashtbl.add children idom []) idoms;
+    Hashtbl.iter (fun n _ -> Hashtbl.replace children n []) idoms;
     let add n idom =
-        Hashtbl.add children idom (n :: (Hashtbl.find children idom)) in
+        Hashtbl.replace children idom (n :: (Hashtbl.find children idom)) in
     Hashtbl.iter add idoms;
     children
 ;;
@@ -371,13 +374,19 @@ let comp_idom_tree idoms =
 let print_detailed_cfg cfg =
     printf "\nDetailed CFG\n";
     let idom = comp_idoms cfg in
-    let print_blk i bb =
+    let idom_tree = comp_idom_tree idom in
+    let print_blk i =
+        let bb = cfg#find i in
         let bb_s blk = string_of_int blk#label in
         let succ_s = String.concat ", " (List.map bb_s bb#get_succ) in
         printf "\nBasic block %d [idom = %d, succ = %s]:\n"
             i (Hashtbl.find idom i) succ_s;
         List.iter (fun s -> printf "  %s\n" (stmt_s s)) bb#get_seq
     in
-    Hashtbl.iter print_blk cfg#blocks
+    let rec bfs_list node =
+        let children = Hashtbl.find idom_tree node in
+        node :: (List.concat (List.map bfs_list children))
+    in
+    List.iter print_blk (bfs_list 0)
 ;;
 
