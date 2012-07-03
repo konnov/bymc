@@ -255,7 +255,16 @@ let identify_var_roles units =
         let skel = extract_skel proc#get_stmts in
         Hashtbl.iter
             (fun v r ->
-                let loc_roles = Hashtbl.find int_roles (m_stmt_id skel.guard) in
+                let fst_id =
+                    let is_norm s = (m_stmt_id s) <> -1 in
+                    (m_stmt_id (List.find is_norm skel.update)) in
+                let loc_roles =
+                    try Hashtbl.find int_roles fst_id
+                    with Not_found ->
+                        let m =
+                            (sprintf "No analysis data for loc %d" fst_id) in
+                        raise (Failure m)
+                in
                 let is_const = match Hashtbl.find loc_roles v with
                     | IntervalInt (a, b) -> a = b   (* const *)
                     | _ -> false                    (* mutating *)
