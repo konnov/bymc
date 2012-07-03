@@ -45,6 +45,30 @@ let list_cut match_fun lst = list_cut_general false match_fun lst;;
 
 let list_cut_ignore match_fun lst = list_cut_general true match_fun lst;;
 
+(* Find the n-th element and
+   return the elements before it, the element itself, and the elements after
+ *)
+let rec list_nth_slice lst n =
+    if lst = []
+    then raise (Failure (Printf.sprintf "list_nth_split: lst = [], n = %d" n));
+    if n < 0 then raise (Failure "list_nth_split: n < 0");
+    match n with
+    | 0 -> ([], List.hd lst, List.tl lst)
+    | _ ->
+        let (h, e, t) = list_nth_slice (List.tl lst) (n - 1) in
+        ((List.hd lst) :: h, e, t)
+;;
+
+(* Find the position of the first element equal to e *)
+let list_find_pos e lst =
+    let rec fnd = function
+        | [] -> raise Not_found
+        | hd :: tl ->
+            if hd = e then 0 else 1 + (fnd tl)
+    in
+    fnd lst
+;;
+
 (* Python-like range *)                                                         
 let rec range i j =
     if j <= i then [] else i :: (range (i + 1) j);;

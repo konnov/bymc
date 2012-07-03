@@ -36,6 +36,7 @@ let is_local_unbounded = function
     | _ -> false
 ;;
 
+(* XXX: it works only for one process prototype *)
 class ['tok] trans_context =
     object(self)
         val mutable globals: var list = []
@@ -88,6 +89,10 @@ class ['tok] trans_context =
 
         method get_shared =
             List.filter (fun v -> not v#is_symbolic) globals
+
+        method get_non_shared =
+            List.filter (fun v -> not (self#is_global v)) (hashtbl_keys var_roles)
+
 
         method get_var_roles = var_roles
         method set_var_roles r = var_roles <- r

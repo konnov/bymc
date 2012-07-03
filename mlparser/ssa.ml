@@ -103,6 +103,8 @@ let comp_dom_frontiers cfg =
 
 (* Ron Cytron et al. Static Single Assignment Form and the Control
    Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991, pp. 451-490.
+
+   Figure 11.
  *)
 let place_phi (vars: var list) (cfg: 't control_flow_graph) =
     let df = comp_dom_frontiers cfg in
@@ -155,9 +157,114 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
     cfg
 ;;
 
-let mk_ssa vars cfg =
-    (* initial indices assigned to variables *)
-    visit_cfg (visit_basic_block (transfer_var_version (Hashtbl.create 10)))
-        (join lub_var_nos) (print_var_version "ssa_vers") cfg
+let map_rhs map_fun ex =
+    let rec sub = function
+    | Var v -> map_fun v
+    | UnEx (t, l) -> UnEx (t, sub l)
+    | BinEx (ASGN, l, r) -> BinEx (ASGN, l, sub r)
+    | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+    | _ as e -> e
+    in
+    sub ex
+;;
+
+(* Ron Cytron et al. Static Single Assignment Form and the Control
+   Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991, pp. 451-490.
+
+   Figure 12.
+ *)
+let mk_ssa shared_vars local_vars cfg =
+    let vars = shared_vars @ local_vars in
+    let cfg = place_phi vars cfg in
+    let idom_tbl = comp_idoms cfg in
+    let idom_tree = comp_idom_tree idom_tbl in
+
+    let counters = Hashtbl.create (List.length vars) in
+    let stacks = Hashtbl.create (List.length vars) in
+    let nm v = v#get_name in
+    let s_top v =
+        let stack = Hashtbl.find stacks (nm v) in
+        if stack <> []
+        then List.hd stack
+        else raise (Failure ("Stack is empty for " ^ v#get_name))
+    in
+    let s_push v i =
+        Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
+    let s_pop var_nm = 
+        Hashtbl.replace stacks var_nm (List.tl (Hashtbl.find stacks var_nm)) in
+    (* initialize local variables *)
+    List.iter (fun v -> Hashtbl.add counters (nm v) 0) local_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) []) local_vars;
+    (* global vars are different,
+       they have a first version x_0 at the initial state *)
+    List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
+
+    let sub_var v = new var (sprintf "%s_%d" (nm v) (s_top v)) in
+    let sub_var_as_var v = Var (sub_var v) in
+    let intro_var v =
+        try
+            let i = Hashtbl.find counters (nm v) in
+            let new_v = new var (sprintf "%s_%d" (nm v) i) in
+            s_push v i;
+            Hashtbl.replace counters (nm v) (i + 1);
+            new_v
+        with Not_found ->
+            raise (Failure ("Var not found: " ^ v#get_name))
+    in
+    let rec search x =
+        let bb = cfg#find x in
+        let bb_old_seq = bb#get_seq in
+        let replace_rhs = function
+            | Decl (id, v, e) ->
+                    Decl (id, v, map_rhs sub_var_as_var e)
+            | Expr (id, e) as s ->
+                begin
+                    try
+                        let new_e = map_rhs sub_var_as_var e in
+                        Expr (id, new_e)
+                    with Not_found ->
+                        s (* ignore other variables *)
+                end
+            | _ as s -> s
+        in
+        let replace_lhs = function
+            | Decl (id, v, e) -> Decl (id, (intro_var v), e)
+            | Expr (id, BinEx (ASGN, Var v, rhs)) ->
+                    Expr (id, BinEx (ASGN, Var (intro_var v), rhs))
+            | Expr (id, Phi (v, rhs)) ->
+                    Expr (id, Phi (intro_var v, rhs))
+            | _ as s -> s
+        in
+        let on_stmt lst s = (replace_lhs (replace_rhs s)) :: lst in
+        bb#set_seq (List.rev (List.fold_left on_stmt [] bb#get_seq));
+        (* put the variables in the successors *)
+        let sub_phi_arg y =
+            let succ_bb = cfg#find y in
+            let j = Accums.list_find_pos x succ_bb#pred_labs in
+            let on_phi = function
+            | Expr (id, Phi (v, rhs)) ->
+                let (before, e, after) = Accums.list_nth_slice rhs j in
+                let new_e = sub_var e in
+                Expr (id, Phi (v, before @ (new_e :: after)))
+            | _ as s -> s
+            in
+            succ_bb#set_seq (List.map on_phi succ_bb#get_seq)
+        in
+        List.iter sub_phi_arg bb#succ_labs;
+        (* visit children in the dominator tree *)
+        List.iter search (Hashtbl.find idom_tree x);
+        (* pop the stack for each assignment *)
+        let pop_v v = s_pop v#get_name in
+        let pop_stmt = function
+            | Decl (_, v, _) -> pop_v v
+            | Expr (_, Phi (v, _)) -> pop_v v
+            | Expr (_, BinEx (ASGN, Var v, _)) -> pop_v v
+            | _ -> ()
+        in
+        List.iter pop_stmt bb_old_seq
+    in
+    search 0;
+    cfg
 ;;
 
