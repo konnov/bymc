@@ -37,9 +37,6 @@ exception Skel_error of string;;
  *)
 let extract_skel proc_body =
     let decls, non_decls = List.partition is_mdecl proc_body in
-    List.iter
-        (fun s -> Printf.printf "  %s\n" (Spin_ir_imp.stmt_s s))
-        (mir_to_lir proc_body);
     let cfg = Cfg.mk_cfg (mir_to_lir proc_body) in
     let loop = match (comp_sccs cfg#entry) with
     | [] -> raise (Skel_error "Skeleton does not have the main loop")

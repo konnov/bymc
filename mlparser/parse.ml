@@ -6,6 +6,7 @@ open Spin;;
 open Spin_types;;
 open Spin_ir;;
 open Spin_ir_imp;;
+open Debug;;
 
 open Cfg;;
 
@@ -122,18 +123,11 @@ let parse_promela filename basename dirname =
         *)
 
         printf "#units: %d\n" (List.length units);
-        let p u = printf "%s\n" (prog_unit_s u) in
-        List.iter p units;
-
-        (*
-        List.iter
-            (function
-                | Proc p ->
-                    let bbs = mk_cfg p#get_stmts in
-                    Hashtbl.iter (fun _ bb -> printf "%s\n" bb#str) bbs
-                | _ -> () )
-            units;
-        *)
+        if may_log DEBUG
+        then begin
+            let p u = printf "%s\n" (prog_unit_s u) in
+            List.iter p units;
+        end
     end;
     units
 
