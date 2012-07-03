@@ -168,6 +168,42 @@ let map_rhs map_fun ex =
     sub ex
 ;;
 
+(*
+ It appears that the Cytron's algorithm can produce phi functions like
+ x_2 = phi(x_1, x_1, x_1).
+ Here we remove them.
+ *)
+let optimize_ssa cfg =
+    let sub_tbl = Hashtbl.create 10 in
+    let changed = ref true in
+    let collect_replace bb =
+        let on_stmt = function
+            | Expr (id, Phi (lhs, rhs)) as s ->
+                    let fst = List.hd rhs in
+                    if List.for_all (fun o -> o#get_name = fst#get_name) rhs
+                    then begin
+                        Hashtbl.add sub_tbl lhs#get_name fst;
+                        changed := true;
+                        Skip id 
+                    end else s
+            | Expr (id, e) ->
+                    let sub v =
+                        if Hashtbl.mem sub_tbl v#get_name
+                        then Var (Hashtbl.find sub_tbl v#get_name)
+                        else Var v in
+                    let ne = map_rhs sub e in
+                    Expr (id, ne)
+            | _ as s -> s
+        in
+        bb#set_seq (List.map on_stmt bb#get_seq);
+    in
+    while !changed do
+        changed := false;
+        List.iter collect_replace cfg#block_list;
+    done;
+    cfg
+;;
+
 (* Ron Cytron et al. Static Single Assignment Form and the Control
    Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991, pp. 451-490.
 
@@ -200,12 +236,12 @@ let mk_ssa shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
-    let sub_var v = new var (sprintf "%s_%d" (nm v) (s_top v)) in
+    let sub_var v = new var (sprintf "%s$%d" (nm v) (s_top v)) in
     let sub_var_as_var v = Var (sub_var v) in
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
-            let new_v = new var (sprintf "%s_%d" (nm v) i) in
+            let new_v = new var (sprintf "%s$%d" (nm v) i) in
             s_push v i;
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
@@ -265,6 +301,6 @@ let mk_ssa shared_vars local_vars cfg =
         List.iter pop_stmt bb_old_seq
     in
     search 0;
-    cfg
+    optimize_ssa cfg (* optimize it after all *)
 ;;
 
