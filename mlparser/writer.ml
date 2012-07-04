@@ -46,7 +46,7 @@ let rec write_stmt cout lvl lab_tab s =
         fprintf cout "%s%s%s %s%s%s;\n" tab
             (if flags_as_s <> "" then flags_as_s ^ " " else "")
             (var_type_promela v#get_type) v#get_name
-            (if v#get_isarray then sprintf "[%d]" v#get_num_elems else "")
+            (if v#is_array then sprintf "[%d]" v#get_num_elems else "")
             (if e != Nop then " = " ^ (expr_s e) else "")
     | MDeclProp (_, v, PropAll e) ->
             fprintf cout "#define %s ALL(%s)\n" v#get_name (expr_s e)

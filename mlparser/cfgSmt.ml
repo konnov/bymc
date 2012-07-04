@@ -47,8 +47,10 @@ let block_to_constraints (bb: 't basic_block) =
     let loc_mux =
         list_to_binex (AND) (List.map mk_mux (mk_product (range 0 n_succ) 2)) in
     (* convert statements *)
+    let at_impl_expr e =
+        SmtExpr (BinEx (OR, UnEx (NEG, at_var bb#label), e)) in
     let convert tl = function
-        | Expr (id, Phi (lhs, rhs)) ->
+        | Expr (_, Phi (lhs, rhs)) ->
             (* (at_i -> x = x_i) for x = phi(x_1, ..., x_k) *)
             let pred_labs = bb#pred_labs in
             let n_preds = List.length pred_labs in
@@ -61,17 +63,17 @@ let block_to_constraints (bb: 't basic_block) =
             SmtExpr (list_to_binex AND exprs) :: tl
 
         | Expr (_, BinEx (ASGN, lhs, rhs)) ->
-            SmtExpr (BinEx (EQ, lhs, rhs)) :: tl
+            (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
 
         | Expr (_, Nop) ->
             tl (* skip this *)
-        | Expr (id, e) ->
+        | Expr (_, e) ->
             (* at_i -> e *)
-            SmtExpr (BinEx (OR, UnEx (NEG, at_var bb#label), e)) :: tl
+            (at_impl_expr e) :: tl
 
-        | Decl (_, v, e) -> SmtDecl (v, e) :: tl
-        | Assume (_, e) -> (SmtExpr e) :: tl
-        | Assert (_, e) -> (SmtExpr e) :: tl
+        | Decl (_, v, e) -> (at_impl_expr (BinEx (EQ, Var v, e))) :: tl
+        | Assume (_, e) -> (at_impl_expr e) :: tl
+        | Assert (_, e) -> (at_impl_expr e) :: tl
         | Skip _ -> tl
         | _ -> tl (* ignore all control flow constructs *)
     in
@@ -87,12 +89,21 @@ let is_smt_decl = function
     | _ -> false
 ;;
 
+let smt_exprs_used_vars (exprs: smt_expr list) : var list =
+    let used_vars = function
+        | SmtDecl (v, e) -> v :: (expr_used_vars e)
+        | SmtExpr e -> expr_used_vars e
+    in
+    let all_vars = List.concat (List.map used_vars exprs) in
+    Accums.list_sort_uniq cmp_vars all_vars
+;;
+
 let cfg_to_constraints cfg =
     (* introduce variables at_i *)
     (* TODO: declare them somewhere! *)
     let cons = List.concat (List.map block_to_constraints cfg#block_list) in
-    let decls, non_decls = List.partition is_smt_decl cons in
-    let cons = decls @ non_decls in
+    let used_vars = smt_exprs_used_vars cons in
+    let cons = (List.map (fun v -> SmtDecl (v, Nop)) used_vars) @ cons in
     printf "SMT constraints: \n";
     List.iter (fun s -> printf "%s\n" (smt_expr_s s)) cons;
     cons

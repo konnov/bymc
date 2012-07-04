@@ -96,7 +96,8 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
 
 let map_rvalues map_fun ex =
     let rec sub = function
-    | Var v -> map_fun v
+    | Var v ->
+            if not v#is_array then map_fun v else Var v
     | UnEx (t, l) ->
             UnEx (t, sub l)
     | BinEx (ASGN, BinEx (ARRAY_DEREF, arr, idx), r) ->
@@ -178,12 +179,12 @@ let mk_ssa shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
-    let sub_var v = new var (sprintf "%s$%d" (nm v) (s_top v)) in
+    let sub_var v = new var (sprintf "%s_I%d" (nm v) (s_top v)) in
     let sub_var_as_var v = Var (sub_var v) in
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
-            let new_v = new var (sprintf "%s$%d" (nm v) i) in
+            let new_v = new var (sprintf "%s_I%d" (nm v) i) in
             s_push v i;
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
@@ -196,14 +197,8 @@ let mk_ssa shared_vars local_vars cfg =
         let replace_rhs = function
             | Decl (id, v, e) ->
                     Decl (id, v, map_rvalues sub_var_as_var e)
-            | Expr (id, e) as s ->
-                begin
-                    try
-                        let new_e = map_rvalues sub_var_as_var e in
-                        Expr (id, new_e)
-                    with Not_found ->
-                        s (* ignore other variables *)
-                end
+            | Expr (id, e) ->
+                    Expr (id, map_rvalues sub_var_as_var e)
             | _ as s -> s
         in
         let replace_lhs = function

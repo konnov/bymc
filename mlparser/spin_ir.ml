@@ -177,7 +177,7 @@ var name_i =
         method get_type = vtype
 
         method set_isarray b = isarray <- b
-        method get_isarray = isarray
+        method is_array = isarray
 
         method set_nbits n = nbits <- n
         method get_nbits = nbits
@@ -251,6 +251,9 @@ let is_var = function
     | _ -> false
 ;;
 
+let cmp_vars vx vy =
+    String.compare vx#get_name vy#get_name;;
+
 let expr_used_vars (expression: 't expr) : var list =
     let rec find_used e =
         match e with
@@ -259,19 +262,12 @@ let expr_used_vars (expression: 't expr) : var list =
         | BinEx (_, f, g) -> List.append (find_used f) (find_used g)
         | _ -> []
     in
-    let used = (List.fast_sort
-        (fun vx vy ->
-            String.compare vx#get_name vy#get_name) (find_used expression)) in
-    (* remove duplicates, one could have used BatList.sort_unique *)
-    match used with
-    | [] -> []
-    | [hd] -> [hd]
-    | hd :: tl ->
-            hd :: (List.fold_left2
-                (fun l cur prev -> if cur <> prev then cur :: l else l)
-                []
-                tl
-                (hd :: (List.rev (List.tl (List.rev tl)))))
+    Accums.list_sort_uniq cmp_vars (find_used expression)
+;;
+
+let expr_list_used_vars (exprs: 't expr list) : var list =
+    let all_vars = List.concat (List.map expr_used_vars exprs) in
+    Accums.list_sort_uniq cmp_vars all_vars
 ;;
 
 let rec expr_exists func e =
