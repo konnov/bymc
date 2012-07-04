@@ -68,7 +68,13 @@ let block_to_constraints (bb: 't basic_block) =
                     BinEx (ARR_UPDATE,
                            BinEx (ARR_ACCESS, Var old_arr, idx), rhs))) ->
             let mk_arr v i = BinEx (ARR_ACCESS, Var v, i) in
-            SmtExpr (BinEx (EQ, mk_arr new_arr idx, mk_arr old_arr idx)) :: tl
+            let keep_val l i =
+                let eq = BinEx (EQ,
+                    mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
+                at_impl_expr (BinEx (OR, BinEx (NE, idx, Const i), eq)) :: l in
+            (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, mk_arr old_arr idx)))
+            ::
+            List.fold_left keep_val tl (range 0 new_arr#get_num_elems)
 
         | Expr (_, BinEx (ASGN, lhs, rhs)) ->
             (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
