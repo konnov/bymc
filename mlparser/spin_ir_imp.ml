@@ -120,7 +120,8 @@ let token_s t =
       | LSHIFT -> "<<"
       | RSHIFT -> ">>"
       | VARREF -> "VARREF"
-      | ARRAY_DEREF -> "ARRAY_DEREF"
+      | ARR_ACCESS -> "ARR_ACCESS"
+      | ARR_UPDATE -> "ARR_UPDATE"
       | EOF -> "EOF"
       | ASSUME -> "ASSUME"
       | SYMBOLIC -> "SYMBOLIC"
@@ -134,7 +135,7 @@ let rec expr_s e =
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
-    | BinEx (ARRAY_DEREF, arr, idx) ->
+    | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (expr_s arr) (expr_s idx)
     | BinEx (AND, f, g) -> sprintf "(%s && %s)" (expr_s f) (expr_s g)
     | BinEx (OR, f, g) -> sprintf "(%s || %s)" (expr_s f) (expr_s g)

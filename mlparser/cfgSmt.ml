@@ -49,7 +49,8 @@ let block_to_constraints (bb: 't basic_block) =
     (* convert statements *)
     let at_impl_expr e =
         SmtExpr (BinEx (OR, UnEx (NEG, at_var bb#label), e)) in
-    let convert tl = function
+    let convert s tl =
+        match s with
         | Expr (_, Phi (lhs, rhs)) ->
             (* (at_i -> x = x_i) for x = phi(x_1, ..., x_k) *)
             let pred_labs = bb#pred_labs in
@@ -61,6 +62,13 @@ let block_to_constraints (bb: 't basic_block) =
             in
             let exprs = (List.map pred_selects_arg (range 0 n_preds)) in
             SmtExpr (list_to_binex AND exprs) :: tl
+
+        (* crazy array update form imposed by SSA *)
+        | Expr (_, BinEx (ASGN, Var new_arr,
+                    BinEx (ARR_UPDATE,
+                           BinEx (ARR_ACCESS, Var old_arr, idx), rhs))) ->
+            let mk_arr v i = BinEx (ARR_ACCESS, Var v, i) in
+            SmtExpr (BinEx (EQ, mk_arr new_arr idx, mk_arr old_arr idx)) :: tl
 
         | Expr (_, BinEx (ASGN, lhs, rhs)) ->
             (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
@@ -77,7 +85,7 @@ let block_to_constraints (bb: 't basic_block) =
         | Skip _ -> tl
         | _ -> tl (* ignore all control flow constructs *)
     in
-    let smt_es = (List.rev (List.fold_left convert [] bb#get_seq)) in
+    let smt_es = (List.fold_right convert bb#get_seq []) in
     let smt_es = if flow_succ <> Nop
         then SmtExpr flow_succ :: smt_es
         else smt_es in

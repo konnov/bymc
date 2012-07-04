@@ -156,8 +156,10 @@ let fatal msg payload =
 /* FORSYTE extensions { */
 %token  ASSUME SYMBOLIC ALL SOME
 /* FORSYTE extensions } */
-/* imaginary tokens */
-%token  UMIN NEG VARREF ARRAY_DEREF
+/* imaginary tokens not directly used in the grammar, but used in the
+   intermediate representations
+ */
+%token  UMIN NEG VARREF ARR_ACCESS ARR_UPDATE
 
 %right	ASGN
 %left	SND O_SND RCV R_RCV     /* SND doubles as boolean negation */

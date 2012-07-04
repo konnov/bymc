@@ -96,12 +96,11 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
 
 let map_rvalues map_fun ex =
     let rec sub = function
-    | Var v ->
-            if not v#is_array then map_fun v else Var v
+    | Var v -> map_fun v
     | UnEx (t, l) ->
             UnEx (t, sub l)
-    | BinEx (ASGN, BinEx (ARRAY_DEREF, arr, idx), r) ->
-            BinEx (ASGN, BinEx (ARRAY_DEREF, arr, sub idx), sub r)
+    | BinEx (ASGN, BinEx (ARR_ACCESS, arr, idx), r) ->
+            BinEx (ASGN, BinEx (ARR_ACCESS, arr, sub idx), sub r)
     | BinEx (ASGN, l, r) ->
             BinEx (ASGN, l, sub r)
     | BinEx (t, l, r) ->
@@ -179,12 +178,12 @@ let mk_ssa shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
-    let sub_var v = new var (sprintf "%s_I%d" (nm v) (s_top v)) in
+    let sub_var v = v#copy (sprintf "%s_Y%d" (nm v) (s_top v)) in
     let sub_var_as_var v = Var (sub_var v) in
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
-            let new_v = new var (sprintf "%s_I%d" (nm v) i) in
+            let new_v = v#copy (sprintf "%s_Y%d" (nm v) i) in
             s_push v i;
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
@@ -205,6 +204,12 @@ let mk_ssa shared_vars local_vars cfg =
             | Decl (id, v, e) -> Decl (id, (intro_var v), e)
             | Expr (id, BinEx (ASGN, Var v, rhs)) ->
                     Expr (id, BinEx (ASGN, Var (intro_var v), rhs))
+            | Expr (id, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, idx), rhs)) ->
+                    (* A_i <- Update(A_j, k, e) *)
+                    let old_arr = Var (sub_var v) in
+                    let upd = BinEx (ARR_UPDATE,
+                        BinEx (ARR_ACCESS, old_arr, idx), rhs) in
+                    Expr (id, BinEx (ASGN, Var (intro_var v), upd))
             | Expr (id, Phi (v, rhs)) ->
                     Expr (id, Phi (intro_var v, rhs))
             | _ as s -> s
@@ -233,6 +238,8 @@ let mk_ssa shared_vars local_vars cfg =
             | Decl (_, v, _) -> pop_v v
             | Expr (_, Phi (v, _)) -> pop_v v
             | Expr (_, BinEx (ASGN, Var v, _)) -> pop_v v
+            | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
+                    pop_v v
             | _ -> ()
         in
         List.iter pop_stmt bb_old_seq

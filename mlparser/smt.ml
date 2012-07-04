@@ -84,12 +84,15 @@ type smt_expr =
 ;;
 
 let rec var_to_smt var =
+    let wrap_arr type_s =
+        if var#is_array then sprintf "(-> int %s)" type_s else type_s
+    in
     let ts = match var#get_type with
-    | TBIT -> "bool"
-    | TBYTE -> "int"
-    | TSHORT -> "int"
-    | TINT -> "int"
-    | TUNSIGNED -> "nat"
+    | TBIT -> wrap_arr "bool"
+    | TBYTE -> wrap_arr "int"
+    | TSHORT -> wrap_arr "int"
+    | TINT -> wrap_arr "int"
+    | TUNSIGNED -> wrap_arr "nat"
     | TCHAN -> raise (Failure "Type chan is not supported")
     | TMTYPE -> raise (Failure "Type mtype is not supported")
     in
@@ -123,10 +126,10 @@ let rec expr_to_smt e =
         | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | NE    -> sprintf "(!= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | ARRAY_DEREF -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
+        | ARR_ACCESS -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
         | _ -> raise (Failure
                 (sprintf "No idea how to translate %s to SMT" (token_s tok)))
         end

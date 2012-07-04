@@ -122,7 +122,7 @@ let rec remove_bad_statements stmts =
 let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
     let mk_cons tok sep indices =
         let add_cons e idx =
-            let ke = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx) in
+            let ke = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const idx) in
             if e = Nop
             then BinEx (tok, ke, Const 0)
             else BinEx (sep, e, BinEx (tok, ke, Const 0)) in
@@ -213,7 +213,7 @@ class virtual ctr_funcs ctr_ctx =
             token -> token expr -> token mir_stmt list
 
         method deref_ctr e =
-            BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, e)
+            BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, e)
     end;;
 
 class abs_ctr_funcs dom t_ctx ctr_ctx solver =
@@ -243,7 +243,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     ) local_vals;
                 let idx = ctr_ctx#pack_vals_to_index valuation in
                 let lhs =
-                    BinEx (ARRAY_DEREF,
+                    BinEx (ARR_ACCESS,
                         Var ctr_ctx#get_ctr, Const idx) in
                 MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
             in
@@ -258,7 +258,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
         method mk_counter_update tok idx_ex =
             let ktr_i = self#deref_ctr idx_ex in
             let is_deref = function
-                | BinEx (ARRAY_DEREF, _, _) -> true
+                | BinEx (ARR_ACCESS, _, _) -> true
                 | _ -> false
             in
             let expr_abs_vals =
@@ -284,7 +284,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             in
             let indices = ctr_ctx#all_indices_for has_val in
             let sum_fun e i =
-                let ctr_ex = BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const i)
+                let ctr_ex = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i)
                 in
                 if e = Nop then ctr_ex else BinEx (PLUS, e, ctr_ex)
             in
@@ -309,7 +309,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         let make_opt idx =
             let guard =
                 (BinEx (NE,
-                    BinEx (ARRAY_DEREF, Var ctr_ctx#get_ctr, Const idx),
+                    BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const idx),
                     Const 0))
             in
             MExpr (-1, guard) :: (* and then assignments *)
@@ -377,8 +377,8 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         | Proc p ->
             let new_proc = (abstract_proc p) in
             let lirs = (mir_to_lir new_proc#get_stmts) in
-            let cfg = mk_ssa t_ctx#get_shared t_ctx#get_non_shared (mk_cfg lirs)
-            in
+            let cfg = mk_ssa (ctr_ctx#get_ctr :: t_ctx#get_shared)
+                t_ctx#get_non_shared (mk_cfg lirs) in
             if may_log DEBUG then print_detailed_cfg cfg;
             let cons = cfg_to_constraints cfg in
             Proc new_proc

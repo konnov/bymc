@@ -160,7 +160,7 @@ var name_i =
         inherit symb name_i
 
         val mutable vtype = TINT
-        val mutable isarray: bool = false (* set if decl specifies array bound *)
+        val mutable m_isarray: bool = false (* set if decl specifies array bound *)
         val mutable nbits: int = 0        (* optional width specifier *)
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
@@ -176,8 +176,8 @@ var name_i =
         method set_type t = vtype <- t
         method get_type = vtype
 
-        method set_isarray b = isarray <- b
-        method is_array = isarray
+        method set_isarray b = m_isarray <- b
+        method is_array = m_isarray
 
         method set_nbits n = nbits <- n
         method get_nbits = nbits
@@ -193,6 +193,17 @@ var name_i =
 
         method proc_name = m_proc_name
         method set_proc_name r = m_proc_name <- r
+
+        method copy new_name =
+            let new_var = new var new_name in
+            new_var#set_type vtype;
+            new_var#set_isarray m_isarray;
+            new_var#set_nbits nbits;
+            new_var#set_num_elems nel;
+            new_var#set_ini ini;
+            if self#is_symbolic then new_var#set_symbolic;
+            new_var#set_proc_name m_proc_name;
+            new_var
     end
 and
 (* a label mapped to an integer *)
