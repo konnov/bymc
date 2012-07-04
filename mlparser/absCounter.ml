@@ -9,6 +9,7 @@ open Cfg;;
 open Analysis;;
 open Ssa;;
 open Skel_struc;;
+open CfgSmt;;
 open Debug;;
 
 open AbsInterval;;
@@ -364,7 +365,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             @ [MLabel (-1, main_lab)]
             @ counter_guard
             @ [MIf (-1,
-                [MOptGuarded ([(*skel.guard; *) new_comp_upd]);
+                [MOptGuarded ([new_comp_upd]);
                  MOptGuarded [MExpr (-1, Nop)]]);
                MGoto (-1, main_lab)]
         in
@@ -379,6 +380,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             let cfg = mk_ssa t_ctx#get_shared t_ctx#get_non_shared (mk_cfg lirs)
             in
             if may_log DEBUG then print_detailed_cfg cfg;
+            let cons = cfg_to_constraints cfg in
             Proc new_proc
         | Stmt (MDeclProp (_, _, _) as d) ->
             Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
