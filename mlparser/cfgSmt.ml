@@ -58,37 +58,42 @@ let block_to_constraints (bb: 't basic_block) =
                     BinEx (EQ, Var lhs, Var (List.nth rhs i)))
             in
             let exprs = (List.map pred_selects_arg (range 0 n_preds)) in
-            Expr (id, list_to_binex AND exprs) :: tl
+            SmtExpr (list_to_binex AND exprs) :: tl
 
-        | Expr (_, Nop) -> tl (* skip this *)
+        | Expr (_, BinEx (ASGN, lhs, rhs)) ->
+            SmtExpr (BinEx (EQ, lhs, rhs)) :: tl
+
+        | Expr (_, Nop) ->
+            tl (* skip this *)
         | Expr (id, e) ->
             (* at_i -> e *)
-            Expr (id, BinEx (OR, UnEx (NEG, at_var bb#label), e)) :: tl
+            SmtExpr (BinEx (OR, UnEx (NEG, at_var bb#label), e)) :: tl
 
-        | Decl (_, _, _) as s -> s :: tl
-        | Assume (_, _) as s -> s :: tl
-        | Assert (_, _) as s -> s :: tl
-        | Print (_, _, _) as s -> s :: tl
+        | Decl (_, v, e) -> SmtDecl (v, e) :: tl
+        | Assume (_, e) -> (SmtExpr e) :: tl
+        | Assert (_, e) -> (SmtExpr e) :: tl
+        | Skip _ -> tl
         | _ -> tl (* ignore all control flow constructs *)
     in
-    Expr (-1, flow_succ)
-    :: Expr (-1, loc_mux)
-    :: (List.rev (List.fold_left convert [] bb#get_seq))
+    let smt_es = (List.rev (List.fold_left convert [] bb#get_seq)) in
+    let smt_es = if flow_succ <> Nop
+        then SmtExpr flow_succ :: smt_es
+        else smt_es in
+    if loc_mux <> Nop then SmtExpr loc_mux :: smt_es else smt_es
 ;;
 
-let not_skip = function
-    | Skip _ -> false
-    | Expr (_, Nop) -> false
-    | _ -> true
+let is_smt_decl = function
+    | SmtDecl _ -> true
+    | _ -> false
 ;;
 
 let cfg_to_constraints cfg =
     (* introduce variables at_i *)
     (* TODO: declare them somewhere! *)
     let cons = List.concat (List.map block_to_constraints cfg#block_list) in
-    let decls, non_decls = List.partition is_decl (List.filter not_skip cons) in
+    let decls, non_decls = List.partition is_smt_decl cons in
     let cons = decls @ non_decls in
-    printf "cfg_to_constraints: \n";
-    List.iter (fun s -> printf "%s\n" (stmt_s s)) cons;
+    printf "SMT constraints: \n";
+    List.iter (fun s -> printf "%s\n" (smt_expr_s s)) cons;
     cons
 ;;

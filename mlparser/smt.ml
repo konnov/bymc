@@ -77,6 +77,12 @@ class yices_smt =
     end
 ;;
 
+(* a wrapper around expr to keep additional Yices commands *)
+type smt_expr =
+    SmtExpr of Spin.token expr
+  | SmtDecl of var * Spin.token expr
+;;
+
 let rec var_to_smt var =
     let ts = match var#get_type with
     | TBIT -> "bool"
@@ -120,7 +126,18 @@ let rec expr_to_smt e =
         | NE    -> sprintf "(!= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | ARRAY_DEREF -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
         | _ -> raise (Failure
                 (sprintf "No idea how to translate %s to SMT" (token_s tok)))
         end
+;;
+
+let smt_expr_s = function
+    | SmtDecl (v, e) ->
+            if e <> Nop
+            then sprintf "%s\n(assert (= %s %s))"
+                (var_to_smt v) v#get_name (expr_to_smt e)
+            else var_to_smt v
+    | SmtExpr e ->
+            sprintf "(assert %s)" (expr_to_smt e)
 ;;

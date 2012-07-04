@@ -9,69 +9,6 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Debug;;
 
-(* variable versions assigned to a location *)
-type var_version = { out_ver: int; in_vers: int list }
-
-let lub_var_nos (x: var_version) (y: var_version) : var_version =
-    let y_minus_x = List.filter (fun i -> not (List.mem i x.in_vers)) y.in_vers
-    in
-    { out_ver = (max x.out_ver y.out_ver); in_vers = (x.in_vers @ y_minus_x) }
-;;
-
-let var_version_s v =
-    (sprintf "%s -> %d"
-        (String.concat ", " (List.map string_of_int v.in_vers)) v.out_ver)
-;;
-
-let print_var_version head vals =
-    if may_log DEBUG
-    then begin
-        printf " %s { " head;
-        Hashtbl.iter
-            (fun var aval -> printf "%s: [%s]; " var#get_name (var_version_s aval))
-            vals;
-        printf "}\n";
-    end
-;;
-
-let transfer_var_version tbl stmt input =
-    log DEBUG (sprintf "  %%%s;" (stmt_s stmt));
-    let output = Hashtbl.create (Hashtbl.length input) in
-    let copy_elem var ver =
-        if ver.out_ver = -1
-        then Hashtbl.add output var ver
-        else Hashtbl.add output var { out_ver = -1; in_vers = [ver.out_ver] }
-    in
-    Hashtbl.iter copy_elem input;
-    begin
-        match stmt with
-        | Decl (id, v, i) ->
-                Hashtbl.add tbl id 0;
-                Hashtbl.replace output v { out_ver = 0; in_vers = [] }
-        | Expr (id, BinEx (ASGN, Var v, _)) ->
-                begin
-                try
-                    let ver = Hashtbl.find input v in
-                    let o_v =
-                        try Hashtbl.find tbl id
-                        with Not_found ->
-                            let ver = Hashtbl.length tbl in
-                            Hashtbl.add tbl id ver;
-                            ver
-                    in
-                    let i_v = if ver.out_ver <> -1
-                    then [ver.out_ver]
-                    else ver.in_vers in
-                    Hashtbl.replace output v { out_ver = o_v; in_vers = i_v }
-                with Not_found -> ()
-                end
-        | _ -> ()
-    end;
-    print_var_version "#s input = " input;
-    print_var_version "#s output = " output;
-    output
-;;
-
 let comp_dom_frontiers cfg =
     let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
     let idom_tbl = comp_idoms cfg in
@@ -157,12 +94,17 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
     cfg
 ;;
 
-let map_rhs map_fun ex =
+let map_rvalues map_fun ex =
     let rec sub = function
     | Var v -> map_fun v
-    | UnEx (t, l) -> UnEx (t, sub l)
-    | BinEx (ASGN, l, r) -> BinEx (ASGN, l, sub r)
-    | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+    | UnEx (t, l) ->
+            UnEx (t, sub l)
+    | BinEx (ASGN, BinEx (ARRAY_DEREF, arr, idx), r) ->
+            BinEx (ASGN, BinEx (ARRAY_DEREF, arr, sub idx), sub r)
+    | BinEx (ASGN, l, r) ->
+            BinEx (ASGN, l, sub r)
+    | BinEx (t, l, r) ->
+            BinEx (t, sub l, sub r)
     | _ as e -> e
     in
     sub ex
@@ -191,7 +133,7 @@ let optimize_ssa cfg =
                         if Hashtbl.mem sub_tbl v#get_name
                         then Var (Hashtbl.find sub_tbl v#get_name)
                         else Var v in
-                    let ne = map_rhs sub e in
+                    let ne = map_rvalues sub e in
                     Expr (id, ne)
             | _ as s -> s
         in
@@ -253,11 +195,11 @@ let mk_ssa shared_vars local_vars cfg =
         let bb_old_seq = bb#get_seq in
         let replace_rhs = function
             | Decl (id, v, e) ->
-                    Decl (id, v, map_rhs sub_var_as_var e)
+                    Decl (id, v, map_rvalues sub_var_as_var e)
             | Expr (id, e) as s ->
                 begin
                     try
-                        let new_e = map_rhs sub_var_as_var e in
+                        let new_e = map_rvalues sub_var_as_var e in
                         Expr (id, new_e)
                     with Not_found ->
                         s (* ignore other variables *)
