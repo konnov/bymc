@@ -205,7 +205,10 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
-    let sub_var v = v#copy (sprintf "%s_Y%d" (nm v) (s_top v)) in
+    let sub_var v =
+        let i = s_top v in
+        let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
+        v#copy (sprintf "%s_%s" (nm v) suf) in
     let sub_var_as_var v = Var (sub_var v) in
     let rec search x =
         let bb = cfg#find x in

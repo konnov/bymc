@@ -527,3 +527,17 @@ let collect_final_labs (stmts: 't mir_stmt list)
     let ls, os = collect (List.rev stmts) in
     (List.rev os, List.rev ls)
 ;;
+
+(* convert a list of expressions [e1, ..., ek] to a binary tree
+   (tok, e1, (tok, e2, (... (tok, e(k-1), ek) ...))).
+   Nop expressions are ignored.
+ *)
+let list_to_binex tok lst =
+    let join_e ae e =
+        if e <> Nop
+        then if ae <> Nop then BinEx (tok, ae, e) else e
+        else ae
+    in
+    List.fold_left join_e Nop lst
+;;
+

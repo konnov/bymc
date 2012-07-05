@@ -154,6 +154,14 @@ class abs_domain conds_i =
             with Found i ->
                 (Const i: Spin.token expr)
 
+        method concretize exp abs_val =
+            let (_, l, r) =
+                List.find (fun (a, _, _) -> a = abs_val) cond_intervals in
+            let left = BinEx (GE, exp, l) in
+            if r <> Nop
+            then BinEx (AND, left, BinEx (LT, exp, r))
+            else left
+
         method find_abs_vals
                 (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)
                 : (Spin_ir.var * int) list list =

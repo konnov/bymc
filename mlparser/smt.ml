@@ -77,13 +77,6 @@ class yices_smt =
     end
 ;;
 
-(* a wrapper around expr to keep additional Yices commands *)
-(* TODO: remove it, Expr is what we need *)
-type smt_expr =
-    SmtExpr of Spin.token expr
-  | SmtDecl of var * Spin.token expr (* XXX: useless *)
-;;
-
 let rec var_to_smt var =
     let wrap_arr type_s =
         if var#is_array then sprintf "(-> int %s)" type_s else type_s
@@ -136,12 +129,3 @@ let rec expr_to_smt e =
         end
 ;;
 
-let smt_expr_s = function
-    | SmtDecl (v, e) ->
-            if e <> Nop
-            then sprintf "%s\n(assert (= %s %s))"
-                (var_to_smt v) v#get_name (expr_to_smt e)
-            else var_to_smt v
-    | SmtExpr e ->
-            sprintf "(assert %s)" (expr_to_smt e)
-;;

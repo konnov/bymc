@@ -11,19 +11,6 @@ open Ssa;;
 open Smt;;
 open Debug;;
 
-(* convert a list of expressions [e1, ..., ek] to a binary tree
-   (tok, e1, (tok, e2, (... (tok, e(k-1), ek) ...))).
-   Nop expressions are ignored.
- *)
-let list_to_binex tok lst =
-    let join_e ae e =
-        if e <> Nop
-        then if ae <> Nop then BinEx (tok, ae, e) else e
-        else ae
-    in
-    List.fold_left join_e Nop lst
-;;
-
 (*
  XXX: this translation does not work with a control flow graph like this:
      A -> (B, C); B -> D; C -> D; B -> C.
@@ -53,7 +40,7 @@ let block_to_constraints (bb: 't basic_block) =
         list_to_binex (AND) (List.map mk_mux (mk_product (range 0 n_succ) 2)) in
     (* convert statements *)
     let at_impl_expr e =
-        SmtExpr (BinEx (OR, UnEx (NEG, at_var bb#label), e)) in
+        BinEx (OR, UnEx (NEG, at_var bb#label), e) in
     let convert s tl =
         match s with
         | Expr (_, Phi (lhs, rhs)) ->
@@ -66,7 +53,7 @@ let block_to_constraints (bb: 't basic_block) =
                     BinEx (EQ, Var lhs, Var (List.nth rhs i)))
             in
             let exprs = (List.map pred_selects_arg (range 0 n_preds)) in
-            SmtExpr (list_to_binex AND exprs) :: tl
+            (list_to_binex AND exprs) :: tl
 
         (* crazy array update form imposed by SSA *)
         | Expr (_, BinEx (ASGN, Var new_arr,
@@ -98,33 +85,17 @@ let block_to_constraints (bb: 't basic_block) =
     in
     let smt_es = (List.fold_right convert bb#get_seq []) in
     let smt_es = if flow_succ <> Nop
-        then SmtExpr flow_succ :: smt_es
+        then flow_succ :: smt_es
         else smt_es in
-    if loc_mux <> Nop then SmtExpr loc_mux :: smt_es else smt_es
-;;
-
-let is_smt_decl = function
-    | SmtDecl _ -> true
-    | _ -> false
-;;
-
-let smt_exprs_used_vars (exprs: smt_expr list) : var list =
-    let used_vars = function
-        | SmtDecl (v, e) -> v :: (expr_used_vars e)
-        | SmtExpr e -> expr_used_vars e
-    in
-    let all_vars = List.concat (List.map used_vars exprs) in
-    Accums.list_sort_uniq cmp_vars all_vars
+    if loc_mux <> Nop then loc_mux :: smt_es else smt_es
 ;;
 
 let cfg_to_constraints cfg =
     let cons = List.concat (List.map block_to_constraints cfg#block_list) in
-    let used_vars = smt_exprs_used_vars cons in
-    let cons = (List.map (fun v -> SmtDecl (v, Nop)) used_vars) @ cons in
     if may_log DEBUG
     then begin
         printf "SMT constraints: \n";
-        List.iter (fun s -> printf "%s\n" (smt_expr_s s)) cons;
+        List.iter (fun s -> printf "%s\n" (expr_to_smt s)) cons;
     end;
     cons
 ;;
