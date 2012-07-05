@@ -165,6 +165,7 @@ let mk_cfg stmts =
             (Label (-1, 0) :: cleaned) in
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
+    let exit_label = 999999 in
     let mk_bb seq next_seq =
         let has_terminator =
             match (List.hd (List.rev seq)) with
@@ -177,7 +178,8 @@ let mk_cfg stmts =
         | _ -> raise (CfgError "Broken head: expected (Label i) :: tl")
         in
         let entry_lab = (get_entry_lab seq) in
-        let body = if not has_terminator
+        let body =
+            if not has_terminator && (get_entry_lab next_seq) <> exit_label
         then seq @ [Goto (-1, (get_entry_lab next_seq))]
         else seq in
         let bb = new basic_block in
@@ -185,14 +187,8 @@ let mk_cfg stmts =
         Hashtbl.add blocks entry_lab bb;
         bb
     in
-    (*
-    let entry = mk_bb (List.hd seq_list) in
-    *)
     let bbs = List.map2 mk_bb
-        seq_list ((List.tl seq_list) @ [[Label (-1, 0)]]) in
-    (*
-    List.iter (fun seq -> let _ = mk_bb seq in ()) (List.tl seq_list);
-     *)
+        seq_list ((List.tl seq_list) @ [[Label (-1, exit_label)]]) in
     let entry = List.hd bbs in
     (* set successors *)
     Hashtbl.iter
@@ -371,16 +367,17 @@ let comp_idom_tree idoms =
     children
 ;;
 
-let print_detailed_cfg cfg =
-    printf "\nDetailed CFG\n";
+let print_detailed_cfg title cfg =
+    printf "\n%s\n" title;
     let idom = comp_idoms cfg in
     let idom_tree = comp_idom_tree idom in
     let print_blk i =
         let bb = cfg#find i in
         let bb_s blk = string_of_int blk#label in
         let succ_s = String.concat ", " (List.map bb_s bb#get_succ) in
-        printf "\nBasic block %d [idom = %d, succ = %s]:\n"
-            i (Hashtbl.find idom i) succ_s;
+        let pred_s = String.concat ", " (List.map bb_s bb#get_pred) in
+        printf "\nBasic block %d [idom = %d, succ = %s, pred = %s]:\n"
+            i (Hashtbl.find idom i) succ_s pred_s;
         List.iter (fun s -> printf "  %s\n" (stmt_s s)) bb#get_seq
     in
     let rec bfs_list node =

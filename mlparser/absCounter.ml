@@ -352,6 +352,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         @ [print_stmt]
         @ new_update
     in
+    let transducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
         let body = remove_bad_statements p#get_stmts in
         let skel = extract_skel body in
@@ -360,28 +361,35 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         in
         let new_update = replace_update skel.update body in
         let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
-        let new_body = 
-            skel.decl @ new_init @ skel.loop_prefix
-            @ [MLabel (-1, main_lab)]
-            @ counter_guard
+        let new_loop_body =
+            counter_guard
             @ [MIf (-1,
                 [MOptGuarded ([new_comp_upd]);
                  MOptGuarded [MExpr (-1, Nop)]]);
-               MGoto (-1, main_lab)]
+               MGoto (-1, main_lab)] in
+        let new_body = 
+            skel.decl @ new_init @ skel.loop_prefix
+            @ [MLabel (-1, main_lab)]
+            @ new_loop_body
         in
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
+        (* SMT transducer: exactly at this moment we have all information to
+           generate a transducer of a process
+         *)
+        let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
+        let cfg = mk_ssa true (ctr_ctx#get_ctr :: t_ctx#get_shared)
+            t_ctx#get_non_shared (mk_cfg lirs) in
+        if may_log DEBUG
+        then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
+        let transd = cfg_to_constraints cfg in
+        Hashtbl.add transducers p#get_name transd;
+        (* end of transducer *)
         new_proc
     in
     let abs_unit = function
         | Proc p ->
-            let new_proc = (abstract_proc p) in
-            let lirs = (mir_to_lir new_proc#get_stmts) in
-            let cfg = mk_ssa (ctr_ctx#get_ctr :: t_ctx#get_shared)
-                t_ctx#get_non_shared (mk_cfg lirs) in
-            if may_log DEBUG then print_detailed_cfg cfg;
-            let cons = cfg_to_constraints cfg in
-            Proc new_proc
+            Proc (abstract_proc p)
         | Stmt (MDeclProp (_, _, _) as d) ->
             Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
         | _ as u -> u
@@ -392,7 +400,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         | Stmt (MAssume (_, _)) -> false
         | _ -> true
     in
-    (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop)))
-        :: (List.filter keep_unit new_units)
+    let out_units =
+        (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop)))
+        :: (List.filter keep_unit new_units) in
+    (out_units, transducers)
 ;;
 

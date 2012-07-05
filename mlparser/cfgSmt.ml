@@ -9,6 +9,7 @@ open Spin_ir_imp;;
 open Cfg;;
 open Ssa;;
 open Smt;;
+open Debug;;
 
 (* convert a list of expressions [e1, ..., ek] to a binary tree
    (tok, e1, (tok, e2, (... (tok, e(k-1), ek) ...))).
@@ -32,10 +33,14 @@ let block_to_constraints (bb: 't basic_block) =
     let at_var i = Var (new var (sprintf "at_%d" i)) in
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
     let succ_labs = bb#succ_labs in
-    let flow_succ = List.fold_left
-        (fun e successor -> BinEx (OR, e, (at_var successor#label)))
-        (UnEx (NEG, (at_var bb#label))) bb#get_succ in
     let n_succ = List.length bb#get_succ in
+    let flow_succ =
+        if n_succ = 0
+        then List.fold_left
+            (fun e successor -> BinEx (OR, e, (at_var successor#label)))
+            (UnEx (NEG, (at_var bb#label))) bb#get_succ
+        else Nop
+    in
     (* at most one successor takes the control *)
     let mk_mux (pair: int list) =
         let i, j = (List.hd pair), (List.nth pair 1) in
@@ -113,12 +118,13 @@ let smt_exprs_used_vars (exprs: smt_expr list) : var list =
 ;;
 
 let cfg_to_constraints cfg =
-    (* introduce variables at_i *)
-    (* TODO: declare them somewhere! *)
     let cons = List.concat (List.map block_to_constraints cfg#block_list) in
     let used_vars = smt_exprs_used_vars cons in
     let cons = (List.map (fun v -> SmtDecl (v, Nop)) used_vars) @ cons in
-    printf "SMT constraints: \n";
-    List.iter (fun s -> printf "%s\n" (smt_expr_s s)) cons;
+    if may_log DEBUG
+    then begin
+        printf "SMT constraints: \n";
+        List.iter (fun s -> printf "%s\n" (smt_expr_s s)) cons;
+    end;
     cons
 ;;

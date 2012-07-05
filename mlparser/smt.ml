@@ -78,9 +78,10 @@ class yices_smt =
 ;;
 
 (* a wrapper around expr to keep additional Yices commands *)
+(* TODO: remove it, Expr is what we need *)
 type smt_expr =
     SmtExpr of Spin.token expr
-  | SmtDecl of var * Spin.token expr
+  | SmtDecl of var * Spin.token expr (* XXX: useless *)
 ;;
 
 let rec var_to_smt var =

@@ -54,7 +54,10 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
 
     let for_var v =
         let does_stmt_uses_var = function
-            | Expr (_, BinEx (ASGN, Var v, _)) -> true
+            | Expr (_, BinEx (ASGN, Var ov, _)) ->
+                    ov#get_name = v#get_name
+            | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var ov, _), _)) ->
+                    ov#get_name = v#get_name
             | _ -> false in
         let does_blk_uses_var bb =
             List.exists does_stmt_uses_var bb#get_seq in
@@ -151,35 +154,21 @@ let optimize_ssa cfg =
 
    Figure 12.
  *)
-let mk_ssa shared_vars local_vars cfg =
+let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     let vars = shared_vars @ local_vars in
+    if may_log DEBUG then print_detailed_cfg "CFG before SSA" cfg;
     let cfg = place_phi vars cfg in
+    if may_log DEBUG then print_detailed_cfg "CFG after place_phi" cfg;
     let idom_tbl = comp_idoms cfg in
     let idom_tree = comp_idom_tree idom_tbl in
 
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
     let nm v = v#get_name in
-    let s_top v =
-        let stack = Hashtbl.find stacks (nm v) in
-        if stack <> []
-        then List.hd stack
-        else raise (Failure ("Stack is empty for " ^ v#get_name))
-    in
     let s_push v i =
         Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
     let s_pop var_nm = 
         Hashtbl.replace stacks var_nm (List.tl (Hashtbl.find stacks var_nm)) in
-    (* initialize local variables *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 0) local_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) []) local_vars;
-    (* global vars are different,
-       they have a first version x_0 at the initial state *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
-
-    let sub_var v = v#copy (sprintf "%s_Y%d" (nm v) (s_top v)) in
-    let sub_var_as_var v = Var (sub_var v) in
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
@@ -190,6 +179,34 @@ let mk_ssa shared_vars local_vars cfg =
         with Not_found ->
             raise (Failure ("Var not found: " ^ v#get_name))
     in
+    let s_top v =
+        let stack = Hashtbl.find stacks (nm v) in
+        if stack <> []
+        then List.hd stack
+        else if tolerate_undeclared_vars
+        then begin
+            let i = Hashtbl.find counters (nm v) in
+            Hashtbl.replace counters (nm v) (i + 1);
+            i
+            (* We have reached a location where a value from an
+               undeclared variable can be used. *)
+            (* Push a special variable on top of the empty. *)
+            end else
+                let m = (sprintf "Use of %s before declaration?" v#get_name) in
+                raise (Failure m)
+    in
+    (* initialize local variables *)
+    List.iter (fun v -> Hashtbl.add counters (nm v) 0) local_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) []) local_vars;
+    (* global vars are different,
+       each global variable x has a version x_0 referring
+       to the variable on the input
+     *)
+    List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
+
+    let sub_var v = v#copy (sprintf "%s_Y%d" (nm v) (s_top v)) in
+    let sub_var_as_var v = Var (sub_var v) in
     let rec search x =
         let bb = cfg#find x in
         let bb_old_seq = bb#get_seq in
@@ -223,7 +240,13 @@ let mk_ssa shared_vars local_vars cfg =
             let on_phi = function
             | Expr (id, Phi (v, rhs)) ->
                 let (before, e, after) = Accums.list_nth_slice rhs j in
-                let new_e = sub_var e in
+                let new_e =
+                    try sub_var e
+                    with Failure s ->
+                        let m =
+                            (sprintf "sub_phi_arg(x = %d, y = %d): %s" x y s) in
+                        raise (Failure m)
+                in
                 Expr (id, Phi (v, before @ (new_e :: after)))
             | _ as s -> s
             in
@@ -232,6 +255,16 @@ let mk_ssa shared_vars local_vars cfg =
         List.iter sub_phi_arg bb#succ_labs;
         (* visit children in the dominator tree *)
         List.iter search (Hashtbl.find idom_tree x);
+        (* our extension: if we are at the exit block,
+           then add x_OUT for each shared variable x *)
+        if bb#get_succ = []
+        then begin
+            let bind_out v =
+                let out_v = v#copy (v#get_name ^ "_OUT") in
+                Expr (-1, BinEx (ASGN, Var out_v, sub_var_as_var v)) in
+            let out_assignments = List.map bind_out shared_vars in
+            bb#set_seq (bb#get_seq @ out_assignments);
+        end;
         (* pop the stack for each assignment *)
         let pop_v v = s_pop v#get_name in
         let pop_stmt = function

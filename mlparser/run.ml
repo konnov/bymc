@@ -13,7 +13,7 @@ let write_to_file name units =
 
 let _ =
     try
-        current_verbosity_level := INFO (*INFO*);
+        current_verbosity_level := DEBUG (*INFO*);
 
         let filename, basename, dirname =
             if Array.length Sys.argv > 1
@@ -25,8 +25,7 @@ let _ =
         let units = parse_promela filename basename dirname in
         write_to_file "original.prm" units;
         log DEBUG (sprintf "#units: %d" (List.length units));
-        let new_units = do_abstraction units in
-        write_to_file "abs-counter.prm" new_units
+        let _ = do_abstraction units in ()
     with End_of_file ->
         log ERROR "Premature end of file";
         exit 1
