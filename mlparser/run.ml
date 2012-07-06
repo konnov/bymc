@@ -52,7 +52,7 @@ let _ =
         log INFO (sprintf "> Parsing %s..." basename);
         let units = parse_promela filename basename dirname in
         write_to_file "original.prm" units;
-        log INFO "[DONE]";
+        log INFO "  [DONE]";
         log DEBUG (sprintf "#units: %d" (List.length units));
         if opts.abstract
         then let _ = do_abstraction units in ()

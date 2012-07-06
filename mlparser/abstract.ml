@@ -47,7 +47,7 @@ let do_refinement trail_filename units =
     let dom = mk_domain solver ctx units in
     log INFO "> Constructing interval abstraction...";
     let intabs_units = do_interval_abstraction ctx dom solver units in
-    log INFO "[DONE]";
+    log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
@@ -55,20 +55,21 @@ let do_refinement trail_filename units =
         do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
     in
     write_to_file "abs-vass.prm" vass_units;
-    log INFO " [DONE]";
+    log INFO "  [DONE]";
     log INFO "> Reading trail...";
     let trail_asserts = parse_spin_trail trail_filename dom ctx ctr_ctx in
-    log INFO " [DONE]";
+    log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
+    log INFO "  [DONE]";
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
         if simulate_in_smt solver ctx xducers trail_asserts n_steps
         then begin
-            log INFO (sprintf "  %d steps. OK" n_steps);
+            log INFO (sprintf "  %d step(s). OK" n_steps);
             false
         end else begin
             log INFO
-            (sprintf "  %d steps. The path 0:%d is spurious." n_steps n_steps);
+            (sprintf "  %d step(s). The path 0:%d is spurious." n_steps n_steps);
             true
         end
     in
@@ -77,11 +78,22 @@ let do_refinement trail_filename units =
             let spurious_len =
                 List.find sim_prefix (range 1 (List.length trail_asserts))
             in
-            () (* do something *)
+            let step_asserts = list_sub trail_asserts spurious_len 2 in
+            solver#set_collect_asserts true;
+            if not (simulate_in_smt solver ctx xducers step_asserts 1)
+            then begin
+                log INFO
+                    (sprintf "  The transition %d -> %d is spurious."
+                        spurious_len (spurious_len + 1))
+            end else begin
+                log INFO "Sorry, I am afraid I cannot do that, Dave.";
+                log INFO "I need human assistance to find an invariant."
+            end;
+            solver#set_collect_asserts false;
         with Not_found ->
-            log INFO "The counter-example is not spurious!";
-            log INFO "I will give you a concrete path in the next episode..."
+            log INFO "  The counter-example is not spurious!";
+            log INFO "  I will give you a concrete path in the next episode..."
     end;
-    log INFO " [DONE]";
+    log INFO "  [DONE]";
     let _ = solver#stop in ()
 ;;

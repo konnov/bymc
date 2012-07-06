@@ -51,31 +51,31 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
 (* don't touch symbolic variables --- they are the parameters! *)
 let map_to_in v = if v#is_symbolic then v else v#copy (v#get_name ^ "_IN") ;;
 let map_to_out v = if v#is_symbolic then v else v#copy (v#get_name ^ "_OUT") ;;
-let map_to_layer layer v =
-    if v#is_symbolic then v else v#copy (sprintf "L%d_%s" layer v#get_name) ;;
+let map_to_step step v =
+    if v#is_symbolic then v else v#copy (sprintf "S%d_%s" step v#get_name) ;;
 
 let stick_var map_fun v = Var (map_fun v);;
 
 
-let connect_layers shared_vars layer =
+let connect_steps shared_vars step =
     let connect v =
-        let ov = map_to_layer (layer + 1) (map_to_out v) in
-        let iv = map_to_layer layer (map_to_in v) in
+        let ov = map_to_step step (map_to_out v) in
+        let iv = map_to_step (step + 1) (map_to_in v) in
         BinEx (EQ, Var ov, Var iv) in
     list_to_binex AND (List.map connect shared_vars)
 ;;
 
 let create_path shared_vars xducer num =
-    let map_xducer n = List.map (map_vars (stick_var (map_to_layer n))) xducer in
+    let map_xducer n = List.map (map_vars (stick_var (map_to_step n))) xducer in
     let xducers = List.concat (List.map map_xducer (range 0 num)) in
     let connections =
-        List.map (connect_layers shared_vars) (range 0 (num - 1)) in
+        List.map (connect_steps shared_vars) (range 0 (num - 1)) in
     xducers @ connections
 ;;
 
 let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
     assert (n_steps < (List.length trail_asserts));
-    let trail_asserts = list_sub trail_asserts 0 n_steps in
+    let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     let print_row i exprs =
         Printf.printf "  %d. " i;
         List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
@@ -85,13 +85,13 @@ let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
     let map_it i asserts =
         if i = 0
         then List.map
-            (map_vars (fun v -> Var (map_to_layer i (map_to_in v)))) asserts
+            (map_vars (fun v -> Var (map_to_step 0 (map_to_in v)))) asserts
         else List.map
-            (map_vars (fun v -> Var (map_to_layer (i - 1) (map_to_out v))))
+            (map_vars (fun v -> Var (map_to_step (i - 1) (map_to_out v))))
             asserts
     in
     let trail_asserts_glued =
-        List.map2 map_it (range 0 n_steps) trail_asserts in
+        List.map2 map_it (range 0 (n_steps + 1)) trail_asserts in
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
     let xducer_asserts = create_path t_ctx#get_shared proc_xducer n_steps in
@@ -115,7 +115,7 @@ let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
 
     solver#push_ctx;
     List.iter (fun v -> solver#append (var_to_smt v)) decls;
-    List.iter (fun e -> solver#append_assert (expr_to_smt e)) asserts;
+    List.iter (fun e -> solver#append_expr e) asserts;
     let result = solver#check in
     solver#pop_ctx;
     result

@@ -9,74 +9,6 @@ open Spin_ir_imp;;
 
 exception Smt_error of string;;
 
-(* the wrapper of the actual solver (yices) *)
-class yices_smt =
-    object(self)
-        val mutable pid = 0
-        val mutable cin = stdin
-        val mutable cout = stdout
-        val mutable clog = stdout
-        val mutable debug = false
-
-        method start =
-            let pin, pout = Unix.open_process "yices" in
-            cin <- pin;
-            cout <- pout;
-            clog <- open_out "yices.log";
-            fprintf cout "(set-verbosity! 0)\n"
-        
-        method stop =
-            close_out clog;
-            Unix.close_process (cin, cout)
-
-
-        method append cmd =
-            if debug then printf "%s\n" cmd;
-            fprintf cout "%s\n" cmd;
-            fprintf clog "%s\n" cmd; flush clog
-
-        method append_assert expr_as_str =
-            self#append (sprintf "(assert %s)" expr_as_str)
-
-        method push_ctx = self#append "(push)"
-
-        method pop_ctx = self#append "(pop)"
-
-        method check =
-            (* the solver can print more messages, thus, sync! *)
-            self#append "(echo \"sync\\n\")"; flush cout;
-            let stop = ref false in
-            while not !stop do
-                if "sync" = (input_line cin) then stop := true
-            done;
-
-            self#append "(status)"; (* it can be unsat already *)
-            flush cout;
-            if not (self#is_out_sat true)
-            then false
-            else begin
-                self#append "(check)";
-                flush cout;
-                self#is_out_sat false
-            end
-
-        method is_out_sat ignore_errors =
-            let l = input_line cin in
-            (*printf "%s\n" l;*)
-            match l with
-            | "sat" -> true
-            | "ok" -> true
-            | "unsat" -> false
-            | _ -> if ignore_errors
-                then false
-                else raise (Smt_error (sprintf "yices: %s" l))
-
-        method get_cin = cin
-        method get_cout = cout
-        method set_debug flag = debug <- flag
-    end
-;;
-
 let rec var_to_smt var =
     let wrap_arr type_s =
         if var#is_array
@@ -129,5 +61,105 @@ let rec expr_to_smt e =
         | _ -> raise (Failure
                 (sprintf "No idea how to translate %s to SMT" (token_s tok)))
         end
+;;
+
+(* the wrapper of the actual solver (yices) *)
+class yices_smt =
+    object(self)
+        val mutable pid = 0
+        val mutable cin = stdin
+        val mutable cout = stdout
+        val mutable cerr = stdin
+        val mutable clog = stdout
+        val mutable debug = false
+        val mutable collect_asserts = false
+        val mutable asserts_tbl : (int, token expr) Hashtbl.t = Hashtbl.create 0
+
+        method start =
+            let pin, pout, perr =
+                Unix.open_process_full "yices" (Unix.environment ()) in
+            cin <- pin;
+            cout <- pout;
+            cerr <- perr;
+            clog <- open_out "yices.log";
+            fprintf cout "(set-verbosity! 3)\n"
+        
+        method stop =
+            close_out clog;
+            Unix.close_process_full (cin, cout, cerr)
+
+
+        method append cmd =
+            if debug then printf "%s\n" cmd;
+            fprintf cout "%s\n" cmd;
+            fprintf clog "%s\n" cmd; flush clog
+
+        method append_assert s =
+            self#append (sprintf "(assert %s)" s)
+
+        method append_expr expr =
+            if collect_asserts
+            then self#append (sprintf "(assert %s)" (expr_to_smt expr))
+            else begin
+                (* XXX: may block if the verbosity level < 2 *)
+                self#sync;
+                self#append (sprintf "(assert+ %s)" (expr_to_smt expr));
+                flush cout;
+                let line = input_line cin in
+                if (Str.string_match (Str.regexp "id: \\([0-9]+\\))") line 0)
+                then
+                    let id = int_of_string (Str.matched_group 1 line) in
+                    Hashtbl.add asserts_tbl id expr
+            end
+
+        method push_ctx = self#append "(push)"
+
+        method pop_ctx = self#append "(pop)"
+
+        method sync =
+            (* the solver can print more messages, thus, sync! *)
+            self#append "(echo \"sync\\n\")"; flush cout;
+            let stop = ref false in
+            while not !stop do
+                if "sync" = (input_line cin) then stop := true
+            done
+
+        method check =
+            self#sync;
+            self#append "(status)"; (* it can be unsat already *)
+            flush cout;
+            if not (self#is_out_sat true)
+            then false
+            else begin
+                self#append "(check)";
+                flush cout;
+                self#is_out_sat false
+            end
+
+        method set_collect_asserts b =
+            collect_asserts <- b;
+            if not b then Hashtbl.clear asserts_tbl
+
+        method find_collected id =
+            Hashtbl.find asserts_tbl id
+
+        method forget_collected =
+            Hashtbl.clear asserts_tbl
+
+        method is_out_sat ignore_errors =
+            let l = input_line cin in
+            (*printf "%s\n" l;*)
+            match l with
+            | "sat" -> true
+            | "ok" -> true
+            | "unsat" -> false
+            | _ -> if ignore_errors
+                then false
+                else raise (Smt_error (sprintf "yices: %s" l))
+
+        method get_cin = cin
+        method get_cout = cout
+        method set_debug flag = debug <- flag
+    end
 ;;
 
