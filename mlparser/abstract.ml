@@ -64,13 +64,27 @@ let do_refinement trail_filename units =
         List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
         Printf.printf "\n"
     in
-    List.iter2 print_row (range 0 (List.length trail_asserts)) trail_asserts;
+    List.iter2 print_row (range 0 num_layers) trail_asserts;
+    let map_it i asserts =
+        if i = 0
+        then List.map
+            (map_vars (fun v -> Var (map_to_layer i (map_to_in v)))) asserts
+        else List.map
+            (map_vars (fun v -> Var (map_to_layer i (map_to_out v)))) asserts
+    in
+    let trail_asserts_glued =
+        List.map2 map_it (range 0 num_layers) trail_asserts in
     log INFO " [DONE]";
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
-    let asserts = create_path ctx#get_shared proc_xducer num_layers in
+    let xducer_asserts = create_path ctx#get_shared proc_xducer num_layers in
+    let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
     let decls = expr_list_used_vars asserts in
+    (* REMOVE IT LATER *)
+    let decls = ctx#get_symbolic @ decls in
+    let asserts = ctx#get_assumps @ asserts in
+    (* END OF RIL *)
     List.iter (fun e -> Printf.printf "%s\n" (var_to_smt e)) decls;
     List.iter (fun e -> Printf.printf "(assert %s)\n" (expr_to_smt e)) asserts;
     log INFO " [DONE]";

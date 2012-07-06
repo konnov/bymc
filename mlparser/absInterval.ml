@@ -93,6 +93,8 @@ class ['tok] trans_context =
         method get_non_shared =
             List.filter (fun v -> not (self#is_global v)) (hashtbl_keys var_roles)
 
+        method get_symbolic =
+            List.filter (fun v -> v#is_symbolic) globals
 
         method get_var_roles = var_roles
         method set_var_roles r = var_roles <- r

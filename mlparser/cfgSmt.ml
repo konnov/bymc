@@ -17,12 +17,18 @@ open Debug;;
  To handle this case two copies of C must be introduced.
  *)
 let block_to_constraints (bb: 't basic_block) =
-    let at_var i = Var (new var (sprintf "at_%d" i)) in
+    let at_var i =
+        let nv = new var (sprintf "at_%d" i) in 
+        nv#set_type Spin_types.TBIT;
+        Var nv
+    in
+    (* the entry block always gains control! *)
+    let entry_starts = if bb#label <> 0 then Nop else at_var 0 in
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
     let succ_labs = bb#succ_labs in
     let n_succ = List.length bb#get_succ in
     let flow_succ =
-        if n_succ = 0
+        if n_succ <> 0
         then List.fold_left
             (fun e successor -> BinEx (OR, e, (at_var successor#label)))
             (UnEx (NEG, (at_var bb#label))) bb#get_succ
@@ -84,10 +90,8 @@ let block_to_constraints (bb: 't basic_block) =
         | _ -> tl (* ignore all control flow constructs *)
     in
     let smt_es = (List.fold_right convert bb#get_seq []) in
-    let smt_es = if flow_succ <> Nop
-        then flow_succ :: smt_es
-        else smt_es in
-    if loc_mux <> Nop then loc_mux :: smt_es else smt_es
+    let n_cons e es = if e <> Nop then e :: es else es in
+    n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 ;;
 
 let cfg_to_constraints cfg =

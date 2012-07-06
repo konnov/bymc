@@ -79,7 +79,9 @@ class yices_smt =
 
 let rec var_to_smt var =
     let wrap_arr type_s =
-        if var#is_array then sprintf "(-> int %s)" type_s else type_s
+        if var#is_array
+        then sprintf "(-> (subrange 0 %d) %s)" (var#get_num_elems - 1) type_s
+        else type_s
     in
     let ts = match var#get_type with
     | TBIT -> wrap_arr "bool"

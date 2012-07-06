@@ -47,21 +47,25 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
     List.map row_to_exprs (List.rev !int_lists)
 ;;
 
-let map_to_layer layer expr =
-    let map_fun v = Var (v#copy (sprintf "L%d_%s" layer v#get_name)) in
-    map_vars map_fun expr
-;;
+(* don't touch symbolic variables --- they are the parameters! *)
+let map_to_in v = if v#is_symbolic then v else v#copy (v#get_name ^ "_IN") ;;
+let map_to_out v = if v#is_symbolic then v else v#copy (v#get_name ^ "_OUT") ;;
+let map_to_layer layer v =
+    if v#is_symbolic then v else v#copy (sprintf "L%d_%s" layer v#get_name) ;;
+
+let stick_var map_fun v = Var (map_fun v);;
+
 
 let connect_layers shared_vars layer =
     let connect v =
-        let ov = map_to_layer layer (Var (v#copy (v#get_name ^ "_OUT"))) in
-        let iv = map_to_layer (layer + 1) (Var (v#copy (v#get_name ^ "_IN"))) in
-        BinEx (EQ, ov, iv) in
+        let ov = map_to_layer layer (map_to_out v) in
+        let iv = map_to_layer layer (map_to_in v) in
+        BinEx (EQ, Var ov, Var iv) in
     list_to_binex AND (List.map connect shared_vars)
 ;;
 
 let create_path shared_vars xducer num =
-    let map_xducer n = List.map (map_to_layer n) xducer in
+    let map_xducer n = List.map (map_vars (stick_var (map_to_layer n))) xducer in
     let xducers = List.concat (List.map map_xducer (range 0 num)) in
     let connections =
         List.map (connect_layers shared_vars) (range 0 (num - 1)) in
