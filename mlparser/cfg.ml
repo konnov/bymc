@@ -387,3 +387,34 @@ let print_detailed_cfg title cfg =
     List.iter print_blk (bfs_list 0)
 ;;
 
+let write_dot (out_name: string) (cfg: 't control_flow_graph) =
+    let fo = open_out out_name in
+    let rec break s tw = 
+        (* I am sure it can be done with Format if a day wasted *)
+        if String.length s < tw
+        then s
+        else
+            let bpos =
+                try String.rindex_from s (tw - 1) ' ' with Not_found -> tw
+            in
+            (String.sub s 0 bpos) ^ "\\l    "
+                ^ (break (String.sub s bpos ((String.length s) - bpos)) tw)
+    in
+    let rec write_bb bb =
+        let label = String.concat "\\l" (List.map stmt_s bb#get_seq) in
+        fprintf fo "  bb%d [label = \"%s\\l\"];\n" bb#label (break label 70)
+    in
+    let rec write_bb_succ bb =
+        let connect_succ succ_lab =
+            fprintf fo "  bb%d -> bb%d;\n" bb#label succ_lab in
+        List.iter connect_succ bb#succ_labs
+    in
+    fprintf fo "digraph cfg {\n";
+    fprintf fo "  size=\"11.5,8.0\";\n";
+    fprintf fo "  rotate=90;\n";
+    fprintf fo "  node [shape=box];\n";
+    List.iter write_bb cfg#block_list;
+    List.iter write_bb_succ cfg#block_list;
+    fprintf fo "}\n";
+    close_out fo
+;;

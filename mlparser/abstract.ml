@@ -64,7 +64,7 @@ let do_refinement trail_filename units =
         List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
         Printf.printf "\n"
     in
-    List.iter2 print_row (range 0 num_layers) trail_asserts;
+    if may_log DEBUG then List.iter2 print_row (range 0 num_layers) trail_asserts;
     let map_it i asserts =
         if i = 0
         then List.map
@@ -85,8 +85,16 @@ let do_refinement trail_filename units =
     let decls = ctx#get_symbolic @ decls in
     let asserts = ctx#get_assumps @ asserts in
     (* END OF RIL *)
-    List.iter (fun e -> Printf.printf "%s\n" (var_to_smt e)) decls;
-    List.iter (fun e -> Printf.printf "(assert %s)\n" (expr_to_smt e)) asserts;
+    let fo = open_out "cex.yices" in
+    fprintf fo "(set-evidence! true)\n";
+    List.iter (fun e -> fprintf fo "%s\n" (var_to_smt e)) decls;
+    List.iter
+        (fun e ->
+            fprintf fo ";; %s\n" (expr_s e);
+            fprintf fo "(assert %s)\n" (expr_to_smt e)
+        ) asserts;
+    fprintf fo "(check)\n";
+    close_out fo;
     log INFO " [DONE]";
     let _ = solver#stop in ()
 ;;

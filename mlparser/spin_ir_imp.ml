@@ -137,6 +137,10 @@ let rec expr_s e =
     | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (expr_s arr) (expr_s idx)
+    | BinEx (ASGN, Var arr,
+                BinEx (ARR_UPDATE, BinEx (ARR_ACCESS, Var old_arr, idx), rhs)) ->
+            sprintf "%s<-%s[%s] = %s" arr#get_name
+                old_arr#get_name (expr_s idx) (expr_s rhs)
     | BinEx (AND, f, g) -> sprintf "(%s && %s)" (expr_s f) (expr_s g)
     | BinEx (OR, f, g) -> sprintf "(%s || %s)" (expr_s f) (expr_s g)
     | BinEx (tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)

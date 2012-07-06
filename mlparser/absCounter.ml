@@ -353,7 +353,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         @ [print_stmt]
         @ new_update
     in
-    let transducers = Hashtbl.create 1 in (* transition relations in SMT *)
+    let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
         let body = remove_bad_statements p#get_stmts in
         let skel = extract_skel body in
@@ -375,8 +375,8 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         in
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
-        (* SMT transducer: exactly at this moment we have all information to
-           generate a transducer of a process
+        (* SMT xducer: exactly at this moment we have all information to
+           generate a xducer of a process
          *)
         let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
         let cfg = mk_ssa true (ctr_ctx#get_ctr :: t_ctx#get_shared)
@@ -384,8 +384,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         if may_log DEBUG
         then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
         let transd = cfg_to_constraints cfg in
-        Hashtbl.add transducers p#get_name transd;
-        (* end of transducer *)
+        Hashtbl.add xducers p#get_name transd;
+        Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
+        (* end of xducer *)
         new_proc
     in
     let abs_unit = function
@@ -404,6 +405,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let out_units =
         (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
         :: (List.filter keep_unit new_units) in
-    (out_units, transducers)
+    (out_units, xducers)
 ;;
 
