@@ -58,44 +58,30 @@ let do_refinement trail_filename units =
     log INFO " [DONE]";
     log INFO "> Reading trail...";
     let trail_asserts = parse_spin_trail trail_filename dom ctx ctr_ctx in
-    let num_layers = (List.length trail_asserts) in
-    let print_row i exprs =
-        Printf.printf "  %d. " i;
-        List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
-        Printf.printf "\n"
-    in
-    if may_log DEBUG then List.iter2 print_row (range 0 num_layers) trail_asserts;
-    let map_it i asserts =
-        if i = 0
-        then List.map
-            (map_vars (fun v -> Var (map_to_layer i (map_to_in v)))) asserts
-        else List.map
-            (map_vars (fun v -> Var (map_to_layer (i - 1) (map_to_out v))))
-            asserts
-    in
-    let trail_asserts_glued =
-        List.map2 map_it (range 0 num_layers) trail_asserts in
     log INFO " [DONE]";
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
-    let proc_xducer = List.hd (hashtbl_vals xducers) in
-    let xducer_asserts = create_path ctx#get_shared proc_xducer num_layers in
-    let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
-    let decls = expr_list_used_vars asserts in
-    (* REMOVE IT LATER *)
-    let decls = ctx#get_symbolic @ decls in
-    let asserts = ctx#get_assumps @ asserts in
-    (* END OF RIL *)
-    let fo = open_out "cex.yices" in
-    fprintf fo "(set-evidence! true)\n";
-    List.iter (fun e -> fprintf fo "%s\n" (var_to_smt e)) decls;
-    List.iter
-        (fun e ->
-            fprintf fo ";; %s\n" (expr_s e);
-            fprintf fo "(assert %s)\n" (expr_to_smt e)
-        ) asserts;
-    fprintf fo "(check)\n";
-    close_out fo;
+    let sim_prefix n_steps =
+        if simulate_in_smt solver ctx xducers trail_asserts n_steps
+        then begin
+            log INFO (sprintf "  %d steps. OK" n_steps);
+            false
+        end else begin
+            log INFO
+            (sprintf "  %d steps. The path 0:%d is spurious." n_steps n_steps);
+            true
+        end
+    in
+    begin
+        try
+            let spurious_len =
+                List.find sim_prefix (range 1 (List.length trail_asserts))
+            in
+            () (* do something *)
+        with Not_found ->
+            log INFO "The counter-example is not spurious!";
+            log INFO "I will give you a concrete path in the next episode..."
+    end;
     log INFO " [DONE]";
     let _ = solver#stop in ()
 ;;

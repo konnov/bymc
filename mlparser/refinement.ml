@@ -6,6 +6,7 @@ open Accums;;
 open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
+open Smt;;
 open Debug;;
 
 let parse_spin_trail filename dom t_ctx ctr_ctx =
@@ -71,3 +72,51 @@ let create_path shared_vars xducer num =
         List.map (connect_layers shared_vars) (range 0 (num - 1)) in
     xducers @ connections
 ;;
+
+let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
+    assert (n_steps < (List.length trail_asserts));
+    let trail_asserts = list_sub trail_asserts 0 n_steps in
+    let print_row i exprs =
+        Printf.printf "  %d. " i;
+        List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
+        Printf.printf "\n"
+    in
+    if may_log DEBUG then List.iter2 print_row (range 0 n_steps) trail_asserts;
+    let map_it i asserts =
+        if i = 0
+        then List.map
+            (map_vars (fun v -> Var (map_to_layer i (map_to_in v)))) asserts
+        else List.map
+            (map_vars (fun v -> Var (map_to_layer (i - 1) (map_to_out v))))
+            asserts
+    in
+    let trail_asserts_glued =
+        List.map2 map_it (range 0 n_steps) trail_asserts in
+    assert (1 = (Hashtbl.length xducers));
+    let proc_xducer = List.hd (hashtbl_vals xducers) in
+    let xducer_asserts = create_path t_ctx#get_shared proc_xducer n_steps in
+    let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
+    let decls = expr_list_used_vars asserts in
+    let fo = open_out (sprintf "cex%d.yices" n_steps) in
+    let push_var v = fprintf fo "%s\n" (var_to_smt v) in
+    let push_expr e =
+        fprintf fo ";; %s\n" (expr_s e);
+        fprintf fo "(assert %s)\n" (expr_to_smt e)
+    in
+    fprintf fo "(set-evidence! true)\n";
+    (* global definitions and assumptions go to the file only *)
+    List.iter push_var t_ctx#get_symbolic;
+    List.iter push_expr t_ctx#get_assumps;
+    (* the main part of assertions *)
+    List.iter push_var decls;
+    List.iter push_expr asserts;
+    fprintf fo "(check)\n";
+    close_out fo;
+
+    solver#push_ctx;
+    List.iter (fun v -> solver#append (var_to_smt v)) decls;
+    List.iter (fun e -> solver#append_assert (expr_to_smt e)) asserts;
+    let result = solver#check in
+    solver#pop_ctx;
+    result
+

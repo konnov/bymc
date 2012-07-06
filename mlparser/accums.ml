@@ -59,6 +59,20 @@ let rec list_nth_slice lst n =
         ((List.hd lst) :: h, e, t)
 ;;
 
+let rec list_sub lst start len =
+    match lst with
+    | [] ->
+        if start <> 0 || len <> 0
+        then raise (Failure "list_sub: invalid start or len")
+        else []
+    | hd :: tl ->
+        if start > 0
+        then list_sub tl (start - 1) len
+        else if len > 0
+        then hd :: (list_sub tl 0 (len - 1))
+        else []
+;;
+
 (* sort and remove duplicates, one could have used BatList.sort_unique *)
 let list_sort_uniq comp_fun lst =    
     let consume_copy l cur prev =
