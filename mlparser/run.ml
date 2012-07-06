@@ -20,7 +20,7 @@ let parse_options =
         [
             ("-a", Arg.Unit (fun () -> opts := {!opts with abstract = true}),
              "Produce abstraction of a Promela program.");
-            ("-c", Arg.String
+            ("-t", Arg.String
              (fun s -> opts := {!opts with refine = true; trail_name = s}),
              "Check feasibility of a counterexample produced by spin -t (not a *.trail!).");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
@@ -52,11 +52,13 @@ let _ =
         log INFO (sprintf "> Parsing %s..." basename);
         let units = parse_promela filename basename dirname in
         write_to_file "original.prm" units;
+        log INFO "[DONE]";
         log DEBUG (sprintf "#units: %d" (List.length units));
         if opts.abstract
         then let _ = do_abstraction units in ()
         else if opts.refine
         then let _ = do_refinement opts.trail_name units in ()
+        else printf "No options given. Bye.\n"
     with End_of_file ->
         log ERROR "Premature end of file";
         exit 1

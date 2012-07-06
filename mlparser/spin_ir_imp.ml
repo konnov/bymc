@@ -131,7 +131,7 @@ let token_s t =
 
 let rec expr_s e =
     match e with
-    | Nop -> "skip"
+    | Nop comment -> sprintf "skip /* %s */" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)

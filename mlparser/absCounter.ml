@@ -57,12 +57,12 @@ class ctr_abs_ctx dom t_ctx =
             let ex =
                 List.fold_left
                     (fun subex var ->
-                        if subex = Nop
+                        if is_nop subex
                         then Var var
                         else BinEx (PLUS,
                             BinEx (MULT, subex, Const dom#length),
                             Var var)
-                    ) Nop (List.rev local_vars)
+                    ) (Nop "") (List.rev local_vars)
             in
             BinEx (PLUS, BinEx (MULT, ex, Const pc_size), Var pc_var)
 
@@ -123,10 +123,10 @@ let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
     let mk_cons tok sep indices =
         let add_cons e idx =
             let ke = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const idx) in
-            if e = Nop
+            if is_nop e
             then BinEx (tok, ke, Const 0)
             else BinEx (sep, e, BinEx (tok, ke, Const 0)) in
-        List.fold_left add_cons Nop indices
+        List.fold_left add_cons (Nop "") indices
     in
     let mk_all check_fun =
         mk_cons EQ AND (ctr_ctx#all_indices_for (fun m -> not (check_fun m))) in
@@ -223,7 +223,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
         method mk_print_stmt prev_idx next_idx =
             let n = ctr_ctx#get_ctr_dim in
             let m = List.length t_ctx#get_shared in
-            let str = sprintf "{%%d->%%d:%s}\\n"
+            let str = sprintf "GS{%%d->%%d:%s}\\n"
                 (String.concat "," (Accums.n_copies (n + m) "%d")) in
             let mk_deref i = self#deref_ctr (Const i) in
             let es = (List.map mk_deref (range 0 n))
@@ -286,14 +286,15 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             let sum_fun e i =
                 let ctr_ex = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i)
                 in
-                if e = Nop then ctr_ex else BinEx (PLUS, e, ctr_ex)
+                if is_nop e then ctr_ex else BinEx (PLUS, e, ctr_ex)
             in
-            let sum_ex = List.fold_left sum_fun Nop indices in
+            let sum_ex = List.fold_left sum_fun (Nop "") indices in
             let sum_eq_n = MAssume (-1, BinEx (EQ, active_expr, sum_ex)) in
             let other_indices =
                 List.filter (fun i -> not (List.mem i indices))
                     (range 0 ctr_ctx#get_ctr_dim) in
-            let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun Nop i)) in
+            let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun (Nop "") i))
+            in
             let other0 = List.map mk_oth other_indices in
             (* TODO: add an assumption that all other values stay zero *)
             sum_eq_n :: other0
@@ -365,7 +366,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             counter_guard
             @ [MIf (-1,
                 [MOptGuarded ([new_comp_upd]);
-                 MOptGuarded [MExpr (-1, Nop)]]);
+                 MOptGuarded [MExpr (-1, Nop "")]]);
                MGoto (-1, main_lab)] in
         let new_body = 
             skel.decl @ new_init @ skel.loop_prefix
@@ -401,7 +402,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         | _ -> true
     in
     let out_units =
-        (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop)))
+        (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
         :: (List.filter keep_unit new_units) in
     (out_units, transducers)
 ;;

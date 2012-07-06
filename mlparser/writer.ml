@@ -47,7 +47,7 @@ let rec write_stmt cout lvl lab_tab s =
             (if flags_as_s <> "" then flags_as_s ^ " " else "")
             (var_type_promela v#get_type) v#get_name
             (if v#is_array then sprintf "[%d]" v#get_num_elems else "")
-            (if e != Nop then " = " ^ (expr_s e) else "")
+            (if not (is_nop e) then " = " ^ (expr_s e) else "")
     | MDeclProp (_, v, PropAll e) ->
             fprintf cout "#define %s ALL(%s)\n" v#get_name (expr_s e)
     | MDeclProp (_, v, PropSome e) ->
@@ -98,7 +98,7 @@ let rec write_stmt cout lvl lab_tab s =
   
 let write_proc cout lvl p =
     let tab = indent lvl in
-    if p#get_active_expr != Nop
+    if not (is_nop p#get_active_expr)
     then fprintf cout "\n%sactive[%s] " tab (expr_s p#get_active_expr);
 
     let args_s = Accums.str_join ", "

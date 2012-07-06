@@ -23,7 +23,7 @@ let block_to_constraints (bb: 't basic_block) =
         Var nv
     in
     (* the entry block always gains control! *)
-    let entry_starts = if bb#label <> 0 then Nop else at_var 0 in
+    let entry_starts = if bb#label <> 0 then Nop "" else at_var 0 in
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
     let succ_labs = bb#succ_labs in
     let n_succ = List.length bb#get_succ in
@@ -32,7 +32,7 @@ let block_to_constraints (bb: 't basic_block) =
         then List.fold_left
             (fun e successor -> BinEx (OR, e, (at_var successor#label)))
             (UnEx (NEG, (at_var bb#label))) bb#get_succ
-        else Nop
+        else Nop ""
     in
     (* at most one successor takes the control *)
     let mk_mux (pair: int list) =
@@ -40,7 +40,7 @@ let block_to_constraints (bb: 't basic_block) =
         let cond = BinEx (OR,
             UnEx (NEG, at_var (List.nth succ_labs i)),
             UnEx (NEG, at_var (List.nth succ_labs j))) in
-        if i < j then cond else Nop
+        if i < j then cond else Nop ""
     in
     let loc_mux =
         list_to_binex (AND) (List.map mk_mux (mk_product (range 0 n_succ) 2)) in
@@ -77,7 +77,7 @@ let block_to_constraints (bb: 't basic_block) =
         | Expr (_, BinEx (ASGN, lhs, rhs)) ->
             (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
 
-        | Expr (_, Nop) ->
+        | Expr (_, Nop _) ->
             tl (* skip this *)
         | Expr (_, e) ->
             (* at_i -> e *)
@@ -90,7 +90,7 @@ let block_to_constraints (bb: 't basic_block) =
         | _ -> tl (* ignore all control flow constructs *)
     in
     let smt_es = (List.fold_right convert bb#get_seq []) in
-    let n_cons e es = if e <> Nop then e :: es else es in
+    let n_cons e es = if not_nop e then e :: es else es in
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 ;;
 

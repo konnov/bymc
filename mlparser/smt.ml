@@ -97,7 +97,7 @@ let rec var_to_smt var =
 
 let rec expr_to_smt e =
     match e with
-    | Nop -> ""
+    | Nop comment -> sprintf ";; %s\n" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | Phi (lhs, rhs) ->

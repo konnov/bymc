@@ -252,10 +252,17 @@ class symb_tab =
     end
 ;;
 
-type 't expr = Nop | Const of int | Var of var
+type 't expr = Nop of string (* a comment *) | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
     | Phi of var * var list (* a phi function for SSA purposes *)
 ;;
+
+let is_nop = function
+    | Nop _ -> true
+    | _ -> false
+;;
+
+let not_nop e = not (is_nop e);; (* a shorthand *)
 
 let is_var = function
     | Var _ -> true
@@ -405,7 +412,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MAssert (id, e) -> Assert (id, e) :: tl
         | MAssume (id, e) -> Assume (id, e) :: tl
         | MPrint (id, s, args) -> Print (id, s, args) :: tl
-        | MDeclProp (id, _, _) -> Expr (id, Nop) :: tl
+        | MDeclProp (id, _, _) -> Expr (id, Nop "") :: tl
     and
         make_option exit_lab opt =
         let is_else, seq = match opt with
@@ -534,10 +541,10 @@ let collect_final_labs (stmts: 't mir_stmt list)
  *)
 let list_to_binex tok lst =
     let join_e ae e =
-        if e <> Nop
-        then if ae <> Nop then BinEx (tok, ae, e) else e
+        if not (is_nop e)
+        then if not (is_nop ae) then BinEx (tok, ae, e) else e
         else ae
     in
-    List.fold_left join_e Nop lst
+    List.fold_left join_e (Nop "") lst
 ;;
 

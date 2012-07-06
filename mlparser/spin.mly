@@ -541,7 +541,7 @@ proc	: inst		/* optional instantiator */
         | ivar COMMA var_list	{ $1 :: $3 }
         ;
 
-    ivar    : vardcl           	{ ($1, Nop) }
+    ivar    : vardcl           	{ ($1, Nop "") }
         | vardcl ASGN expr   	{
             ($1, $3)
             (* $$ = $1;

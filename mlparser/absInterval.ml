@@ -127,7 +127,7 @@ class abs_domain conds_i =
             let _, tuples =
                 List.fold_left (fun (i, l) (a, b) -> (i + 1, (i, a, b) :: l))
                     (0, [])
-                    (List.combine conds (List.append (List.tl conds) [Nop]))
+                    (List.combine conds (List.append (List.tl conds) [Nop ""]))
             in
             cond_intervals <- tuples
 
@@ -140,7 +140,7 @@ class abs_domain conds_i =
                         solver#push_ctx;
                         solver#append_assert
                             (expr_to_smt (BinEx (GE, symb_expr, l)));
-                        if r <> Nop
+                        if not_nop r
                         then solver#append_assert
                             (expr_to_smt (BinEx (LT, symb_expr, r)));
                         if solver#check
@@ -160,7 +160,7 @@ class abs_domain conds_i =
             let (_, l, r) =
                 List.find (fun (a, _, _) -> a = abs_val) cond_intervals in
             let left = BinEx (GE, exp, l) in
-            if r <> Nop
+            if not_nop r
             then BinEx (AND, left, BinEx (LT, exp, r))
             else left
 
@@ -181,7 +181,7 @@ class abs_domain conds_i =
                 let append_cons var (i, l, r) =
                     solver#append_assert
                         (expr_to_smt (BinEx (GE, Var var, l)));
-                    if r <> Nop
+                    if not_nop r
                     then solver#append_assert
                         (expr_to_smt (BinEx (LT, Var var, r)))
                 in
@@ -234,14 +234,14 @@ class abs_domain conds_i =
                         (fun v (i, l, r) ->
                             solver#append_assert
                                 (expr_to_smt (BinEx (GE, Var v, l)));
-                            if r <> Nop
+                            if not_nop r
                             then solver#append_assert
                                 (expr_to_smt (BinEx (LT, Var v, r)));
                         ) vars comb;
                     let sum = List.fold_left
                         (fun e v ->
-                            if e = Nop then Var v else BinEx (PLUS, Var v, e)
-                        ) Nop vars in
+                            if is_nop e then Var v else BinEx (PLUS, Var v, e)
+                        ) (Nop "") vars in
                     let sum_eq = BinEx (EQ, num_expr, sum) in
                     solver#append_assert (expr_to_smt sum_eq);
                     let exists_concrete = solver#check in
@@ -518,9 +518,9 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
                 (fun lits (ex, abs_val) ->
                     if not (is_out_var ex)
                     then let lit = BinEx (EQ, ex, Const abs_val) in
-                        if lits = Nop then lit else BinEx (AND, lits, lit)
+                        if is_nop lits then lit else BinEx (AND, lits, lit)
                     else lits (* skip this var *))
-                Nop abs_tuple
+                (Nop "") abs_tuple
             in
             let assigns = List.fold_left
                 (fun seq (ex, abs_val) ->
@@ -561,15 +561,15 @@ let translate_expr ctx dom solver atype expr =
                 let conj = List.fold_left
                     (fun lits (var, abs_val) ->
                         let lit = BinEx (EQ, Var var, Const abs_val) in
-                        if lits = Nop
+                        if is_nop lits
                         then lit
                         else BinEx (AND, lits, lit))
-                    Nop abs_tuple
+                    (Nop "") abs_tuple
                 in
-                if conjuncts = Nop
+                if is_nop conjuncts
                 then conj
                 else BinEx (OR, conjuncts, conj))
-            Nop matching_vals
+            (Nop "") matching_vals
     in
     let rec trans_e = function
         (* boolean combination of arithmetic constraints *)
