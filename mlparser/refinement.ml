@@ -58,7 +58,7 @@ let stick_var map_fun v = Var (map_fun v);;
 
 let connect_layers shared_vars layer =
     let connect v =
-        let ov = map_to_layer layer (map_to_out v) in
+        let ov = map_to_layer (layer + 1) (map_to_out v) in
         let iv = map_to_layer layer (map_to_in v) in
         BinEx (EQ, Var ov, Var iv) in
     list_to_binex AND (List.map connect shared_vars)

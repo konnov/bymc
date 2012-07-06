@@ -70,7 +70,8 @@ let do_refinement trail_filename units =
         then List.map
             (map_vars (fun v -> Var (map_to_layer i (map_to_in v)))) asserts
         else List.map
-            (map_vars (fun v -> Var (map_to_layer i (map_to_out v)))) asserts
+            (map_vars (fun v -> Var (map_to_layer (i - 1) (map_to_out v))))
+            asserts
     in
     let trail_asserts_glued =
         List.map2 map_it (range 0 num_layers) trail_asserts in
