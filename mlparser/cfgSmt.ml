@@ -70,7 +70,7 @@ let block_to_constraints (bb: 't basic_block) =
                 let eq = BinEx (EQ,
                     mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
                 at_impl_expr (BinEx (OR, BinEx (EQ, idx, Const i), eq)) :: l in
-            (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, mk_arr old_arr idx)))
+            (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, rhs)))
             ::
             List.fold_left keep_val tl (range 0 new_arr#get_num_elems)
 

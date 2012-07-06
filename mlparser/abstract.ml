@@ -63,9 +63,10 @@ let do_refinement trail_filename units =
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
-        if simulate_in_smt solver ctx xducers trail_asserts n_steps
+        if simulate_in_smt solver ctx ctr_ctx xducers trail_asserts n_steps
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
+            flush stdout;
             false
         end else begin
             log INFO
@@ -78,16 +79,16 @@ let do_refinement trail_filename units =
             let spurious_len =
                 List.find sim_prefix (range 1 (List.length trail_asserts))
             in
-            let step_asserts = list_sub trail_asserts spurious_len 2 in
+            let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
             solver#set_collect_asserts true;
-            if not (simulate_in_smt solver ctx xducers step_asserts 1)
+            if not (simulate_in_smt solver ctx ctr_ctx xducers step_asserts 1)
             then begin
                 log INFO
                     (sprintf "  The transition %d -> %d is spurious."
-                        spurious_len (spurious_len + 1))
+                        (spurious_len - 1) spurious_len)
             end else begin
                 log INFO "Sorry, I am afraid I cannot do that, Dave.";
-                log INFO "I need human assistance to find an invariant."
+                log INFO "I need a human assistance to find an invariant."
             end;
             solver#set_collect_asserts false;
         with Not_found ->

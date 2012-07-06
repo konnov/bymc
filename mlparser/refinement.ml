@@ -73,7 +73,7 @@ let create_path shared_vars xducer num =
     xducers @ connections
 ;;
 
-let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
+let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts n_steps =
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     let print_row i exprs =
@@ -94,7 +94,8 @@ let simulate_in_smt solver t_ctx xducers trail_asserts n_steps =
         List.map2 map_it (range 0 (n_steps + 1)) trail_asserts in
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
-    let xducer_asserts = create_path t_ctx#get_shared proc_xducer n_steps in
+    let xducer_asserts =
+        create_path (ctr_ctx#get_pc :: t_ctx#get_shared) proc_xducer n_steps in
     let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
     let decls = expr_list_used_vars asserts in
     let fo = open_out (sprintf "cex%d.yices" n_steps) in

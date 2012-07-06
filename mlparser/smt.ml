@@ -98,7 +98,7 @@ class yices_smt =
             self#append (sprintf "(assert %s)" s)
 
         method append_expr expr =
-            if collect_asserts
+            if not collect_asserts
             then self#append (sprintf "(assert %s)" (expr_to_smt expr))
             else begin
                 (* XXX: may block if the verbosity level < 2 *)
