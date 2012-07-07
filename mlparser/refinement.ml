@@ -65,11 +65,11 @@ let connect_steps shared_vars step =
     list_to_binex AND (List.map connect shared_vars)
 ;;
 
-let create_path shared_vars xducer num =
+let create_path shared_vars xducer n_steps =
     let map_xducer n = List.map (map_vars (stick_var (map_to_step n))) xducer in
-    let xducers = List.concat (List.map map_xducer (range 0 num)) in
+    let xducers = List.concat (List.map map_xducer (range 0 n_steps)) in
     let connections =
-        List.map (connect_steps shared_vars) (range 0 (num - 1)) in
+        List.map (connect_steps shared_vars) (range 0 (n_steps - 1)) in
     xducers @ connections
 ;;
 
@@ -95,7 +95,7 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts n_steps =
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
     let xducer_asserts =
-        create_path (ctr_ctx#get_pc :: t_ctx#get_shared) proc_xducer n_steps in
+        create_path (ctr_ctx#get_ctr :: t_ctx#get_shared) proc_xducer n_steps in
     let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
     let decls = expr_list_used_vars asserts in
     let fo = open_out (sprintf "cex%d.yices" n_steps) in
@@ -146,8 +146,7 @@ let parse_smt_evidence solver =
             let value = int_of_string (Str.matched_group 4 line) in
             let state = if dir = "IN" then step else (step + 1) in
             let e = BinEx (ASGN, Var (new var name), Const value) in
-            if (dir = "IN" && state = 0) || (dir = "OUT")
-            then add_state_expr state e;
+            add_state_expr state e;
         else if Str.string_match arr_re line 0
         then
             let step = int_of_string (Str.matched_group 1 line) in
@@ -160,30 +159,37 @@ let parse_smt_evidence solver =
             let e = BinEx (ASGN,
                 BinEx (ARR_ACCESS, Var (new var name), Const idx),
                 Const value) in
-            if (dir = "IN" && state = 0) || (dir = "OUT")
-            then add_state_expr state e;
+            add_state_expr state e;
     in
     List.iter parse_line lines;
     let cmp e1 e2 =
-        match e1, e2 with
-        | BinEx (ASGN, Var v1, _),
-          BinEx (ASGN, Var v2, _) ->
-                String.compare v1#get_name v2#get_name
-        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
-          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), _) ->
+        let comp_res = match e1, e2 with
+        | BinEx (ASGN, Var v1, Const k1),
+          BinEx (ASGN, Var v2, Const k2) ->
+              let r = String.compare v1#get_name v2#get_name in
+              if r <> 0 then r else (k1 - k2)
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), Const k1),
+          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), Const k2) ->
                 let r = String.compare a1#get_name a2#get_name in
-                if r <> 0 then r else (i1 - i2)
+                if r <> 0
+                then r
+                else if i1 <> i2
+                then i1 - i2
+                else k1 - k2
         | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
           BinEx (ASGN, Var v2, _) ->
                 -1 (* arrays go first *)
         | BinEx (ASGN, Var v1, _),
           BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), _) ->
                 1 (* arrays go first *)
-        | _ -> -1 (* preserve the order otherwise *)
+        | _ -> raise (Failure
+            (sprintf "Incomparable: %s and %s" (expr_s e1) (expr_s e2)))
+        in
+        comp_res
     in
     let new_tbl = Hashtbl.create (Hashtbl.length vals) in
     Hashtbl.iter
-        (fun k vs -> Hashtbl.add new_tbl k (List.sort cmp vs))
+        (fun k vs -> Hashtbl.add new_tbl k (list_sort_uniq cmp vs))
         vals;
     new_tbl
 ;;
@@ -207,7 +213,10 @@ let pretty_print_exprs exprs =
                 then stop_arr ();
                 if !last_arr <> arr#get_name
                 then start_arr arr idx;
-                assert (!last_idx < idx);
+                if (!last_idx >= idx)
+                then raise (Failure
+                    (sprintf "Met %s[%d] = %d after %s[%d]"
+                        arr#get_name idx value arr#get_name !last_idx));
                 (* fill the gaps in indices *)
                 List.iter (fun _ -> printf "_ ") (range !last_idx (idx - 1));
                 (* print the value *)

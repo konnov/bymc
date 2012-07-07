@@ -76,13 +76,16 @@ let rec list_sub lst start len =
 (* sort and remove duplicates, one could have used BatList.sort_unique *)
 let list_sort_uniq comp_fun lst =    
     let consume_copy l cur prev =
-        if (comp_fun cur prev) != 0 then cur :: l else l in
-    match List.fast_sort comp_fun lst with
-    | [] -> []
-    | [hd] -> [hd]
-    | hd :: tl ->
-            let wo_last = (hd :: (List.rev (List.tl (List.rev tl)))) in
-            hd :: (List.fold_left2 consume_copy [] tl wo_last)
+        if (comp_fun cur prev) <> 0 then cur :: l else l in
+    let no_dups =
+        match List.stable_sort comp_fun lst with
+        | [] -> []
+        | [hd] -> [hd]
+        | hd :: tl ->
+                let wo_last = (hd :: (List.rev (List.tl (List.rev tl)))) in
+                hd :: (List.rev (List.fold_left2 consume_copy [] tl wo_last))
+    in
+    no_dups
 ;;
 
 (* Find the position of the first element equal to e *)
