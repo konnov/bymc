@@ -176,6 +176,7 @@ let stmt_s s =
     | Else id -> sprintf "<%3d> else" id
     | Assert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | Assume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
+    | Havoc (id, v) -> sprintf "<%3d> havoc %s" id v#get_name
     | Print (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s" id s
             (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
@@ -214,6 +215,7 @@ let rec mir_stmt_s s =
         sprintf "<%3d> if\n%s\n fi" id inner
     | MAssert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | MAssume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
+    | MHavoc (id, v) -> sprintf "<%3d> havoc %s" id v#get_name
     | MPrint (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s"
             id s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)

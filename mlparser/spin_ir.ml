@@ -313,7 +313,9 @@ type 't stmt =
     | Goto of int * int
     | If of int * int list (* condition labels *) * int (* exit label *)
     | Else of int
-    | Assert of int * 't expr | Assume of int * 't expr
+    | Assert of int * 't expr
+    | Assume of int * 't expr
+    | Havoc of int * var (* forget about the current value of the variable *)
     | Print of int * string * 't expr list
 ;;
 
@@ -331,6 +333,7 @@ let stmt_id = function
     | Else id -> id
     | Assert (id, _) -> id
     | Assume (id, _) -> id
+    | Havoc (id, _) -> id
     | Print (id, _, _) -> id
 ;;
 
@@ -348,6 +351,7 @@ let replace_stmt_id new_id = function
     | Else _ -> Else new_id
     | Assert (_, e) -> Assert (new_id, e)
     | Assume (_, e) -> Assume (new_id, e)
+    | Havoc (_, v) -> Havoc (new_id, v)
     | Print (_, f, a) -> Print (new_id, f, a)
 ;;
 
@@ -364,6 +368,7 @@ type 't mir_stmt =
     | MAssert of int * 't expr
     | MAssume of int * 't expr
     | MPrint of int * string * 't expr list
+    | MHavoc of int * var
     | MDeclProp of int * var * 't atomic_expr
 and 't atomic_expr =
       PropAll of 't expr
@@ -386,6 +391,7 @@ let m_stmt_id = function
     | MAssert (id, _) -> id
     | MAssume (id, _) -> id
     | MPrint (id, _, _) -> id
+    | MHavoc (id, _) -> id
     | MDeclProp (id, _, _) -> id
 ;;
 
@@ -412,6 +418,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MAssert (id, e) -> Assert (id, e) :: tl
         | MAssume (id, e) -> Assume (id, e) :: tl
         | MPrint (id, s, args) -> Print (id, s, args) :: tl
+        | MHavoc (id, v) -> Havoc (id, v) :: tl
         | MDeclProp (id, _, _) -> Expr (id, Nop "") :: tl
     and
         make_option exit_lab opt =

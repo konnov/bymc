@@ -204,13 +204,16 @@ let find_init_local_vals ctr_ctx decls init_stmts =
 (* abstraction of functions different in VASS and our counter abstraction *)
 class virtual ctr_funcs ctr_ctx =
     object
+        method virtual introduced_vars:
+            var list
+
         method virtual mk_asserts:
             token expr -> token expr -> token expr -> token mir_stmt list
         method virtual mk_init:
             token expr -> token mir_stmt list -> token mir_stmt list
             -> token mir_stmt list
         method virtual mk_counter_update:
-            token -> token expr -> token mir_stmt list
+            token expr -> token expr -> token mir_stmt list
 
         method deref_ctr e =
             BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, e)
@@ -219,6 +222,8 @@ class virtual ctr_funcs ctr_ctx =
 class abs_ctr_funcs dom t_ctx ctr_ctx solver =
     object(self)
         inherit ctr_funcs ctr_ctx 
+
+        method introduced_vars = []
 
         method mk_asserts active_expr prev_idx next_idx =
             let n = ctr_ctx#get_ctr_dim in
@@ -255,21 +260,29 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             [mk_nondet_choice option_list]
                 @ self#mk_asserts active_expr (Const 0) (Const 0)
 
-        method mk_counter_update tok idx_ex =
-            let ktr_i = self#deref_ctr idx_ex in
-            let is_deref = function
-                | BinEx (ARR_ACCESS, _, _) -> true
-                | _ -> false
+        method mk_counter_update prev_idx next_idx =
+            let mk_one tok idx_ex = 
+                let ktr_i = self#deref_ctr idx_ex in
+                let is_deref = function
+                    | BinEx (ARR_ACCESS, _, _) -> true
+                    | _ -> false
+                in
+                let expr_abs_vals =
+                    mk_expr_abstraction solver dom is_deref
+                        (BinEx (tok, ktr_i, Const 1)) in
+                mk_assign_unfolding ktr_i expr_abs_vals
             in
-            let expr_abs_vals =
-                mk_expr_abstraction solver dom is_deref
-                    (BinEx (tok, ktr_i, Const 1)) in
-            [mk_assign_unfolding ktr_i expr_abs_vals]
+            [mk_one MINUS prev_idx; mk_one PLUS next_idx]
     end;;
 
 class vass_funcs dom t_ctx ctr_ctx solver =
     object(self)
         inherit ctr_funcs ctr_ctx 
+
+        (* a free variable delta describing how many processes made a step *)
+        val mutable delta = new var "vass_dta"
+
+        method introduced_vars = [delta]
 
         method mk_asserts active_expr prev_idx next_idx =
             let add s i =
@@ -309,9 +322,18 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             sum_eq_n :: other0
                 @ (self#mk_asserts active_expr (Const 0) (Const 0))
 
-        method mk_counter_update tok idx_ex =
-            let ktr_i = self#deref_ctr idx_ex in
-            [MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Const 1)))]
+        method mk_counter_update prev_idx next_idx =
+            (* XXX: use a havoc-like operator here *)
+            (* it is very important that we add delta instead of 1 here,
+               as it describes a summary of several processes doing the same
+               step *)
+            let mk_one tok idx_ex =
+                let ktr_i = self#deref_ctr idx_ex in
+                MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
+            in
+            [MHavoc (-1, delta);
+             MAssume (-1, BinEx (GT, Var delta, Const 0));
+             mk_one MINUS prev_idx; mk_one PLUS next_idx]
     end;;
 
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
@@ -358,8 +380,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                 ) prev_idx_ex in
         let asserts = funcs#mk_asserts active_expr prev_idx_ex next_idx_ex in
         asserts (* TODO: make pre_asserts and post_asserts *)
-        @ (funcs#mk_counter_update MINUS prev_idx_ex)
-        @ (funcs#mk_counter_update PLUS next_idx_ex)
+        @ (funcs#mk_counter_update prev_idx_ex next_idx_ex)
         @ asserts
         @ new_update
     in
@@ -388,8 +409,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
            generate a xducer of a process
          *)
         let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
-        let cfg = mk_ssa true (ctr_ctx#get_ctr :: t_ctx#get_shared)
-            t_ctx#get_non_shared (mk_cfg lirs) in
+        let all_vars =
+            (ctr_ctx#get_ctr :: t_ctx#get_shared) @ funcs#introduced_vars in
+        let cfg = mk_ssa true all_vars t_ctx#get_non_shared (mk_cfg lirs) in
         if may_log DEBUG
         then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
         let transd = cfg_to_constraints cfg in

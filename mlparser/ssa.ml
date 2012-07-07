@@ -58,6 +58,8 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
                     ov#get_name = v#get_name
             | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var ov, _), _)) ->
                     ov#get_name = v#get_name
+            | Havoc (_, ov) ->
+                    ov#get_name = v#get_name
             | _ -> false in
         let does_blk_uses_var bb =
             List.exists does_stmt_uses_var bb#get_seq in
@@ -245,6 +247,10 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
                     Expr (id, BinEx (ASGN, Var (intro_var v), upd))
             | Expr (id, Phi (v, rhs)) ->
                     Expr (id, Phi (intro_var v, rhs))
+            | Havoc (id, v) ->
+                    (* just introduce a fresh one *)
+                    let _ = intro_var v in
+                    Skip id
             | _ as s -> s
         in
         let on_stmt lst s = (replace_lhs (replace_rhs s)) :: lst in
@@ -289,6 +295,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
             | Expr (_, BinEx (ASGN, Var v, _)) -> pop_v v
             | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
                     pop_v v
+            | Havoc (_, v) -> pop_v v
             | _ -> ()
         in
         List.iter pop_stmt bb_old_seq
