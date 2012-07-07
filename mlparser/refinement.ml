@@ -120,4 +120,107 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts n_steps =
     let result = solver#check in
     solver#pop_ctx;
     result
+;;
+
+let parse_smt_evidence solver =
+    let vals = Hashtbl.create 10 in
+    let lines = solver#get_evidence in
+    let var_re =
+        Str.regexp "(= S\\([0-9]+\\)_\\([a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([-0-9]+\\))"
+    in
+    let arr_re =
+        Str.regexp "(= (S\\([0-9]+\\)_\\([a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([0-9]+\\)) \\([-0-9]+\\))"
+    in
+    let add_state_expr state expr =
+        if not (Hashtbl.mem vals state)
+        then Hashtbl.add vals state [expr]
+        else Hashtbl.replace vals state (expr :: (Hashtbl.find vals state))
+    in
+    let parse_line line =
+        if Str.string_match var_re line 0
+        then
+            let step = int_of_string (Str.matched_group 1 line) in
+            let name = (Str.matched_group 2 line) in
+            let dir = (Str.matched_group 3 line) in
+            (* we support ints only, don't we? *)
+            let value = int_of_string (Str.matched_group 4 line) in
+            let state = if dir = "IN" then step else (step + 1) in
+            let e = BinEx (ASGN, Var (new var name), Const value) in
+            if (dir = "IN" && state = 0) || (dir = "OUT")
+            then add_state_expr state e;
+        else if Str.string_match arr_re line 0
+        then
+            let step = int_of_string (Str.matched_group 1 line) in
+            let name = (Str.matched_group 2 line) in
+            let dir = (Str.matched_group 3 line) in
+            let idx = int_of_string (Str.matched_group 4 line) in
+            (* we support ints only, don't we? *)
+            let value = int_of_string (Str.matched_group 5 line) in
+            let state = if dir = "IN" then step else (step + 1) in
+            let e = BinEx (ASGN,
+                BinEx (ARR_ACCESS, Var (new var name), Const idx),
+                Const value) in
+            if (dir = "IN" && state = 0) || (dir = "OUT")
+            then add_state_expr state e;
+    in
+    List.iter parse_line lines;
+    let cmp e1 e2 =
+        match e1, e2 with
+        | BinEx (ASGN, Var v1, _),
+          BinEx (ASGN, Var v2, _) ->
+                String.compare v1#get_name v2#get_name
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
+          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), _) ->
+                let r = String.compare a1#get_name a2#get_name in
+                if r <> 0 then r else (i1 - i2)
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
+          BinEx (ASGN, Var v2, _) ->
+                -1 (* arrays go first *)
+        | BinEx (ASGN, Var v1, _),
+          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), _) ->
+                1 (* arrays go first *)
+        | _ -> -1 (* preserve the order otherwise *)
+    in
+    let new_tbl = Hashtbl.create (Hashtbl.length vals) in
+    Hashtbl.iter
+        (fun k vs -> Hashtbl.add new_tbl k (List.sort cmp vs))
+        vals;
+    new_tbl
+;;
+
+(* group an expression in a sorted valuation *)
+let pretty_print_exprs exprs =
+    let last_arr = ref "" in
+    let last_idx = ref (-1) in
+    let start_arr arr idx = 
+        last_arr := arr#get_name;
+        last_idx := idx - 1;
+        printf "%s = { " !last_arr
+    in
+    let stop_arr () = 
+        printf "} ";
+        last_arr := ""
+    in
+    let pp = function
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, Const idx), Const value) ->
+                if !last_arr <> "" && !last_arr <> arr#get_name
+                then stop_arr ();
+                if !last_arr <> arr#get_name
+                then start_arr arr idx;
+                assert (!last_idx < idx);
+                (* fill the gaps in indices *)
+                List.iter (fun _ -> printf "_ ") (range !last_idx (idx - 1));
+                (* print the value *)
+                printf "%d " value;
+                last_idx := idx
+
+        | BinEx (ASGN, Var var, Const value) ->
+                if !last_arr <> ""
+                then stop_arr ();
+                printf "%s = %d " var#get_name value
+
+        | _ -> ()
+    in
+    List.iter pp exprs
+;;
 

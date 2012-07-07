@@ -75,10 +75,14 @@ let do_refinement trail_filename units =
         end
     in
     begin
+        solver#set_need_evidence true;
+        let num_states = (List.length trail_asserts) in
         try
-            let spurious_len =
-                List.find sim_prefix (range 1 (List.length trail_asserts))
-            in
+            (* check the path first *)
+            if not (sim_prefix (num_states - 1))
+            then raise Not_found;
+            (* then check its prefixes, from the shortest to the longest *)
+            let spurious_len = List.find sim_prefix (range 1 num_states) in
             let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
             solver#set_collect_asserts true;
             if not (simulate_in_smt solver ctx ctr_ctx xducers step_asserts 1)
@@ -92,8 +96,16 @@ let do_refinement trail_filename units =
             end;
             solver#set_collect_asserts false;
         with Not_found ->
+        begin
             log INFO "  The counter-example is not spurious!";
-            log INFO "  I will give you a concrete path in the next episode..."
+            let vals = parse_smt_evidence solver in
+            let print_st i =
+                printf "%d: " i;
+                pretty_print_exprs (Hashtbl.find vals i);
+                printf "\n";
+            in
+            List.iter (print_st) (range 0 num_states)
+        end
     end;
     log INFO "  [DONE]";
     let _ = solver#stop in ()

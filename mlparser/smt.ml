@@ -136,6 +136,24 @@ class yices_smt =
                 self#is_out_sat false
             end
 
+        method set_need_evidence b =
+            if b
+            then self#append "(set-evidence! true)"
+            else self#append "(set-evidence! false)"
+
+        method get_evidence =
+            (* same as sync but the lines are collected *)
+            let lines = ref [] in
+            self#append "(echo \"END\\n\")"; flush cout;
+            let stop = ref false in
+            while not !stop do
+                let line = input_line cin in
+                if "END" = line
+                then stop := true
+                else lines := line :: !lines
+            done;
+            List.rev !lines
+
         method set_collect_asserts b =
             collect_asserts <- b;
             if not b then Hashtbl.clear asserts_tbl
