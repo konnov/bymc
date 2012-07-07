@@ -180,7 +180,12 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
             raise (Failure ("Var not found: " ^ v#get_name))
     in
     let s_top v =
-        let stack = Hashtbl.find stacks (nm v) in
+        let stack =
+            try
+                Hashtbl.find stacks (nm v)
+            with Not_found ->
+                raise (Failure ("No stack for " ^ (nm v)))
+        in
         if stack <> []
         then List.hd stack
         else if tolerate_undeclared_vars
@@ -206,9 +211,13 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
     let sub_var v =
-        let i = s_top v in
-        let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
-        v#copy (sprintf "%s_%s" (nm v) suf) in
+        if v#is_symbolic
+        then v (* do not touch symbolic variables, they are parameters! *)
+        else 
+            let i = s_top v in
+            let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
+            v#copy (sprintf "%s_%s" (nm v) suf)
+    in
     let sub_var_as_var v = Var (sub_var v) in
     let rec search x =
         let bb = cfg#find x in
@@ -218,6 +227,10 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
                     Decl (id, v, map_rvalues sub_var_as_var e)
             | Expr (id, e) ->
                     Expr (id, map_rvalues sub_var_as_var e)
+            | Assume (id, e) ->
+                    Assume (id, map_rvalues sub_var_as_var e)
+            | Assert (id, e) ->
+                    Assert (id, map_rvalues sub_var_as_var e)
             | _ as s -> s
         in
         let replace_lhs = function

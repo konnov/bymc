@@ -81,6 +81,7 @@ let do_refinement trail_filename units =
             (* check the path first *)
             if not (sim_prefix (num_states - 1))
             then raise Not_found;
+            log INFO "  Trying to find the shortest spurious path...";
             (* then check its prefixes, from the shortest to the longest *)
             let spurious_len = List.find sim_prefix (range 1 num_states) in
             let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
@@ -91,6 +92,9 @@ let do_refinement trail_filename units =
                     (sprintf "  The transition %d -> %d is spurious."
                         (spurious_len - 1) spurious_len)
             end else begin
+                log INFO
+                    (sprintf "  The transition %d -> %d is NOT spurious."
+                        (spurious_len - 1) spurious_len);
                 log INFO "Sorry, I am afraid I cannot do that, Dave.";
                 log INFO "I need a human assistance to find an invariant."
             end;
