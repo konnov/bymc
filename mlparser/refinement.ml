@@ -107,6 +107,8 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
             let smt_id = solver#append_expr new_e in
             (* bind ids from the solver with reverse mapping on
                concrete expressions *)
+            let s, e = (Hashtbl.find rev_map id) in
+            log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s e));
             Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id)
 
         | _ -> ()
@@ -244,12 +246,13 @@ let pretty_print_exprs exprs =
 
 let refine_spurious_step solver smt_rev_map =
     let core_ids = solver#get_unsat_cores in
+    log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
     let map_core cid =
         if Hashtbl.mem smt_rev_map cid
         then begin
             let state, conc_ex = Hashtbl.find smt_rev_map cid in
             printf "%d: %s\n" state (expr_s conc_ex)
-        end
+        end else log DEBUG (sprintf "Unmapped core %d\n" cid)
     in
     List.iter map_core core_ids
 ;;

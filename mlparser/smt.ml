@@ -88,7 +88,7 @@ class yices_smt =
             cout <- pout;
             cerr <- perr;
             clog <- open_out "yices.log";
-            fprintf cout "(set-verbosity! 2)\n"
+            self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =
             close_out clog;
@@ -208,9 +208,8 @@ class yices_smt =
                 (* XXX: may block if the verbosity level < 2 *)
                 self#sync;
                 self#append (sprintf "(assert+ %s)" (expr_to_smt expr));
-                flush cout;
-                let line = input_line cin in
-                if (Str.string_match (Str.regexp "id: \\([0-9]+\\))") line 0)
+                let line = self#read_line in
+                if (Str.string_match (Str.regexp "id: \\([0-9]+\\)") line 0)
                 then
                     let id = int_of_string (Str.matched_group 1 line) in
                     eid := id
@@ -264,7 +263,7 @@ class yices_smt =
 
         method get_unsat_cores =
             (* collect unsatisfiable cores *)
-            let re = Str.regexp ".*unsat core ids: ([0-9\\ ]+).*" in
+            let re = Str.regexp ".*unsat core ids: \\([ 0-9]+\\).*" in
             let cores = ref [] in
             self#append "(echo \"EOI\\n\")\n";
             let stop = ref false in
@@ -273,7 +272,7 @@ class yices_smt =
                 if Str.string_match re line 0
                 then begin
                     let id_str = (Str.matched_group 1 line) in
-                    let ids_as_str = (Str.split (Str.regexp "") id_str) in
+                    let ids_as_str = (Str.split (Str.regexp " ") id_str) in
                     cores := (List.map int_of_string ids_as_str)
                 end;
 
