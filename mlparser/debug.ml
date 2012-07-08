@@ -1,6 +1,6 @@
 (* simple logging/debugging facility *)
 
-type verbosity = QUIET | ERROR | WARN | INFO | DEBUG;;
+type verbosity = QUIET | ERROR | WARN | INFO | DEBUG | TRACE;;
 
 let current_verbosity_level = ref INFO;; (* extremely long on purpose *)
 
@@ -10,6 +10,7 @@ let verbosity_s = function
     | WARN -> "WARN   "
     | INFO -> " "
     | DEBUG -> " *** "
+    | TRACE -> " --- "
 ;;
 
 let may_log level =
@@ -19,6 +20,7 @@ let may_log level =
         | WARN -> 2
         | INFO -> 3
         | DEBUG -> 4
+        | TRACE -> 5
     in
     (to_num level) <= (to_num !current_verbosity_level)
 ;;

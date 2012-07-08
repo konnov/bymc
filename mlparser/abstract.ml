@@ -42,7 +42,7 @@ let do_abstraction units =
 
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-   let ctx = mk_context units in
+    let ctx = mk_context units in
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx units in
     log INFO "> Constructing interval abstraction...";
@@ -55,15 +55,18 @@ let do_refinement trail_filename units =
         do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
     in
     write_to_file "abs-vass.prm" vass_units;
-    log INFO "  [DONE]";
+    log INFO "  [DONE]"; flush stdout;
     log INFO "> Reading trail...";
-    let trail_asserts = parse_spin_trail trail_filename dom ctx ctr_ctx in
+    let trail_asserts, rev_map =
+        parse_spin_trail trail_filename dom ctx ctr_ctx in
     log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
-    log INFO "  [DONE]";
+    log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
-        if simulate_in_smt solver ctx ctr_ctx xducers trail_asserts n_steps
+        let res, _ = simulate_in_smt
+                solver ctx ctr_ctx xducers trail_asserts rev_map n_steps in
+        if res
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
             flush stdout;
@@ -74,9 +77,18 @@ let do_refinement trail_filename units =
             true
         end
     in
+    let print_vass_trace num_states = 
+        let vals = parse_smt_evidence solver in
+        let print_st i =
+            printf "%d: " i;
+            pretty_print_exprs (Hashtbl.find vals i);
+            printf "\n";
+        in
+        List.iter (print_st) (range 0 num_states)
+    in
     begin
-        solver#set_need_evidence true;
         let num_states = (List.length trail_asserts) in
+        solver#set_need_evidence true;
         try
             (* check the path first *)
             if not (sim_prefix (num_states - 1))
@@ -86,15 +98,20 @@ let do_refinement trail_filename units =
             let spurious_len = List.find sim_prefix (range 1 num_states) in
             let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
             solver#set_collect_asserts true;
-            if not (simulate_in_smt solver ctx ctr_ctx xducers step_asserts 1)
+            let res, smt_rev_map =
+                (simulate_in_smt
+                    solver ctx ctr_ctx xducers step_asserts rev_map 1) in
+            if not res
             then begin
                 log INFO
                     (sprintf "  The transition %d -> %d is spurious."
-                        (spurious_len - 1) spurious_len)
+                        (spurious_len - 1) spurious_len);
+                refine_spurious_step solver smt_rev_map
             end else begin
                 log INFO
                     (sprintf "  The transition %d -> %d is NOT spurious."
                         (spurious_len - 1) spurious_len);
+                print_vass_trace 2;
                 log INFO "Sorry, I am afraid I cannot do that, Dave.";
                 log INFO "I need a human assistance to find an invariant."
             end;
@@ -102,13 +119,7 @@ let do_refinement trail_filename units =
         with Not_found ->
         begin
             log INFO "  The counter-example is not spurious!";
-            let vals = parse_smt_evidence solver in
-            let print_st i =
-                printf "%d: " i;
-                pretty_print_exprs (Hashtbl.find vals i);
-                printf "\n";
-            in
-            List.iter (print_st) (range 0 num_states)
+            print_vass_trace num_states
         end
     end;
     log INFO "  [DONE]";

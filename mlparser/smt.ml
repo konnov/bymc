@@ -6,8 +6,10 @@ open Spin_types;;
 open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
+open Debug;;
 
 exception Smt_error of string;;
+exception Communication_failure of string;;
 
 let rec var_to_smt var =
     let wrap_arr type_s =
@@ -63,7 +65,11 @@ let rec expr_to_smt e =
         end
 ;;
 
-(* the wrapper of the actual solver (yices) *)
+(*
+  The wrapper of an SMT solver (yices).
+  XXX: if yices dies accidentally, the parent (OCaml) dies as well.
+  Do something to notify the user.
+ *)
 class yices_smt =
     object(self)
         val mutable pid = 0
@@ -73,7 +79,7 @@ class yices_smt =
         val mutable clog = stdout
         val mutable debug = false
         val mutable collect_asserts = false
-        val mutable asserts_tbl : (int, token expr) Hashtbl.t = Hashtbl.create 0
+        val timeout_sec = 0.1 (* how long we wait for input from yices *)
 
         method start =
             let pin, pout, perr =
@@ -82,22 +88,120 @@ class yices_smt =
             cout <- pout;
             cerr <- perr;
             clog <- open_out "yices.log";
-            fprintf cout "(set-verbosity! 3)\n"
+            fprintf cout "(set-verbosity! 2)\n"
         
         method stop =
             close_out clog;
             Unix.close_process_full (cin, cout, cerr)
 
+        method poll poll_i poll_o =
+            let read_err = ref true in
+            let rs = ref [] in
+            let ws = ref [] in
+            (* read the error input first as it can block other chans *)
+            while !read_err do
+                let ins, outs, errs =
+                    Unix.select
+                        (if poll_i then [Unix.descr_of_in_channel cin] else [])
+                        (if poll_o then [Unix.descr_of_out_channel cout] else [])
+                        [Unix.descr_of_in_channel cerr] timeout_sec in
+                if errs <> []
+                then begin
+                    let buf = String.create 50 in
+                    let fd = List.hd errs in
+                    let stop = ref false in
+                    while not !stop do
+                        let len = Unix.read fd buf 0 50 in
+                        fprintf stderr "%s" buf; flush stderr;
+                        stop := (len < 50);
+                    done
+                end
+                else read_err := false;
+                rs := ins;
+                ws := outs
+            done;
+            (!rs, !ws)
+
+        method consume_errors =
+            let _, _ = self#poll false false in
+            ()
+
+        method poll_read = 
+            let rs, _ = self#poll true false in
+            if rs = []
+            then raise (Communication_failure "Yices output is blocked")
+            else List.hd rs
+
+        method poll_write = 
+            let _, ws = self#poll false true in
+            if ws = []
+            then raise (Communication_failure "Yices input is blocked")
+            else List.hd ws
+
+        (* as we communicate with yices via pipes, the program can be blocked
+           if there is pending input/output on another channel.
+           Thus, use select before an input/output.
+
+           Did I started using OCaml to do low-level programming???
+         *)
+        method write_line s =
+            let fd = self#poll_write in
+            let len = String.length s in
+            let pos = ref 0 in
+            while !pos < len do
+                let written = Unix.write fd s !pos (len - !pos) in
+                if written = 0
+                then raise (Communication_failure "Written 0 chars to the yices input");
+                pos := !pos + written
+            done
+
+        method read_line =
+            let fd = self#poll_read in
+            (* too inefficient??? *)
+            let collected = ref [] in
+            let collected_str () = String.concat "" (List.rev !collected) in
+            let small_len = 100 in
+            let small_buf = String.create small_len in
+            let stop = ref false in
+            while not !stop do
+                let pos = ref 0 in
+                let read = ref 1 in
+                while not !stop && !read <> 0 && !pos < small_len do
+                    begin
+                        try read := Unix.read fd small_buf !pos 1;
+                        with Invalid_argument s ->
+                            self#consume_errors;
+                            fprintf
+                                stderr "Read so far: %s\n" (collected_str ());
+                            raise (Communication_failure "Yices output closed?")
+                    end;
+                    let c = String.get small_buf !pos in
+                    pos := !pos + 1;
+                    if c == '\n'
+                    then begin
+                        stop := true;
+                        pos := !pos - 1 (* strip '\n' *)
+                    end
+                done;
+                if !pos > 0
+                then collected := (String.sub small_buf 0 !pos) :: !collected;
+                if not !stop
+                then let _ = self#poll_read in ()
+            done;
+            let out = collected_str () in
+            log TRACE (sprintf "YICES: ^^^%s$$$\n" out);
+            out
 
         method append cmd =
             if debug then printf "%s\n" cmd;
-            fprintf cout "%s\n" cmd;
+            self#write_line (sprintf "%s\n" cmd);
             fprintf clog "%s\n" cmd; flush clog
 
         method append_assert s =
             self#append (sprintf "(assert %s)" s)
 
         method append_expr expr =
+            let eid = ref 0 in
             if not collect_asserts
             then self#append (sprintf "(assert %s)" (expr_to_smt expr))
             else begin
@@ -109,8 +213,9 @@ class yices_smt =
                 if (Str.string_match (Str.regexp "id: \\([0-9]+\\))") line 0)
                 then
                     let id = int_of_string (Str.matched_group 1 line) in
-                    Hashtbl.add asserts_tbl id expr
-            end
+                    eid := id
+            end;
+            !eid
 
         method push_ctx = self#append "(push)"
 
@@ -118,10 +223,10 @@ class yices_smt =
 
         method sync =
             (* the solver can print more messages, thus, sync! *)
-            self#append "(echo \"sync\\n\")"; flush cout;
+            self#append "(echo \"sync\\n\")";
             let stop = ref false in
             while not !stop do
-                if "sync" = (input_line cin) then stop := true
+                if "sync" = self#read_line then stop := true
             done
 
         method check =
@@ -144,28 +249,40 @@ class yices_smt =
         method get_evidence =
             (* same as sync but the lines are collected *)
             let lines = ref [] in
-            self#append "(echo \"END\\n\")"; flush cout;
+            self#append "(echo \"EOI\\n\")"; flush cout;
             let stop = ref false in
             while not !stop do
-                let line = input_line cin in
-                if "END" = line
+                let line = self#read_line in
+                if "EOI" = line
                 then stop := true
                 else lines := line :: !lines
             done;
             List.rev !lines
 
         method set_collect_asserts b =
-            collect_asserts <- b;
-            if not b then Hashtbl.clear asserts_tbl
+            collect_asserts <- b
 
-        method find_collected id =
-            Hashtbl.find asserts_tbl id
+        method get_unsat_cores =
+            (* collect unsatisfiable cores *)
+            let re = Str.regexp ".*unsat core ids: ([0-9\\ ]+).*" in
+            let cores = ref [] in
+            self#append "(echo \"EOI\\n\")\n";
+            let stop = ref false in
+            while not !stop do
+                let line = self#read_line in
+                if Str.string_match re line 0
+                then begin
+                    let id_str = (Str.matched_group 1 line) in
+                    let ids_as_str = (Str.split (Str.regexp "") id_str) in
+                    cores := (List.map int_of_string ids_as_str)
+                end;
 
-        method forget_collected =
-            Hashtbl.clear asserts_tbl
+                stop := (line = "EOI")
+            done;
+            !cores
 
         method is_out_sat ignore_errors =
-            let l = input_line cin in
+            let l = self#read_line in
             (*printf "%s\n" l;*)
             match l with
             | "sat" -> true

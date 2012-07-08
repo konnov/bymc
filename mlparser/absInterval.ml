@@ -143,14 +143,10 @@ class abs_domain conds_i =
                         if not_nop r
                         then solver#append_assert
                             (expr_to_smt (BinEx (LT, symb_expr, r)));
-                        if solver#check
-                        then begin
-                            solver#pop_ctx;
-                            raise (Found (Hashtbl.find val_map l))
-                        end;
-                        solver#pop_ctx
-                    )
-                    cond_intervals;
+                        let sat = solver#check in
+                        solver#pop_ctx;
+                        if sat then raise (Found (Hashtbl.find val_map l));
+                    ) cond_intervals;
                 raise (Abstraction_error
                     (sprintf "No abstract value for %s" (expr_s symb_expr)))
             with Found i ->
@@ -456,7 +452,9 @@ let mk_domain solver ctx units =
     let all_stmts = List.fold_left collect_stmts [] units in
     let conds = identify_conditions ctx#get_var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver ctx conds in
-    new abs_domain sorted_conds
+    let dom = new abs_domain sorted_conds in
+    dom#print;
+    dom
 ;;
 
 (*

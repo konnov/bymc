@@ -41,8 +41,8 @@ let write_to_file name units =
 
 let _ =
     try
-        current_verbosity_level := INFO (*INFO*);
         let opts = parse_options in
+        current_verbosity_level := if opts.verbose then DEBUG else INFO;
         let filename, basename, dirname =
             if Array.length Sys.argv > 1
             then opts.filename,

@@ -10,6 +10,8 @@ open Smt;;
 open Debug;;
 
 let parse_spin_trail filename dom t_ctx ctr_ctx =
+    let last_id = ref 0 in
+    let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
     let state_re = Str.regexp ".*GS{[0-9]*->[0-9]*:\\(\\([0-9,]\\)*\\)}.*" in
     let int_lists = ref [] in
     let vec_len = ref 0 in
@@ -27,7 +29,8 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
                     int_lists := ints :: !int_lists;
                     if may_log DEBUG
                     then begin
-                        List.iter (fun i -> printf "%d " i) ints; printf "\n"
+                        List.iter (fun i -> printf "%d " i) ints;
+                        printf "\n"
                     end
                 end
             done
@@ -36,16 +39,31 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
     end;
 
     let int_to_expr pos value =
+        let id = !last_id in
+        last_id := !last_id + 1;
         if pos < ctr_ctx#get_ctr_dim
-        then dom#concretize
-            (BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos)) value
+        then let e = dom#concretize
+                (BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos)) value in
+            let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos) in
+            (id, e, BinEx (EQ, acc, Const value))
         else let shared_no = pos - ctr_ctx#get_ctr_dim in
-            dom#concretize (Var (List.nth t_ctx#get_shared shared_no)) value
+            let e = dom#concretize
+                (Var (List.nth t_ctx#get_shared shared_no)) value in
+            let v = Var (List.nth t_ctx#get_shared shared_no) in
+            (id, e, BinEx (EQ, v, Const value))
     in
-    let row_to_exprs (lst: int list) : token expr list =
-        List.map2 int_to_expr (range 0 !vec_len) lst
+    let row_to_exprs (state_no: int) (lst: int list) : token stmt list =
+        let map_one pos value =
+            let id, abs_ex, conc_ex = int_to_expr pos value in
+            Hashtbl.add rev_map id (state_no, conc_ex);
+            Expr (id, abs_ex) in
+        List.map2 map_one (range 0 !vec_len) lst
     in
-    List.map row_to_exprs (List.rev !int_lists)
+    let asserts =
+        List.map2 row_to_exprs
+            (range 0 (List.length !int_lists)) (List.rev !int_lists)
+    in
+    (asserts, rev_map)
 ;;
 
 (* don't touch symbolic variables --- they are the parameters! *)
@@ -73,53 +91,44 @@ let create_path shared_vars xducer n_steps =
     xducers @ connections
 ;;
 
-let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts n_steps =
+let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
+    let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
-    let print_row i exprs =
-        Printf.printf "  %d. " i;
-        List.iter (fun e -> Printf.printf "%s " (expr_s e)) exprs;
-        Printf.printf "\n"
+    let append_one_assert state_no asrt =
+        match asrt with
+        | Expr (id, e) ->
+            let new_e =
+                if state_no = 0
+                then map_vars (fun v -> Var (map_to_step 0 (map_to_in v))) e
+                else map_vars
+                    (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) e
+            in
+            let smt_id = solver#append_expr new_e in
+            (* bind ids from the solver with reverse mapping on
+               concrete expressions *)
+            Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id)
+
+        | _ -> ()
     in
-    if may_log DEBUG then List.iter2 print_row (range 0 n_steps) trail_asserts;
-    let map_it i asserts =
-        if i = 0
-        then List.map
-            (map_vars (fun v -> Var (map_to_step 0 (map_to_in v)))) asserts
-        else List.map
-            (map_vars (fun v -> Var (map_to_step (i - 1) (map_to_out v))))
-            asserts
+    let append_trail_asserts state_no asserts =
+        List.iter (append_one_assert state_no) asserts
     in
-    let trail_asserts_glued =
-        List.map2 map_it (range 0 (n_steps + 1)) trail_asserts in
+    solver#push_ctx;
+    (* put asserts from the control flow graph *)
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
     let xducer_asserts =
         create_path (ctr_ctx#get_ctr :: t_ctx#get_shared) proc_xducer n_steps in
-    let asserts = xducer_asserts @ (List.concat trail_asserts_glued) in
-    let decls = expr_list_used_vars asserts in
-    let fo = open_out (sprintf "cex%d.yices" n_steps) in
-    let push_var v = fprintf fo "%s\n" (var_to_smt v) in
-    let push_expr e =
-        fprintf fo ";; %s\n" (expr_s e);
-        fprintf fo "(assert %s)\n" (expr_to_smt e)
-    in
-    fprintf fo "(set-evidence! true)\n";
-    (* global definitions and assumptions go to the file only *)
-    List.iter push_var t_ctx#get_symbolic;
-    List.iter push_expr t_ctx#get_assumps;
-    (* the main part of assertions *)
-    List.iter push_var decls;
-    List.iter push_expr asserts;
-    fprintf fo "(check)\n";
-    close_out fo;
+    let decls = expr_list_used_vars xducer_asserts in
 
-    solver#push_ctx;
     List.iter (fun v -> solver#append (var_to_smt v)) decls;
-    List.iter (fun e -> solver#append_expr e) asserts;
+    List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
+    (* put asserts from the counter example *)
+    List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
     let result = solver#check in
     solver#pop_ctx;
-    result
+    (result, smt_rev_map)
 ;;
 
 let parse_smt_evidence solver =
@@ -233,3 +242,14 @@ let pretty_print_exprs exprs =
     List.iter pp exprs
 ;;
 
+let refine_spurious_step solver smt_rev_map =
+    let core_ids = solver#get_unsat_cores in
+    let map_core cid =
+        if Hashtbl.mem smt_rev_map cid
+        then begin
+            let state, conc_ex = Hashtbl.find smt_rev_map cid in
+            printf "%d: %s\n" state (expr_s conc_ex)
+        end
+    in
+    List.iter map_core core_ids
+;;
