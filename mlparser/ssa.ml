@@ -213,7 +213,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
 
     let sub_var v =
-        if v#is_symbolic
+        if v#is_symbolic || v#proc_name = "spec" (* XXX: magic const *)
         then v (* do not touch symbolic variables, they are parameters! *)
         else 
             let i = s_top v in

@@ -24,7 +24,6 @@ let do_abstraction units =
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx units in
 
-    if may_log INFO then dom#print;
     log INFO "> Constructing interval abstraction";
     let intabs_units = do_interval_abstraction ctx dom solver units in
     write_to_file "abs-interval.prm" intabs_units;

@@ -79,7 +79,7 @@ class yices_smt =
         val mutable clog = stdout
         val mutable debug = false
         val mutable collect_asserts = false
-        val timeout_sec = 10.0 (* how long we wait for input from yices *)
+        val timeout_sec = 100.0 (* how long we wait for input from yices *)
 
         method start =
             let pin, pout, perr =

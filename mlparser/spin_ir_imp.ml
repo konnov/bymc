@@ -127,6 +127,7 @@ let token_s t =
       | SYMBOLIC -> "SYMBOLIC"
       | ALL -> "all"
       | SOME -> "some"
+      | CARD -> "card"
 ;;
 
 let rec expr_s e =
@@ -134,6 +135,7 @@ let rec expr_s e =
     | Nop comment -> sprintf "skip /* %s */" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
+    | UnEx (CARD, f) -> sprintf "card(%s)" (expr_s f)
     | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (expr_s arr) (expr_s idx)

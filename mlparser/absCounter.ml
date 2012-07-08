@@ -156,12 +156,38 @@ let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
                 (sprintf "Don't know how to do counter abstraction for %s"
                     (expr_s e)))
     in
+    let rec repl_ctr = function
+        | UnEx (CARD, BinEx (EQ, Var v, Const i)) ->
+            let is_ok valuation = (i = (Hashtbl.find valuation v)) in
+            let indices = ctr_ctx#all_indices_for is_ok in
+            let mk_sum l i =
+                let arr = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
+                if not_nop l then BinEx (PLUS, l, arr) else arr
+            in
+            List.fold_left mk_sum (Nop "") indices
+        | UnEx (CARD, _) as e ->
+            raise (Failure
+                (sprintf "Don't know how to handle card(%s)" (expr_s e)))
+        | BinEx (tok, lhs, rhs) ->
+            BinEx (tok, repl_ctr lhs, repl_ctr rhs)
+        | UnEx (tok, lhs) ->
+            UnEx (tok, repl_ctr lhs)
+        | _ as e -> e
+    in
     match decl_expr with
         | MDeclProp (id, v, PropAll e) ->
             MDeclProp (id, v, PropGlob (t_e mk_all e))
         | MDeclProp (id, v, PropSome e) ->
             MDeclProp (id, v, PropGlob (t_e mk_some e))
-        | _ -> decl_expr
+        | MDeclProp (id, v, PropGlob e) ->
+            let has_card = function
+                | UnEx (CARD, _) -> true
+                | _ -> false
+            in
+            if expr_exists has_card e
+            then MDeclProp (id, v, PropGlob (repl_ctr e))
+            else MDeclProp (id, v, PropGlob e)
+        | _ as s -> s
 ;;
 
 (* TODO: find out the values at the end of the init_stmts,
@@ -219,6 +245,9 @@ class virtual ctr_funcs ctr_ctx =
 
         method deref_ctr e =
             BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, e)
+
+        method virtual keep_assume:
+            token expr -> bool
     end;;
 
 class abs_ctr_funcs dom t_ctx ctr_ctx solver =
@@ -278,6 +307,8 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                 mk_assign_unfolding ktr_i expr_abs_vals
             in
             [mk_one MINUS prev_idx; mk_one PLUS next_idx]
+
+        method keep_assume e = false
     end;;
 
 class vass_funcs dom t_ctx ctr_ctx solver =
@@ -342,9 +373,12 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             [MHavoc (-1, delta);
              MAssume (-1, BinEx (GT, Var delta, Const 0));
              mk_one MINUS prev_idx; mk_one PLUS next_idx]
+
+        method keep_assume e = true
     end;;
 
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
+    let atomic_props = Hashtbl.create 10 in
     let counter_guard =
         let make_opt idx =
             let guard =
@@ -395,6 +429,24 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         @ post_cond
         @ new_update
     in
+    let replace_comp stmts =
+        let replace_assume = function
+            | MAssume (id, Var v) as s ->
+                    begin
+                    try 
+                        if funcs#keep_assume (Var v)
+                        then 
+                            if v#proc_name = "spec"
+                            then MAssume (id, Hashtbl.find atomic_props v)
+                            else s
+                        else MSkip id
+                    with Not_found ->
+                        raise (Failure
+                            (sprintf "No atomic prop %s found" v#get_name))
+                    end
+            | _ as s -> s
+        in List.map replace_assume stmts
+    in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
         let body = remove_bad_statements p#get_stmts in
@@ -402,7 +454,8 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         let main_lab = mk_uniq_label () in
         let new_init = funcs#mk_init p#get_active_expr skel.decl skel.init in
         let new_update = replace_update p#get_active_expr skel.update body in
-        let new_comp_upd = MAtomic (-1, skel.comp @ new_update) in
+        let new_comp = replace_comp skel.comp in
+        let new_comp_upd = MAtomic (-1, new_comp @ new_update) in
         let new_loop_body =
             counter_guard
             @ [MIf (-1,
@@ -437,6 +490,15 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             let np = abstract_proc p in
             np#set_provided (BinEx (EQ, Var sp_var, Const 0));
             Proc np
+    | Stmt (MDeclProp (id, v, PropGlob e) as s) ->
+       begin 
+            let nd = trans_prop_decl t_ctx ctr_ctx dom solver s in
+            match nd with
+            | MDeclProp (_, _, PropGlob ne) ->
+                Hashtbl.add atomic_props v ne;
+                Stmt (MSkip id)
+            | _ -> Stmt (MSkip id)
+       end
     | Stmt (MDeclProp (_, _, _) as d) ->
         Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
     | _ as u -> u
@@ -445,6 +507,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let keep_unit = function
         | Stmt (MDecl (_, v, _)) -> not v#is_symbolic
         | Stmt (MAssume (_, _)) -> false
+        | Stmt (MSkip _) -> false
         | _ -> true
     in
     let out_units =

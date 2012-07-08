@@ -72,6 +72,7 @@ let met_else = ref false;;
 let fwd_labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
 let global_scope = new symb_tab;;
+let spec_scope = new symb_tab;;
 let current_scope = ref global_scope;;
 
 let new_id () =
@@ -154,7 +155,7 @@ let fatal msg payload =
 %token  <string> MACRO_OTHER
 %token  EOF
 /* FORSYTE extensions { */
-%token  ASSUME SYMBOLIC ALL SOME
+%token  ASSUME SYMBOLIC ALL SOME CARD
 /* FORSYTE extensions } */
 /* imaginary tokens not directly used in the grammar, but used in the
    intermediate representations
@@ -607,12 +608,11 @@ proc	: inst		/* optional instantiator */
         ;
 
     pfld	: NAME {
-                (!current_scope#lookup $1)#as_var
-                   (* $$ = nn($1, NAME, ZN, ZN);
-                      if ($1->sym->isarray && !in_for)
-                      {	non_fatal("missing array index for '%s'",
-                            $1->sym->name);
-                      } *)
+                try
+                    (!current_scope#lookup $1)#as_var
+                with Symbol_not_found _ ->
+                    (* XXX: check that the current expression can use that *)
+                    (spec_scope#lookup $1)#as_var
                 }
         | NAME			/* { (* owner = ZS; *) } */
           LBRACE expr RBRACE
@@ -1002,7 +1002,11 @@ expr    : LPAREN expr RPAREN		{ $2 }
 /* FORSYTE extension */
 prop_decl:
     ATOMIC NAME ASGN atomic_prop {
-        MDeclProp (new_id (), new var($2), $4)
+        let v = new var($2) in
+        v#set_type Spin_types.TBIT;
+        v#set_proc_name "spec" (* special name to distinguish *);
+        spec_scope#add_symb v#get_name (v :> symb);
+        MDeclProp (new_id (), v, $4)
     }
     ;
 
@@ -1014,7 +1018,8 @@ atomic_prop:
     ;
 
 prop_expr    : 
-	  prop_expr PLUS prop_expr		{ BinEx(PLUS, $1, $3) }
+	  LPAREN prop_expr RPAREN		{ $2 }
+	| prop_expr PLUS prop_expr		{ BinEx(PLUS, $1, $3) }
 	| prop_expr MINUS prop_expr		{ BinEx(MINUS, $1, $3) }
 	| prop_expr MULT prop_expr		{ BinEx(MULT, $1, $3) }
 	| prop_expr DIV prop_expr		{ BinEx(DIV, $1, $3) }
@@ -1024,11 +1029,12 @@ prop_expr    :
 	| prop_expr LE prop_expr		{ BinEx(LE, $1, $3) }
 	| prop_expr EQ prop_expr		{ BinEx(EQ, $1, $3) }
 	| prop_expr NE prop_expr		{ BinEx(NE, $1, $3) }
+	| CARD LPAREN prop_expr	RPAREN	{ UnEx(CARD, $3) }
     | NAME /* proctype */ COLON NAME
         {
             let v = new var $3 in
             v#set_proc_name $1;
-            Var (v) (* TODO: remember the proctype*)
+            Var (v)
         }
 	| NAME
         {
