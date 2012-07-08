@@ -29,7 +29,6 @@ class ctr_abs_ctx dom t_ctx =
             local_vars <- Hashtbl.fold
                 (fun v r lst -> if is_local_unbounded r then v :: lst else lst)
                 t_ctx#get_var_roles [];
-            ctr_var#set_type Spin_types.TUNSIGNED;
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
                 ((List.length local_vars) * dom#length * pc_size)
