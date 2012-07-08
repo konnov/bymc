@@ -207,7 +207,9 @@ class virtual ctr_funcs ctr_ctx =
         method virtual introduced_vars:
             var list
 
-        method virtual mk_asserts:
+        method virtual mk_pre_asserts:
+            token expr -> token expr -> token expr -> token mir_stmt list
+        method virtual mk_post_asserts:
             token expr -> token expr -> token expr -> token mir_stmt list
         method virtual mk_init:
             token expr -> token mir_stmt list -> token mir_stmt list
@@ -225,7 +227,10 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
 
         method introduced_vars = []
 
-        method mk_asserts active_expr prev_idx next_idx =
+        method mk_pre_asserts active_expr prev_idx next_idx =
+            []
+
+        method mk_post_asserts active_expr prev_idx next_idx =
             let n = ctr_ctx#get_ctr_dim in
             let m = List.length t_ctx#get_shared in
             let str = sprintf "GS{%%d->%%d:%s}\\n"
@@ -258,7 +263,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     ) size_dist_list
             in
             [mk_nondet_choice option_list]
-                @ self#mk_asserts active_expr (Const 0) (Const 0)
+                @ self#mk_post_asserts active_expr (Const 0) (Const 0)
 
         method mk_counter_update prev_idx next_idx =
             let mk_one tok idx_ex = 
@@ -284,7 +289,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
         method introduced_vars = [delta]
 
-        method mk_asserts active_expr prev_idx next_idx =
+        method mk_pre_asserts active_expr prev_idx next_idx =
             let add s i =
                 let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
                 if s <> Const 0
@@ -296,6 +301,9 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
             [MAssume (-1, BinEx (EQ, active_expr, sum))]
+
+        method mk_post_asserts active_expr prev_idx next_idx =
+            self#mk_pre_asserts active_expr prev_idx next_idx
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
@@ -320,7 +328,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             in
             let other0 = List.map mk_oth other_indices in
             sum_eq_n :: other0
-                @ (self#mk_asserts active_expr (Const 0) (Const 0))
+                @ (self#mk_post_asserts active_expr (Const 0) (Const 0))
 
         method mk_counter_update prev_idx next_idx =
             (* XXX: use a havoc-like operator here *)
@@ -378,10 +386,13 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                     try Var (Hashtbl.find prev_next_pairs v)
                     with Not_found -> Var v
                 ) prev_idx_ex in
-        let asserts = funcs#mk_asserts active_expr prev_idx_ex next_idx_ex in
-        asserts (* TODO: make pre_asserts and post_asserts *)
+        let pre_cond =
+            funcs#mk_pre_asserts active_expr prev_idx_ex next_idx_ex in
+        let post_cond =
+            funcs#mk_post_asserts active_expr prev_idx_ex next_idx_ex in
+        pre_cond (* TODO: make pre_asserts and post_asserts *)
         @ (funcs#mk_counter_update prev_idx_ex next_idx_ex)
-        @ asserts
+        @ post_cond
         @ new_update
     in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
