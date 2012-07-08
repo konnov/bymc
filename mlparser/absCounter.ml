@@ -18,7 +18,7 @@ class ctr_abs_ctx dom t_ctx =
     object(self)
         val mutable pc_var: var = t_ctx#find_pc
         val mutable pc_size = 0
-        val mutable ctr_var = new var "ktr"
+        val mutable ctr_var = new var "bymc_k"
         val mutable local_vars = []
         
         initializer
@@ -431,12 +431,15 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         (* end of xducer *)
         new_proc
     in
+    let sp_var = new var "bymc_spur" in sp_var#set_type Spin_types.TBIT;
     let abs_unit = function
-        | Proc p ->
-            Proc (abstract_proc p)
-        | Stmt (MDeclProp (_, _, _) as d) ->
-            Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
-        | _ as u -> u
+    | Proc p ->
+            let np = abstract_proc p in
+            np#set_provided (BinEx (EQ, Var sp_var, Const 0));
+            Proc np
+    | Stmt (MDeclProp (_, _, _) as d) ->
+        Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
+    | _ as u -> u
     in
     let new_units = List.map abs_unit units in
     let keep_unit = function
@@ -446,6 +449,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     in
     let out_units =
         (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
+        :: (Stmt (MDecl (-1, sp_var, Const 0)))
         :: (List.filter keep_unit new_units) in
     (out_units, xducers)
 ;;

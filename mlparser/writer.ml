@@ -106,7 +106,10 @@ let write_proc cout lvl p =
         (List.map
             (fun v -> (var_type_promela v#get_type) ^ " " ^ v#get_name)
         p#get_args) in
-    fprintf cout "proctype %s(%s) {\n" p#get_name args_s;
+    fprintf cout "proctype %s(%s) " p#get_name args_s;
+    if not_nop p#get_provided
+    then begin fprintf cout "provided (%s) " (expr_s p#get_provided) end;
+    fprintf cout "{\n";
     let labels = Hashtbl.create 10 in
     Hashtbl.iter
         (fun n l -> Hashtbl.add labels l#get_num n)

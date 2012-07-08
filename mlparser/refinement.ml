@@ -244,15 +244,46 @@ let pretty_print_exprs exprs =
     List.iter pp exprs
 ;;
 
-let refine_spurious_step solver smt_rev_map =
+let intro_new_pred () =
+    let re = Str.regexp ".*bit bymc_p\\([0-9]+\\) = 0;.*" in
+    let cin = open_in "cegar_decl.inc" in
+    let stop = ref false in
+    let max_no = ref (-1) in
+    while not !stop do
+        try
+            let line = input_line cin in
+            if Str.string_match re line 0
+            then
+                let no = int_of_string (Str.matched_group 1 line) in
+                max_no := max !max_no no
+        with End_of_file ->
+            close_in cin;
+            stop := true
+    done;
+    let pred_no = 1 + !max_no in
+    let cout = open_out_gen [Open_append] 0666 "cegar_decl.inc" in
+    fprintf cout "bit bymc_p%d = 0;\n" pred_no;
+    close_out cout;
+    pred_no
+;;
+
+let refine_spurious_step solver smt_rev_map src_state_no =
     let core_ids = solver#get_unsat_cores in
     log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
-    let map_core cid =
-        if Hashtbl.mem smt_rev_map cid
-        then begin
-            let state, conc_ex = Hashtbl.find smt_rev_map cid in
-            printf "%d: %s\n" state (expr_s conc_ex)
-        end else log DEBUG (sprintf "Unmapped core %d\n" cid)
+    let filtered = List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids 
     in
-    List.iter map_core core_ids
+    let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
+    let pre, post = List.partition (fun (s, e) -> s = src_state_no) mapped in
+    let b2 (s, e) = sprintf "(%s)" (expr_s e) in
+    let pre, post = List.map b2 pre, List.map b2 post in
+    let pred_no = intro_new_pred () in
+
+    let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
+    fprintf cout "bymc_p%d = (%s);\n" pred_no (String.concat " && " pre);
+    close_out cout;
+
+    let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
+    fprintf cout "bymc_spur = (bymc_p%d && (%s)) || bymc_spur;\n"
+        pred_no (String.concat " && " post);
+    close_out cout
 ;;

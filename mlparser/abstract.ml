@@ -36,6 +36,10 @@ let do_abstraction units =
         do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
+    (* wipe the files left from other refinement sessions *)
+    close_out (open_out "cegar_decl.inc");
+    close_out (open_out "cegar_pre.inc");
+    close_out (open_out "cegar_post.inc");
     let _ = solver#stop in
     ctrabs_units
 ;;
@@ -106,7 +110,7 @@ let do_refinement trail_filename units =
                 log INFO
                     (sprintf "  The transition %d -> %d is spurious."
                         (spurious_len - 1) spurious_len);
-                refine_spurious_step solver smt_rev_map
+                refine_spurious_step solver smt_rev_map (spurious_len - 1)
             end else begin
                 log INFO
                     (sprintf "  The transition %d -> %d is NOT spurious."

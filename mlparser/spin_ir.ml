@@ -472,6 +472,8 @@ class ['t] proc name_i active_expr_i =
         val mutable stmts: 't mir_stmt list = []
         (* a symbolic expression *)
         val mutable active_expr: 't expr = active_expr_i
+        (* a provided clause if any *)
+        val mutable provided_expr: 't expr = Nop ""
 
         method set_args a = args <- a
         method get_args = args
@@ -481,6 +483,9 @@ class ['t] proc name_i active_expr_i =
 
         method set_active_expr e = active_expr <- e
         method get_active_expr = active_expr
+
+        method set_provided e = provided_expr <- e
+        method get_provided = provided_expr
 
         method labels_as_hash =
             let symbs = List.filter
