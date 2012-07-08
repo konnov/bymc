@@ -424,8 +424,10 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             funcs#mk_pre_asserts active_expr prev_idx_ex next_idx_ex in
         let post_cond =
             funcs#mk_post_asserts active_expr prev_idx_ex next_idx_ex in
+
         pre_cond (* TODO: make pre_asserts and post_asserts *)
         @ (funcs#mk_counter_update prev_idx_ex next_idx_ex)
+        @ [MUnsafe (-1, "#include \"cegar_post.inc\"")]
         @ post_cond
         @ new_update
     in
@@ -463,8 +465,12 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                  MOptGuarded [MExpr (-1, Nop "")]]);
                MGoto (-1, main_lab)] in
         let new_body = 
-            skel.decl @ new_init @ skel.loop_prefix
+            skel.decl
+            @ [MUnsafe (-1, "#include \"cegar_decl.inc\"")]
+            @ new_init
             @ [MLabel (-1, main_lab)]
+            @ skel.loop_prefix
+            @ [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
             @ new_loop_body
         in
         let new_proc = proc_replace_body p new_body in

@@ -92,6 +92,7 @@ let rec write_stmt cout lvl lab_tab s =
     | MAssert (_, e) -> fprintf cout "%sassert(%s);\n" tab (expr_s e)
     | MAssume (_, e) -> fprintf cout "%sassume(%s);\n" tab (expr_s e)
     | MHavoc (_, v) -> fprintf cout "%shavoc(%s);\n" tab v#get_name
+    | MUnsafe (_, s) -> fprintf cout "%s%s\n" tab s
     | MPrint (_, s, es) ->
             fprintf cout "%sprintf(\"%s\"%s);\n"
                 tab s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)

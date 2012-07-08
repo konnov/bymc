@@ -369,6 +369,7 @@ type 't mir_stmt =
     | MAssume of int * 't expr
     | MPrint of int * string * 't expr list
     | MHavoc of int * var
+    | MUnsafe of int * string (* a statement never interpreted but copied*)
     | MDeclProp of int * var * 't atomic_expr
 and 't atomic_expr =
       PropAll of 't expr
@@ -392,6 +393,7 @@ let m_stmt_id = function
     | MAssume (id, _) -> id
     | MPrint (id, _, _) -> id
     | MHavoc (id, _) -> id
+    | MUnsafe (id, _) -> id
     | MDeclProp (id, _, _) -> id
 ;;
 
@@ -419,6 +421,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MAssume (id, e) -> Assume (id, e) :: tl
         | MPrint (id, s, args) -> Print (id, s, args) :: tl
         | MHavoc (id, v) -> Havoc (id, v) :: tl
+        | MUnsafe (id, s) -> Expr (id, Nop "") :: tl
         | MDeclProp (id, _, _) -> Expr (id, Nop "") :: tl
     and
         make_option exit_lab opt =

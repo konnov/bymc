@@ -218,6 +218,7 @@ let rec mir_stmt_s s =
     | MAssert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | MAssume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
     | MHavoc (id, v) -> sprintf "<%3d> havoc %s" id v#get_name
+    | MUnsafe (id, s) -> sprintf "<%3d> %s" id s
     | MPrint (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s"
             id s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
