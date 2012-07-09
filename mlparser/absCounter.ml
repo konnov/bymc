@@ -348,7 +348,9 @@ class vass_funcs dom t_ctx ctr_ctx solver =
                 List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
-            [MAssume (-1, BinEx (EQ, active_expr, sum))]
+            [MAssume (-1, BinEx (EQ, active_expr, sum));
+             MHavoc (-1, delta);
+             MAssume (-1, BinEx (GT, Var delta, Const 0));]
 
         method mk_post_asserts active_expr prev_idx next_idx =
             self#mk_pre_asserts active_expr prev_idx next_idx
@@ -387,9 +389,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
                 let ktr_i = self#deref_ctr idx_ex in
                 MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
             in
-            [MHavoc (-1, delta);
-             (*MAssume (-1, BinEx (GT, Var delta, Const 0));*)
-             MAssume (-1, BinEx (EQ, Var delta, Const 1));
+            [ (*MAssume (-1, BinEx (EQ, Var delta, Const 1));*)
              MAssume (-1, BinEx (GE, self#deref_ctr prev_idx, Const 0));
              mk_one MINUS prev_idx; mk_one PLUS next_idx]
 
@@ -451,6 +451,23 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         @ new_update
     in
     let replace_comp stmts =
+        let rec hack_nsnt = function
+            (* XXX: this is a hack saying if we have nsnt + 1,
+                then it should be nsnt + delta *)
+            | MExpr (id, BinEx (ASGN, Var x, BinEx (PLUS, Var y, Const 1))) as s ->
+                if t_ctx#must_hack_expr (Var x) && x#get_name = y#get_name
+                then MExpr (id,
+                        BinEx (ASGN, Var x,
+                            BinEx (PLUS, Var x, Var (new var "vass_dta"))))
+                else s
+            | MIf (id, opts) ->
+                let on_opt = function
+                    | MOptGuarded seq -> MOptGuarded (List.map hack_nsnt seq)
+                    | MOptElse seq -> MOptElse (List.map hack_nsnt seq)
+                in
+                MIf (id, (List.map on_opt opts))
+            | _ as s -> s
+        in
         let replace_assume = function
             | MAssume (id, Var v) as s ->
                     begin
@@ -466,7 +483,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                             (sprintf "No atomic prop %s found" v#get_name))
                     end
             | _ as s -> s
-        in List.map replace_assume stmts
+        in List.map hack_nsnt (List.map replace_assume stmts)
     in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =

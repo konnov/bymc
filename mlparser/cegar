@@ -13,17 +13,22 @@ PROP=$2
 SPIN=spin
 cmd=""
 
-CAMLRUNPARAM="b" ./run.native -a $PROG
+CAMLRUNPARAM="b" ./run.native -a $PROG || exit 1
+
+rm -rf spin.out spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
     $SPIN -a -N $PROP abs-counter.prm \
-        && gcc -o ./pan pan.c && ./pan -a -m1000000 \
-        && $SPIN -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.out
+        && gcc -o ./pan pan.c && ./pan -a -m1000000 2>&1| tee spin.out
 
-    if grep -q -v "errors: 1" spin.out; then
-        CAMLRUNPARAM="b" ./run.native -t spin.out $PROG | tee refinement.out
-        echo -n "     0  "; head -n 1 spin.out # start with 0
-        tail -n '+2' spin.out | cat -n
+    if egrep -q "errors: +0" spin.out; then
+        echo "The property is verified"
+        cmd="q"
+    else
+        $SPIN -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
+        && CAMLRUNPARAM="b" ./run.native -t spin.trace $PROG | tee refinement.out
+        echo -n "     0  "; head -n 1 spin.trace # start with 0
+        tail -n '+2' spin.trace | cat -n
         echo ""
 
         if grep "Sorry" refinement.out; then
@@ -32,8 +37,5 @@ while [ "$cmd" != "q" ]; do
             echo "Enter to continue, q<Enter> to exit"
             read cmd
         fi
-    else
-        echo "The property is verified"
-        cmd="q"
     fi
 done
