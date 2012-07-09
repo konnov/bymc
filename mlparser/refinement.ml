@@ -136,14 +136,15 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
     (result, smt_rev_map)
 ;;
 
-let parse_smt_evidence solver =
+let parse_smt_evidence t_ctx solver =
     let vals = Hashtbl.create 10 in
     let lines = solver#get_evidence in
+    let param_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
     let var_re =
-        Str.regexp "(= S\\([0-9]+\\)_\\([a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([-0-9]+\\))"
+        Str.regexp "(= S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([-0-9]+\\))"
     in
     let arr_re =
-        Str.regexp "(= (S\\([0-9]+\\)_\\([a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([0-9]+\\)) \\([-0-9]+\\))"
+        Str.regexp "(= (S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
     let add_state_expr state expr =
         if not (Hashtbl.mem vals state)
@@ -152,7 +153,7 @@ let parse_smt_evidence solver =
     in
     let parse_line line =
         if Str.string_match var_re line 0
-        then
+        then begin
             let step = int_of_string (Str.matched_group 1 line) in
             let name = (Str.matched_group 2 line) in
             let dir = (Str.matched_group 3 line) in
@@ -160,9 +161,10 @@ let parse_smt_evidence solver =
             let value = int_of_string (Str.matched_group 4 line) in
             let state = if dir = "IN" then step else (step + 1) in
             let e = BinEx (ASGN, Var (new var name), Const value) in
-            add_state_expr state e;
-        else if Str.string_match arr_re line 0
-        then
+            if List.exists (fun v -> v#get_name = name) t_ctx#get_shared
+            then add_state_expr state e;
+        end else if Str.string_match arr_re line 0
+        then begin
             let step = int_of_string (Str.matched_group 1 line) in
             let name = (Str.matched_group 2 line) in
             let dir = (Str.matched_group 3 line) in
@@ -174,6 +176,11 @@ let parse_smt_evidence solver =
                 BinEx (ARR_ACCESS, Var (new var name), Const idx),
                 Const value) in
             add_state_expr state e;
+        end else if Str.string_match param_re line 0
+        then
+            let name = (Str.matched_group 1 line) in
+            let value = int_of_string (Str.matched_group 2 line) in
+            add_state_expr 0 (BinEx (ASGN, Var (new var name), Const value))
     in
     List.iter parse_line lines;
     let cmp e1 e2 =

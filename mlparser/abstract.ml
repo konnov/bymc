@@ -6,6 +6,7 @@ open AbsCounter;;
 open Refinement;;
 open Smt;;
 
+open Spin;;
 open Spin_ir;;
 open Spin_ir_imp;;
 open Writer;;
@@ -31,7 +32,7 @@ let do_abstraction units =
     log INFO "> Constructing counter abstraction";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let funcs = new abs_ctr_funcs dom ctx ctr_ctx solver in
-    let ctrabs_units, _ =
+    let ctrabs_units, _, _ =
         do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
@@ -55,23 +56,53 @@ let construct_vass units =
     log INFO "> Constructing VASS and transducers...";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
-    let vass_units, xducers =
+    let vass_units, xducers, atomic_props =
         do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
     in
     write_to_file "abs-vass.prm" vass_units;
     log INFO "  [DONE]"; flush stdout;
 
-    (ctx, solver, dom, ctr_ctx, xducers)
+    (ctx, solver, dom, ctr_ctx, xducers, atomic_props)
+;;
+
+let print_vass_trace t_ctx solver num_states = 
+    let vals = parse_smt_evidence t_ctx solver in
+    let print_st i =
+        printf "%d: " i;
+        pretty_print_exprs (Hashtbl.find vals i);
+        printf "\n";
+    in
+    List.iter (print_st) (range 0 num_states)
 ;;
 
 let check_invariant inv_name units =
-    let (ctx, solver, dom, ctr_ctx, xducers) = construct_vass units in
-    ()
+    let (ctx, solver, dom, ctr_ctx, xducers, aprops) = construct_vass units in
+    let inv_expr =
+        try Hashtbl.find aprops inv_name
+        with Not_found ->
+            raise (Failure (sprintf "No atomic proposition %s" inv_name))
+    in
+    printf "The invariant candidate to check: %s\n" (expr_s inv_expr);
+    let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
+    let step_asserts = [[Expr (0, inv)]; [Expr (1, not_inv)]] in
+    let rev_map = Hashtbl.create 10 in
+    Hashtbl.add rev_map 0 (0, inv); Hashtbl.add rev_map 1 (1, not_inv);
+    solver#set_collect_asserts true;
+    solver#set_need_evidence true;
+    let res, smt_rev_map =
+        (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1) in
+    if not res
+    then printf "The invariant holds!\n"
+    else begin
+        printf "The invariant is violated!\n";
+        print_vass_trace ctx solver 2
+    end;
+    solver#set_collect_asserts false;
 ;;
 
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    let (ctx, solver, dom, ctr_ctx, xducers) = construct_vass units in
+    let (ctx, solver, dom, ctr_ctx, xducers, _) = construct_vass units in
     log INFO "> Reading trail...";
     let trail_asserts, rev_map =
         parse_spin_trail trail_filename dom ctx ctr_ctx in
@@ -94,15 +125,6 @@ let do_refinement trail_filename units =
             true
         end
     in
-    let print_vass_trace num_states = 
-        let vals = parse_smt_evidence solver in
-        let print_st i =
-            printf "%d: " i;
-            pretty_print_exprs (Hashtbl.find vals i);
-            printf "\n";
-        in
-        List.iter (print_st) (range 0 num_states)
-    in
     let check_trans st = 
         let step_asserts = list_sub trail_asserts st 2 in
         solver#append
@@ -121,7 +143,7 @@ let do_refinement trail_filename units =
         end else begin
             log INFO
                 (sprintf "  The transition %d -> %d is OK." st (st + 1));
-            (*print_vass_trace 2;*)
+            (*print_vass_trace ctx solver 2;*)
             false
         end
     in
@@ -131,7 +153,7 @@ let do_refinement trail_filename units =
     if not (sim_prefix (num_states - 1))
     then begin
         log INFO "  The counter-example is not spurious!";
-        print_vass_trace num_states
+        print_vass_trace ctx solver num_states
     end else begin
         log INFO "  Trying to find a spurious transition...";
         let sp_st =

@@ -64,6 +64,8 @@ let _ =
         then let _ = do_abstraction units in ()
         else if opts.refine
         then let _ = do_refinement opts.trail_name units in ()
+        else if opts.check_inv
+        then let _ = check_invariant opts.inv_name units in ()
         else printf "No options given. Bye.\n"
     with End_of_file ->
         log ERROR "Premature end of file";

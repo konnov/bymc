@@ -412,7 +412,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                     if funcs#keep_assume (Var v)
                     then 
                         if v#proc_name = "spec"
-                        then MAssume (id, Hashtbl.find atomic_props v)
+                        then MAssume (id, Hashtbl.find atomic_props v#get_name)
                         else s
                     else MSkip id
                 with Not_found ->
@@ -491,7 +491,22 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        List.map (fun e -> replace_assume (hack_nsnt e)) stmts
+        let replace_assume = function
+            | MAssume (id, Var v) as s ->
+                    begin
+                    try 
+                        if funcs#keep_assume (Var v)
+                        then 
+                            if v#proc_name = "spec"
+                            then MAssume (id, Hashtbl.find atomic_props v#get_name)
+                            else s
+                        else MSkip id
+                    with Not_found ->
+                        raise (Failure
+                            (sprintf "No atomic prop %s found" v#get_name))
+                    end
+            | _ as s -> s
+        in List.map hack_nsnt (List.map replace_assume stmts)
     in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
@@ -546,7 +561,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             let nd = trans_prop_decl t_ctx ctr_ctx dom solver s in
             match nd with
             | MDeclProp (_, _, PropGlob ne) ->
-                Hashtbl.add atomic_props v ne;
+                Hashtbl.add atomic_props v#get_name ne;
                 Stmt (MSkip id)
             | _ -> Stmt (MSkip id)
        end
@@ -565,6 +580,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
         :: (Stmt (MDecl (-1, ctr_ctx#get_spur, Const 0)))
         :: (List.filter keep_unit new_units) in
-    (out_units, xducers)
+    (out_units, xducers, atomic_props)
 ;;
 
