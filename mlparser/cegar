@@ -3,7 +3,7 @@
 PROG=$1
 PROP=$2
 
-SPIN=spin601
+SPIN=spin
 cmd=""
 
 CAMLRUNPARAM="b" ./run.native -a $PROG
