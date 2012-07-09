@@ -7,13 +7,16 @@ open Debug;;
 
 type options =
     {
-        abstract: bool; refine: bool; trail_name: string; filename: string;
+        abstract: bool; refine: bool; check_inv: bool;
+        trail_name: string; filename: string; 
+        inv_name: string;
         verbose: bool
     }
 
 let parse_options =
     let opts = ref {
-        abstract = false; refine = false; trail_name = ""; filename = "";
+        abstract = false; refine = false; check_inv = false;
+        trail_name = ""; filename = ""; inv_name = "";
         verbose = false
     } in
     (Arg.parse
@@ -23,6 +26,9 @@ let parse_options =
             ("-t", Arg.String
              (fun s -> opts := {!opts with refine = true; trail_name = s}),
              "Check feasibility of a counterexample produced by spin -t (not a *.trail!).");
+            ("-i", Arg.String
+             (fun s -> opts := {!opts with check_inv = true; inv_name = s}),
+             "Check if an atomic proposition is an invariant!).");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "Produce lots of verbose output (you are warned).");
         ]

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 if [ "$#" -lt 2 ]; then
     echo "Not enough arguments"
@@ -12,8 +12,11 @@ PROP=$2
 
 SPIN=spin
 cmd=""
+step="0"
 
-CAMLRUNPARAM="b" ./run.native -a $PROG || exit 1
+if [ "$CONTINUE" == "" ]; then
+    CAMLRUNPARAM="b" ./run.native -a $PROG || exit 1
+fi
 
 rm -rf spin.out spin.trace refinement.out
 
@@ -22,7 +25,7 @@ while [ "$cmd" != "q" ]; do
         && gcc -o ./pan pan.c && ./pan -a -m1000000 2>&1| tee spin.out
 
     if egrep -q "errors: +0" spin.out; then
-        echo "The property is verified"
+        echo "The property is verified in $step refinement steps"
         cmd="q"
     else
         $SPIN -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
@@ -34,8 +37,11 @@ while [ "$cmd" != "q" ]; do
         if grep "Sorry" refinement.out; then
             cmd="q"
         else
-            echo "Enter to continue, q<Enter> to exit"
-            read cmd
+            step=$((step+1))
+            if [ "$INTERACT" != "" ]; then
+                echo "Enter to continue, q<Enter> to exit"
+                read cmd
+            fi
         fi
     fi
 done
