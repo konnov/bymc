@@ -82,7 +82,7 @@ let check_invariant inv_name units =
         with Not_found ->
             raise (Failure (sprintf "No atomic proposition %s" inv_name))
     in
-    printf "The invariant candidate to check: %s\n" (expr_s inv_expr);
+    printf "The invariant candidate to check:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
     let step_asserts = [[Expr (0, inv)]; [Expr (1, not_inv)]] in
     let rev_map = Hashtbl.create 10 in
@@ -92,9 +92,9 @@ let check_invariant inv_name units =
     let res, smt_rev_map =
         (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1) in
     if not res
-    then printf "The invariant holds!\n"
+    then printf "The invariant holds!\n\n"
     else begin
-        printf "The invariant is violated!\n";
+        printf "The invariant is violated!\n\nHere is an example:\n";
         print_vass_trace ctx solver 2
     end;
     solver#set_collect_asserts false;

@@ -347,17 +347,21 @@ class vass_funcs dom t_ctx ctr_ctx solver =
              MAssume (-1, BinEx (GT, Var delta, Const 0));]
 
         method mk_pre_asserts active_expr prev_idx next_idx =
+            let acc i = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
             let add s i =
-                let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
                 if s <> Const 0
-                then BinEx (PLUS, acc, s)
-                else acc
+                then BinEx (PLUS, acc i, s)
+                else acc i
             in
-            let sum =
-                List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
+            (* counter are non-negative, non-obvious for an SMT solver! *)
+            let all_indices = (range 0 ctr_ctx#get_ctr_dim) in
+            let mk_non_neg i = MAssume (-1, BinEx (GE, acc i, Const 0)) in
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
-            [MAssume (-1, BinEx (EQ, active_expr, sum));]
+            let sum =
+                List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
+            MAssume (-1, BinEx (EQ, active_expr, sum));
+            :: (List.map mk_non_neg all_indices)
 
         method mk_post_asserts active_expr prev_idx next_idx =
             self#mk_pre_asserts active_expr prev_idx next_idx
