@@ -27,12 +27,14 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
                     let ints = List.map int_of_string strs in
                     vec_len := List.length ints;
                     int_lists := ints :: !int_lists;
+                    List.iter (fun i -> printf "%d " i) ints;
+                    printf "\n";
                     if may_log DEBUG
                     then begin
                         List.iter (fun i -> printf "%d " i) ints;
                         printf "\n"
                     end
-                end
+                end else (printf "WARNING: no match for %s\n" line)
             done
         with End_of_file ->
             close_in fin;
