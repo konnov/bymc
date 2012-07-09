@@ -202,8 +202,8 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
                 let m = (sprintf "Use of %s before declaration?" v#get_name) in
                 raise (Failure m)
     in
-    (* initialize local variables *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 0) local_vars;
+    (* initialize local variables: start with 1 as 0 is reserved for input *)
+    List.iter (fun v -> Hashtbl.add counters (nm v) 1) local_vars;
     List.iter (fun v -> Hashtbl.add stacks (nm v) []) local_vars;
     (* global vars are different,
        each global variable x has a version x_0 referring
