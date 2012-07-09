@@ -135,7 +135,7 @@ let do_refinement trail_filename units =
     end else begin
         log INFO "  Trying to find a spurious transition...";
         let sp_st =
-            try List.find check_trans (range 0 num_states)
+            try List.find check_trans (range 0 (num_states - 1))
             with Not_found -> -1
         in
         if sp_st = -1
