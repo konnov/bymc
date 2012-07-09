@@ -69,14 +69,20 @@ let extract_skel proc_body =
     | [MAtomic (_, atomic_body)] -> atomic_body
     | _ -> raise (Skel_error "The computation must be protected by atomic")
     in
+    let assumps, el, tl =
+        Accums.list_cut_ignore (* collect finalizing assumptions *)
+            (function | MAssume (_, _) -> false | _ -> true)
+            (List.rev atomic_body)
+    in
     let hd, el, tl =
-        Accums.list_cut_ignore (* cut it by the first non-expression *)
+        Accums.list_cut_ignore (* collect finalizing expressions + assumps *)
             (function
                 | MExpr (_, _) -> false
-                | _ -> true
-            ) (List.rev atomic_body)
+                | MAssume (_, _) -> false
+                | _ -> true)
+            (el @ tl)
     in
-    let update = List.rev hd in
+    let update = (List.rev hd) @ (List.rev assumps) in
     let comp = List.rev (el @ tl) in
     { decl = decls; init = init_s;
       loop_prefix = prefix_s; comp = comp; update = update }

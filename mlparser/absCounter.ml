@@ -405,6 +405,22 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let atomic_props = Hashtbl.create 10 in
+    let replace_assume = function
+        | MAssume (id, Var v) as s ->
+                begin
+                try 
+                    if funcs#keep_assume (Var v)
+                    then 
+                        if v#proc_name = "spec"
+                        then MAssume (id, Hashtbl.find atomic_props v)
+                        else s
+                    else MSkip id
+                with Not_found ->
+                    raise (Failure
+                        (sprintf "No atomic prop %s found" v#get_name))
+                end
+        | _ as s -> s
+    in
     let counter_guard =
         let make_opt idx =
             let guard =
@@ -424,18 +440,18 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let replace_update active_expr update stmts =
         (* all local variables should be reset to 0 *)
         let new_update =
-            List.map
-                (function
-                    | MExpr (_1, BinEx (ASGN, Var var, rhs)) as s ->
-                        begin
-                            match t_ctx#get_role var with
-                            | LocalUnbounded
-                            | BoundedInt (_, _) ->
-                                MExpr (-1, BinEx (ASGN, Var var, Const 0))
-                            | _ -> s
-                        end
-                    | _ as s -> s
-                ) update
+            let replace_expr = function
+                | MExpr (_1, BinEx (ASGN, Var var, rhs)) as s ->
+                    begin
+                        match t_ctx#get_role var with
+                        | LocalUnbounded
+                        | BoundedInt (_, _) ->
+                            MExpr (-1, BinEx (ASGN, Var var, Const 0))
+                        | _ -> s
+                    end
+                | _ as s -> s
+            in
+            List.map (fun e -> replace_assume (replace_expr e)) update
         in
         let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
         (* XXX: it might break with several process prototypes *)
@@ -475,22 +491,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        let replace_assume = function
-            | MAssume (id, Var v) as s ->
-                    begin
-                    try 
-                        if funcs#keep_assume (Var v)
-                        then 
-                            if v#proc_name = "spec"
-                            then MAssume (id, Hashtbl.find atomic_props v)
-                            else s
-                        else MSkip id
-                    with Not_found ->
-                        raise (Failure
-                            (sprintf "No atomic prop %s found" v#get_name))
-                    end
-            | _ as s -> s
-        in List.map hack_nsnt (List.map replace_assume stmts)
+        List.map (fun e -> replace_assume (hack_nsnt e)) stmts
     in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
