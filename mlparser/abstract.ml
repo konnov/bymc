@@ -103,43 +103,49 @@ let do_refinement trail_filename units =
         in
         List.iter (print_st) (range 0 num_states)
     in
-    begin
-        let num_states = (List.length trail_asserts) in
-        solver#set_need_evidence true;
-        try
-            (* check the path first *)
-            if not (sim_prefix (num_states - 1))
-            then raise Not_found;
-            log INFO "  Trying to find the shortest spurious path...";
+    let check_trans st = 
+        let step_asserts = list_sub trail_asserts st 2 in
+        solver#append
+            (sprintf ";; Checking the transition %d -> %d" st (st + 1));
+        solver#set_collect_asserts true;
+        let res, smt_rev_map =
+            (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1)
+        in
+        solver#set_collect_asserts false;
+        if not res
+        then begin
+            log INFO (sprintf "  The transition %d -> %d is spurious."
+                    st (st + 1));
+            refine_spurious_step solver smt_rev_map st;
+            true
+        end else begin
+            log INFO
+                (sprintf "  The transition %d -> %d is OK." st (st + 1));
+            (*print_vass_trace 2;*)
+            false
+        end
+    in
+    let num_states = (List.length trail_asserts) in
+    solver#set_need_evidence true;
+    (* check the path first *)
+    if not (sim_prefix (num_states - 1))
+    then begin
+        log INFO "  The counter-example is not spurious!";
+        print_vass_trace num_states
+    end else begin
+        log INFO "  Trying to find a spurious transition...";
+        let sp_st =
+            try List.find check_trans (range 0 num_states)
+            with Not_found -> -1
+        in
+        if sp_st = -1
+        then begin
+            log INFO "Sorry, I am afraid I cannot do that, Dave.";
+            log INFO "I need a human assistance to find an invariant.";
+            log INFO "  Trying to find the shortest spurious path for you...";
             (* then check its prefixes, from the shortest to the longest *)
-            let spurious_len = List.find sim_prefix (range 1 num_states) in
-            let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
-            solver#append
-                (sprintf ";; Checking the transition %d -> %d"
-                    (spurious_len - 1) spurious_len);
-            solver#set_collect_asserts true;
-            let res, smt_rev_map =
-                (simulate_in_smt
-                    solver ctx ctr_ctx xducers step_asserts rev_map 1) in
-            if not res
-            then begin
-                log INFO
-                    (sprintf "  The transition %d -> %d is spurious."
-                        (spurious_len - 1) spurious_len);
-                refine_spurious_step solver smt_rev_map (spurious_len - 1)
-            end else begin
-                log INFO
-                    (sprintf "  The transition %d -> %d is NOT spurious."
-                        (spurious_len - 1) spurious_len);
-                print_vass_trace 2;
-                log INFO "Sorry, I am afraid I cannot do that, Dave.";
-                log INFO "I need a human assistance to find an invariant."
-            end;
-            solver#set_collect_asserts false;
-        with Not_found ->
-        begin
-            log INFO "  The counter-example is not spurious!";
-            print_vass_trace num_states
+            let short_len = List.find sim_prefix (range 1 num_states) in
+            log INFO (sprintf "  The shortest path is 0:%d" short_len)
         end
     end;
     log INFO "  [DONE]";
