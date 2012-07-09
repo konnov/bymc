@@ -242,6 +242,8 @@ class virtual ctr_funcs ctr_ctx =
         method virtual introduced_vars:
             var list
 
+        method virtual mk_pre_loop:
+            token expr -> token mir_stmt list
         method virtual mk_pre_asserts:
             token expr -> token expr -> token expr -> token mir_stmt list
         method virtual mk_post_asserts:
@@ -264,6 +266,9 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
         inherit ctr_funcs ctr_ctx 
 
         method introduced_vars = []
+
+        method mk_pre_loop active_expr =
+            []
 
         method mk_pre_asserts active_expr prev_idx next_idx =
             []
@@ -337,6 +342,10 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
         method introduced_vars = [delta]
 
+        method mk_pre_loop active_expr =
+            [MHavoc (-1, delta);
+             MAssume (-1, BinEx (GT, Var delta, Const 0));]
+
         method mk_pre_asserts active_expr prev_idx next_idx =
             let add s i =
                 let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
@@ -348,9 +357,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
                 List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
-            [MAssume (-1, BinEx (EQ, active_expr, sum));
-             MHavoc (-1, delta);
-             MAssume (-1, BinEx (GT, Var delta, Const 0));]
+            [MAssume (-1, BinEx (EQ, active_expr, sum));]
 
         method mk_post_asserts active_expr prev_idx next_idx =
             self#mk_pre_asserts active_expr prev_idx next_idx
@@ -506,6 +513,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             @ new_init
             @ [MLabel (-1, main_lab)]
             @ skel.loop_prefix
+            @ (funcs#mk_pre_loop p#get_active_expr)
             @ [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
             @ new_loop_body
         in

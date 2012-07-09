@@ -314,7 +314,6 @@ type 't stmt =
     | D_step_beg of int | D_step_end of int
     | Goto of int * int
     | If of int * int list (* condition labels *) * int (* exit label *)
-    | Else of int
     | Assert of int * 't expr
     | Assume of int * 't expr
     | Havoc of int * var (* forget about the current value of the variable *)
@@ -332,7 +331,6 @@ let stmt_id = function
     | D_step_end id -> id
     | Goto (id, _) -> id
     | If (id, _, _) -> id
-    | Else id -> id
     | Assert (id, _) -> id
     | Assume (id, _) -> id
     | Havoc (id, _) -> id
@@ -350,7 +348,6 @@ let replace_stmt_id new_id = function
     | D_step_end _ -> D_step_end new_id
     | Goto (_, l) -> Goto (new_id, l)
     | If (_, opt_labs, exit_lab) -> If (new_id, opt_labs, exit_lab)
-    | Else _ -> Else new_id
     | Assert (_, e) -> Assert (new_id, e)
     | Assume (_, e) -> Assume (new_id, e)
     | Havoc (_, v) -> Havoc (new_id, v)
@@ -397,59 +394,6 @@ let m_stmt_id = function
     | MHavoc (id, _) -> id
     | MUnsafe (id, _) -> id
     | MDeclProp (id, _, _) -> id
-;;
-
-let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
-    let rec make_one s tl =
-        match s with
-        | MIf (id, options) ->
-            let exit_lab = mk_uniq_label () in
-            let labs_seqs = List.map (make_option exit_lab) options in
-            let opt_labs, opt_seqs = List.split labs_seqs in
-            If (id, opt_labs, exit_lab)
-                :: ((List.concat opt_seqs) @ (Label (-1, exit_lab) :: tl))
-        | MAtomic (id, seq) ->
-            let new_seq = List.fold_right make_one seq [] in
-            Atomic_beg id :: new_seq @ Atomic_end (-1) :: tl
-        | MD_step (id, seq) ->
-            let new_seq = List.fold_right make_one seq [] in
-            D_step_beg id :: new_seq @ D_step_end (-1) :: tl
-        | MGoto (id, i) -> Goto (id, i) :: tl
-        | MLabel (id, i) -> Label (id, i) :: tl
-        | MDecl (id, v, i) -> Decl (id, v, i) :: tl
-        | MExpr (id, e) -> Expr (id, e) :: tl
-        | MSkip id -> Skip id :: tl
-        | MAssert (id, e) -> Assert (id, e) :: tl
-        | MAssume (id, e) -> Assume (id, e) :: tl
-        | MPrint (id, s, args) -> Print (id, s, args) :: tl
-        | MHavoc (id, v) -> Havoc (id, v) :: tl
-        | MUnsafe (id, s) -> Expr (id, Nop "") :: tl
-        | MDeclProp (id, _, _) -> Expr (id, Nop "") :: tl
-    and
-        make_option exit_lab opt =
-        let is_else, seq = match opt with
-            | MOptGuarded sts -> (false, sts)
-            | MOptElse sts -> (true, sts)
-        in
-        let opt_lab = mk_uniq_label () in
-        let body = List.fold_right make_one seq [] in
-        let body = if is_else then Else (-1) :: body else body in
-        let new_seq = 
-            ((Label (-1, opt_lab) :: body) @ [Goto (-1, exit_lab)])
-        in
-        (opt_lab, new_seq)
-    in
-    let lstmts = List.fold_right make_one stmts [] in
-    (* assign unique negative ids instead of just -1's *)
-    let _, res = List.fold_right
-        (fun s (min_id, tl) ->
-            let s_id = stmt_id s in
-            if s_id = -1
-            then (min_id - 1, (replace_stmt_id min_id s) :: tl)
-            else (min_id, s :: tl)
-        ) lstmts (-1, []) 
-    in
-    res
 ;;
 
 (* find the first statement with a non-negative id *)

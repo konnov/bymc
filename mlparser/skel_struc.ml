@@ -4,6 +4,7 @@
  *)
 
 open Spin_ir;;
+open Spin_ir_imp;;
 open Cfg;;
 
 type 't skel_struc = {
