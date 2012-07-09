@@ -18,7 +18,8 @@ class ctr_abs_ctx dom t_ctx =
     object(self)
         val mutable pc_var: var = t_ctx#find_pc
         val mutable pc_size = 0
-        val mutable ctr_var = new var "bymc_k"
+        val ctr_var = new var "bymc_k"
+        val spur_var = new var "bymc_spur"
         val mutable local_vars = []
         
         initializer
@@ -31,7 +32,8 @@ class ctr_abs_ctx dom t_ctx =
                 t_ctx#get_var_roles [];
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
-                ((List.length local_vars) * dom#length * pc_size)
+                ((List.length local_vars) * dom#length * pc_size);
+            spur_var#set_type Spin_types.TBIT
            
         method get_pc = pc_var
         method get_pc_size = pc_size
@@ -39,6 +41,7 @@ class ctr_abs_ctx dom t_ctx =
         method get_ctr = ctr_var
         method get_ctr_dim =
             ((List.length local_vars) * dom#length * pc_size)
+        method get_spur = spur_var
 
         method var_vec = (self#get_pc :: self#get_locals)
 
@@ -273,7 +276,15 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             let mk_deref i = self#deref_ctr (Const i) in
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) t_ctx#get_shared) in
-            [MPrint (-1, str, prev_idx :: next_idx :: es)]
+            let prev_ne_next =
+                let sp = Var ctr_ctx#get_spur in
+                let eq = BinEx (EQ, prev_idx, next_idx) in
+                let e = BinEx (ASGN, sp, BinEx (OR, sp, eq)) in
+                (* other transformations do not touch it *)
+                MUnsafe (-1, (expr_s e) ^ ";")
+            in
+            
+            [ prev_ne_next; MPrint (-1, str, prev_idx :: next_idx :: es)]
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
@@ -298,7 +309,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     ) size_dist_list
             in
             [mk_nondet_choice option_list]
-                @ self#mk_post_asserts active_expr (Const 0) (Const 0)
+                @ self#mk_post_asserts active_expr (Const (-1)) (Const 0)
 
         method mk_counter_update prev_idx next_idx =
             let mk_one tok idx_ex = 
@@ -377,7 +388,8 @@ class vass_funcs dom t_ctx ctr_ctx solver =
                 MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
             in
             [MHavoc (-1, delta);
-             MAssume (-1, BinEx (GT, Var delta, Const 0));
+             (*MAssume (-1, BinEx (GT, Var delta, Const 0));*)
+             MAssume (-1, BinEx (EQ, Var delta, Const 1));
              MAssume (-1, BinEx (GE, self#deref_ctr prev_idx, Const 0));
              mk_one MINUS prev_idx; mk_one PLUS next_idx]
 
@@ -497,11 +509,11 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         (* end of xducer *)
         new_proc
     in
-    let sp_var = new var "bymc_spur" in sp_var#set_type Spin_types.TBIT;
+
     let abs_unit = function
     | Proc p ->
             let np = abstract_proc p in
-            np#set_provided (BinEx (EQ, Var sp_var, Const 0));
+            np#set_provided (BinEx (EQ, Var ctr_ctx#get_spur, Const 0));
             Proc np
     | Stmt (MDeclProp (id, v, PropGlob e) as s) ->
        begin 
@@ -525,7 +537,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     in
     let out_units =
         (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
-        :: (Stmt (MDecl (-1, sp_var, Const 0)))
+        :: (Stmt (MDecl (-1, ctr_ctx#get_spur, Const 0)))
         :: (List.filter keep_unit new_units) in
     (out_units, xducers)
 ;;
