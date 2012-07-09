@@ -372,6 +372,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             in
             [MHavoc (-1, delta);
              MAssume (-1, BinEx (GT, Var delta, Const 0));
+             MAssume (-1, BinEx (GE, self#deref_ctr prev_idx, Const 0));
              mk_one MINUS prev_idx; mk_one PLUS next_idx]
 
         method keep_assume e = true
