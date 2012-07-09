@@ -34,7 +34,7 @@ while [ "$cmd" != "q" ]; do
         tail -n '+2' spin.trace | cat -n
         echo ""
 
-        if grep "Sorry" refinement.out; then
+        if grep "Sorry" refinement.out || grep "not spurious" refinement.out; then
             cmd="q"
         else
             step=$((step+1))
