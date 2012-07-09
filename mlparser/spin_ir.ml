@@ -297,6 +297,8 @@ let rec expr_exists func e =
     | _ -> false
 ;;
 
+let rec expr_forall func e = not (expr_exists (fun f -> not (func f)) e) ;;
+
 (*
  A low-level statement, no block structure preserved.
  The first field is always the identifier of a statement.

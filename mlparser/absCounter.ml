@@ -152,9 +152,15 @@ let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
         | UnEx (NEG, s) ->
             UnEx (NEG, t_e mk_fun s)
         | _ as e ->
-            raise (Abstraction_error
+            let not_local = function
+            | Var v -> t_ctx#is_global v
+            | _ -> true
+            in
+            if not (expr_forall not_local e)
+            then raise (Abstraction_error
                 (sprintf "Don't know how to do counter abstraction for %s"
                     (expr_s e)))
+            else e (* do not touch *)
     in
     let rec repl_ctr = function
         | UnEx (CARD, BinEx (EQ, Var v, Const i)) ->

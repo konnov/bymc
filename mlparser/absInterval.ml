@@ -36,12 +36,22 @@ let is_local_unbounded = function
     | _ -> false
 ;;
 
+let is_shared_unbounded = function
+    | SharedUnbounded -> true
+    | _ -> false
+;;
+
 (* XXX: it works only for one process prototype *)
 class ['tok] trans_context =
     object(self)
         val mutable globals: var list = []
         val mutable assumps: 'tok expr list = []
         val mutable var_roles: (var, var_role) Hashtbl.t = Hashtbl.create 1
+        (* XXX: special hack mode for VASS, shared variables
+           treated differently.
+           TODO: do it w/o hack after the deadline!
+         *)
+        val mutable m_hack_shared: bool = false
 
         (*
           Run a solver prepopulated with a context.
@@ -100,6 +110,14 @@ class ['tok] trans_context =
         method set_var_roles r = var_roles <- r
         method get_assumps = assumps
         method set_assumps a = assumps <- a
+
+        method is_hack_shared = m_hack_shared
+        method set_hack_shared b = m_hack_shared <- b
+
+        method must_hack_expr (e: token expr) = 
+            match e with
+            | Var v -> m_hack_shared && is_shared_unbounded (self#get_role v)
+            | _ -> false
     end
 ;;
 
@@ -550,6 +568,12 @@ let non_symbolic = function
 ;;
 
 let translate_expr ctx dom solver atype expr =
+    let cmp_abs_var var_expr abs_val =
+        if not (ctx#must_hack_expr var_expr)
+        then BinEx (EQ, var_expr, Const abs_val)
+        else (* hack: concretize the var_expriable back as a constraint *)
+            dom#concretize var_expr abs_val
+    in 
     let trans_rel_many_vars symb_expr =
         let matching_vals = (dom#find_abs_vals atype solver symb_expr) in
         (* create a disjunction of conjunctions enumerating abstract values:
@@ -558,16 +582,12 @@ let translate_expr ctx dom solver atype expr =
             (fun conjuncts abs_tuple ->
                 let conj = List.fold_left
                     (fun lits (var, abs_val) ->
-                        let lit = BinEx (EQ, Var var, Const abs_val) in
-                        if is_nop lits
-                        then lit
-                        else BinEx (AND, lits, lit))
-                    (Nop "") abs_tuple
+                        let lit = cmp_abs_var (Var var) abs_val in
+                        if not_nop lits then BinEx (AND, lits, lit) else lit
+                    ) (Nop "") abs_tuple
                 in
-                if is_nop conjuncts
-                then conj
-                else BinEx (OR, conjuncts, conj))
-            (Nop "") matching_vals
+                if not_nop conjuncts then BinEx (OR, conjuncts, conj) else conj 
+            ) (Nop "") matching_vals
     in
     let rec trans_e = function
         (* boolean combination of arithmetic constraints *)
@@ -608,9 +628,14 @@ let translate_stmt ctx dom solver stmt =
         (* different kinds of expressions must be treated differently *)
             match e with
             | BinEx (ASGN, lhs, rhs) ->
+                (* XXX: hack for shared variables in VASS *)
+                if ctx#must_hack_expr lhs
+                then s (* keep untouched *)
+                else
+                (* END of hack *)
                 if (expr_exists non_symbolic rhs)
-                then
-                    if (match rhs with | Var _ -> true | _ -> false)
+                then begin
+                    if is_var rhs
                     (* foo = bar; keep untouched *)
                     then s
                     (* analyze all possible values of the right-hand side *)
@@ -618,6 +643,7 @@ let translate_stmt ctx dom solver stmt =
                         mk_expr_abstraction solver dom
                             (fun e -> is_var e && not (has_expr_symbolic e)) rhs
                     in (mk_assign_unfolding lhs expr_abs_vals)
+                end
                 (* just substitute one abstract value on the right-hand side *)
                 else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
             | _ -> MExpr (id, translate_expr ctx dom solver ExistAbs e)

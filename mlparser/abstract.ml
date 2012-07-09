@@ -46,6 +46,7 @@ let do_abstraction units =
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
     let ctx = mk_context units in
+    ctx#set_hack_shared true; (* XXX: hack mode on *)
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx units in
     log INFO "> Constructing interval abstraction...";
