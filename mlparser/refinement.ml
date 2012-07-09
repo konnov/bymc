@@ -47,9 +47,12 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
             let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos) in
             (id, e, BinEx (EQ, acc, Const value))
         else let shared_no = pos - ctr_ctx#get_ctr_dim in
-            let e = dom#concretize
-                (Var (List.nth t_ctx#get_shared shared_no)) value in
             let v = Var (List.nth t_ctx#get_shared shared_no) in
+            let e =
+                if t_ctx#must_hack_expr v
+                then dom#concretize v value
+                else BinEx (EQ, v, Const value) (* keep it abstract *)
+            in
             (id, e, BinEx (EQ, v, Const value))
     in
     let row_to_exprs (state_no: int) (lst: int list) : token stmt list =
