@@ -12,7 +12,7 @@ open Debug;;
 let parse_spin_trail filename dom t_ctx ctr_ctx =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
-    let state_re = Str.regexp ".*GS{[0-9]*->[0-9]*:\\(\\([0-9,]\\)*\\)}.*" in
+    let state_re = Str.regexp ".*GS{[0-9-]*->[0-9-]*:\\(\\([0-9,]\\)*\\)}.*" in
     let int_lists = ref [] in
     let vec_len = ref 0 in
     let fin = open_in filename in
@@ -57,9 +57,9 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
     in
     let row_to_exprs (state_no: int) (lst: int list) : token stmt list =
         let map_one pos value =
-            let id, abs_ex, conc_ex = int_to_expr pos value in
-            Hashtbl.add rev_map id (state_no, conc_ex);
-            Expr (id, abs_ex) in
+            let id, conc_ex, abs_ex = int_to_expr pos value in
+            Hashtbl.add rev_map id (state_no, abs_ex);
+            Expr (id, conc_ex) in
         List.map2 map_one (range 0 !vec_len) lst
     in
     let asserts =

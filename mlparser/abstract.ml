@@ -68,6 +68,7 @@ let do_refinement trail_filename units =
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
+        solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
                 solver ctx ctr_ctx xducers trail_asserts rev_map n_steps in
         if res
@@ -101,6 +102,9 @@ let do_refinement trail_filename units =
             (* then check its prefixes, from the shortest to the longest *)
             let spurious_len = List.find sim_prefix (range 1 num_states) in
             let step_asserts = list_sub trail_asserts (spurious_len - 1) 2 in
+            solver#append
+                (sprintf ";; Checking the transition %d -> %d"
+                    (spurious_len - 1) spurious_len);
             solver#set_collect_asserts true;
             let res, smt_rev_map =
                 (simulate_in_smt
