@@ -22,19 +22,20 @@ rm -rf spin.out spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
     $SPIN -a -N $PROP abs-counter.prm \
-        && gcc -o ./pan pan.c && ./pan -a -m1000000 2>&1| tee spin.out
+        && gcc -o ./pan pan.c && ./pan -a -m100000 2>&1| tee spin.out
 
     if egrep -q "errors: +0" spin.out; then
         echo "The property is verified in $step refinement steps"
         cmd="q"
     else
         $SPIN -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
-        && CAMLRUNPARAM="b" ./run.native -t spin.trace $PROG | tee refinement.out
+        && CAMLRUNPARAM="b" ./run.native -t spin.trace $PROG 2>&1 | tee refinement.out
         echo -n "     0  "; head -n 1 spin.trace # start with 0
         tail -n '+2' spin.trace | cat -n
         echo ""
 
-        if grep "Sorry" refinement.out || grep "not spurious" refinement.out; then
+        if grep "Sorry" refinement.out || grep "error" refinement.out \
+                || grep "not spurious" refinement.out; then
             cmd="q"
         else
             step=$((step+1))

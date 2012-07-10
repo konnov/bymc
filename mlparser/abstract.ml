@@ -107,6 +107,8 @@ let do_refinement trail_filename units =
     let trail_asserts, rev_map =
         parse_spin_trail trail_filename dom ctx ctr_ctx in
     log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
+    if (List.length trail_asserts) <= 1
+    then raise (Failure "The system loops forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS...";
     assert (1 = (Hashtbl.length xducers));
