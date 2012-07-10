@@ -136,7 +136,7 @@ let rec expr_s e =
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | UnEx (CARD, f) -> sprintf "card(%s)" (expr_s f)
-    | UnEx (tok, f) -> (token_s tok) ^ " " ^ (expr_s f)
+    | UnEx (tok, f) -> sprintf "(%s%s)" (token_s tok) (expr_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (expr_s arr) (expr_s idx)
     | BinEx (ASGN, Var arr,
@@ -145,7 +145,9 @@ let rec expr_s e =
                 old_arr#get_name (expr_s idx) (expr_s rhs)
     | BinEx (AND, f, g) -> sprintf "(%s && %s)" (expr_s f) (expr_s g)
     | BinEx (OR, f, g) -> sprintf "(%s || %s)" (expr_s f) (expr_s g)
-    | BinEx (tok, f, g) ->  (expr_s f) ^ " " ^ (token_s tok) ^ " " ^ (expr_s g)
+    | BinEx (ASGN, f, g) -> sprintf "%s = %s" (expr_s f) (expr_s g)
+    | BinEx (tok, f, g) ->
+        sprintf "(%s %s %s)" (expr_s f) (token_s tok) (expr_s g)
     | Phi (lhs, rhs) ->
             let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
             in

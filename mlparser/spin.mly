@@ -279,9 +279,11 @@ proc	: inst		/* optional instantiator */
                 match $3 with
                 | Const i -> Const i
                 | Var v ->
-                    if (v#get_ini > 0)
+                    if v#get_ini > 0
                     then Const v#get_ini
-                    else fatal "need constant initializer for" v#get_name
+                    else if v#is_symbolic
+                    then Var v
+                    else fatal (sprintf "%s is neither symbolic nor a constant" v#get_name) ""
                 | _ -> if is_expr_symbolic $3 then $3 else
                     fatal "active [..] must be constant or symbolic" ""
             }
