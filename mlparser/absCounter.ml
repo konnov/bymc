@@ -524,8 +524,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         let new_loop_body =
             counter_guard
             @ [MIf (-1,
-                [MOptGuarded ([new_comp_upd]);
-                 MOptGuarded [MExpr (-1, Nop "")]]);
+                [MOptGuarded ([new_comp_upd])]);
                MGoto (-1, main_lab)] in
         let new_body = 
             skel.decl
