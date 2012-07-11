@@ -264,7 +264,7 @@ class abs_domain conds_i =
                 ) combinations in
             let extr_num triples = List.map (fun (i, _, _) -> i) triples in
             List.map extr_num sat_triples_list
-    end
+       end
 ;;
 
 let identify_var_roles units =

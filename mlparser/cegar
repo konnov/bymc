@@ -10,9 +10,10 @@ fi
 PROG=$1
 PROP=$2
 
-SPIN=spin
+SPIN=spin601
 cmd=""
 step="0"
+rand=""
 
 if [ "$CONTINUE" == "" ]; then
     CAMLRUNPARAM="b" ./run.native -a $PROG || exit 1
@@ -22,7 +23,7 @@ rm -rf spin.out spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
     $SPIN -a -N $PROP abs-counter.prm \
-        && gcc -o ./pan pan.c && ./pan -a -m100000 2>&1| tee spin.out
+        && gcc $rand -o ./pan pan.c && ./pan -a -m100000 2>&1| tee spin.out
 
     if egrep -q "errors: +0" spin.out; then
         echo "The property is verified in $step refinement steps"
@@ -34,7 +35,12 @@ while [ "$cmd" != "q" ]; do
         tail -n '+2' spin.trace | cat -n
         echo ""
 
-        if grep "Sorry" refinement.out || grep "error" refinement.out \
+        
+        if grep "Sorry" refinement.out; then
+            echo "Enter to try another trace, q<Enter> to exit"
+            rand="-DT_RAND"
+            read cmd
+        elif grep "error" refinement.out \
                 || grep "not spurious" refinement.out; then
             cmd="q"
         else
