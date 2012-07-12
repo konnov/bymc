@@ -42,6 +42,7 @@ while [ "$cmd" != "q" ]; do
             read cmd
         elif grep "error" refinement.out \
                 || grep "not spurious" refinement.out; then
+            echo "It took $step refinement steps"
             cmd="q"
         else
             step=$((step+1))
