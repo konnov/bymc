@@ -10,7 +10,7 @@ fi
 PROG=$1
 PROP=$2
 
-SPIN=spin601
+SPIN=spin
 cmd=""
 step="0"
 rand=""
@@ -29,8 +29,9 @@ while [ "$cmd" != "q" ]; do
         echo "The property is verified in $step refinement steps"
         cmd="q"
     else
-        $SPIN -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
+        $SPIN -T -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
         && CAMLRUNPARAM="b" ./run.native -t spin.trace $PROG 2>&1 | tee refinement.out
+        echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0
         tail -n '+2' spin.trace | cat -n
         echo ""

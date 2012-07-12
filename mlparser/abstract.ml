@@ -66,6 +66,8 @@ let construct_vass units =
 ;;
 
 let print_vass_trace t_ctx solver num_states = 
+    printf "Here is a CONCRETE trace in VASS violating the property.\n";
+    printf "See concrete values of parameters at the state 0.\n\n";
     let vals = parse_smt_evidence t_ctx solver in
     let print_st i =
         printf "%d: " i;
