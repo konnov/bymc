@@ -9,14 +9,20 @@ fi
 
 PROG=$1
 PROP=$2
+BYMC_HOME=`dirname $0`
 
 SPIN=spin
 cmd=""
 step="0"
 rand=""
 
+CUR_DIR=`pwd`
+cd $BYMC_HOME
+./make.sh || (cd $CUR_DIR; exit 1)
+cd $CUR_DIR
+
 if [ "$CONTINUE" == "" ]; then
-    CAMLRUNPARAM="b" ./run.native -a $PROG || exit 1
+    CAMLRUNPARAM="b" $BYMC_HOME/run.native -a $PROG || exit 1
 fi
 
 rm -rf spin.out spin.trace refinement.out
@@ -30,7 +36,7 @@ while [ "$cmd" != "q" ]; do
         cmd="q"
     else
         $SPIN -T -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
-        && CAMLRUNPARAM="b" ./run.native -t spin.trace $PROG 2>&1 | tee refinement.out
+        && CAMLRUNPARAM="b" $BYMC_HOME/run.native -t spin.trace $PROG 2>&1 | tee refinement.out
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0
         tail -n '+2' spin.trace | cat -n
