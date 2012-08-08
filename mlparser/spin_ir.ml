@@ -284,8 +284,14 @@ let expr_used_vars (expression: 't expr) : var list =
 ;;
 
 let expr_list_used_vars (exprs: 't expr list) : var list =
-    let all_vars = List.concat (List.map expr_used_vars exprs) in
-    Accums.list_sort_uniq cmp_vars all_vars
+    (* by using hashtbl we avoid duplicate elements *)
+    let tbl = Hashtbl.create 10 in
+    let collect_for_expr e =
+        let vs = expr_used_vars e in
+        List.iter (fun v -> Hashtbl.replace tbl v#get_name v) vs
+    in
+    List.iter collect_for_expr exprs;
+    List.sort cmp_vars (Accums.hashtbl_vals tbl)
 ;;
 
 let rec expr_exists func e =
