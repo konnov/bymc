@@ -32,15 +32,14 @@ class ctr_abs_ctx dom t_ctx =
                 t_ctx#get_var_roles [];
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
-                ((List.length local_vars) * dom#length * pc_size);
+                ((ipow dom#length (List.length local_vars))  * pc_size);
             spur_var#set_type Spin_types.TBIT
            
         method get_pc = pc_var
         method get_pc_size = pc_size
         method get_locals = local_vars
         method get_ctr = ctr_var
-        method get_ctr_dim =
-            ((List.length local_vars) * dom#length * pc_size)
+        method get_ctr_dim = ctr_var#get_num_elems
         method get_spur = spur_var
 
         method var_vec = (self#get_pc :: self#get_locals)

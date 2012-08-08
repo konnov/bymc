@@ -160,3 +160,9 @@ let bits_to_fit n =
     f 1 2
 ;;
 
+let rec ipow a n =
+    if n <= 0
+    then 1
+    else a * (ipow a (n - 1))
+;;
+
