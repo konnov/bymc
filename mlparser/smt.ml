@@ -72,14 +72,19 @@ let rec expr_to_smt e =
  *)
 class yices_smt =
     object(self)
+        (* for how long we wait for output from yices if check is issued *)
+        val check_timeout_sec = 3600.0
+        (* for how long we wait for output from yices if another command is issued*)
+        val timeout_sec = 10.0
         val mutable pid = 0
         val mutable cin = stdin
         val mutable cout = stdout
         val mutable cerr = stdin
         val mutable clog = stdout
+        val mutable cerrlog = stdout
         val mutable debug = false
         val mutable collect_asserts = false
-        val timeout_sec = 3600.0 (* how long we wait for input from yices *)
+        val mutable poll_tm_sec = 10.0
 
         method start =
             let pin, pout, perr =
@@ -88,34 +93,43 @@ class yices_smt =
             cout <- pout;
             cerr <- perr;
             clog <- open_out "yices.log";
+            cerrlog <- open_out "yices.err";
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =
             close_out clog;
+            close_out cerrlog;
             Unix.close_process_full (cin, cout, cerr)
 
         method poll poll_i poll_o =
             let read_err = ref true in
             let rs = ref [] in
             let ws = ref [] in
+            let log_input_to_errlog fd = 
+                let buf_len = 50 in
+                let buf = String.create buf_len in
+                let stop = ref false in
+                while not !stop do
+                    let len = Unix.read fd buf 0 buf_len in
+                    fprintf cerrlog "%s" buf; flush cerrlog;
+                    stop := (len < buf_len);
+                done
+            in
             (* read the error input first as it can block other chans *)
             while !read_err do
                 let ins, outs, errs =
                     Unix.select
-                        (if poll_i then [Unix.descr_of_in_channel cin] else [])
+                        [Unix.descr_of_in_channel cin]
                         (if poll_o then [Unix.descr_of_out_channel cout] else [])
-                        [Unix.descr_of_in_channel cerr] timeout_sec in
+                        [Unix.descr_of_in_channel cerr] poll_tm_sec in
                 if errs <> []
-                then begin
-                    let buf = String.create 50 in
-                    let fd = List.hd errs in
-                    let stop = ref false in
-                    while not !stop do
-                        let len = Unix.read fd buf 0 50 in
-                        fprintf stderr "%s" buf; flush stderr;
-                        stop := (len < 50);
-                    done
-                end
+                then log_input_to_errlog (List.hd errs)
+                else if poll_o && not poll_i && outs = [] && ins <> []
+                then
+                    (* yices produced too many warnings to stdout and thus
+                       blocks its stdin.
+                       Consume the text and spit it to the error log. *)
+                    log_input_to_errlog (List.hd ins)
                 else read_err := false;
                 rs := ins;
                 ws := outs
@@ -236,8 +250,11 @@ class yices_smt =
             then false
             else begin
                 self#append "(check)";
+                poll_tm_sec <- check_timeout_sec;
                 flush cout;
-                self#is_out_sat false
+                let res = self#is_out_sat false in
+                poll_tm_sec <- timeout_sec;
+                res
             end
 
         method set_need_evidence b =
@@ -258,8 +275,9 @@ class yices_smt =
             done;
             List.rev !lines
 
-        method set_collect_asserts b =
-            collect_asserts <- b
+        method get_collect_asserts = collect_asserts
+
+        method set_collect_asserts b = collect_asserts <- b
 
         method get_unsat_cores =
             (* collect unsatisfiable cores *)

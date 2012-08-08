@@ -112,7 +112,8 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
                concrete expressions *)
             let s, e = (Hashtbl.find rev_map id) in
             log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s e));
-            Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id)
+            if solver#get_collect_asserts
+            then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
 
         | _ -> ()
     in
@@ -123,14 +124,23 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
     (* put asserts from the control flow graph *)
     assert (1 = (Hashtbl.length xducers));
     let proc_xducer = List.hd (hashtbl_vals xducers) in
+    log INFO "    collecting declarations and transducer asserts...";
+    flush stdout;
     let xducer_asserts =
         create_path (ctr_ctx#get_ctr :: t_ctx#get_shared) proc_xducer n_steps in
     let decls = expr_list_used_vars xducer_asserts in
 
+    log INFO (sprintf "    appending %d declarations..."
+        (List.length decls)); flush stdout;
     List.iter (fun v -> solver#append (var_to_smt v)) decls;
+    log INFO (sprintf "    appending %d transducer asserts..."
+        (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
+    log INFO (sprintf "    appending %d trail asserts..."
+        (List.length trail_asserts)); flush stdout;
     (* put asserts from the counter example *)
     List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
+    log INFO "    waiting for SMT..."; flush stdout;
     let result = solver#check in
     solver#pop_ctx;
     (result, smt_rev_map)

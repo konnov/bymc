@@ -112,7 +112,7 @@ let do_refinement trail_filename units =
     if (List.length trail_asserts) <= 1
     then raise (Failure "The system loops forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
-    log INFO "> Simulating counter example in VASS...";
+    log INFO "> Simulating counter example in VASS..."; flush stdout;
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
@@ -126,6 +126,7 @@ let do_refinement trail_filename units =
         end else begin
             log INFO
             (sprintf "  %d step(s). The path 0:%d is spurious." n_steps n_steps);
+            flush stdout;
             true
         end
     in
@@ -142,11 +143,13 @@ let do_refinement trail_filename units =
         then begin
             log INFO (sprintf "  The transition %d -> %d is spurious."
                     st (st + 1));
+            flush stdout;
             refine_spurious_step solver smt_rev_map st;
             true
         end else begin
             log INFO
                 (sprintf "  The transition %d -> %d is OK." st (st + 1));
+            flush stdout;
             (*print_vass_trace ctx solver 2;*)
             false
         end
@@ -160,6 +163,7 @@ let do_refinement trail_filename units =
         print_vass_trace ctx solver num_states
     end else begin
         log INFO "  Trying to find a spurious transition...";
+        flush stdout;
         let sp_st =
             try List.find check_trans (range 0 (num_states - 1))
             with Not_found -> -1
@@ -171,7 +175,8 @@ let do_refinement trail_filename units =
             log INFO "  Trying to find the shortest spurious path for you...";
             (* then check its prefixes, from the shortest to the longest *)
             let short_len = List.find sim_prefix (range 1 num_states) in
-            log INFO (sprintf "  The shortest path is 0:%d" short_len)
+            log INFO (sprintf "  The shortest path is 0:%d" short_len);
+            flush stdout;
         end
     end;
     log INFO "  [DONE]";
