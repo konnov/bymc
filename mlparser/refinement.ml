@@ -289,7 +289,8 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     let pred_no = intro_new_pred () in
 
     let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
-    fprintf cout "bymc_p%d = (%s);\n" pred_no (String.concat " && " pre);
+    let preex = if pre = [] then "1" else (String.concat " && " pre) in
+    fprintf cout "bymc_p%d = (%s);\n" pred_no preex;
     close_out cout;
 
     let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
