@@ -12,7 +12,8 @@ PROP=$2
 BYMC_HOME=`dirname $0`
 
 SPIN=spin
-PAN_COMP_FLAGS="-DVECTORSZ=2048 " #-DCOLLAPSE"
+PAN_COMP_FLAGS="-DVECTORSZ=2048" # -DMA=290" #-DCOLLAPSE"
+PAN_FLAGS="-m100000" #-m50000000"
 cmd=""
 step="0"
 rand=""
@@ -30,7 +31,7 @@ rm -rf spin.out spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
     $SPIN -a -N $PROP abs-counter.prm \
-        && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c && ./pan -a -m100000 2>&1| tee spin.out
+        && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c && ./pan $PAN_FLAGS -a 2>&1| tee spin.out
 
     if egrep -q "errors: +0" spin.out; then
         echo "The property is verified in $step refinement steps"
