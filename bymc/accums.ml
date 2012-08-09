@@ -143,6 +143,11 @@ let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
     inv
 ;;
 
+let hashtbl_filter_keys (pred: 'b -> bool) (tbl: ('a, 'b) Hashtbl.t) : ('a list) =
+    let filter k v lst = if pred v then k :: lst else lst in
+    Hashtbl.fold filter tbl [] 
+;;
+
 let n_copies n e =
     let rec gen = function
     | 0 -> []

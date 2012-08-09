@@ -16,74 +16,71 @@ open AbsInterval;;
 
 class ctr_abs_ctx dom t_ctx =
     object(self)
-        val mutable pc_var: var = t_ctx#find_pc
-        val mutable pc_size = 0
+        val mutable control_vars: var list = []
+        val mutable control_size = 0
+        val mutable data_vars = []
+        val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
         val ctr_var = new var "bymc_k"
         val spur_var = new var "bymc_spur"
-        val mutable local_vars = []
         
         initializer
-            pc_size <-
-                (match t_ctx#get_role t_ctx#find_pc with
-                | BoundedInt (a, b) -> b - a + 1
-                | _ -> raise (Abstraction_error "pc variable is not bounded"));
-            local_vars <- Hashtbl.fold
-                (fun v r lst -> if is_local_unbounded r then v :: lst else lst)
-                t_ctx#get_var_roles [];
+            control_vars <- hashtbl_filter_keys is_bounded t_ctx#get_var_roles;
+            if control_vars = []
+            then raise (Abstraction_error "No control variables (like pc) found.");
+            let var_dom_size v =
+                match t_ctx#get_role v with
+                | BoundedInt (a, b) -> (b - a) + 1
+                | _ -> 1 in
+            control_size <- List.fold_left ( * ) 1 (List.map var_dom_size control_vars);
+            List.iter (fun v -> Hashtbl.add var_sizes v (var_dom_size v)) control_vars;
+            data_vars <- hashtbl_filter_keys is_local_unbounded t_ctx#get_var_roles;
+            List.iter (fun v -> Hashtbl.add var_sizes v dom#length) data_vars;
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
-                ((ipow dom#length (List.length local_vars))  * pc_size);
+                ((ipow dom#length (List.length data_vars))  * control_size);
             spur_var#set_type Spin_types.TBIT
            
-        method get_pc = pc_var
-        method get_pc_size = pc_size
-        method get_locals = local_vars
+        method get_control_vars = control_vars
+        method get_control_size = control_size
+        method get_locals = data_vars
         method get_ctr = ctr_var
         method get_ctr_dim = ctr_var#get_num_elems
         method get_spur = spur_var
 
-        method var_vec = (self#get_pc :: self#get_locals)
+        method var_vec = (self#get_locals @ self#get_control_vars)
 
-        method unpack_const i =
-            let valuation = Hashtbl.create ((List.length local_vars) + 1) in
-            Hashtbl.add valuation pc_var (i mod pc_size);
-            let _ =
-                List.fold_left
-                    (fun j var ->
-                        Hashtbl.add valuation var (j mod dom#length);
-                        j / dom#length)
-                    (i / pc_size) local_vars in
+        method unpack_from_const i =
+            let vsz v = Hashtbl.find var_sizes v in
+            let valuation = Hashtbl.create (List.length self#var_vec) in
+            let unpack_one big_num var =
+                Hashtbl.add valuation var (big_num mod (vsz var));
+                big_num / (vsz var) in
+            let _ = List.fold_left unpack_one i self#var_vec in
             valuation
 
-        method pack_index_expr =
-            let ex =
-                List.fold_left
-                    (fun subex var ->
-                        if is_nop subex
-                        then Var var
-                        else BinEx (PLUS,
-                            BinEx (MULT, subex, Const dom#length),
-                            Var var)
-                    ) (Nop "") (List.rev local_vars)
-            in
-            BinEx (PLUS, BinEx (MULT, ex, Const pc_size), Var pc_var)
-
-        method pack_vals_to_index valuation =
+        method pack_to_const valuation =
             let get_val var =
-                try
-                    Hashtbl.find valuation var
+                try Hashtbl.find valuation var
                 with Not_found ->
                     raise (Failure
                         (sprintf "Valuation of %s not found" var#get_name))
             in
-            let idx = List.fold_left
-                (fun sum var -> (sum * dom#length) + (get_val var)
-                ) 0 (List.rev local_vars)
+            let pack_one sum var =
+                sum * (Hashtbl.find var_sizes var) + (get_val var) in
+            List.fold_left pack_one 0 (List.rev self#var_vec)
+
+        method pack_index_expr =
+            let pack_one subex var =
+                if is_nop subex
+                then Var var
+                else let shifted =
+                        BinEx (MULT, subex, Const (Hashtbl.find var_sizes var)) in
+                    BinEx (PLUS, shifted, Var var)
             in
-            (idx * pc_size + (get_val pc_var))
+            List.fold_left pack_one (Nop "") (List.rev self#var_vec)
 
         method all_indices_for check_val_fun =
-            let has_v i = (check_val_fun (self#unpack_const i)) in
+            let has_v i = (check_val_fun (self#unpack_from_const i)) in
             List.filter has_v (range 0 self#get_ctr_dim)
     end
 ;;
@@ -301,7 +298,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     (fun (var, i) ->
                         Hashtbl.add valuation var i
                     ) local_vals;
-                let idx = ctr_ctx#pack_vals_to_index valuation in
+                let idx = ctr_ctx#pack_to_const valuation in
                 let lhs =
                     BinEx (ARR_ACCESS,
                         Var ctr_ctx#get_ctr, Const idx) in
@@ -435,7 +432,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                 (Hashtbl.fold
                     (fun var value lst -> 
                         MExpr (-1, BinEx (ASGN, Var var, Const value)) :: lst)
-                    (ctr_ctx#unpack_const idx) [])
+                    (ctr_ctx#unpack_from_const idx) [])
         in
         let indices = range 0 ctr_ctx#get_ctr_dim in
         [mk_nondet_choice (List.map make_opt indices)]
@@ -479,7 +476,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let replace_comp stmts =
         let rec hack_nsnt = function
             (* XXX: this is a hack saying if we have nsnt + 1,
-                then it should be nsnt + delta *)
+                then it must be nsnt + delta *)
             | MExpr (id, BinEx (ASGN, Var x, BinEx (PLUS, Var y, Const 1))) as s ->
                 if t_ctx#must_hack_expr (Var x) && x#get_name = y#get_name
                 then MExpr (id,

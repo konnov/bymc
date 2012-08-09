@@ -31,6 +31,11 @@ let is_unbounded = function
     | _ -> false
 ;;
 
+let is_bounded = function
+    | BoundedInt (_, _) -> true
+    | _ -> false
+;;
+
 let is_local_unbounded = function
     | LocalUnbounded -> true
     | _ -> false
@@ -69,23 +74,6 @@ class ['tok] trans_context =
             (* solver#set_debug true; *) (* see yices.log *)
             List.iter solver#append smt_exprs;
             solver
-
-        method find_pc =
-            let is_pc role =
-                match role with
-                | BoundedInt (_, _) -> true
-                | _ -> false
-            in
-            let pcs =
-                (Hashtbl.fold
-                    (fun v r lst -> if is_pc r then v :: lst else lst)
-                    var_roles []) in
-            match pcs with
-            | [v] -> v
-            | [] -> raise (Abstraction_error "No variable like pc is found.")
-            | _ :: (_ :: _) -> 
-                 raise (Abstraction_error
-                        "More than one bounded variable. Which is pc?")
 
         method get_role v = Hashtbl.find var_roles v
 
