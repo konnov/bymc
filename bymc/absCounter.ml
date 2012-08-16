@@ -561,7 +561,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             match nd with
             | MDeclProp (_, _, PropGlob ne) ->
                 Hashtbl.add atomic_props v#get_name ne;
-                Stmt (MSkip id)
+                Stmt (MDeclProp (id, v, PropGlob ne))
             | _ -> Stmt (MSkip id)
        end
     | Stmt (MDeclProp (_, _, _) as d) ->
