@@ -158,9 +158,10 @@ class abs_domain conds_i =
             with Found i ->
                 (Const i: Spin.token expr)
 
-        method concretize exp abs_val =
-            let (_, l, r) =
-                List.find (fun (a, _, _) -> a = abs_val) cond_intervals in
+        method expr_is_concretization exp abs_val =
+            (* given an abstract value abs_val, constrain exp to be a concretization
+               of abs_val, i.e. create a boolean expression over exp *)
+            let (_, l, r) = List.find (fun (a, _, _) -> a = abs_val) cond_intervals in
             let left = BinEx (GE, exp, l) in
             if not_nop r
             then BinEx (AND, left, BinEx (LT, exp, r))
@@ -171,7 +172,8 @@ class abs_domain conds_i =
                 : (SpinIr.var * int) list list =
             let used = expr_used_vars symb_expr in
             if (List.length used) <> 2
-            (* XXX: nothing prevents us from handling multiple variables *)
+            (* NOTE: nothing prevents us from handling multiple variables *)
+            (* if anybody needs it, remove the condition and check if it works *)
             then raise (Abstraction_error
                 (sprintf "Expression %s must have two free variables"
                     (expr_s symb_expr)))
@@ -181,11 +183,9 @@ class abs_domain conds_i =
              *)
             begin
                 let append_cons var (i, l, r) =
-                    solver#append_assert
-                        (expr_to_smt (BinEx (GE, Var var, l)));
+                    solver#append_assert (expr_to_smt (BinEx (GE, Var var, l)));
                     if not_nop r
-                    then solver#append_assert
-                        (expr_to_smt (BinEx (LT, Var var, r)))
+                    then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
                 in
                 (* TODO: refactor, it is so complicated! *)
                 solver#push_ctx;
@@ -560,7 +560,7 @@ let translate_expr ctx dom solver atype expr =
         if not (ctx#must_hack_expr var_expr)
         then BinEx (EQ, var_expr, Const abs_val)
         else (* hack: concretize the var_expr back as a constraint *)
-            dom#concretize var_expr abs_val
+            dom#expr_is_concretization var_expr abs_val
     in 
     let trans_rel_many_vars symb_expr =
         let matching_vals = (dom#find_abs_vals atype solver symb_expr) in
@@ -593,12 +593,20 @@ let translate_expr ctx dom solver atype expr =
         | BinEx (GE, lhs, rhs)
         | BinEx (EQ, lhs, rhs)
         | BinEx (NE, lhs, rhs) as e ->
-            if (expr_exists non_symbolic lhs)
-            then if (expr_exists non_symbolic rhs)
-                then trans_rel_many_vars e
-                else BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
-            else BinEx ((op_of_expr e),
-                (dom#map_concrete solver lhs), rhs)
+            begin
+            match (expr_exists non_symbolic lhs, expr_exists non_symbolic rhs) with
+            | (true, true) -> trans_rel_many_vars e
+            (* thanks to the domain we can translate these comparisons as they are *)
+            | (true, false) -> 
+                BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
+            | (false, true) -> 
+                BinEx ((op_of_expr e), (dom#map_concrete solver lhs), rhs)
+            | _ ->
+                (* NOTE: in principle, we can do that,
+                   but it looks like an error in the user code *)
+                let m = sprintf "Abstract a constant expression (%s)?" (expr_s e) in
+                raise (Abstraction_error m)
+            end
         | _ -> raise (Abstraction_error
             (sprintf "No abstraction for: %s" (expr_s expr)))
     in

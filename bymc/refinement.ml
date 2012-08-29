@@ -42,7 +42,7 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
         let id = !last_id in
         last_id := !last_id + 1;
         if pos < ctr_ctx#get_ctr_dim
-        then let e = dom#concretize
+        then let e = dom#expr_is_concretization
                 (BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos)) value in
             let acc = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const pos) in
             (id, e, BinEx (EQ, acc, Const value))
@@ -50,7 +50,7 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
             let v = Var (List.nth t_ctx#get_shared shared_no) in
             let e =
                 if t_ctx#must_hack_expr v
-                then dom#concretize v value
+                then dom#expr_is_concretization v value
                 else BinEx (EQ, v, Const value) (* keep it abstract *)
             in
             (id, e, BinEx (EQ, v, Const value))
