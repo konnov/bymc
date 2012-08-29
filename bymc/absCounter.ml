@@ -8,7 +8,7 @@ open Smt;;
 open Cfg;;
 open Analysis;;
 open Ssa;;
-open Skel_struc;;
+open SkelStruc;;
 open CfgSmt;;
 open Debug;;
 

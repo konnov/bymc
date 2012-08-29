@@ -6,7 +6,7 @@ open Spin_ir;;
 open Spin_ir_imp;;
 open Smt;;
 open Analysis;;
-open Skel_struc;;
+open SkelStruc;;
 open Accums;;
 open Writer;;
 open Debug;;
