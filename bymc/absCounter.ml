@@ -462,15 +462,15 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                     try Var (Hashtbl.find prev_next_pairs v)
                     with Not_found -> Var v
                 ) prev_idx_ex in
-        let pre_cond =
+        let pre_asserts =
             funcs#mk_pre_asserts active_expr prev_idx_ex next_idx_ex in
-        let post_cond =
+        let post_asserts =
             funcs#mk_post_asserts active_expr prev_idx_ex next_idx_ex in
 
-        pre_cond (* TODO: make pre_asserts and post_asserts *)
+        pre_asserts
         @ (funcs#mk_counter_update prev_idx_ex next_idx_ex)
         @ [MUnsafe (-1, "#include \"cegar_post.inc\"")]
-        @ post_cond
+        @ post_asserts
         @ new_update
     in
     let replace_comp stmts =
