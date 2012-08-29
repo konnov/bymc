@@ -26,7 +26,7 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
         end
     in
     match tok with
-      (* TODO: handle macros with arguments foo(x, y) *)
+      (* TODO: handle macros with arguments like foo(x, y) *)
       DEFINE(name, text) ->
         Hashtbl.add macro_tbl name text;
         lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf

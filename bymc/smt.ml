@@ -214,6 +214,9 @@ class yices_smt =
         method append_assert s =
             self#append (sprintf "(assert %s)" s)
 
+        method append_var_def (v: var) =
+            self#append (var_to_smt v)
+
         method append_expr expr =
             let eid = ref 0 in
             if not collect_asserts

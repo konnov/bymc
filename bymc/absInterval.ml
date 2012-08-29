@@ -231,7 +231,7 @@ class abs_domain conds_i =
                     solver#push_ctx;
                     let vars = List.map
                         (fun i -> (new var (sprintf "_a%d" i))) (range 0 n) in
-                    List.iter (fun v -> solver#append (var_to_smt v)) vars;
+                    List.iter solver#append_var_def vars;
                     List.iter2
                         (fun v (i, l, r) ->
                             solver#append_assert
@@ -469,10 +469,10 @@ let mk_domain solver ctx units =
   expr must be performed.
  *)
 let mk_expr_abstraction solver dom is_leaf_fun expr =
-    (* replace the only leaf expression with a variable *)
+    (* replace leaf expressions with a variable _argI *)
     let mapping = Hashtbl.create 1 in
     let rec sub e =
-        if (is_leaf_fun e)
+        if is_leaf_fun e
         then if Hashtbl.mem mapping e
             then Var (Hashtbl.find mapping e)
             else begin
@@ -485,27 +485,27 @@ let mk_expr_abstraction solver dom is_leaf_fun expr =
             | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
             | _ as e -> e
     in
-    assert ((Hashtbl.length mapping) <= 1); (* handle only two arguments by now *)
+    (* FIXME: the number of variables is limited by two now for no reason *)
+    assert ((Hashtbl.length mapping) <= 1);
     let res_var = new var "_res" in
-    let expr_ren = sub expr in
-    let vars_used = res_var :: (expr_used_vars expr_ren) (* i.e. _res; _arg0 *)
+    let expr_w_args = sub expr in
+    let vars_used = res_var :: (expr_used_vars expr_w_args) (* i.e. _res; _arg0 *)
     in
     solver#push_ctx;
-    (* introduce those variables to the SMT solver *)
-    List.iter (fun v -> solver#append (var_to_smt v)) vars_used;
-    (* find matching combinations *)
+    (* introduce the variables to the SMT solver *)
+    List.iter (solver#append_var_def) vars_used;
+    (* find matching combinations of _res and _arg0 *)
     let matching_vals =
-        (dom#find_abs_vals ExistAbs solver
-            (BinEx (EQ, Var (new var "_res"), expr_ren))) in
+        (dom#find_abs_vals ExistAbs solver (BinEx (EQ, Var res_var, expr_w_args))) in
     solver#pop_ctx;
     let inv_map = hashtbl_inverse mapping in
     (* list of pairs of abstract values for ((_res, d'), (e(_arg0), d'')) *)
-    let sub_var (v: var) : (token expr) =
-        if Hashtbl.mem inv_map v then Hashtbl.find inv_map v else Var v in
-    List.map
-        (fun tuple ->
-            List.map (fun (var, abs_val) -> (sub_var var, abs_val)) tuple
-        ) matching_vals
+    let map_vars_back (var, abs_val) =
+        if Hashtbl.mem inv_map var
+        then (Hashtbl.find inv_map var, abs_val)
+        else (Var var, abs_val)
+    in
+    List.map (List.map map_vars_back) matching_vals
 ;;
 
 (* XXX: refactor *)
@@ -559,7 +559,7 @@ let translate_expr ctx dom solver atype expr =
     let cmp_abs_var var_expr abs_val =
         if not (ctx#must_hack_expr var_expr)
         then BinEx (EQ, var_expr, Const abs_val)
-        else (* hack: concretize the var_expriable back as a constraint *)
+        else (* hack: concretize the var_expr back as a constraint *)
             dom#concretize var_expr abs_val
     in 
     let trans_rel_many_vars symb_expr =
@@ -608,32 +608,30 @@ let translate_expr ctx dom solver atype expr =
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
 let translate_stmt ctx dom solver stmt =
-    let rec abs_stmt = function
+    let rec abs_seq seq = List.fold_right (fun s l -> (abs_stmt s) :: l) seq [] 
+    and abs_stmt = function
     | MExpr (id, e) as s ->
         if not (expr_exists (over_dom ctx) e)
-        then s
+        then s (* no domain variables, keep as it is *)
         else begin
-        (* different kinds of expressions must be treated differently *)
             match e with
             | BinEx (ASGN, lhs, rhs) ->
-                (* XXX: hack for shared variables in VASS *)
+                (* special cases *)
                 if ctx#must_hack_expr lhs
-                then s (* keep untouched *)
-                else
-                (* END of hack *)
-                if (expr_exists non_symbolic rhs)
-                then begin
-                    if is_var rhs
-                    (* foo = bar; keep untouched *)
-                    then s
-                    (* analyze all possible values of the right-hand side *)
-                    else let expr_abs_vals =
+                then s (* XXX: hack shared variables in VASS, keep untouched *)
+                else if not (expr_exists non_symbolic rhs)
+                (* substitute a constant expression
+                   by its abstract value on the right-hand side *)
+                then MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
+                else if is_var rhs
+                (* special case: foo = bar; keep untouched *)
+                then s
+                (* the general case: find all possible abstract values of the rhs *)
+                else let expr_abs_vals =
                         mk_expr_abstraction solver dom
-                            (fun e -> is_var e && not (has_expr_symbolic e)) rhs
-                    in (mk_assign_unfolding lhs expr_abs_vals)
-                end
-                (* just substitute one abstract value on the right-hand side *)
-                else MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
+                            (fun e -> is_var e && not (has_expr_symbolic e)) rhs in
+                    (mk_assign_unfolding lhs expr_abs_vals)
+
             | _ -> MExpr (id, translate_expr ctx dom solver ExistAbs e)
         end                
 
@@ -649,10 +647,6 @@ let translate_stmt ctx dom solver stmt =
         MIf (id, List.map abs_opt opts)
 
     | _ as s -> s
-
-    and
-    abs_seq seq =
-        List.fold_right (fun s l -> (abs_stmt s) :: l) seq []
     in
     abs_stmt stmt 
 ;;
@@ -662,7 +656,7 @@ let trans_prop_decl ctx dom solver decl_expr =
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
         solver#push_ctx;
-        List.iter solver#append (List.map var_to_smt locals);
+        List.iter solver#append_var_def locals;
         let abs_ex = translate_expr ctx dom solver UnivAbs e in
         solver#pop_ctx;
         abs_ex
@@ -691,7 +685,7 @@ let do_interval_abstraction ctx dom solver units =
     let on_unit = function
         | Proc p ->
             solver#push_ctx;
-            List.iter (fun v -> solver#append (var_to_smt v)) p#get_locals;
+            List.iter solver#append_var_def p#get_locals;
             let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
             log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
             List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;

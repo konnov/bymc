@@ -132,7 +132,7 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
 
     log INFO (sprintf "    appending %d declarations..."
         (List.length decls)); flush stdout;
-    List.iter (fun v -> solver#append (var_to_smt v)) decls;
+    List.iter solver#append_var_def decls;
     log INFO (sprintf "    appending %d transducer asserts..."
         (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
