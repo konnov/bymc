@@ -1,6 +1,6 @@
 open Printf;;
 
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Debug;;
 

@@ -60,7 +60,7 @@ static	int	Embedded = 0, inEventMap = 0, has_ini = 0;
 open Printf;;
 
 open Lexing;;
-open Spin_ir;;
+open SpinIr;;
 
 exception Not_implemented of string;;
 exception Parse_error of string;;
@@ -180,7 +180,7 @@ let fatal msg payload =
 %right	NEG UMIN BITNOT
 %left	DOT
 %start program
-%type <token Spin_ir.prog_unit list> program
+%type <token SpinIr.prog_unit list> program
 %%
 
 /** PROMELA Grammar Rules **/

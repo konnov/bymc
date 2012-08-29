@@ -6,7 +6,7 @@
 open Printf;;
 
 open Spin;;
-open Spin_ir;;
+open SpinIr;;
 open Spin_types;;
 
 let token_s t =

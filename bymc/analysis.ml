@@ -4,7 +4,7 @@ open Printf;;
 
 open Cfg;;
 open Spin;;
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Debug;;
 

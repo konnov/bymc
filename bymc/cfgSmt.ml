@@ -4,7 +4,7 @@ open Printf;;
 
 open Accums;;
 open Spin;;
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Cfg;;
 open Ssa;;

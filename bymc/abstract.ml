@@ -7,7 +7,7 @@ open Refinement;;
 open Smt;;
 
 open Spin;;
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Writer;;
 open Accums;;

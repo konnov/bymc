@@ -3,7 +3,7 @@
    init section, main loop, etc.
  *)
 
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Cfg;;
 

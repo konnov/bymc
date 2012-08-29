@@ -2,7 +2,7 @@ open Printf;;
 
 open Cfg;;
 open Spin;;
-open Spin_ir;;
+open SpinIr;;
 open SpinIrImp;;
 open Smt;;
 open Analysis;;
@@ -168,7 +168,7 @@ class abs_domain conds_i =
 
         method find_abs_vals
                 (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)
-                : (Spin_ir.var * int) list list =
+                : (SpinIr.var * int) list list =
             let used = expr_used_vars symb_expr in
             if (List.length used) <> 2
             (* XXX: nothing prevents us from handling multiple variables *)
