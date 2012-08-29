@@ -38,7 +38,7 @@ class ctr_abs_ctx dom t_ctx =
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
                 ((ipow dom#length (List.length data_vars))  * control_size);
-            spur_var#set_type Spin_types.TBIT
+            spur_var#set_type SpinTypes.TBIT
            
         method get_control_vars = control_vars
         method get_control_size = control_size

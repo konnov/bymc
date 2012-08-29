@@ -5,7 +5,7 @@ open Printf;;
 open Debug;;
 open SpinIr;;
 open SpinIrImp;;
-open Spin_types;;
+open SpinTypes;;
 
 let indent level = String.make level ' ';;
 

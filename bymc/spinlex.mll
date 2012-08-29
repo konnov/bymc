@@ -1,7 +1,7 @@
 {
     open Printf;;
 
-    open Spin_types;;
+    open SpinTypes;;
     open Spin;;
     exception Unexpected_token of string;;
     let string_chars s = String.sub s 1 ((String.length s) - 2) ;;

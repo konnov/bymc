@@ -8,7 +8,7 @@
  * lot to fit into the OCAML concepts.
  *)
 
-open Spin_types;;
+open SpinTypes;;
 
 module StringSet = Set.Make(String);;
 

@@ -2,7 +2,7 @@
 
 open Printf;;
 
-open Spin_types;;
+open SpinTypes;;
 open Spin;;
 open SpinIr;;
 open SpinIrImp;;

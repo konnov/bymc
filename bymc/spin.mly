@@ -135,8 +135,8 @@ let fatal msg payload =
 %token	PRIORITY PROVIDED
 %token	FULL EMPTY NFULL NEMPTY
 %token	<int> CONST                 /* val */
-%token  <Spin_types.var_type> TYPE
-%token  <Spin_types.xu_type> XU			    /* val */
+%token  <SpinTypes.var_type> TYPE
+%token  <SpinTypes.xu_type> XU			    /* val */
 %token	<string> NAME
 %token  <string> UNAME
 %token  <string> PNAME
@@ -1005,7 +1005,7 @@ expr    : LPAREN expr RPAREN		{ $2 }
 prop_decl:
     ATOMIC NAME ASGN atomic_prop {
         let v = new var($2) in
-        v#set_type Spin_types.TBIT;
+        v#set_type SpinTypes.TBIT;
         v#set_proc_name "spec" (* special name to distinguish *);
         spec_scope#add_symb v#get_name (v :> symb);
         MDeclProp (new_id (), v, $4)

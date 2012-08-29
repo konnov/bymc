@@ -3,7 +3,7 @@ open Printf;;
 
 open Spinlex;;
 open Spin;;
-open Spin_types;;
+open SpinTypes;;
 open SpinIr;;
 open SpinIrImp;;
 open Debug;;

@@ -7,7 +7,7 @@ open Printf;;
 
 open Spin;;
 open SpinIr;;
-open Spin_types;;
+open SpinTypes;;
 
 let token_s t =
     match t with

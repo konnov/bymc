@@ -19,7 +19,7 @@ open Debug;;
 let block_to_constraints (bb: 't basic_block) =
     let at_var i =
         let nv = new var (sprintf "at_%d" i) in 
-        nv#set_type Spin_types.TBIT;
+        nv#set_type SpinTypes.TBIT;
         Var nv
     in
     (* the entry block always gains control! *)
