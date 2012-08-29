@@ -5,7 +5,7 @@ open Spinlex;;
 open Spin;;
 open Spin_types;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Debug;;
 
 open Cfg;;

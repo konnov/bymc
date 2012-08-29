@@ -5,7 +5,7 @@ open Printf;;
 open Spin_types;;
 open Spin;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Debug;;
 
 exception Smt_error of string;;

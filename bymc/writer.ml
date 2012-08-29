@@ -4,7 +4,7 @@ open Printf;;
 
 open Debug;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Spin_types;;
 
 let indent level = String.make level ' ';;

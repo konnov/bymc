@@ -6,7 +6,7 @@ open Cfg;;
 open Analysis;;
 open Spin;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Debug;;
 
 let comp_dom_frontiers cfg =

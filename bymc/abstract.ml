@@ -8,7 +8,7 @@ open Smt;;
 
 open Spin;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Writer;;
 open Accums;;
 open Debug;;

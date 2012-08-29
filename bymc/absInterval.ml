@@ -3,7 +3,7 @@ open Printf;;
 open Cfg;;
 open Spin;;
 open Spin_ir;;
-open Spin_ir_imp;;
+open SpinIrImp;;
 open Smt;;
 open Analysis;;
 open SkelStruc;;
