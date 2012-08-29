@@ -1,12 +1,14 @@
 In case you want to play with the tool, do the following:
 
 # building
-cd theta/tools/mlparser
+cd theta/tools/bymc
 ./make.sh
 
 # the automatic CEGAR loop
 
 ./cegar ../../promela/bcast_symb.pml ../../promela/univ_relay.never
+
+(you can invoke cegar from any directory you want)
 
 # follow the messages by the script...
 
@@ -27,10 +29,12 @@ OCAMLRUNPARAM=b ./run.native -a ../../promela/bcast_symb.pml
 view original.prm     # the original system as parsed by the tool
 view abs-interval.prm # the interval abstraction
 view abs-counter.prm  # the counter abstraction
+view abs-vass.prm     # the VASS representation used for refinement
 spin -a -N ../../promela/univ_unforg.never abs-counter.prm
 gcc -o pan pan.c && ./pan -a -m1000000
 # see a counter example produced in Spin
 spin -t -N ../../promela/univ_unforg.never abs-counter.prm | grep '{' >spin.trace
+view trace.ys         # the trace encoded in yices (SMT solver)
 
 # properties we want to check
 promela/univ_{unforg,corr,relay}.never
