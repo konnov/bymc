@@ -12,6 +12,7 @@ open SkelStruc;;
 open CfgSmt;;
 open Debug;;
 
+open AbsBasics;;
 open AbsInterval;;
 
 class ctr_abs_ctx dom t_ctx =
@@ -478,7 +479,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             (* XXX: this is a hack saying if we have nsnt + 1,
                 then it must be nsnt + delta *)
             | MExpr (id, BinEx (ASGN, Var x, BinEx (PLUS, Var y, Const 1))) as s ->
-                if t_ctx#must_hack_expr (Var x) && x#get_name = y#get_name
+                if t_ctx#must_keep_concrete (Var x) && x#get_name = y#get_name
                 then MExpr (id,
                         BinEx (ASGN, Var x,
                             BinEx (PLUS, Var x, Var (new var "vass_dta"))))

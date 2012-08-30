@@ -49,7 +49,7 @@ let parse_spin_trail filename dom t_ctx ctr_ctx =
         else let shared_no = pos - ctr_ctx#get_ctr_dim in
             let v = Var (List.nth t_ctx#get_shared shared_no) in
             let e =
-                if t_ctx#must_hack_expr v
+                if t_ctx#must_keep_concrete v
                 then dom#expr_is_concretization v value
                 else BinEx (EQ, v, Const value) (* keep it abstract *)
             in

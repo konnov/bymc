@@ -11,8 +11,9 @@ open Accums;;
 open Writer;;
 open Debug;;
 
+open AbsBasics;;
+
 exception Skeleton_not_supported of string;;
-exception Abstraction_error of string;;
 
 type var_role =
     BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch;;
@@ -102,7 +103,7 @@ class ['tok] trans_context =
         method is_hack_shared = m_hack_shared
         method set_hack_shared b = m_hack_shared <- b
 
-        method must_hack_expr (e: token expr) = 
+        method must_keep_concrete (e: token expr) = 
             match e with
             | Var v -> m_hack_shared && is_shared_unbounded (self#get_role v)
             | _ -> false
@@ -557,7 +558,7 @@ let non_symbolic = function
 
 let translate_expr ctx dom solver atype expr =
     let cmp_abs_var var_expr abs_val =
-        if not (ctx#must_hack_expr var_expr)
+        if not (ctx#must_keep_concrete var_expr)
         then BinEx (EQ, var_expr, Const abs_val)
         else (* hack: concretize the var_expr back as a constraint *)
             dom#expr_is_concretization var_expr abs_val
@@ -625,7 +626,7 @@ let translate_stmt ctx dom solver stmt =
             match e with
             | BinEx (ASGN, lhs, rhs) ->
                 (* special cases *)
-                if ctx#must_hack_expr lhs
+                if ctx#must_keep_concrete lhs
                 then s (* XXX: hack shared variables in VASS, keep untouched *)
                 else if not (expr_exists non_symbolic rhs)
                 (* substitute a constant expression
