@@ -24,6 +24,7 @@ type expr_abs_trait =
 let get_abs_trait
         (var_trait_fun: var -> expr_abs_trait) (ex: 't expr) : expr_abs_trait =
     let rec explore = function
+        | Const _ -> ConstExpr
         | Var v -> var_trait_fun v
         | UnEx (tok, arg) -> explore arg
         | BinEx (PLUS, lhs, rhs)

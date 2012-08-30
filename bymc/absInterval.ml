@@ -107,6 +107,10 @@ class ['tok] trans_context =
             match e with
             | Var v -> m_hack_shared && is_shared_unbounded (self#get_role v)
             | _ -> false
+
+        method var_needs_abstraction (v: var) =
+            let r = self#get_role v in
+            not (self#must_keep_concrete (Var v)) && (not (is_bounded r))
     end
 ;;
 
@@ -467,7 +471,10 @@ let mk_domain solver ctx units =
 (*
   Abstraction of an expression over a variable and symbolic parameters.
   is_leaf_fun evaluates an expression to true if no further expansion of
-  expr must be performed.
+  expr must be performed. Such an expression is replaced by a variable _argX
+  and after abstraction restored back.
+  
+  XXX: the _res variable looks ad hoc.
  *)
 let mk_expr_abstraction solver dom is_leaf_fun expr =
     (* replace leaf expressions with a variable _argI *)
@@ -554,6 +561,14 @@ let over_dom ctx = function
 let non_symbolic = function
     | Var v -> not v#is_symbolic
     | _ -> false
+;;
+
+let var_trait t_ctx v =
+    if v#is_symbolic
+    then ConstExpr
+    else if t_ctx#var_needs_abstraction v
+    then AbsExpr
+    else ConcExpr
 ;;
 
 let translate_expr ctx dom solver atype expr =
