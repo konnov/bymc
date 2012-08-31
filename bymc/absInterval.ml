@@ -110,7 +110,7 @@ class ['tok] trans_context =
 
         method var_needs_abstraction (v: var) =
             let r = self#get_role v in
-            not (self#must_keep_concrete (Var v)) && (not (is_bounded r))
+            (not (self#must_keep_concrete (Var v))) && (not (is_bounded r))
     end
 ;;
 
@@ -571,28 +571,83 @@ let var_trait t_ctx v =
     else ConcExpr
 ;;
 
-let translate_expr ctx dom solver atype expr =
-    let cmp_abs_var var_expr abs_val =
-        if not (ctx#must_keep_concrete var_expr)
-        then BinEx (EQ, var_expr, Const abs_val)
-        else (* hack: concretize the var_expr back as a constraint *)
-            dom#expr_is_concretization var_expr abs_val
-    in 
-    let trans_rel_many_vars symb_expr =
-        let matching_vals = (dom#find_abs_vals atype solver symb_expr) in
-        (* create a disjunction of conjunctions enumerating abstract values:
-            (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)            *)
-        List.fold_left
-            (fun conjuncts abs_tuple ->
-                let conj = List.fold_left
-                    (fun lits (var, abs_val) ->
-                        let lit = cmp_abs_var (Var var) abs_val in
-                        if not_nop lits then BinEx (AND, lits, lit) else lit
-                    ) (Nop "") abs_tuple
-                in
-                if not_nop conjuncts then BinEx (OR, conjuncts, conj) else conj 
-            ) (Nop "") matching_vals
+(*
+ Translate an arithmetic comparison to a pointwise comparison of
+ abstract values. Find the vectors of abstract values that match
+ a symbolic expression (using either an existential or universal
+ abstraction). Then construct a disjunctive normal form on the
+ conditions.
+     
+ Create a disjunction of conjunctions enumerating abstract values:
+    (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)
+*)
+let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
+    let mk_eq (var, abs_val) = coord_point_fun var abs_val in
+    let mk_point point_tuple = list_to_binex AND (List.map mk_eq point_tuple)
     in
+    let points_lst = (dom#find_abs_vals atype solver symb_expr) in
+    list_to_binex OR (List.map mk_point points_lst)
+;;
+
+(* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
+let abstract_arith_rel ctx dom solver atype tok lhs rhs =
+    let orig_expr = BinEx (tok, lhs, rhs) in
+    let ltrait = get_abs_trait (var_trait ctx) lhs in
+    let rtrait = get_abs_trait (var_trait ctx) rhs in
+    let mk_eq var abs_val = BinEx (EQ, Var var, Const abs_val) in
+    match ltrait, rtrait with
+    | ConstExpr, AbsExpr ->
+        (* do a single argument abstraction when rhs is var,
+           otherwise do the general abstraction *)
+        if is_var rhs
+        then BinEx (tok, (dom#map_concrete solver lhs), rhs)
+        else abstract_pointwise ctx dom solver atype mk_eq orig_expr
+
+    | AbsExpr, ConstExpr ->
+        if is_var lhs
+        then BinEx (tok, lhs, (dom#map_concrete solver lhs))
+        else abstract_pointwise ctx dom solver atype mk_eq orig_expr
+
+    | AbsExpr, AbsExpr ->
+        (* general abstraction *)
+        abstract_pointwise ctx dom solver atype mk_eq orig_expr
+
+    | ConcExpr, AbsExpr ->
+        (* do abstract_pointwise general abstraction, then concretize lhs *)
+        let tmp_var = new var "_concX" in
+        solver#append_var_def tmp_var;
+        let new_expr = (BinEx (tok, Var tmp_var, rhs)) in
+        let restore_lhs v abs_val =
+            if v == tmp_var
+            then dom#expr_is_concretization lhs abs_val
+            else BinEx (EQ, Var v, Const abs_val)
+        in
+        abstract_pointwise ctx dom solver atype restore_lhs new_expr
+
+    | AbsExpr, ConcExpr ->
+        let tmp_var = new var "_concX" in
+        solver#append_var_def tmp_var;
+        let new_expr = (BinEx (tok, lhs, Var tmp_var)) in
+        let restore_rhs v abs_val =
+            if v == tmp_var
+            then dom#expr_is_concretization rhs abs_val
+            else BinEx (EQ, Var v, Const abs_val)
+        in
+        abstract_pointwise ctx dom solver atype restore_rhs new_expr
+
+    | ConcExpr, ConcExpr
+    | ConcExpr, ConstExpr
+    | ConstExpr, ConcExpr
+    | ShadowExpr, ShadowExpr -> 
+        (* keep it *)
+        BinEx (tok, lhs, rhs)
+    | _ ->
+        let m = (sprintf "Mixture of abstract and concrete variables in %s"
+                (expr_s (BinEx (tok, lhs, rhs)))) in
+        raise (Abstraction_error m)
+;;
+
+let translate_expr ctx dom solver atype expr =
     let rec trans_e = function
         (* boolean combination of arithmetic constraints *)
         | BinEx (AND, lhs, rhs) ->
@@ -601,28 +656,16 @@ let translate_expr ctx dom solver atype expr =
             BinEx (OR, (trans_e lhs), (trans_e rhs))
         | UnEx  (NEG, lhs) ->
             UnEx (NEG, (trans_e lhs))
-        (* comparison against a constant,
-           comparison against a variable and a constant *)
+
+        (* arithmetic comparisons *)
         | BinEx (LT, lhs, rhs)
         | BinEx (LE, lhs, rhs)
         | BinEx (GT, lhs, rhs)
         | BinEx (GE, lhs, rhs)
         | BinEx (EQ, lhs, rhs)
         | BinEx (NE, lhs, rhs) as e ->
-            begin
-            match (expr_exists non_symbolic lhs, expr_exists non_symbolic rhs) with
-            | (true, true) -> trans_rel_many_vars e
-            (* thanks to the domain we can translate these comparisons as they are *)
-            | (true, false) -> 
-                BinEx ((op_of_expr e), lhs, (dom#map_concrete solver rhs))
-            | (false, true) -> 
-                BinEx ((op_of_expr e), (dom#map_concrete solver lhs), rhs)
-            | _ ->
-                (* NOTE: in principle, we can do that,
-                   but it looks like an error in the user code *)
-                let m = sprintf "Abstract a constant expression (%s)?" (expr_s e) in
-                raise (Abstraction_error m)
-            end
+            abstract_arith_rel ctx dom solver atype (op_of_expr e) lhs rhs
+
         | _ -> raise (Abstraction_error
             (sprintf "No abstraction for: %s" (expr_s expr)))
     in
@@ -699,7 +742,7 @@ let trans_prop_decl ctx dom solver decl_expr =
             then decl_expr
             else MDeclProp (id, v, PropSome (tr_e e))
         | MDeclProp (id, v, PropGlob e) ->
-            if not (expr_exists (over_dom ctx) e) || (expr_exists has_card e)
+            if not (expr_exists (over_dom ctx) e) (*|| (expr_exists has_card e)*)
             then decl_expr
             else MDeclProp (id, v, PropGlob (tr_e e))
         | _ -> decl_expr

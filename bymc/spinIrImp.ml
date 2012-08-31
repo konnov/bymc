@@ -304,3 +304,16 @@ let prog_unit_s u =
     | None -> Printf.sprintf "skip\n"
 ;;
 
+(* return a symmetric version of an arithmetic relation *)
+let symm_of_arith_rel = function
+    | LT -> GT
+    | LE -> GE
+    | GT -> LT
+    | GE -> LE
+    | EQ -> EQ
+    | NE -> NE
+    | _ as tok ->
+        let m = "Not an arithmetic relation: " ^ (token_s tok) in
+        raise (Invalid_argument m)
+;;
+

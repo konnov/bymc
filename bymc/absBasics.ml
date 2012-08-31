@@ -32,7 +32,7 @@ let get_abs_trait
         | BinEx (MULT, lhs, rhs)
         | BinEx (DIV, lhs, rhs) as e ->
             let lt = (explore lhs) and rt = (explore rhs) in
-            if lt <> rt
+            if lt <> rt && lt != ConstExpr && rt != ConstExpr
             then let m = sprintf "Concrete and abstracted variables are mixed in %s"
                         (expr_s e) in
                 raise (Abstraction_error m)
