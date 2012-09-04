@@ -38,8 +38,9 @@ let comp_dom_frontiers cfg =
     df
 ;;
 
-(* Ron Cytron et al. Static Single Assignment Form and the Control
-   Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991, pp. 451-490.
+(* Ron Cytron et al. Efficientrly Computing Static Single Assignment Form and
+   the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
+   pp. 451-490.
 
    Figure 11.
  *)
@@ -151,8 +152,9 @@ let optimize_ssa cfg =
     cfg
 ;;
 
-(* Ron Cytron et al. Static Single Assignment Form and the Control
-   Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991, pp. 451-490.
+(* Ron Cytron et al. Efficientrly Computing Static Single Assignment Form and
+   the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
+   pp. 451-490.
 
    Figure 12.
  *)
