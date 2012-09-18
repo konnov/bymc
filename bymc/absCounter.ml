@@ -286,7 +286,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                 MUnsafe (-1, (expr_s e) ^ ";")
             in
             
-            [ prev_ne_next; MPrint (-1, str, prev_idx :: next_idx :: es)]
+            [ (*prev_ne_next; *) MPrint (-1, str, prev_idx :: next_idx :: es)]
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in
@@ -325,7 +325,10 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                         (BinEx (tok, ktr_i, Const 1)) in
                 mk_assign_unfolding ktr_i expr_abs_vals
             in
-            [mk_one MINUS prev_idx; mk_one PLUS next_idx]
+            let guard = MExpr(-1, BinEx (NE, prev_idx, next_idx)) in
+            let seq = [guard; mk_one MINUS prev_idx; mk_one PLUS next_idx] in
+            let comment = "processes stay at the same local state" in
+            [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
 
         method keep_assume e = false
     end;;
