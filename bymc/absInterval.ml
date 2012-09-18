@@ -127,9 +127,12 @@ class abs_domain conds_i =
 
         method print =
             log INFO " # Abstract domain:";
-            Hashtbl.iter
-                (fun c i -> log INFO (sprintf "   d%d -> %s" i (expr_s c)))
-                val_map
+            let rmap = hashtbl_inverse val_map in
+            let print_cond i =
+                let c = Hashtbl.find rmap i in
+                log INFO (sprintf "   d%d -> %s" i (expr_s c))
+            in
+            List.iter print_cond (range 0 (List.length conds))
         
         initializer
             List.iter
