@@ -608,7 +608,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
 
     | AbsExpr, ConstExpr ->
         if is_var lhs
-        then BinEx (tok, lhs, (dom#map_concrete solver lhs))
+        then BinEx (tok, lhs, (dom#map_concrete solver rhs))
         else abstract_pointwise ctx dom solver atype mk_eq orig_expr
 
     | AbsExpr, AbsExpr ->
