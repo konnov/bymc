@@ -1,5 +1,6 @@
-/* OCaml version of the Promela parser                  */
+/* OCaml version of the (extended) Promela parser       */
 /* Adapted from the original yacc grammar of Spin 6.0.1 */
+/*                                                      */
 /* Igor Konnov 2012                                     */
 
 /***** spin: spin.y *****/
@@ -61,6 +62,7 @@ open Printf;;
 
 open Lexing;;
 open SpinIr;;
+open SpinlexGlue;;
 
 exception Not_implemented of string;;
 exception Parse_error of string;;
@@ -141,6 +143,7 @@ let fatal msg payload =
 %token  <string> UNAME
 %token  <string> PNAME
 %token  <string> INAME		        /* sym */
+%token  <string> FNAME		        /* atomic proposition name */
 %token	<string> STRING
 %token  CLAIM TRACE INIT	LTL	/* sym */
 %token  NE EQ LT GT LE GE OR AND BITNOT BITOR BITXOR BITAND ASGN
@@ -149,6 +152,9 @@ let fatal msg payload =
 %token  COLON DOT COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
 %token  O_SND SND RCV R_RCV AT
 %token  NEVER NOTRACE TRACE ASSERT
+%token	ALWAYS EVENTUALLY		    /* ltl */
+%token	UNTIL WEAK_UNTIL RELEASE	/* ltl */
+%token	NEXT IMPLIES EQUIV          /* ltl */
 %token  <string * string> DEFINE
 %token  <string> INCLUDE
 %token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
@@ -263,502 +269,521 @@ proc	: inst		/* optional instantiator */
                 }
         ;
 
-    proctype: PROCTYPE	{
-            current_scope := new symb_tab;
-            !current_scope#set_parent global_scope
-            (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
-        | D_PROCTYPE	{
-            current_scope := new symb_tab;
-            (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
-        ;
+proctype: PROCTYPE	{
+        current_scope := new symb_tab;
+        !current_scope#set_parent global_scope
+        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
+    | D_PROCTYPE	{
+        current_scope := new symb_tab;
+        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
+    ;
 
-    inst	: /* empty */	{ Const 0 }
-        | ACTIVE	{ Const 1 }
-        /* FORSYTE extension: any constant + a symbolic arith expression */
-        | ACTIVE LBRACE expr RBRACE {
-                match $3 with
-                | Const i -> Const i
-                | Var v ->
-                    if v#get_ini > 0
-                    then Const v#get_ini
-                    else if v#is_symbolic
-                    then Var v
-                    else fatal (sprintf "%s is neither symbolic nor a constant" v#get_name) ""
-                | _ -> if is_expr_symbolic $3 then $3 else
-                    fatal "active [..] must be constant or symbolic" ""
-            }
-        ;
-
-    init	: INIT		/* { (* context = $1->sym; *) } */
-          Opt_priority
-          body		{ (* ProcList *rl;
-                  rl = ready(context, ZN, $4->sq, 0, ZN, I_PROC);
-                  runnable(rl, $3?$3->val:1, 1);
-                  announce(":root:");
-                  context = ZS; *)
-                    }
-        ;
-
-    ltl	: LTL optname2		/* { (* ltl_mode = 1; ltl_name = $2->sym->name; *) } */
-          ltl_body		{ (* if ($4) ltl_list($2->sym->name, $4->sym->name);
-                  ltl_mode = 0; *)
-                }
-        ;
-
-    ltl_body: LCURLY full_expr OS RCURLY { (* $$ = ltl_to_string($2); *) }
-        | error		{ (* $$ = NULL; *) }
-        ;
-
-    claim	: CLAIM	optname	/* { (* if ($2 != ZN)
-                  {	$1->sym = $2->sym;	(* new 5.3.0 *)
-                  }
-                  nclaims++;
-                  context = $1->sym;
-                  if (claimproc && !strcmp(claimproc, $1->sym->name))
-                  {	fatal("claim %s redefined", claimproc);
-                  }
-                  claimproc = $1->sym->name; *)
-                } */
-          body		{ (* (void) ready($1->sym, ZN, $4->sq, 0, ZN, N_CLAIM);
-                      context = ZS; *)
-                    }
-        ;
-
-    optname : /* empty */	{ (* char tb[32];
-                  memset(tb, 0, 32);
-                  sprintf(tb, "never_%d", nclaims);
-                  $$ = nn(ZN, NAME, ZN, ZN);
-                  $$->sym = lookup(tb); *)
-                }
-        | NAME		{ (* $$ = $1; *) }
-        ;
-
-    optname2 : /* empty */ { (* char tb[32]; static int nltl = 0;
-                  memset(tb, 0, 32);
-                  sprintf(tb, "ltl_%d", nltl++);
-                  $$ = nn(ZN, NAME, ZN, ZN);
-                  $$->sym = lookup(tb); *)
-                }
-        | NAME		{ (* $$ = $1; *) }
-        ;
-
-    events : TRACE	/* { (* context = $1->sym;
-                  if (eventmap)
-                    non_fatal("trace %s redefined", eventmap);
-                  eventmap = $1->sym->name;
-                  inEventMap++; *)
-                } */
-          body	{ raise (Not_implemented "TRACE")
-                (*
-                  if (strcmp($1->sym->name, ":trace:") == 0)
-                  {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, E_TRACE);
-                  } else
-                  {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, N_TRACE);
-                  }
-                      context = ZS;
-                  inEventMap--; *)
-                }
-        ;
-
-    utype	: TYPEDEF NAME	/*	{ (* if (context)
-                       fatal("typedef %s must be global",
-                            $2->sym->name);
-                       owner = $2->sym; *)
-                    } */
-          LCURLY decl_lst LCURLY	{
-                    raise (Not_implemented "typedef is not supported")
-                 (* setuname($5); owner = ZS; *) }
-        ;
-
-    nm	: NAME			{ (* $$ = $1; *) }
-        | INAME			{ (* $$ = $1;
-                      if (IArgs)
-                      fatal("invalid use of '%s'", $1->sym->name); *)
-                    }
-        ;
-
-    ns	: INLINE nm LPAREN		/* { (* NamesNotAdded++; *) } */
-          args RPAREN		{
-                        raise (Not_implemented "inline")
-                   (* prep_inline($2->sym, $5);
-                      NamesNotAdded--; *)
-                    }
-        ;
-
-    c_fcts	: ccode			{
-                        raise (Not_implemented "c_fcts")
-                      (* leaves pseudo-inlines with sym of
-                       * type CODE_FRAG or CODE_DECL in global context
-                       *)
-                    }
-        | cstate {}
-        ;
-
-    cstate	: C_STATE STRING STRING	{
-                     raise (Not_implemented "c_state")
-                    (*
-                      c_state($2->sym, $3->sym, ZS);
-                      has_code = has_state = 1; *)
-                    }
-        | C_TRACK STRING STRING {
-                     raise (Not_implemented "c_track")
-                     (*
-                      c_track($2->sym, $3->sym, ZS);
-                      has_code = has_state = 1; *)
-                    }
-        | C_STATE STRING STRING	STRING {
-                     raise (Not_implemented "c_state")
-                     (*
-                      c_state($2->sym, $3->sym, $4->sym);
-                      has_code = has_state = 1; *)
-                    }
-        | C_TRACK STRING STRING STRING {
-                     raise (Not_implemented "c_track")
-                     (*
-                      c_track($2->sym, $3->sym, $4->sym);
-                      has_code = has_state = 1; *)
-                    }
-        ;
-
-    ccode	: C_CODE {
-                     raise (Not_implemented "c_code")
-                     (* Symbol *s;
-                      NamesNotAdded++;
-                      s = prep_inline(ZS, ZN);
-                      NamesNotAdded--;
-                      $$ = nn(ZN, C_CODE, ZN, ZN);
-                      $$->sym = s;
-                      has_code = 1; *)
-                    }
-        | C_DECL		{
-                     raise (Not_implemented "c_decl")
-                     (* Symbol *s;
-                      NamesNotAdded++;
-                      s = prep_inline(ZS, ZN);
-                      NamesNotAdded--;
-                      s->type = CODE_DECL;
-                      $$ = nn(ZN, C_CODE, ZN, ZN);
-                      $$->sym = s;
-                      has_code = 1; *)
-                    }
-        ;
-    cexpr	: C_EXPR	{
-                     raise (Not_implemented "c_expr")
-                     (* Symbol *s;
-                      NamesNotAdded++;
-                      s = prep_inline(ZS, ZN);
-                      NamesNotAdded--;
-                      $$ = nn(ZN, C_EXPR, ZN, ZN);
-                      $$->sym = s;
-                      no_side_effects(s->name);
-                      has_code = 1; *)
-                    }
-        ;
-
-    body	: LCURLY			/* { (* open_seq(1); *) } */
-              sequence OS	/* { (* add_seq(Stop); *) } */
-              RCURLY			{
-                  $2
-               (* $$->sq = close_seq(0);
-                  if (scope_level != 0)
-                  {	non_fatal("missing '}' ?", 0);
-                    scope_level = 0;
-                  } *)
-                }
-        ;
-
-    sequence: step			{ $1 }
-        | sequence MS step	{ List.append $1 $3 }
-        ;
-
-    step    : one_decl		{ $1 }
-        | XU vref_lst		{ raise (Not_implemented "XU vref_lst")
-            (* setxus($2, $1->val); $$ = ZN; *) }
-        | NAME COLON one_decl	{ fatal "label preceding declaration," "" }
-        | NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
-        | stmnt			    { $1 }
-        | stmnt UNLESS stmnt	{ raise (Not_implemented "unless") }
-        ;
-
-    vis	: /* empty */	{ HNone }
-        | HIDDEN		{ HHide }
-        | SHOW			{ HShow }
-        | ISLOCAL		{ HTreatLocal }
-        | SYMBOLIC      { HSymbolic }
-        ;
-
-    asgn:	/* empty */ {}
-        | ASGN {}
-        ;
-
-    one_decl: vis TYPE var_list	{
-            let f = $1 and t = $2 in
-            let ds = (List.map
-                (fun (v, i) ->
-                    v#add_flag f; v#set_type t; MDecl(new_id (), v, i)) $3) in
-            List.iter
-                (fun d ->
-                    match d with
-                    | MDecl(_, v, i) ->
-                            !current_scope#add_symb v#get_name (v :> symb)
-                    | _ -> raise (Failure "Not a Decl")
-                )
-                ds;
-            ds
-           (* setptype($3, $2->val, $1);
-              $$ = $3; *)
+inst	: /* empty */	{ Const 0 }
+    | ACTIVE	{ Const 1 }
+    /* FORSYTE extension: any constant + a symbolic arith expression */
+    | ACTIVE LBRACE expr RBRACE {
+            match $3 with
+            | Const i -> Const i
+            | Var v ->
+                if v#get_ini > 0
+                then Const v#get_ini
+                else if v#is_symbolic
+                then Var v
+                else fatal (sprintf "%s is neither symbolic nor a constant" v#get_name) ""
+            | _ -> if is_expr_symbolic $3 then $3 else
+                fatal "active [..] must be constant or symbolic" ""
         }
-        | vis UNAME var_list	{
-                      raise (Not_implemented "variables of user-defined types")
-                   (* setutype($3, $2->sym, $1);
-                      $$ = expand($3, Expand_Ok); *)
-                    }
-        | vis TYPE asgn LCURLY nlst RCURLY {
-                      raise (Not_implemented "mtype = {...}")
-                     (*
-                      if ($2->val != MTYPE)
-                        fatal("malformed declaration", 0);
-                      setmtype($5);
-                      if ($1)
-                        non_fatal("cannot %s mtype (ignored)",
-                            $1->sym->name);
-                      if (context != ZS)
-                        fatal("mtype declaration must be global", 0); *)
-                    }
-        ;
+    ;
 
-    decl_lst: one_decl       	{ $1 }
-        | one_decl SEMI
-          decl_lst		        { $1 @ $3 }
-        ;
-
-    decl    : /* empty */		{ [] }
-        | decl_lst      	    { $1 }
-        ;
-
-    vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
-        | varref COMMA vref_lst	{ (* $$ = nn($1, XU, $1, $3); *) }
-        ;
-
-    var_list: ivar              { [$1] }
-        | ivar COMMA var_list	{ $1 :: $3 }
-        ;
-
-    ivar    : vardcl           	{ ($1, Nop "") }
-        | vardcl ASGN expr   	{
-            ($1, $3)
-            (* $$ = $1;
-              $1->sym->ini = $3;
-              trackvar($1,$3);
-              if ($3->ntyp == CONST
-              || ($3->ntyp == NAME && $3->sym->context))
-              {	has_ini = 2; /* local init */
-              } else
-              {	has_ini = 1; /* possibly global */
-              }
-              if (!initialization_ok && split_decl)
-              {	nochan_manip($1, $3, 0);
-                no_internals($1);
-                non_fatal(PART0 "'%s'" PART2, $1->sym->name);
-              } *)
-            }
-        | vardcl ASGN ch_init	{
-              raise (Not_implemented "var = ch_init")
-           (* $1->sym->ini = $3;
-              $$ = $1; has_ini = 1;
-              if (!initialization_ok && split_decl)
-              {	non_fatal(PART1 "'%s'" PART2, $1->sym->name);
-              } *)
-            }
-        ;
-
-    ch_init : LBRACE CONST RBRACE OF
-          LCURLY typ_list RCURLY	{
-                     raise (Not_implemented "channels")
-                   (* if ($2->val) u_async++;
-                      else u_sync++;
-                          {	int i = cnt_mpars($6);
-                        Mpars = max(Mpars, i);
-                      }
-                          $$ = nn(ZN, CHAN, ZN, $6);
-                      $$->val = $2->val; *)
-                        }
-        ;
-
-    vardcl  : NAME  		{ new var $1 }
-        | NAME COLON CONST	{
-            let v = new var $1 in
-            v#set_nbits $3;
-            v
-            (* $1->sym->nbits = $3->val;
-              if ($3->val >= 8*sizeof(long))
-              {	non_fatal("width-field %s too large",
-                    $1->sym->name);
-                $3->val = 8*sizeof(long)-1;
-              }
-              $1->sym->nel = 1; $$ = $1; *)
-            }
-        | NAME LBRACE CONST RBRACE	{
-            let v = new var $1 in
-            v#set_isarray true;
-            v#set_num_elems $3;
-            v
-            }
-        ;
-
-    varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
-        ;
-
-    pfld	: NAME {
-                try
-                    (!current_scope#lookup $1)#as_var
-                with Symbol_not_found _ ->
-                    (* XXX: check that the current expression can use that *)
-                    (spec_scope#lookup $1)#as_var
+init	: INIT		/* { (* context = $1->sym; *) } */
+      Opt_priority
+      body		{ (* ProcList *rl;
+              rl = ready(context, ZN, $4->sq, 0, ZN, I_PROC);
+              runnable(rl, $3?$3->val:1, 1);
+              announce(":root:");
+              context = ZS; *)
                 }
-        | NAME			/* { (* owner = ZS; *) } */
-          LBRACE expr RBRACE
-                { raise (Not_implemented
-                    "Array references, e.g., x[y] are not implemented") }
-        ;
+    ;
 
-    cmpnd	: pfld			/* { (* Embedded++;
-                      if ($1->sym->type == STRUCT)
-                        owner = $1->sym->Snm; *)
-                    } */
-          sfld
-                {  $1
-                   (* $$ = $1; $$->rgt = $3;
-                      if ($3 && $1->sym->type != STRUCT)
-                        $1->sym->type = STRUCT;
-                      Embedded--;
-                      if (!Embedded && !NamesNotAdded
-                      &&  !$1->sym->type)
-                       fatal("undeclared variable: %s",
-                            $1->sym->name);
-                      if ($3) validref($1, $3->lft);
-                      owner = ZS; *)
-                    }
-        ;
+ltl	: ltl_prefix FNAME ltl_body	{
+        set_lexer_normal();
+        (* TODO: put it somewhere *)
+        ($2, $3)
+    }
+;
 
-    sfld	: /* empty */		{ }
-        | DOT cmpnd %prec DOT	{
-             raise (Not_implemented
-                    "Structure member addressing, e.g., x.y is not implemented")
-             (* $$ = nn(ZN, '.', $2, ZN); *) }
-        ;
+ltl_prefix: LTL
+    { set_lexer_ltl() }
+;
 
-    stmnt	: Special		{ $1 (* $$ = $1; initialization_ok = 0; *) }
-        | Stmnt			{ $1 (* $$ = $1; initialization_ok = 0;
-                      if (inEventMap)
-                       non_fatal("not an event", (char * )0); *)
-                    }
-        ;
+ltl_body: LCURLY ltl_expr RCURLY { $2 }
+    | error		{ fatal "Incorrect inline LTL formula" "" }
+    ;
 
-    for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
-          varref		{ raise (Not_implemented "for") (* $$ = $4; *) }
-        ;
-
-    for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
-
-    Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
-          rargs		{ raise (Not_implemented "rcv")
-                    (* Expand_Ok--; has_io++;
-                      $$ = nn($1,  'r', $1, $4);
-                      trackchanuse($4, ZN, 'R'); *)
-                    }
-        | varref SND		/* { (* Expand_Ok++; *) } */
-          margs		{ raise (Not_implemented "snd")
-                   (* Expand_Ok--; has_io++;
-                      $$ = nn($1, 's', $1, $4);
-                      $$->val=0; trackchanuse($4, ZN, 'S');
-                      any_runs($4); *)
-                    }
-        | for_pre COLON expr DOTDOT expr RPAREN	/* { (*
-                      for_setup($1, $3, $5); in_for = 0; *)
-                    } */
-          for_post	{
-              raise (Not_implemented "for_post")
-              (* $$ = for_body($1, 1); *)
-                    }
-        | for_pre IN varref RPAREN	/* { (* $$ = for_index($1, $3); in_for = 0; *)
-                    } */
-          for_post	{
-              raise (Not_implemented "for_pre")
-              (* $$ = for_body($5, 1); *)
-                    }
-        | SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
-                        raise (Not_implemented "select")
-                      (* $$ = sel_index($3, $5, $7); *)
-                    }
-        | if_begin options FI	{
-                    pop_labs ();                
-                    met_else := false;
-                    [ MIf (new_id (), $2) ]
-                    (* $$ = nn($1, IF, ZN, ZN);
-                     $$->sl = $2->sl;
-                     prune_opts($$); *)
-              }
-        | do_begin 		/* one more rule as ocamlyacc does not support multiple
-                           actions like this: { (* pushbreak(); *) } */
-              options OD {
-                    (* use of elab/entry_lab is redundant, but we want
-                       if/fi and do/od look similar as some algorithms
-                       can cut off gotos at the end of an option *)
-                    let (_, break_lab) = top_labs ()
-                        and entry_lab = mk_uniq_label()
-                        and opts = $2 in
-                    met_else := false;
-                    let do_s =
-                        [MLabel (new_id (), entry_lab);
-                         MIf (new_id (), opts);
-                         MGoto (new_id (), entry_lab);
-                         MLabel (new_id (), break_lab)]
-                    in
-                    pop_labs ();                
-                    do_s
-
-                    (* $$ = nn($1, DO, ZN, ZN);
-                      $$->sl = $3->sl;
-                      prune_opts($$); *)
-                    }
-        | BREAK     {
-                    let (_, blab) = top_labs () in
-                    [MGoto (new_id (), blab)]
-                    (* $$ = nn(ZN, GOTO, ZN, ZN);
-                      $$->sym = break_dest(); *)
-                    }
-        | GOTO NAME		{
-            try
-                let l = !current_scope#lookup $2 in
-                [MGoto (new_id (), l#as_label#get_num)]
-            with Symbol_not_found _ ->
-                let label_no = mk_uniq_label () in
-                Hashtbl.add fwd_labels $2 label_no;
-                [MGoto (new_id (), label_no)] (* resolve it later *)
-         (* $$ = nn($2, GOTO, ZN, ZN);
-		  if ($2->sym->type != 0
-		  &&  $2->sym->type != LABEL) {
-		  	non_fatal("bad label-name %s",
-			$2->sym->name);
-		  }
-		  $2->sym->type = LABEL; *)
-		}
-	| NAME COLON stmnt	{
-        let label_no =
-            try
-                let _ = (!current_scope)#lookup $1 in
-                fatal "" (sprintf "Label %s redeclared\n" $1)
-            with Symbol_not_found _ ->
-                if Hashtbl.mem fwd_labels $1
-                then Hashtbl.find fwd_labels $1
-                else mk_uniq_label ()
-        in
-        !current_scope#add_symb
-            $1 ((new label $1 label_no) :> symb);
-        MLabel (new_id (), label_no) :: $3
-		}
+/* this rule is completely different from Spin's ltl_expr  */
+ltl_expr:
+      LPAREN ltl_expr RPAREN        { $2 }
+    | SND ltl_expr                  { UnEx(NEG, $2) }
+    | ltl_expr UNTIL ltl_expr	    { BinEx(UNTIL, $1, $3) }
+	| ltl_expr RELEASE ltl_expr	    { BinEx(RELEASE, $1, $3) }
+	| ltl_expr WEAK_UNTIL ltl_expr	{ BinEx(WEAK_UNTIL, $1, $3) }
+	| ltl_expr IMPLIES ltl_expr     { BinEx(OR, UnEx(NEG, $1), $3) }
+	| ltl_expr EQUIV ltl_expr	    { BinEx(EQUIV, $1, $3) }
+	| ALWAYS ltl_expr     %prec NEG { UnEx(ALWAYS, $2) }
+	| EVENTUALLY ltl_expr %prec NEG { UnEx(EVENTUALLY, $2) }
+    | ltl_expr AND ltl_expr         { BinEx(AND, $1, $3) }
+    | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
+    | FNAME                         { Var (new var $1) }
+    | FNAME AT FNAME
+        { let v = new var $3 in v#set_proc_name $1; Var v }
+  /* TODO: implement this later
+    | LPAREN expr RPAREN            { }
+   */
+  /* sorry, next time we support nexttime (hardly ever happens) */
+  /*| NEXT ltl_expr       %prec NEG {...} */
 	;
+
+claim	: CLAIM	optname	/* { (* if ($2 != ZN)
+              {	$1->sym = $2->sym;	(* new 5.3.0 *)
+              }
+              nclaims++;
+              context = $1->sym;
+              if (claimproc && !strcmp(claimproc, $1->sym->name))
+              {	fatal("claim %s redefined", claimproc);
+              }
+              claimproc = $1->sym->name; *)
+            } */
+      body		{ (* (void) ready($1->sym, ZN, $4->sq, 0, ZN, N_CLAIM);
+                  context = ZS; *)
+                }
+    ;
+
+optname : /* empty */	{ (* char tb[32];
+              memset(tb, 0, 32);
+              sprintf(tb, "never_%d", nclaims);
+              $$ = nn(ZN, NAME, ZN, ZN);
+              $$->sym = lookup(tb); *)
+            }
+    | NAME		{ (* $$ = $1; *) }
+    ;
+
+events : TRACE	/* { (* context = $1->sym;
+              if (eventmap)
+                non_fatal("trace %s redefined", eventmap);
+              eventmap = $1->sym->name;
+              inEventMap++; *)
+            } */
+      body	{ raise (Not_implemented "TRACE")
+            (*
+              if (strcmp($1->sym->name, ":trace:") == 0)
+              {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, E_TRACE);
+              } else
+              {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, N_TRACE);
+              }
+                  context = ZS;
+              inEventMap--; *)
+            }
+    ;
+
+utype	: TYPEDEF NAME	/*	{ (* if (context)
+                   fatal("typedef %s must be global",
+                        $2->sym->name);
+                   owner = $2->sym; *)
+                } */
+      LCURLY decl_lst LCURLY	{
+                raise (Not_implemented "typedef is not supported")
+             (* setuname($5); owner = ZS; *) }
+    ;
+
+nm	: NAME			{ (* $$ = $1; *) }
+    | INAME			{ (* $$ = $1;
+                  if (IArgs)
+                  fatal("invalid use of '%s'", $1->sym->name); *)
+                }
+    ;
+
+ns	: INLINE nm LPAREN		/* { (* NamesNotAdded++; *) } */
+      args RPAREN		{
+                    raise (Not_implemented "inline")
+               (* prep_inline($2->sym, $5);
+                  NamesNotAdded--; *)
+                }
+    ;
+
+c_fcts	: ccode			{
+                    raise (Not_implemented "c_fcts")
+                  (* leaves pseudo-inlines with sym of
+                   * type CODE_FRAG or CODE_DECL in global context
+                   *)
+                }
+    | cstate {}
+    ;
+
+cstate	: C_STATE STRING STRING	{
+                 raise (Not_implemented "c_state")
+                (*
+                  c_state($2->sym, $3->sym, ZS);
+                  has_code = has_state = 1; *)
+                }
+    | C_TRACK STRING STRING {
+                 raise (Not_implemented "c_track")
+                 (*
+                  c_track($2->sym, $3->sym, ZS);
+                  has_code = has_state = 1; *)
+                }
+    | C_STATE STRING STRING	STRING {
+                 raise (Not_implemented "c_state")
+                 (*
+                  c_state($2->sym, $3->sym, $4->sym);
+                  has_code = has_state = 1; *)
+                }
+    | C_TRACK STRING STRING STRING {
+                 raise (Not_implemented "c_track")
+                 (*
+                  c_track($2->sym, $3->sym, $4->sym);
+                  has_code = has_state = 1; *)
+                }
+    ;
+
+ccode	: C_CODE {
+                 raise (Not_implemented "c_code")
+                 (* Symbol *s;
+                  NamesNotAdded++;
+                  s = prep_inline(ZS, ZN);
+                  NamesNotAdded--;
+                  $$ = nn(ZN, C_CODE, ZN, ZN);
+                  $$->sym = s;
+                  has_code = 1; *)
+                }
+    | C_DECL		{
+                 raise (Not_implemented "c_decl")
+                 (* Symbol *s;
+                  NamesNotAdded++;
+                  s = prep_inline(ZS, ZN);
+                  NamesNotAdded--;
+                  s->type = CODE_DECL;
+                  $$ = nn(ZN, C_CODE, ZN, ZN);
+                  $$->sym = s;
+                  has_code = 1; *)
+                }
+    ;
+cexpr	: C_EXPR	{
+                 raise (Not_implemented "c_expr")
+                 (* Symbol *s;
+                  NamesNotAdded++;
+                  s = prep_inline(ZS, ZN);
+                  NamesNotAdded--;
+                  $$ = nn(ZN, C_EXPR, ZN, ZN);
+                  $$->sym = s;
+                  no_side_effects(s->name);
+                  has_code = 1; *)
+                }
+    ;
+
+body	: LCURLY			/* { (* open_seq(1); *) } */
+          sequence OS	/* { (* add_seq(Stop); *) } */
+          RCURLY			{
+              $2
+           (* $$->sq = close_seq(0);
+              if (scope_level != 0)
+              {	non_fatal("missing '}' ?", 0);
+                scope_level = 0;
+              } *)
+            }
+    ;
+
+sequence: step			{ $1 }
+    | sequence MS step	{ List.append $1 $3 }
+    ;
+
+step    : one_decl		{ $1 }
+    | XU vref_lst		{ raise (Not_implemented "XU vref_lst")
+        (* setxus($2, $1->val); $$ = ZN; *) }
+    | NAME COLON one_decl	{ fatal "label preceding declaration," "" }
+    | NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
+    | stmnt			    { $1 }
+    | stmnt UNLESS stmnt	{ raise (Not_implemented "unless") }
+    ;
+
+vis	: /* empty */	{ HNone }
+    | HIDDEN		{ HHide }
+    | SHOW			{ HShow }
+    | ISLOCAL		{ HTreatLocal }
+    | SYMBOLIC      { HSymbolic }
+    ;
+
+asgn:	/* empty */ {}
+    | ASGN {}
+    ;
+
+one_decl: vis TYPE var_list	{
+        let f = $1 and t = $2 in
+        let ds = (List.map
+            (fun (v, i) ->
+                v#add_flag f; v#set_type t; MDecl(new_id (), v, i)) $3) in
+        List.iter
+            (fun d ->
+                match d with
+                | MDecl(_, v, i) ->
+                        !current_scope#add_symb v#get_name (v :> symb)
+                | _ -> raise (Failure "Not a Decl")
+            )
+            ds;
+        ds
+       (* setptype($3, $2->val, $1);
+          $$ = $3; *)
+    }
+    | vis UNAME var_list	{
+                  raise (Not_implemented "variables of user-defined types")
+               (* setutype($3, $2->sym, $1);
+                  $$ = expand($3, Expand_Ok); *)
+                }
+    | vis TYPE asgn LCURLY nlst RCURLY {
+                  raise (Not_implemented "mtype = {...}")
+                 (*
+                  if ($2->val != MTYPE)
+                    fatal("malformed declaration", 0);
+                  setmtype($5);
+                  if ($1)
+                    non_fatal("cannot %s mtype (ignored)",
+                        $1->sym->name);
+                  if (context != ZS)
+                    fatal("mtype declaration must be global", 0); *)
+                }
+    ;
+
+decl_lst: one_decl       	{ $1 }
+    | one_decl SEMI
+      decl_lst		        { $1 @ $3 }
+    ;
+
+decl    : /* empty */		{ [] }
+    | decl_lst      	    { $1 }
+    ;
+
+vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
+    | varref COMMA vref_lst	{ (* $$ = nn($1, XU, $1, $3); *) }
+    ;
+
+var_list: ivar              { [$1] }
+    | ivar COMMA var_list	{ $1 :: $3 }
+    ;
+
+ivar    : vardcl           	{ ($1, Nop "") }
+    | vardcl ASGN expr   	{
+        ($1, $3)
+        (* $$ = $1;
+          $1->sym->ini = $3;
+          trackvar($1,$3);
+          if ($3->ntyp == CONST
+          || ($3->ntyp == NAME && $3->sym->context))
+          {	has_ini = 2; /* local init */
+          } else
+          {	has_ini = 1; /* possibly global */
+          }
+          if (!initialization_ok && split_decl)
+          {	nochan_manip($1, $3, 0);
+            no_internals($1);
+            non_fatal(PART0 "'%s'" PART2, $1->sym->name);
+          } *)
+        }
+    | vardcl ASGN ch_init	{
+          raise (Not_implemented "var = ch_init")
+       (* $1->sym->ini = $3;
+          $$ = $1; has_ini = 1;
+          if (!initialization_ok && split_decl)
+          {	non_fatal(PART1 "'%s'" PART2, $1->sym->name);
+          } *)
+        }
+    ;
+
+ch_init : LBRACE CONST RBRACE OF
+      LCURLY typ_list RCURLY	{
+                 raise (Not_implemented "channels")
+               (* if ($2->val) u_async++;
+                  else u_sync++;
+                      {	int i = cnt_mpars($6);
+                    Mpars = max(Mpars, i);
+                  }
+                      $$ = nn(ZN, CHAN, ZN, $6);
+                  $$->val = $2->val; *)
+                    }
+    ;
+
+vardcl  : NAME  		{ new var $1 }
+    | NAME COLON CONST	{
+        let v = new var $1 in
+        v#set_nbits $3;
+        v
+        (* $1->sym->nbits = $3->val;
+          if ($3->val >= 8*sizeof(long))
+          {	non_fatal("width-field %s too large",
+                $1->sym->name);
+            $3->val = 8*sizeof(long)-1;
+          }
+          $1->sym->nel = 1; $$ = $1; *)
+        }
+    | NAME LBRACE CONST RBRACE	{
+        let v = new var $1 in
+        v#set_isarray true;
+        v#set_num_elems $3;
+        v
+        }
+    ;
+
+varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
+    ;
+
+pfld	: NAME {
+            try
+                (!current_scope#lookup $1)#as_var
+            with Symbol_not_found _ ->
+                (* XXX: check that the current expression can use that *)
+                (spec_scope#lookup $1)#as_var
+            }
+    | NAME			/* { (* owner = ZS; *) } */
+      LBRACE expr RBRACE
+            { raise (Not_implemented
+                "Array references, e.g., x[y] are not implemented") }
+    ;
+
+cmpnd	: pfld			/* { (* Embedded++;
+                  if ($1->sym->type == STRUCT)
+                    owner = $1->sym->Snm; *)
+                } */
+      sfld
+            {  $1
+               (* $$ = $1; $$->rgt = $3;
+                  if ($3 && $1->sym->type != STRUCT)
+                    $1->sym->type = STRUCT;
+                  Embedded--;
+                  if (!Embedded && !NamesNotAdded
+                  &&  !$1->sym->type)
+                   fatal("undeclared variable: %s",
+                        $1->sym->name);
+                  if ($3) validref($1, $3->lft);
+                  owner = ZS; *)
+                }
+    ;
+
+sfld	: /* empty */		{ }
+    | DOT cmpnd %prec DOT	{
+         raise (Not_implemented
+                "Structure member addressing, e.g., x.y is not implemented")
+         (* $$ = nn(ZN, '.', $2, ZN); *) }
+    ;
+
+stmnt	: Special		{ $1 (* $$ = $1; initialization_ok = 0; *) }
+    | Stmnt			{ $1 (* $$ = $1; initialization_ok = 0;
+                  if (inEventMap)
+                   non_fatal("not an event", (char * )0); *)
+                }
+    ;
+
+for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
+      varref		{ raise (Not_implemented "for") (* $$ = $4; *) }
+    ;
+
+for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
+
+Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
+      rargs		{ raise (Not_implemented "rcv")
+                (* Expand_Ok--; has_io++;
+                  $$ = nn($1,  'r', $1, $4);
+                  trackchanuse($4, ZN, 'R'); *)
+                }
+    | varref SND		/* { (* Expand_Ok++; *) } */
+      margs		{ raise (Not_implemented "snd")
+               (* Expand_Ok--; has_io++;
+                  $$ = nn($1, 's', $1, $4);
+                  $$->val=0; trackchanuse($4, ZN, 'S');
+                  any_runs($4); *)
+                }
+    | for_pre COLON expr DOTDOT expr RPAREN	/* { (*
+                  for_setup($1, $3, $5); in_for = 0; *)
+                } */
+      for_post	{
+          raise (Not_implemented "for_post")
+          (* $$ = for_body($1, 1); *)
+                }
+    | for_pre IN varref RPAREN	/* { (* $$ = for_index($1, $3); in_for = 0; *)
+                } */
+      for_post	{
+          raise (Not_implemented "for_pre")
+          (* $$ = for_body($5, 1); *)
+                }
+    | SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
+                    raise (Not_implemented "select")
+                  (* $$ = sel_index($3, $5, $7); *)
+                }
+    | if_begin options FI	{
+                pop_labs ();                
+                met_else := false;
+                [ MIf (new_id (), $2) ]
+                (* $$ = nn($1, IF, ZN, ZN);
+                 $$->sl = $2->sl;
+                 prune_opts($$); *)
+          }
+    | do_begin 		/* one more rule as ocamlyacc does not support multiple
+                       actions like this: { (* pushbreak(); *) } */
+          options OD {
+                (* use of elab/entry_lab is redundant, but we want
+                   if/fi and do/od look similar as some algorithms
+                   can cut off gotos at the end of an option *)
+                let (_, break_lab) = top_labs ()
+                    and entry_lab = mk_uniq_label()
+                    and opts = $2 in
+                met_else := false;
+                let do_s =
+                    [MLabel (new_id (), entry_lab);
+                     MIf (new_id (), opts);
+                     MGoto (new_id (), entry_lab);
+                     MLabel (new_id (), break_lab)]
+                in
+                pop_labs ();                
+                do_s
+
+                (* $$ = nn($1, DO, ZN, ZN);
+                  $$->sl = $3->sl;
+                  prune_opts($$); *)
+                }
+    | BREAK     {
+                let (_, blab) = top_labs () in
+                [MGoto (new_id (), blab)]
+                (* $$ = nn(ZN, GOTO, ZN, ZN);
+                  $$->sym = break_dest(); *)
+                }
+    | GOTO NAME		{
+        try
+            let l = !current_scope#lookup $2 in
+            [MGoto (new_id (), l#as_label#get_num)]
+        with Symbol_not_found _ ->
+            let label_no = mk_uniq_label () in
+            Hashtbl.add fwd_labels $2 label_no;
+            [MGoto (new_id (), label_no)] (* resolve it later *)
+     (* $$ = nn($2, GOTO, ZN, ZN);
+      if ($2->sym->type != 0
+      &&  $2->sym->type != LABEL) {
+        non_fatal("bad label-name %s",
+        $2->sym->name);
+      }
+      $2->sym->type = LABEL; *)
+    }
+| NAME COLON stmnt	{
+    let label_no =
+        try
+            let _ = (!current_scope)#lookup $1 in
+            fatal "" (sprintf "Label %s redeclared\n" $1)
+        with Symbol_not_found _ ->
+            if Hashtbl.mem fwd_labels $1
+            then Hashtbl.find fwd_labels $1
+            else mk_uniq_label ()
+    in
+    !current_scope#add_symb
+        $1 ((new label $1 label_no) :> symb);
+    MLabel (new_id (), label_no) :: $3
+    }
+;
 
 Stmnt	: varref ASGN full_expr	{
                     [MExpr (new_id(), BinEx(ASGN, Var $1, $3))]
@@ -997,8 +1022,6 @@ expr    : LPAREN expr RPAREN		{ $2 }
 	| PNAME COLON pfld	{
                    raise (Not_implemented "PNAME operations")
                 (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
-	| ltl_expr	{  raise (Not_implemented "ltl_expr")
-            (*  $$ = $1;  *)}
     ;
 
 /* FORSYTE extension */
@@ -1062,21 +1085,6 @@ Opt_priority:	/* none */	{(*  $$ = ZN;  *)}
 
 full_expr:	expr		{ $1 }
 	| Expr		{ $1 }
-	;
-
-ltl_expr: expr UNTIL expr	{(*  $$ = nn(ZN, UNTIL,   $1, $3);  *)}
-	| expr RELEASE expr	{(*  $$ = nn(ZN, RELEASE, $1, $3);  *)}
-	| expr WEAK_UNTIL expr	{(* $$ = nn(ZN, ALWAYS, $1, ZN);
-				  $$ = nn(ZN, OR, $$, nn(ZN, UNTIL, $1, $3)); *)
-				}
-	| expr IMPLIES expr	{ (*
-				$$ = nn(ZN, '!', $1, ZN);
-				$$ = nn(ZN, OR,  $$, $3); *)
-				}
-	| expr EQUIV expr	{(*  $$ = nn(ZN, EQUIV,   $1, $3);  *)}
-	| NEXT expr       %prec NEG {(*  $$ = nn(ZN, NEXT,  $2, ZN);  *)}
-	| ALWAYS expr     %prec NEG {(*  $$ = nn(ZN, ALWAYS,$2, ZN);  *)}
-	| EVENTUALLY expr %prec NEG {(*  $$ = nn(ZN, EVENTUALLY, $2, ZN);  *)}
 	;
 
 	/* an Expr cannot be negated - to protect Probe expressions */
@@ -1196,87 +1204,3 @@ nlst	: NAME			{ (* $$ = nn($1, NAME, ZN, ZN);
 	;
 %%
 
-(*
-#define binop(n, sop)	fprintf(fd, "("); recursive(fd, n->lft); \
-			fprintf(fd, ") %s (", sop); recursive(fd, n->rgt); \
-			fprintf(fd, ")");
-#define unop(n, sop)	fprintf(fd, "%s (", sop); recursive(fd, n->lft); \
-			fprintf(fd, ")");
-
-static void
-recursive(FILE *fd, Lextok *n)
-{
-	if (n)
-	switch (n->ntyp) {
-	case NEXT:
-		unop(n, "X");
-		break;
-	case ALWAYS:
-		unop(n, "[]");
-		break;
-	case EVENTUALLY:
-		unop(n, "<>");
-		break;
-	case '!':
-		unop(n, "!");
-		break;
-	case UNTIL:
-		binop(n, "U");
-		break;
-	case WEAK_UNTIL:
-		binop(n, "W");
-		break;
-	case RELEASE: /* see http://en.wikipedia.org/wiki/Linear_temporal_logic */
-		binop(n, "V");
-		break;
-	case OR:
-		binop(n, "||");
-		break;
-	case AND:
-		binop(n, "&&");
-		break;
-	case IMPLIES:
-		binop(n, "->");
-		break;
-	case EQUIV:
-		binop(n, "<->");
-		break;
-	default:
-		comment(fd, n, 0);
-		break;
-	}
-}
-
-static Lextok *
-ltl_to_string(Lextok *n)
-{	Lextok *m = nn(ZN, 0, ZN, ZN);
-	char formula[1024];
-	FILE *tf = tmpfile();
-
-	/* convert the parsed ltl to a string
-	   by writing into a file, using existing functions,
-	   and then passing it to the existing interface for
-	   conversion into a never claim
-	  (this means parsing everything twice, which is
-	   a little redundant, but adds only miniscule overhead)
-	 */
-
-	if (!tf)
-	{	fatal("cannot create temporary file", (char * ) 0);
-	}
-	recursive(tf, n);
-	(void) fseek(tf, 0L, SEEK_SET);
-
-	memset(formula, 0, sizeof(formula));
-	if (!fgets(formula, sizeof(formula), tf))
-	{	fatal("could not translate ltl formula", 0);
-	}
-	fclose(tf);
-
-	if (1) printf("ltl %s: %s\n", ltl_name, formula);
-
-	m->sym = lookup(formula);
-
-	return m;
-}
-*)

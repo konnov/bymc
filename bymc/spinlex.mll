@@ -3,6 +3,8 @@
 
     open SpinTypes;;
     open Spin;;
+    open SpinlexGlue;;
+
     exception Unexpected_token of string;;
     let string_chars s = String.sub s 1 ((String.length s) - 2) ;;
     let strip_last_n s n = String.sub s 0 ((String.length s) - n) ;;
@@ -34,7 +36,7 @@ rule token = parse
  | "++"                  { INCR }
  | "<<"                  { LSHIFT }
  | ">>"                  { RSHIFT }
- | "->"                  { SEMI }
+ | "->"                  { if is_lexer_normal() then SEMI else IMPLIES}
  | ';'                   { SEMI }
  | '-'                   { MINUS }
  | '*'                   { MULT }
@@ -54,6 +56,18 @@ rule token = parse
  | ']'                   { RBRACE }
  | '{'                   { LCURLY }
  | '}'                   { RCURLY }
+ | "[]"                  { ALWAYS }
+ | "always"              { ALWAYS }
+ | "<>"                  { EVENTUALLY }
+ | "eventually"          { EVENTUALLY }
+ | "U"                   { UNTIL }
+ | "until"               { UNTIL }
+ | "V"                   { RELEASE }
+ | "W"                   { WEAK_UNTIL }
+ | "not"                 { NEG }
+ | "<->"                 { EQUIV }
+ | "equivalent"          { EQUIV }
+ | "implies"             { IMPLIES }
  | "active"              { ACTIVE }
  | "assert"              { ASSERT }
  | "atomic"              { ATOMIC }
@@ -125,7 +139,10 @@ rule token = parse
  (* end of FORSYTE extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
-                         { NAME (Lexing.lexeme lexbuf) }
+    {
+        let s = Lexing.lexeme lexbuf in
+        if is_lexer_normal() then NAME s else FNAME s
+    }
  | '"' [^ '"']* '"'      { STRING (string_chars (Lexing.lexeme lexbuf)) }
  | '#' ['_' 'A'-'z']['_' 'A'-'z' '0'-'9']*
     {

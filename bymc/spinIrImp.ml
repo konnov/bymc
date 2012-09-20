@@ -64,9 +64,10 @@ let token_s t =
       | TYPE tp -> "TYPE" ^ (var_type_s tp)
       | XU tp -> (xu_type_s tp)
       | NAME s -> "NAME " ^ s
-      | UNAME s -> "NAME " ^ s
-      | PNAME s -> "NAME " ^ s
-      | INAME s -> "NAME " ^ s
+      | UNAME s -> "UNAME " ^ s
+      | PNAME s -> "PNAME " ^ s
+      | INAME s -> "INAME " ^ s
+      | FNAME s -> "FNAME " ^ s
       | STRING s -> "STRING " ^ s
       | CLAIM -> "CLAIM"
       | TRACE -> "TRACE"
@@ -122,6 +123,14 @@ let token_s t =
       | VARREF -> "VARREF"
       | ARR_ACCESS -> "ARR_ACCESS"
       | ARR_UPDATE -> "ARR_UPDATE"
+      | ALWAYS -> "[]"
+      | EVENTUALLY -> "<>"
+      | UNTIL -> "U"
+      | RELEASE -> "V"
+      | WEAK_UNTIL -> "W"
+      | NEXT -> "X"
+      | IMPLIES -> "->"
+      | EQUIV -> "<->"
       | EOF -> "EOF"
       | ASSUME -> "ASSUME"
       | SYMBOLIC -> "SYMBOLIC"
