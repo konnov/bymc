@@ -32,7 +32,7 @@ fi
 rm -rf $SPIN_OUT spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
-    $SPIN -a abs-counter.prm 2>&1 >/dev/null \
+    $SPIN -a abs-counter.prm \
         && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
         && ./pan $PAN_FLAGS -N $PROP -a 2>&1 | tee $SPIN_OUT
 
