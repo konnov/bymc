@@ -121,7 +121,8 @@ type abs_type = ExistAbs | UnivAbs;;
 class abs_domain conds_i =
     object(self)
         val mutable conds = conds_i      (* thresholds *)
-        (* triples of (abstract value, left cond, right cond) *)
+        (* symbolic intervals, i.e., triples of
+            (abstract value, left cond, right cond) *)
         val mutable cond_intervals = []
         val mutable val_map = Hashtbl.create 10 (* from a cond to a value *)
 
@@ -179,49 +180,42 @@ class abs_domain conds_i =
                 (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)
                 : (SpinIr.var * int) list list =
             let used = expr_used_vars symb_expr in
-            if (List.length used) <> 2
+            let n_used = List.length used in
+            if n_used > 2
             (* NOTE: nothing prevents us from handling multiple variables *)
             (* if anybody needs it, remove the condition and check if it works *)
             then raise (Abstraction_error
-                (sprintf "Expression %s must have two free variables"
-                    (expr_s symb_expr)))
+                (sprintf "Expression %s has %d variables, we handle 1 or 2"
+                    (expr_s symb_expr) n_used))
             else
-            (* enumerate all possible abstract pairs that have a concretization
-               satisfying symb_expr
-             *)
+            (* enumerate all possible abstract tuples of size n_used that have
+               a concretization satisfying symb_expr *)
             begin
-                let append_cons var (i, l, r) =
+                let put_interval_constraint var (i, l, r) =
                     solver#append_assert (expr_to_smt (BinEx (GE, Var var, l)));
                     if not_nop r
                     then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
                 in
-                (* TODO: refactor, it is so complicated! *)
                 solver#push_ctx;
-                let matching_tuples = List.fold_left
-                    (fun lst triples (* of (abs_val, lcond, rcond) *) ->
-                        solver#push_ctx;
-                        List.iter2 append_cons used triples;
-                        let satisfies =
-                            if at = ExistAbs
-                            then begin
-                                solver#append_assert (expr_to_smt symb_expr);
-                                solver#check
-                            end else begin
-                                let neg = UnEx (NEG, symb_expr) in
-                                solver#append_assert (expr_to_smt neg);
-                                not (solver#check)
-                            end
-                        in
-                        solver#pop_ctx;
-                        if satisfies
-                        then (List.map2
-                            (fun var (i, _, _) -> (var, i)) used triples)
-                            :: lst
-                        else lst
-                    ) [] (Accums.mk_product cond_intervals 2)
+                let has_concretization intervals =
+                    solver#push_ctx;
+                    List.iter2 put_interval_constraint used intervals;
+                    let expr_to_check =
+                        if (at = ExistAbs) then symb_expr else UnEx(NEG, symb_expr) in
+                    solver#append_assert (expr_to_smt expr_to_check);
+                    let result = solver#check in
+                    solver#pop_ctx;
+                    if (at = ExistAbs) then result else (not result)
                 in
+                let all_interval_tuples =
+                    (Accums.mk_product cond_intervals n_used) in
+                let matching_interval_tuples =
+                    List.filter has_concretization all_interval_tuples in
+                let mk_var_val var (abs_val, _, _) = (var, abs_val) in
                 solver#pop_ctx;
-                matching_tuples (* now pairs *)
+                List.map
+                    (fun intervals -> List.map2 mk_var_val used intervals)
+                    matching_interval_tuples
             end
 
         (*

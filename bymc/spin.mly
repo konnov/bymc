@@ -1019,18 +1019,26 @@ atomic_prop:
     | LPAREN prop_expr RPAREN { PropGlob ($2) }
     ;
 
-prop_expr    : 
-	  LPAREN prop_expr RPAREN		{ $2 }
-	| prop_expr PLUS prop_expr		{ BinEx(PLUS, $1, $3) }
-	| prop_expr MINUS prop_expr		{ BinEx(MINUS, $1, $3) }
-	| prop_expr MULT prop_expr		{ BinEx(MULT, $1, $3) }
-	| prop_expr DIV prop_expr		{ BinEx(DIV, $1, $3) }
-	| prop_expr GT prop_expr		{ BinEx(GT, $1, $3) }
-	| prop_expr LT prop_expr		{ BinEx(LT, $1, $3) }
-	| prop_expr GE prop_expr		{ BinEx(GE, $1, $3) }
-	| prop_expr LE prop_expr		{ BinEx(LE, $1, $3) }
-	| prop_expr EQ prop_expr		{ BinEx(EQ, $1, $3) }
-	| prop_expr NE prop_expr		{ BinEx(NE, $1, $3) }
+/* should we use full_expr here and then check the tree? */
+prop_expr   :
+      LPAREN prop_expr RPAREN       { $2 }
+    | prop_expr AND prop_expr       { BinEx(AND, $1, $3) }
+    | prop_expr OR prop_expr        { BinEx(OR, $1, $3) }
+    | NEG prop_expr                 { UnEx(NEG, $2) }
+	| prop_arith_expr GT prop_arith_expr		{ BinEx(GT, $1, $3) }
+	| prop_arith_expr LT prop_arith_expr		{ BinEx(LT, $1, $3) }
+	| prop_arith_expr GE prop_arith_expr		{ BinEx(GE, $1, $3) }
+	| prop_arith_expr LE prop_arith_expr		{ BinEx(LE, $1, $3) }
+	| prop_arith_expr EQ prop_arith_expr		{ BinEx(EQ, $1, $3) }
+	| prop_arith_expr NE prop_arith_expr		{ BinEx(NE, $1, $3) }
+    ;
+
+prop_arith_expr    : 
+	  LPAREN prop_arith_expr RPAREN		{ $2 }
+	| prop_arith_expr PLUS prop_arith_expr		{ BinEx(PLUS, $1, $3) }
+	| prop_arith_expr MINUS prop_arith_expr		{ BinEx(MINUS, $1, $3) }
+	| prop_arith_expr MULT prop_arith_expr		{ BinEx(MULT, $1, $3) }
+	| prop_arith_expr DIV prop_arith_expr		{ BinEx(DIV, $1, $3) }
 	| CARD LPAREN prop_expr	RPAREN	{ UnEx(CARD, $3) }
     | NAME /* proctype */ COLON NAME
         {
@@ -1043,7 +1051,7 @@ prop_expr    :
             try
                 Var (global_scope#find_or_error $1)#as_var
             with Not_found ->
-                fatal "prop_expr: " (sprintf "Undefined global variable %s" $1)
+                fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
         }
 	| CONST { Const $1 }
     ;

@@ -67,11 +67,11 @@ while [ "$cmd" != "q" ]; do
 done
 
 if [ "$out" == "" ]; then
-    out="|01:exitcode=quit|01:valid=maybe|02:spurious=maybe"
+    out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
 fi
 
 
 spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
 common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`"
-echo "$out|$common|$spin_data" >verdict.txt
+echo "$out|$common|$spin_data" >>verdict.txt
 
