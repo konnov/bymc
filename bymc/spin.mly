@@ -201,7 +201,7 @@ units	: unit      { $1 }
 unit	: proc	/* proctype        */    { [Proc $1] }
     | init		/* init            */    { [] }
 	| claim		/* never claim        */ { [] }
-	| ltl		/* ltl formula        */ { [] }
+    | ltl		/* ltl formula        */ { [$1] }
 	| events	/* event assertions   */ { [] }
 	| one_decl	/* variables, chans   */ { List.map (fun e -> Stmt e) $1 }
 	| utype		/* user defined types */ { [] }
@@ -308,7 +308,7 @@ init	: INIT		/* { (* context = $1->sym; *) } */
 ltl	: ltl_prefix FNAME ltl_body	{
         set_lexer_normal();
         (* TODO: put it somewhere *)
-        ($2, $3)
+        Ltl($2, $3)
     }
 ;
 
@@ -333,7 +333,8 @@ ltl_expr:
 	| EVENTUALLY ltl_expr %prec NEG { UnEx(EVENTUALLY, $2) }
     | ltl_expr AND ltl_expr         { BinEx(AND, $1, $3) }
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
-    | FNAME                         { Var (new var $1) }
+    | FNAME                        
+        { let v = new var $1 in v#set_type SpinTypes.TPROPOSITION; Var v }
     | FNAME AT FNAME
         { let v = new var $3 in v#set_proc_name $1; Var v }
   /* TODO: implement this later

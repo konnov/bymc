@@ -25,6 +25,7 @@ let rec var_to_smt var =
     | TUNSIGNED -> wrap_arr "nat"
     | TCHAN -> raise (Failure "Type chan is not supported")
     | TMTYPE -> raise (Failure "Type mtype is not supported")
+    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
     in
     sprintf "(define %s :: %s)" var#get_name ts
 ;;

@@ -407,8 +407,25 @@ class vass_funcs dom t_ctx ctr_ctx solver =
         method keep_assume e = true
     end;;
 
+
+let fuse_ltl_form ctr_ctx ltl_forms name ltl_expr =
+    let embed_fairness fair_expr =
+        let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx#get_spur)) in
+        let lhs = (if is_nop fair_expr then spur else BinEx(AND, spur, fair_expr)) in
+        Ltl(name, BinEx(IMPLIES, lhs, ltl_expr))
+    in
+    Hashtbl.add ltl_forms name ltl_expr;
+    if name = "fairness"
+    then None (* keep fairness *)
+    else if Hashtbl.mem ltl_forms "fairness"
+    then embed_fairness (Hashtbl.find ltl_forms "fairness")
+    else embed_fairness (Nop "")
+;;
+
+
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let atomic_props = Hashtbl.create 10 in
+    let ltl_forms = Hashtbl.create 10 in
     let replace_assume = function
         | MAssume (id, Var v) as s ->
                 begin
@@ -570,6 +587,10 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
        end
     | Stmt (MDeclProp (_, _, _) as d) ->
         Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
+
+    | Ltl(name, ltl_expr) ->
+        fuse_ltl_form ctr_ctx ltl_forms name ltl_expr
+
     | _ as u -> u
     in
     let new_units = List.map abs_unit units in

@@ -1,5 +1,5 @@
 type var_type = TBIT | TBYTE | TSHORT
-    | TINT | TUNSIGNED | TCHAN | TMTYPE ;;
+    | TINT | TUNSIGNED | TCHAN | TMTYPE | TPROPOSITION;;
 type xu_type = XS | XR;;
 
 let var_type_s tp =
@@ -11,6 +11,7 @@ let var_type_s tp =
       | TUNSIGNED -> "UNSIGNED"
       | TCHAN -> "CHAN"
       | TMTYPE -> "MTYPE"
+      | TPROPOSITION -> "PROPOSITION"
 ;;
 
 let xu_type_s tp =

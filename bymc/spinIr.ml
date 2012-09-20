@@ -482,7 +482,9 @@ let map_vars map_fun ex =
     sub ex
 ;;
 
-type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt | None;;
+type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt
+    | Ltl of string * 't expr | None
+;;
 
 let proc_of_unit = function
     | Proc p -> p

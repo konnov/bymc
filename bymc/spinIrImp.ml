@@ -310,6 +310,9 @@ let prog_unit_s u =
         h ^ ss ^ "\n}"
 
     | Stmt s -> mir_stmt_s s
+
+    | Ltl (name, exp) -> sprintf "ltl %s { %s }" name (expr_s exp)
+
     | None -> Printf.sprintf "skip\n"
 ;;
 

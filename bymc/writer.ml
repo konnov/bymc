@@ -18,6 +18,7 @@ let var_type_promela tp =
       | TUNSIGNED -> "unsigned"
       | TCHAN -> "chan"
       | TMTYPE -> "mtype"
+      | TPROPOSITION -> "proposition"
 ;;
 
 let hflag_promela f =
@@ -123,5 +124,6 @@ let write_unit cout lvl u =
     match u with
     | Stmt s -> write_stmt cout lvl (Hashtbl.create 0) s
     | Proc p -> write_proc cout lvl p
+    | Ltl (name, exp) -> fprintf cout "ltl %s { %s }\n" name (expr_s exp)
     | _ -> ()
 ;;
