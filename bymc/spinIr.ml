@@ -255,6 +255,7 @@ class symb_tab =
 type 't expr = Nop of string (* a comment *) | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
     | Phi of var * var list (* a phi function for SSA purposes *)
+    | LabelRef of string * string (* a reference to a process label *)
 ;;
 
 let is_nop = function

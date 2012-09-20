@@ -278,6 +278,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             let mk_deref i = self#deref_ctr (Const i) in
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) t_ctx#get_shared) in
+            (*
             let prev_ne_next =
                 let sp = Var ctr_ctx#get_spur in
                 let eq = BinEx (EQ, prev_idx, next_idx) in
@@ -285,8 +286,9 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                 (* other transformations do not touch it *)
                 MUnsafe (-1, (expr_s e) ^ ";")
             in
+            *)
             
-            [ (*prev_ne_next; *) MPrint (-1, str, prev_idx :: next_idx :: es)]
+            [ MPrint (-1, str, prev_idx :: next_idx :: es)]
 
         method mk_init active_expr decls init_stmts =
             let init_locals = find_init_local_vals ctr_ctx decls init_stmts in

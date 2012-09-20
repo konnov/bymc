@@ -32,15 +32,16 @@ fi
 rm -rf $SPIN_OUT spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
-    $SPIN -a -N $PROP abs-counter.prm \
-        && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c && ./pan $PAN_FLAGS -a 2>&1| tee $SPIN_OUT
+    $SPIN -a abs-counter.prm 2>&1 >/dev/null \
+        && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
+        && ./pan $PAN_FLAGS -N $PROP -a 2>&1 | tee $SPIN_OUT
 
     if egrep -q "errors: +0" $SPIN_OUT; then
         echo "The property is verified in $step refinement steps"
         out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
         cmd="q"
     else
-        $SPIN -T -t -N $PROP abs-counter.prm | grep 'GS{' | tee spin.trace \
+        ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee spin.trace \
         && CAMLRUNPARAM="b" $BYMC_HOME/run.native -t spin.trace $PROG 2>&1 | tee refinement.out
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0

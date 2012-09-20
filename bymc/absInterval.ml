@@ -552,6 +552,7 @@ let over_dom ctx = function
             with Not_found ->
                 raise (Abstraction_error (sprintf "No role for %s" v#get_name))
         end
+
     | _ -> false
 ;;
 
@@ -725,10 +726,6 @@ let trans_prop_decl ctx dom solver decl_expr =
         solver#pop_ctx;
         abs_ex
     in
-    let has_card = function
-        | UnEx (CARD, _) -> true
-        | _ -> false
-    in
     match decl_expr with
         | MDeclProp (id, v, PropAll e) ->
             if not (expr_exists (over_dom ctx) e)
@@ -739,7 +736,7 @@ let trans_prop_decl ctx dom solver decl_expr =
             then decl_expr
             else MDeclProp (id, v, PropSome (tr_e e))
         | MDeclProp (id, v, PropGlob e) ->
-            if not (expr_exists (over_dom ctx) e) (*|| (expr_exists has_card e)*)
+            if not (expr_exists (over_dom ctx) e)
             then decl_expr
             else MDeclProp (id, v, PropGlob (tr_e e))
         | _ -> decl_expr

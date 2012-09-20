@@ -35,8 +35,6 @@ let rec expr_to_smt e =
     | Nop comment -> sprintf ";; %s\n" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
-    | Phi (lhs, rhs) ->
-            raise (Failure "Phi to SMT is not supported yet")
     | UnEx (tok, f) ->
         begin match tok with
         | UMIN -> sprintf "(- %s)" (expr_to_smt f)
@@ -64,6 +62,12 @@ let rec expr_to_smt e =
         | _ -> raise (Failure
                 (sprintf "No idea how to translate %s to SMT" (token_s tok)))
         end
+
+    | Phi (lhs, rhs) ->
+            raise (Failure "Phi to SMT is not supported")
+
+    | LabelRef (proc_name, lab_name) ->
+            raise (Failure "LabelRef to SMT is not supported")
 ;;
 
 (*

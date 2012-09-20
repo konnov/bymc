@@ -155,12 +155,15 @@ let rec expr_s e =
     | BinEx (AND, f, g) -> sprintf "(%s && %s)" (expr_s f) (expr_s g)
     | BinEx (OR, f, g) -> sprintf "(%s || %s)" (expr_s f) (expr_s g)
     | BinEx (ASGN, f, g) -> sprintf "%s = %s" (expr_s f) (expr_s g)
+    | BinEx (AT, proc, lab) -> sprintf "%s@%s" (expr_s proc) (expr_s lab)
     | BinEx (tok, f, g) ->
         sprintf "(%s %s %s)" (expr_s f) (token_s tok) (expr_s g)
     | Phi (lhs, rhs) ->
-            let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
-            in
-            sprintf "%s = phi(%s)" lhs#get_name rhs_s
+        let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
+        in
+        sprintf "%s = phi(%s)" lhs#get_name rhs_s
+    | LabelRef (proc_name, lab_name) ->
+        sprintf "%s@%s" proc_name lab_name
 ;;
 
 let op_of_expr e =

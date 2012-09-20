@@ -84,10 +84,11 @@ let rec write_stmt cout lvl lab_tab s =
                             (List.tl seq);
 
                     | MOptElse seq ->
-                            fprintf cout "%s  :: else ->\n" tab;
-                            List.iter
-                                (write_stmt cout (lvl + 4) lab_tab)
-                                seq;
+                        let semi = if (List.length seq) = 0 then "" else "->" in
+                        fprintf cout "%s  :: else %s\n" tab semi;
+                        List.iter
+                            (write_stmt cout (lvl + 4) lab_tab)
+                            seq;
                 ) opts;
             fprintf cout "%sfi;\n" tab;
     | MAssert (_, e) -> fprintf cout "%sassert(%s);\n" tab (expr_s e)

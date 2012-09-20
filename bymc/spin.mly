@@ -335,8 +335,7 @@ ltl_expr:
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
         { let v = new var $1 in v#set_type SpinTypes.TPROPOSITION; Var v }
-    | FNAME AT FNAME
-        { let v = new var $3 in v#set_proc_name $1; Var v }
+    | FNAME AT FNAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
     | LPAREN expr RPAREN            { }
    */
