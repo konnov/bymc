@@ -48,9 +48,13 @@ while [ "$cmd" != "q" ]; do
         echo ""
         
         if grep "Sorry" refinement.out; then
-            echo "Enter to try another trace, q<Enter> to exit"
-            rand="-DT_RAND"
-            read cmd
+            if [ "$AUTO" == "" ]; then
+                echo "Enter to try another trace, q<Enter> to exit"
+                rand="-DT_RAND"
+                read cmd
+            else
+                cmd="q"
+            fi
         elif grep "error" refinement.out \
                 || grep "not spurious" refinement.out; then
             echo "It took $step refinement steps"
@@ -58,7 +62,7 @@ while [ "$cmd" != "q" ]; do
             cmd="q"
         else
             step=$((step+1))
-            if [ "$INTERACT" != "" ]; then
+            if [ "$DEBUG" != "" ]; then
                 echo "Enter to continue, q<Enter> to exit"
                 read cmd
             fi
