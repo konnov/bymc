@@ -28,13 +28,13 @@ let parse_options =
              "Check feasibility of a counterexample produced by spin -t (not a *.trail!).");
             ("-i", Arg.String
              (fun s -> opts := {!opts with check_inv = true; inv_name = s}),
-             "Check if an atomic proposition is an invariant!).");
+             "Check if an atomic proposition is an invariant!.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "Produce lots of verbose output (you are warned).");
         ]
         (fun s ->
             if !opts.filename = "" then opts := {!opts with filename = s})
-        "Use: run [-a] [-c spin_sim_out] promela_file");
+        "Use: run [-a] [-i invariant] [-c spin_sim_out] promela_file");
 
     !opts
 ;;

@@ -522,7 +522,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         let new_comp = replace_comp skel.comp in
         let new_comp_upd = MAtomic (-1, new_comp @ new_update) in
         let new_loop_body =
-            counter_guard
+            [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
+            @ (funcs#mk_pre_loop p#get_active_expr)
+            @ counter_guard
             @ [MIf (-1,
                 [MOptGuarded ([new_comp_upd])]);
                MGoto (-1, main_lab)] in
@@ -532,8 +534,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
             @ new_init
             @ [MLabel (-1, main_lab)]
             @ skel.loop_prefix
-            @ (funcs#mk_pre_loop p#get_active_expr)
-            @ [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
             @ new_loop_body
         in
         let new_proc = proc_replace_body p new_body in

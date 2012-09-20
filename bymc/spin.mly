@@ -1024,7 +1024,7 @@ prop_expr   :
       LPAREN prop_expr RPAREN       { $2 }
     | prop_expr AND prop_expr       { BinEx(AND, $1, $3) }
     | prop_expr OR prop_expr        { BinEx(OR, $1, $3) }
-    | NEG prop_expr                 { UnEx(NEG, $2) }
+    | SND prop_expr                 { UnEx(NEG, $2) }
 	| prop_arith_expr GT prop_arith_expr		{ BinEx(GT, $1, $3) }
 	| prop_arith_expr LT prop_arith_expr		{ BinEx(LT, $1, $3) }
 	| prop_arith_expr GE prop_arith_expr		{ BinEx(GE, $1, $3) }
