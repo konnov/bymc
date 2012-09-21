@@ -9,6 +9,7 @@ open Smt;;
 open Spin;;
 open SpinIr;;
 open SpinIrImp;;
+open Ltl;;
 open Writer;;
 open Accums;;
 open Debug;;
@@ -32,7 +33,7 @@ let do_abstraction units =
     log INFO "> Constructing counter abstraction";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let funcs = new abs_ctr_funcs dom ctx ctr_ctx solver in
-    let ctrabs_units, _, _ =
+    let ctrabs_units, _, _, _ =
         do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
@@ -56,13 +57,13 @@ let construct_vass units =
     log INFO "> Constructing VASS and transducers...";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
-    let vass_units, xducers, atomic_props =
+    let vass_units, xducers, atomic_props, ltl_forms =
         do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
     in
     write_to_file "abs-vass.prm" vass_units;
     log INFO "  [DONE]"; flush stdout;
 
-    (ctx, solver, dom, ctr_ctx, xducers, atomic_props)
+    (ctx, solver, dom, ctr_ctx, xducers, atomic_props, ltl_forms)
 ;;
 
 let print_vass_trace t_ctx solver num_states = 
@@ -78,9 +79,13 @@ let print_vass_trace t_ctx solver num_states =
 ;;
 
 let check_invariant inv_name units =
-    let (ctx, solver, dom, ctr_ctx, xducers, aprops) = construct_vass units in
+    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltl_forms)
+        = construct_vass units in
     let inv_expr =
-        try Hashtbl.find aprops inv_name
+        try
+            match Hashtbl.find aprops inv_name with
+            | PropGlob e -> e
+            | _ -> raise (Failure (sprintf "Invariant %s is not a global property" inv_name))
         with Not_found ->
             raise (Failure (sprintf "No atomic proposition %s" inv_name))
     in
@@ -102,13 +107,35 @@ let check_invariant inv_name units =
     solver#set_collect_asserts false;
 ;;
 
+let mk_fairness_assertion aprops ltl_forms =
+    let fairness =
+        try Hashtbl.find ltl_forms "fairness"
+        with Not_found ->
+            raise (Fairness_error "No LTL formula called \"fairness\" found!")
+    in
+    let strange_fairness () =
+        let m = "Don't know how to handle fairness: " ^ (expr_s fairness) in
+        raise (Fairness_error m)
+    in
+    let proposition = 
+        match fairness with
+        | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) ->
+            if is_propositional f then f else strange_fairness ()
+        | UnEx(EVENTUALLY, UnEx(ALWAYS, f)) ->
+            if is_propositional f then f else strange_fairness ()
+        | _ -> strange_fairness ()
+    in
+    ()
+;;
+
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    let (ctx, solver, dom, ctr_ctx, xducers, _) = construct_vass units in
+    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) = construct_vass units in
     log INFO "> Reading trail...";
-    let trail_asserts, rev_map =
+    let trail_asserts, loop_asserts, rev_map =
         parse_spin_trail trail_filename dom ctx ctr_ctx in
     log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
+    (* FIXME: deal somehow with this stupid message *)
     if (List.length trail_asserts) <= 1
     then raise (Failure "The system loops forever at the initial state");
     log INFO "  [DONE]"; flush stdout;

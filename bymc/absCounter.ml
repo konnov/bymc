@@ -182,18 +182,17 @@ let trans_prop_decl t_ctx ctr_ctx dom solver decl_expr =
     in
     match decl_expr with
         | MDeclProp (id, v, PropAll e) ->
-            MDeclProp (id, v, PropGlob (t_e mk_all e))
+            t_e mk_all e
         | MDeclProp (id, v, PropSome e) ->
-            MDeclProp (id, v, PropGlob (t_e mk_some e))
+            t_e mk_some e
         | MDeclProp (id, v, PropGlob e) ->
             let has_card = function
                 | UnEx (CARD, _) -> true
                 | _ -> false
             in
-            if expr_exists has_card e
-            then MDeclProp (id, v, PropGlob (repl_ctr e))
-            else MDeclProp (id, v, PropGlob e)
-        | _ as s -> s
+            if expr_exists has_card e then repl_ctr e else e
+        | _ as s ->
+            raise (Abstraction_error ("Don't know how to handle " ^ (mir_stmt_s s)))
 ;;
 
 (* TODO: find out the values at the end of the init_stmts,
@@ -433,20 +432,22 @@ let fuse_ltl_form ctr_ctx ltl_forms name ltl_expr =
 let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
     let atomic_props = Hashtbl.create 10 in
     let ltl_forms = Hashtbl.create 10 in
+    let extract_atomic_prop name =
+        try
+            match (Hashtbl.find atomic_props name) with
+            | PropGlob e -> e
+            | _ -> raise (Abstraction_error ("Cannot embed " ^ name))
+        with Not_found ->
+            raise (Abstraction_error ("No atomic expression: " ^ name))
+    in
     let replace_assume = function
         | MAssume (id, Var v) as s ->
-                begin
-                try 
-                    if funcs#keep_assume (Var v)
-                    then 
-                        if v#proc_name = "spec"
-                        then MAssume (id, Hashtbl.find atomic_props v#get_name)
-                        else s
-                    else MSkip id
-                with Not_found ->
-                    raise (Failure
-                        (sprintf "No atomic prop %s found" v#get_name))
-                end
+            if funcs#keep_assume (Var v)
+            then 
+                if v#proc_name = "spec"
+                then MAssume (id, extract_atomic_prop v#get_name)
+                else s
+            else MSkip id
         | _ as s -> s
     in
     let counter_guard =
@@ -519,22 +520,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        let replace_assume = function
-            | MAssume (id, Var v) as s ->
-                    begin
-                    try 
-                        if funcs#keep_assume (Var v)
-                        then 
-                            if v#proc_name = "spec"
-                            then MAssume (id, Hashtbl.find atomic_props v#get_name)
-                            else s
-                        else MSkip id
-                    with Not_found ->
-                        raise (Failure
-                            (sprintf "No atomic prop %s found" v#get_name))
-                    end
-            | _ as s -> s
-        in List.map hack_nsnt (List.map replace_assume stmts)
+        List.map hack_nsnt (List.map replace_assume stmts)
     in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
@@ -580,20 +566,16 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
 
     let abs_unit = function
     | Proc p ->
-            let np = abstract_proc p in
-            np#set_provided (BinEx (EQ, Var ctr_ctx#get_spur, Const 0));
-            Proc np
-    | Stmt (MDeclProp (id, v, PropGlob e) as s) ->
-       begin 
-            let nd = trans_prop_decl t_ctx ctr_ctx dom solver s in
-            match nd with
-            | MDeclProp (_, _, PropGlob ne) ->
-                Hashtbl.add atomic_props v#get_name ne;
-                Stmt (MDeclProp (id, v, PropGlob ne))
-            | _ -> Stmt (MSkip id)
-       end
-    | Stmt (MDeclProp (_, _, _) as d) ->
-        Stmt (trans_prop_decl t_ctx ctr_ctx dom solver d)
+        let np = abstract_proc p in
+        np#set_provided (BinEx (EQ, Var ctr_ctx#get_spur, Const 0));
+        Proc np
+
+    | Stmt (MDeclProp (id, v, _) as d) ->
+        begin
+            let trd = (trans_prop_decl t_ctx ctr_ctx dom solver d) in
+            Hashtbl.add atomic_props v#get_name (PropGlob trd);
+            Stmt (MDeclProp (id, v, PropGlob trd))
+        end
 
     | Ltl(name, ltl_expr) ->
         fuse_ltl_form ctr_ctx ltl_forms name ltl_expr
@@ -611,6 +593,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
         :: (Stmt (MDecl (-1, ctr_ctx#get_spur, Const 0)))
         :: (List.filter keep_unit new_units) in
-    (out_units, xducers, atomic_props)
+    (out_units, xducers, atomic_props, ltl_forms)
 ;;
 
