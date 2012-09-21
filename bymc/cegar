@@ -32,9 +32,10 @@ fi
 rm -rf $SPIN_OUT spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
-    $SPIN -a abs-counter.prm \
+    $SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
+    $SPIN -a -N $PROP.never abs-counter.prm \
         && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
-        && ./pan $PAN_FLAGS -N $PROP -a 2>&1 | tee $SPIN_OUT
+        && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 
     if egrep -q "errors: +0" $SPIN_OUT; then
         echo "The property is verified in $step refinement steps"

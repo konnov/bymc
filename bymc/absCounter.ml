@@ -414,14 +414,19 @@ let fuse_ltl_form ctr_ctx ltl_forms name ltl_expr =
     let embed_fairness fair_expr =
         let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx#get_spur)) in
         let lhs = (if is_nop fair_expr then spur else BinEx(AND, spur, fair_expr)) in
-        Ltl(name, BinEx(IMPLIES, lhs, ltl_expr))
+        BinEx(IMPLIES, lhs, ltl_expr)
     in
     Hashtbl.add ltl_forms name ltl_expr;
-    if name = "fairness"
-    then None (* keep fairness *)
-    else if Hashtbl.mem ltl_forms "fairness"
-    then embed_fairness (Hashtbl.find ltl_forms "fairness")
-    else embed_fairness (Nop "")
+    if (name <> "fairness") && (Hashtbl.mem ltl_forms "fairness")
+    then begin
+        (* Spin 6.2 does not support inline formulas longer that 1024 chars.
+           Put the formula into the file. *)
+        let embedded = embed_fairness (Hashtbl.find ltl_forms "fairness") in
+        let out = open_out (sprintf "%s.ltl" name) in
+        fprintf out "%s\n" (expr_s embedded);
+        close_out out
+    end;
+    None
 ;;
 
 
