@@ -66,7 +66,7 @@ class ['tok] trans_context =
         method run_solver =
             let smt_exprs =
                 List.append
-                    (List.map var_to_smt globals)
+                    (List.map var_to_smt self#get_symbolic)
                     (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e))
                         assumps)
             in
@@ -722,6 +722,7 @@ let trans_prop_decl ctx dom solver decl_expr =
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
         solver#push_ctx;
         List.iter solver#append_var_def locals;
+        List.iter solver#append_var_def ctx#get_shared;
         let abs_ex = translate_expr ctx dom solver UnivAbs e in
         solver#pop_ctx;
         abs_ex
@@ -747,6 +748,7 @@ let do_interval_abstraction ctx dom solver units =
         | Proc p ->
             solver#push_ctx;
             List.iter solver#append_var_def p#get_locals;
+            List.iter solver#append_var_def ctx#get_shared;
             let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
             log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
             List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;

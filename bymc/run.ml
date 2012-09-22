@@ -61,7 +61,7 @@ let _ =
         log INFO "  [DONE]";
         log DEBUG (sprintf "#units: %d" (List.length units));
         if opts.abstract
-        then let _ = do_abstraction units in ()
+        then let _ = do_abstraction true units in ()
         else if opts.refine
         then let _ = do_refinement opts.trail_name units in ()
         else if opts.check_inv

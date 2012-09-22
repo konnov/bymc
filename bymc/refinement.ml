@@ -1,13 +1,16 @@
 (* The refinement for our counter abstraction *)
 
-open Printf;;
+open Printf
 
-open Accums;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open Smt;;
-open Debug;;
+open Accums
+open Spin
+open SpinIr
+open SpinIrImp
+open Smt
+open Debug
+
+let pred_reach = "p";;
+let pred_recur = "r";;
 
 let parse_spin_trail filename dom t_ctx ctr_ctx =
     let last_id = ref 0 in
@@ -104,6 +107,21 @@ let create_path shared_vars xducer n_steps =
     xducers @ connections
 ;;
 
+let smt_append_bind solver rev_map smt_rev_map expr_stmt =
+    match expr_stmt with
+    | Expr (id, e) ->
+        let smt_id = solver#append_expr e in
+        (* bind ids from the solver with reverse mapping on
+           concrete expressions *)
+        let s, abs_expr = (Hashtbl.find rev_map id) in
+        log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
+        if solver#get_collect_asserts
+        then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
+
+    | _ -> ()
+;;
+
+
 let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
@@ -117,13 +135,7 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
                 else map_vars
                     (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) e
             in
-            let smt_id = solver#append_expr new_e in
-            (* bind ids from the solver with reverse mapping on
-               concrete expressions *)
-            let s, e = (Hashtbl.find rev_map id) in
-            log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s e));
-            if solver#get_collect_asserts
-            then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
+            smt_append_bind solver rev_map smt_rev_map (Expr (id, new_e))
 
         | _ -> ()
     in
@@ -274,39 +286,57 @@ let pretty_print_exprs exprs =
     List.iter pp exprs
 ;;
 
-let intro_new_pred () =
-    let re = Str.regexp ".*bit bymc_p\\([0-9]+\\) = 0;.*" in
-    let cin = open_in "cegar_decl.inc" in
-    let stop = ref false in
-    let max_no = ref (-1) in
-    while not !stop do
-        try
-            let line = input_line cin in
-            if Str.string_match re line 0
-            then
-                let no = int_of_string (Str.matched_group 1 line) in
-                max_no := max !max_no no
-        with End_of_file ->
-            close_in cin;
-            stop := true
-    done;
-    let pred_no = 1 + !max_no in
+let find_max_pred prefix = 
+    let re = Str.regexp (".*bit bymc_" ^ prefix ^ "\\([0-9]+\\) = 0;.*") in
+    let read_from_file () =
+        let cin = open_in "cegar_decl.inc" in
+        let stop = ref false in
+        let max_no = ref (-1) in
+        while not !stop do
+            try
+                let line = input_line cin in
+                if Str.string_match re line 0
+                then
+                    let no = int_of_string (Str.matched_group 1 line) in
+                    max_no := max !max_no no
+            with End_of_file ->
+                close_in cin;
+                stop := true
+        done;
+        !max_no
+    in
+    try read_from_file ()
+    with Sys_error _ -> (-1)
+;;
+
+let intro_new_pred prefix (* pred_reach or pred_recur *) =
+    let max_no = find_max_pred prefix in
+    let pred_no = 1 + max_no in
     let cout = open_out_gen [Open_append] 0666 "cegar_decl.inc" in
-    fprintf cout "bit bymc_p%d = 0;\n" pred_no;
+    fprintf cout "bit bymc_%s%d = 0;\n" prefix pred_no;
     close_out cout;
     pred_no
 ;;
 
-let refine_spurious_step solver smt_rev_map src_state_no =
+(* retrieve unsat cores, map back corresponding constraints on abstract values,
+   partition the constraints into two categories:
+       before the transition, after the transition
+ *)
+let retrieve_unsat_cores solver smt_rev_map src_state_no =
     let core_ids = solver#get_unsat_cores in
     log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
-    let filtered = List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids 
+    let filtered = List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids
     in
     let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
     let pre, post = List.partition (fun (s, e) -> s = src_state_no) mapped in
     let b2 (s, e) = sprintf "(%s)" (expr_s e) in
     let pre, post = List.map b2 pre, List.map b2 post in
-    let pred_no = intro_new_pred () in
+    (pre, post)
+;;
+
+let refine_spurious_step solver smt_rev_map src_state_no =
+    let pre, post = retrieve_unsat_cores solver smt_rev_map src_state_no in
+    let pred_no = intro_new_pred pred_reach in
 
     let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
     let preex = if pre = [] then "1" else (String.concat " && " pre) in
@@ -317,4 +347,51 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     fprintf cout "bymc_spur = (bymc_p%d && (%s)) || bymc_spur;\n"
         pred_no (String.concat " && " post);
     close_out cout
+;;
+
+let is_loop_state_fair solver rev_map fairness inv_forms state_asserts =
+    let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
+    let smt_to_expr = function
+        | Expr (_, e) -> e
+        | _ -> Nop ""
+    in
+    let add_assert_expr e =
+        let _ = solver#append_expr e in ()
+    in
+    solver#set_collect_asserts true; (* we need unsat cores *)
+    solver#push_ctx;
+    solver#set_collect_asserts true;
+    let decls = expr_list_used_vars (List.map smt_to_expr state_asserts) in
+    log INFO (sprintf "    appending %d declarations..."
+        (List.length decls)); flush stdout;
+    List.iter solver#append_var_def decls;
+    log INFO (sprintf "    appending %d assertions..."
+        (1 + (List.length inv_forms) + (List.length state_asserts)));
+    add_assert_expr fairness;
+    List.iter add_assert_expr inv_forms;
+    List.iter (smt_append_bind solver rev_map smt_rev_map) state_asserts;
+    log INFO "    waiting for SMT..."; flush stdout;
+    let res = solver#check in
+    solver#set_collect_asserts false;
+    solver#pop_ctx;
+    let _, core_exprs = retrieve_unsat_cores solver smt_rev_map (-1) in
+    let core_exprs_s = (String.concat " && " core_exprs) in
+    res, core_exprs_s
+;;
+
+let check_loop_unfair solver rev_map fairness inv_forms loop_asserts =
+    log INFO ("  Checking if the loop is fair..."); flush stdout;
+    let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
+        let sat, core_exprs_s =
+            is_loop_state_fair solver rev_map fairness inv_forms state_asserts
+        in
+        (all_sat || sat, core_exprs_s :: all_core_exprs_s)
+    in
+    let (sat, exprs) =
+        List.fold_left check_and_collect_cores (false, []) loop_asserts in
+    let pred_no = intro_new_pred pred_recur in
+    let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
+    fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
+    close_out cout;
+    not sat
 ;;

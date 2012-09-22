@@ -14,6 +14,7 @@ open Debug;;
 
 open AbsBasics;;
 open AbsInterval;;
+open Refinement;;
 
 class ctr_abs_ctx dom t_ctx =
     object(self)
@@ -410,17 +411,31 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
 
 let fuse_ltl_form ctr_ctx ltl_forms name ltl_expr =
-    let embed_fairness fair_expr =
+    let embed_fairness fair_expr no_inf_forms =
         let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx#get_spur)) in
-        let lhs = (if is_nop fair_expr then spur else BinEx(AND, spur, fair_expr)) in
-        BinEx(IMPLIES, lhs, ltl_expr)
+        let spur_and_fair =
+            if is_nop fair_expr then [spur] else [spur; fair_expr] in
+        let precond = list_to_binex AND (spur_and_fair @ no_inf_forms) in
+        BinEx(IMPLIES, precond, ltl_expr)
     in
     Hashtbl.add ltl_forms name ltl_expr;
     if (name <> "fairness") && (Hashtbl.mem ltl_forms "fairness")
     then begin
+        (* add formulas saying that unfair predicates can't occur forever *)
+        let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
+        let mk_fair i =
+            let r_var = Var (new var (sprintf "bymc_%s%d" pred_recur i)) in
+            UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var)))
+        in
+        let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
         (* Spin 6.2 does not support inline formulas longer that 1024 chars.
            Put the formula into the file. *)
-        let embedded = embed_fairness (Hashtbl.find ltl_forms "fairness") in
+        let fairness =
+            try (Hashtbl.find ltl_forms "fairness")
+            with Not_found ->
+                raise (Abstraction_error "No \"fairness\" ltl formula found")
+        in
+        let embedded = embed_fairness fairness no_inf_forms in
         let out = open_out (sprintf "%s.ltl" name) in
         fprintf out "%s\n" (expr_s embedded);
         close_out out
@@ -436,7 +451,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         try
             match (Hashtbl.find atomic_props name) with
             | PropGlob e -> e
-            | _ -> raise (Abstraction_error ("Cannot embed " ^ name))
+            | _ -> raise (Abstraction_error ("Cannot extract " ^ name))
         with Not_found ->
             raise (Abstraction_error ("No atomic expression: " ^ name))
     in
@@ -540,7 +555,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                MGoto (-1, main_lab)] in
         let new_body = 
             skel.decl
-            @ [MUnsafe (-1, "#include \"cegar_decl.inc\"")]
             @ new_init
             @ [MLabel (-1, main_lab)]
             @ skel.loop_prefix
@@ -590,7 +604,8 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         | _ -> true
     in
     let out_units =
-        (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
+        Stmt (MUnsafe (-1, "#include \"cegar_decl.inc\""))
+        :: (Stmt (MDecl (-1, ctr_ctx#get_ctr, Nop "")))
         :: (Stmt (MDecl (-1, ctr_ctx#get_spur, Const 0)))
         :: (List.filter keep_unit new_units) in
     (out_units, xducers, atomic_props, ltl_forms)

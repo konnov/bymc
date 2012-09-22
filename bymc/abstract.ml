@@ -21,7 +21,7 @@ let write_to_file name units =
 ;;
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction units =
+let do_abstraction is_first_run units =
     let ctx = mk_context units in
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx units in
@@ -37,11 +37,14 @@ let do_abstraction units =
         do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
-    (* wipe the files left from other refinement sessions *)
-    close_out (open_out "cegar_decl.inc");
-    close_out (open_out "cegar_pre.inc");
-    close_out (open_out "cegar_post.inc");
     let _ = solver#stop in
+    if is_first_run
+    then begin 
+        (* wipe the files left from other refinement sessions *)
+        close_out (open_out "cegar_decl.inc");
+        close_out (open_out "cegar_pre.inc");
+        close_out (open_out "cegar_post.inc")
+    end;
     ctrabs_units
 ;;
 
@@ -107,30 +110,12 @@ let check_invariant inv_name units =
     solver#set_collect_asserts false;
 ;;
 
-let mk_fairness_assertion aprops ltl_forms =
-    let fairness =
-        try Hashtbl.find ltl_forms "fairness"
-        with Not_found ->
-            raise (Fairness_error "No LTL formula called \"fairness\" found!")
-    in
-    let strange_fairness () =
-        let m = "Don't know how to handle fairness: " ^ (expr_s fairness) in
-        raise (Fairness_error m)
-    in
-    let proposition = 
-        match fairness with
-        | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) ->
-            if is_propositional f then f else strange_fairness ()
-        | UnEx(EVENTUALLY, UnEx(ALWAYS, f)) ->
-            if is_propositional f then f else strange_fairness ()
-        | _ -> strange_fairness ()
-    in
-    ()
-;;
-
+(* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
     let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) = construct_vass units in
+    let fairness = find_fairness_assertion aprops ltls in
+    let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
         parse_spin_trail trail_filename dom ctx ctr_ctx in
@@ -197,15 +182,26 @@ let do_refinement trail_filename units =
         in
         if sp_st = -1
         then begin
-            log INFO "Sorry, I am afraid I cannot do that, Dave.";
-            log INFO "I need a human assistance to find an invariant.";
-            log INFO "  Trying to find the shortest spurious path for you...";
-            (* then check its prefixes, from the shortest to the longest *)
-            let short_len = List.find sim_prefix (range 1 num_states) in
-            log INFO (sprintf "  The shortest path is 0:%d" short_len);
-            flush stdout;
+            let spur_loop =
+                check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
+            if spur_loop
+            then log INFO "The loop is unfair. Refined."
+            else begin
+                log INFO "The loop is okay";
+
+                log INFO "Sorry, I am afraid I cannot do that, Dave.";
+                log INFO "I need a human assistance to find an invariant.";
+                log INFO "  Trying to find the shortest spurious path for you...";
+                (* then check its prefixes, from the shortest to the longest *)
+                let short_len = List.find sim_prefix (range 1 num_states) in
+                log INFO (sprintf "  The shortest path is 0:%d" short_len);
+                flush stdout;
+            end
         end
     end;
     log INFO "  [DONE]";
+    log INFO "  Regenerating the counter abstraction";
+    (* formulas must be regenerated *)
+    let _ = do_abstraction false units in
     let _ = solver#stop in ()
 ;;
