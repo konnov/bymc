@@ -115,7 +115,7 @@ let find_fairness_assertion aprops ltl_forms =
             else strange_fairness ()
         | _ -> strange_fairness ()
     in
-    printf "fairness proposition: %s\n" (expr_s proposition);
+    log DEBUG ("fairness proposition: " ^ (expr_s proposition));
     proposition
 ;;
 
