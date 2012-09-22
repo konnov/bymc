@@ -22,6 +22,13 @@ let write_to_file name units =
 
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction is_first_run units =
+    if is_first_run
+    then begin 
+        (* wipe the files left from other refinement sessions *)
+        close_out (open_out "cegar_decl.inc");
+        close_out (open_out "cegar_pre.inc");
+        close_out (open_out "cegar_post.inc")
+    end;
     let ctx = mk_context units in
     let solver = ctx#run_solver in
     let dom = mk_domain solver ctx units in
@@ -38,13 +45,6 @@ let do_abstraction is_first_run units =
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
     let _ = solver#stop in
-    if is_first_run
-    then begin 
-        (* wipe the files left from other refinement sessions *)
-        close_out (open_out "cegar_decl.inc");
-        close_out (open_out "cegar_pre.inc");
-        close_out (open_out "cegar_post.inc")
-    end;
     ctrabs_units
 ;;
 
