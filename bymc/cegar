@@ -25,6 +25,8 @@ cd $BYMC_HOME
 ./make.sh || (cd $CUR_DIR; exit 1)
 cd $CUR_DIR
 
+START_TIME=$(date +%s)
+
 if [ "$CONTINUE" == "" ]; then
     CAMLRUNPARAM="b" $BYMC_HOME/run.native -a $PROG || exit 1
 fi
@@ -76,8 +78,10 @@ if [ "$out" == "" ]; then
     out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
 fi
 
+END_TIME=$(date +%s)
+DIFF_TIME=$(($END_TIME-$START_TIME))
 
 spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
-common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`"
+common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
 echo "$out|$common|$spin_data" >>verdict.txt
 

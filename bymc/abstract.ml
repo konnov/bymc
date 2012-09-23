@@ -168,11 +168,15 @@ let do_refinement trail_filename units =
     in
     let num_states = (List.length trail_asserts) in
     solver#set_need_evidence true;
-    (* check the path first *)
+    (* check the finite prefix first *)
     if not (sim_prefix (num_states - 1))
     then begin
-        log INFO "  The counter-example is not spurious!";
-        print_vass_trace ctx solver num_states
+        print_vass_trace ctx solver num_states;
+        let spur_loop =
+            check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
+        if spur_loop
+        then log INFO "The loop is unfair. Refined."
+        else log INFO "  The finite prefix (of the counterex.) is not spurious!";
     end else begin
         log INFO "  Trying to find a spurious transition...";
         flush stdout;
