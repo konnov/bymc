@@ -402,9 +402,14 @@ class vass_funcs dom t_ctx ctr_ctx solver =
                 let ktr_i = self#deref_ctr idx_ex in
                 MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
             in
-            [ (*MAssume (-1, BinEx (EQ, Var delta, Const 1));*)
-             MAssume (-1, BinEx (GE, self#deref_ctr prev_idx, Const 0));
-             mk_one MINUS prev_idx; mk_one PLUS next_idx]
+
+            let guard = MExpr(-1, BinEx (NE, prev_idx, next_idx)) in
+            let nonneg = MAssume (-1,
+                BinEx (GE, self#deref_ctr prev_idx, Var delta)) in
+            let seq = [guard; nonneg;
+                mk_one MINUS prev_idx; mk_one PLUS next_idx] in
+            let comment = "processes stay at the same local state" in
+            [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
 
         method keep_assume e = true
     end;;
