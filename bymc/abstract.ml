@@ -168,6 +168,7 @@ let do_refinement trail_filename units =
     in
     let num_states = (List.length trail_asserts) in
     solver#set_need_evidence true;
+    let refined = ref false in
     (* check the finite prefix first *)
     if not (sim_prefix (num_states - 1))
     then begin
@@ -175,8 +176,11 @@ let do_refinement trail_filename units =
         let spur_loop =
             check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
         if spur_loop
-        then log INFO "The loop is unfair. Refined."
-        else log INFO "  The finite prefix (of the counterex.) is not spurious!";
+        then begin
+            log INFO "The loop is unfair. Refined.";
+            refined := true;
+        end else
+            log INFO "  The finite prefix (of the counterex.) is not spurious!";
     end else begin
         log INFO "  Trying to find a spurious transition...";
         flush stdout;
@@ -184,13 +188,16 @@ let do_refinement trail_filename units =
             try List.find check_trans (range 0 (num_states - 1))
             with Not_found -> -1
         in
-        if sp_st = -1
-        then begin
+        if sp_st <> -1
+        then refined := true
+        else begin
             let spur_loop =
                 check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
             if spur_loop
-            then log INFO "The loop is unfair. Refined."
-            else begin
+            then begin
+                log INFO "The loop is unfair. Refined.";
+                refined := true;
+            end else begin
                 log INFO "The loop is okay";
 
                 log INFO "Sorry, I am afraid I cannot do that, Dave.";
@@ -204,8 +211,11 @@ let do_refinement trail_filename units =
         end
     end;
     log INFO "  [DONE]";
-    log INFO "  Regenerating the counter abstraction";
-    (* formulas must be regenerated *)
-    let _ = do_abstraction false units in
-    let _ = solver#stop in ()
+    let _ = solver#stop in
+    if !refined
+    then begin
+        log INFO "  Regenerating the counter abstraction";
+        (* formulas must be regenerated *)
+        let _ = do_abstraction false units in ()
+    end
 ;;
