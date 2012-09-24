@@ -350,10 +350,7 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
         method mk_pre_asserts active_expr prev_idx next_idx =
             let acc i = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
-            let add s i =
-                if s <> Const 0
-                then BinEx (PLUS, acc i, s)
-                else acc i
+            let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i
             in
             (* counter are non-negative, non-obvious for an SMT solver! *)
             let all_indices = (range 0 ctr_ctx#get_ctr_dim) in
@@ -568,8 +565,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         (* SMT xducer: exactly at this moment we have all information to
-           generate a xducer of a process
-         *)
+           generate a xducer of a process *)
         let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
         let all_vars =
             (ctr_ctx#get_ctr :: t_ctx#get_shared) @ funcs#introduced_vars in
@@ -577,7 +573,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         if may_log DEBUG
         then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
         let transd = cfg_to_constraints cfg in
-        Hashtbl.add xducers p#get_name transd;
+        Hashtbl.add xducers p#get_name (new proc_xducer p transd);
         Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
         (* end of xducer *)
         new_proc

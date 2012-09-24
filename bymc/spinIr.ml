@@ -455,13 +455,11 @@ class ['t] proc name_i active_expr_i =
             tbl
 
         method get_locals =
-            List.fold_left 
-                (fun l s ->
-                    match s with
-                    | MDecl (_, v, _) -> v :: l
-                    | _ -> l)
-                []
-                stmts
+            let add_decl l = function
+                | MDecl (_, v, _) -> v :: l
+                | _ -> l
+            in
+            List.fold_left add_decl [] stmts
     end
 ;;
 

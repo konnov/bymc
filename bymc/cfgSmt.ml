@@ -11,6 +11,16 @@ open Ssa;;
 open Smt;;
 open Debug;;
 
+class ['t] proc_xducer (i_orig_proc: 't proc) (i_cons: 't expr list) =
+    object
+        val orig_proc = i_orig_proc
+        val transition_cons: 't expr list = i_cons
+
+        method get_orig_proc = orig_proc
+        method get_trans_form = transition_cons
+    end
+;;
+
 (*
  XXX: this translation does not work with a control flow graph like this:
      A -> (B, C); B -> D; C -> D; B -> C.

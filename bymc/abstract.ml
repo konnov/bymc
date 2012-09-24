@@ -174,7 +174,7 @@ let do_refinement trail_filename units =
     then begin
         print_vass_trace ctx solver num_states;
         let spur_loop =
-            check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
+            check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin
             log INFO "The loop is unfair. Refined.";
@@ -192,7 +192,7 @@ let do_refinement trail_filename units =
         then refined := true
         else begin
             let spur_loop =
-                check_loop_unfair solver rev_map fairness inv_forms loop_asserts in
+                check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts in
             if spur_loop
             then begin
                 log INFO "The loop is unfair. Refined.";

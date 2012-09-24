@@ -145,7 +145,7 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
     solver#push_ctx;
     (* put asserts from the control flow graph *)
     assert (1 = (Hashtbl.length xducers));
-    let proc_xducer = List.hd (hashtbl_vals xducers) in
+    let proc_xducer = (List.hd (hashtbl_vals xducers))#get_trans_form in
     log INFO "    collecting declarations and transducer asserts...";
     flush stdout;
     let xducer_asserts =
@@ -349,7 +349,7 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     close_out cout
 ;;
 
-let is_loop_state_fair solver rev_map fairness inv_forms state_asserts =
+let is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_asserts =
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     let smt_to_expr = function
         | Expr (_, e) -> e
@@ -357,6 +357,18 @@ let is_loop_state_fair solver rev_map fairness inv_forms state_asserts =
     in
     let add_assert_expr e =
         let _ = solver#append_expr e in ()
+    in
+    (* TODO: shall we use a transducer that carries all the constraints? *)
+    let get_active_expr xducers =
+        assert(1 = (Hashtbl.length xducers));
+        let p = (List.hd (hashtbl_vals xducers)) in
+        p#get_orig_proc#get_active_expr
+    in
+    let num_procs_preserved =
+        let acc i = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
+        let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i in
+        let sum = List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
+        BinEx (EQ, (get_active_expr xducers), sum)
     in
     solver#set_collect_asserts true; (* we need unsat cores *)
     solver#push_ctx;
@@ -368,6 +380,7 @@ let is_loop_state_fair solver rev_map fairness inv_forms state_asserts =
     log INFO (sprintf "    appending %d assertions..."
         (1 + (List.length inv_forms) + (List.length state_asserts)));
     add_assert_expr fairness;
+    add_assert_expr num_procs_preserved;
     List.iter add_assert_expr inv_forms;
     List.iter (smt_append_bind solver rev_map smt_rev_map) state_asserts;
     log INFO "    waiting for SMT..."; flush stdout;
@@ -379,11 +392,11 @@ let is_loop_state_fair solver rev_map fairness inv_forms state_asserts =
     res, core_exprs_s
 ;;
 
-let check_loop_unfair solver rev_map fairness inv_forms loop_asserts =
+let check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts =
     log INFO ("  Checking if the loop is fair..."); flush stdout;
     let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
         let sat, core_exprs_s =
-            is_loop_state_fair solver rev_map fairness inv_forms state_asserts
+            is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_asserts
         in
         (all_sat || sat, core_exprs_s :: all_core_exprs_s)
     in
