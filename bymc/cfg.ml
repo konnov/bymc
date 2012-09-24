@@ -396,13 +396,13 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
         else
             let p = try String.rindex_from s (tw - 1) ' ' with Not_found -> tw in
             let bpos = (if p = 0 then tw else p) in
-            (String.sub s 0 bpos) ^ "\\l    "
+            (String.sub s 0 bpos) ^ "\\n    "
                 ^ (break (String.sub s bpos ((String.length s) - bpos)) tw)
     in
     let rec write_bb bb =
-        let label = String.concat "\\l" (List.map stmt_s bb#get_seq) in
+        let label = String.concat "\n" (List.map stmt_s bb#get_seq) in
         let elabel = String.escaped label in
-        fprintf fo "  bb%d [label = \"%s\\l\"];\n" bb#label (break elabel 40)
+        fprintf fo "  bb%d [label = \"%s\\n\"];\n" bb#label (break elabel 40)
     in
     let rec write_bb_succ bb =
         let connect_succ succ_lab =
