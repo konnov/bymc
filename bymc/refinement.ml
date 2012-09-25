@@ -402,9 +402,12 @@ let check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_ass
     in
     let (sat, exprs) =
         List.fold_left check_and_collect_cores (false, []) loop_asserts in
-    let pred_no = intro_new_pred pred_recur in
-    let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
-    fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
-    close_out cout;
+    if not sat
+    then begin
+        let pred_no = intro_new_pred pred_recur in
+        let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
+        fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
+        close_out cout;
+    end;
     not sat
 ;;
