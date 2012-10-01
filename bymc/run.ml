@@ -1,4 +1,7 @@
 open Printf;;
+open Str;;
+open Map
+module StringMap = Map.Make (String)
 
 open Parse;;
 open Abstract;;
@@ -11,14 +14,24 @@ type action_option = OptAbstract | OptRefine | OptCheckInv | OptSubstitute | Opt
 type options =
     {
         action: action_option; trail_name: string; filename: string;
-        inv_name: string; param_assignments: string;
+        inv_name: string; param_assignments: int StringMap.t;
         verbose: bool
     }
+
+let parse_key_values str =
+    let parse_pair map s =
+        if string_match (regexp "\\([a-zA-Z0-9]+\\)=\\([0-9]+\\)") s 0
+        then StringMap.add (matched_group 1 s) (int_of_string (matched_group 2 s)) map
+        else raise (Arg.Bad ("Wrong key=value pair: " ^ s))
+    in
+    let pairs = split (regexp ",") str in
+    List.fold_left parse_pair StringMap.empty pairs
+;;
 
 let parse_options =
     let opts = ref {
         action = OptNone; trail_name = ""; filename = ""; inv_name = "";
-        param_assignments = "";
+        param_assignments = StringMap.empty;
         verbose = false
     } in
     (Arg.parse
@@ -31,8 +44,9 @@ let parse_options =
             ("-i", Arg.String
              (fun s -> opts := {!opts with action = OptCheckInv; inv_name = s}),
              "Check if an atomic proposition is an invariant!.");
-            ("-s", Arg.Unit (fun () ->
-                opts := {!opts with action = OptSubstitute; param_assignments = ""}),
+            ("-s", Arg.String (fun s ->
+                opts := {!opts with action = OptSubstitute;
+                    param_assignments = parse_key_values s}),
              "Substitute parameters into the code and produce standard Promela.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "Produce lots of verbose output (you are warned).");
