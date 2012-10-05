@@ -88,9 +88,9 @@ let conc_prop pa pmap prop =
         | _ as e -> e
     in
     match prop with
-    | PropAll e -> PropGlob (unfold ForAll e)
-    | PropSome e -> PropGlob (unfold Exist e)
-    | PropGlob e -> PropGlob (replace_card e)
+    | PropAll e -> PropGlob (conc_expr pa (unfold ForAll e))
+    | PropSome e -> PropGlob (conc_expr pa (unfold Exist e))
+    | PropGlob e -> PropGlob (conc_expr pa (replace_card e))
 
 let rec concretize_stmt pa pmap = function
     | MDecl (id, v, e) as d ->
