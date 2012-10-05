@@ -66,7 +66,7 @@ let concretize_proc pa p =
     | Const i -> i
     | _ as e -> raise (Failure ("Failed to compute: " ^ (expr_s e)))
     in
-    let new_p = proc_replace_body p (List.map (concretize_stmt pa) p#get_stmts)
+    let new_p = proc_replace_body p (List.map (concretize_stmt pa count) p#get_stmts)
     in
     new_p#set_active_expr (Const count);
     new_p
