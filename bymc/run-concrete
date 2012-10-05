@@ -1,0 +1,60 @@
+#!/bin/bash
+#
+# Run experiments on concrete instances
+
+if [ "$#" -lt 3 ]; then
+    echo "Not enough arguments"
+    echo ""
+    echo "Use: run-concrete param1=value1,param2=value2 promela_system property"
+    exit 1
+fi
+
+PROG=$2
+PROP=$3
+PARAM=$1
+BYMC_HOME=`dirname $0`
+
+SPIN=spin
+PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"
+PAN_FLAGS="-m100000" #-m50000000"
+SPIN_OUT="spin.out"
+cmd=""
+step="0"
+rand=""
+out=""
+
+CUR_DIR=`pwd`
+cd $BYMC_HOME
+./make.sh || (cd $CUR_DIR; exit 1)
+cd $CUR_DIR
+
+START_TIME=$(date +%s)
+
+rm -rf $SPIN_OUT spin.trace refinement.out
+
+$BYMC_HOME/run.native -s "$PARAM" $PROG || (echo "FAILURE"; exit 1)
+
+$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
+$SPIN -a -N $PROP.never concrete.prm \
+  && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
+  && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
+
+if egrep -q "errors: +0" $SPIN_OUT; then
+    echo "The property is verified in $step refinement steps"
+    out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
+    cmd="q"
+else
+    ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee spin.trace
+fi
+
+if [ "$out" == "" ]; then
+    out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
+fi
+
+END_TIME=$(date +%s)
+DIFF_TIME=$(($END_TIME-$START_TIME))
+
+spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
+common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+echo "$out|$common|$spin_data" >>verdict.txt
+
