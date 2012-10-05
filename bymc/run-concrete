@@ -9,6 +9,8 @@ if [ "$#" -lt 3 ]; then
     exit 1
 fi
 
+trap "exit" SIGHUP SIGINT SIGTERM
+
 PROG=$2
 PROP=$3
 PARAM=$1
@@ -41,20 +43,20 @@ $SPIN -a -N $PROP.never concrete.prm \
 
 if egrep -q "errors: +0" $SPIN_OUT; then
     echo "The property is verified in $step refinement steps"
-    out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
-    cmd="q"
+    out="|00:exitcode=ok|01:valid=yes"
 else
     ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee spin.trace
+    out="|00:exitcode=ok|01:valid=no"
 fi
 
 if [ "$out" == "" ]; then
-    out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
+    out="|00:exitcode=quit|01:valid=maybe"
 fi
 
 END_TIME=$(date +%s)
 DIFF_TIME=$(($END_TIME-$START_TIME))
 
 spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
-common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+common="|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
 echo "$out|$common|$spin_data" >>verdict.txt
 

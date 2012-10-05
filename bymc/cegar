@@ -7,6 +7,8 @@ if [ "$#" -lt 2 ]; then
     exit 1
 fi
 
+trap "exit" SIGHUP SIGINT SIGTERM
+
 PROG=$1
 PROP=$2
 BYMC_HOME=`dirname $0`
