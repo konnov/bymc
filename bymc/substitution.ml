@@ -6,6 +6,7 @@ open Map
 open Printf
 module StringMap = Map.Make (String)
 
+open Accums
 open Spin
 open SpinIr
 open SpinIrImp
@@ -23,18 +24,75 @@ let try_eval = function
 
 let rec conc_expr pa = function
     | Var v ->
-            if v#is_symbolic then Const (StringMap.find v#get_name pa) else Var v
+            if not v#is_symbolic
+            then Var v
+            else 
+                let value =
+                    try (StringMap.find v#get_name pa)
+                    with Not_found -> raise (Failure ("No param: " ^ v#get_name))
+                in Const value
     | UnEx (t, l) -> UnEx (t, conc_expr pa l)
     | BinEx (t, l, r) ->
             let sl, sr = conc_expr pa l, conc_expr pa r in
             try_eval (BinEx (t, sl, sr))
     | _ as e -> e
 
-let conc_prop pa = function
-    | PropAll e -> ...
-    | _ as p -> p
+type quant = ForAll | Exist
 
-let rec concretize_stmt pa = function
+let conc_prop pa pmap prop = 
+    let rec find_proc_name = function
+        | Var v -> v#proc_name
+        | BinEx (_, l, r) ->
+                let ln, rn = find_proc_name l, find_proc_name r in
+                if ln <> rn && ln <> "" && rn <> ""
+                then let m = (sprintf "2 procs in one property: %s <> %s" ln rn)
+                in raise (Failure m)
+                else if ln <> "" then ln else rn
+        | UnEx (_, l) -> find_proc_name l
+        | _ -> ""
+    in
+    let rec mk_inst e idx =
+        match e with
+        | Var v ->
+                let name = if v#proc_name = ""
+                then v#get_name
+                else sprintf "%s[%d]:%s" v#proc_name idx v#get_name in
+                Var (v#copy name)
+        | UnEx (tok, l) -> UnEx (tok, mk_inst l idx)
+        | BinEx (tok, l, r) -> BinEx (tok, mk_inst l idx, mk_inst r idx)
+        | _ -> e
+    in
+    let rec unfold q = function
+        | BinEx (AND, l, r) -> BinEx (AND, unfold q l, unfold q r)
+        | BinEx (OR, l, r) -> BinEx (OR, unfold q l, unfold q r)
+        | UnEx (NEG, l) -> UnEx (NEG, unfold q l)
+        | BinEx (EQ, l, r)
+        | BinEx (NE, l, r)
+        | BinEx (LE, l, r)
+        | BinEx (LT, l, r)
+        | BinEx (GE, l, r)
+        | BinEx (GT, l, r) as e ->
+                let pname = find_proc_name e in
+                if pname = ""
+                then e (* no process variables inside *)
+                else let count = StringMap.find pname pmap in
+                    let clones = List.map (mk_inst e) (range 0 count) in
+                    let tok = if q = ForAll then AND else OR in
+                    list_to_binex tok clones
+        | _ as e -> e
+    in
+    let rec replace_card = function
+        | UnEx (CARD, l) -> Const 0 (* how to do cardinality in the concrete? *)
+        | UnEx (t, l) -> UnEx (t, replace_card l)
+        | BinEx (t, l, r) -> BinEx (t, replace_card l, replace_card r)
+        | _ as e -> e
+    in
+    match prop with
+    | PropAll e -> PropGlob (unfold ForAll e)
+    | PropSome e -> PropGlob (unfold Exist e)
+    | PropGlob e -> PropGlob (replace_card e)
+
+let rec concretize_stmt pa pmap = function
     | MDecl (id, v, e) as d ->
             if v#is_symbolic
             then let n = v#get_name in
@@ -43,43 +101,69 @@ let rec concretize_stmt pa = function
     | MExpr (id, e) ->
             MExpr (id, conc_expr pa e)
     | MDeclProp (id, v, e) ->
-            MDeclProp (id, v, conc_prop pa e)
+            MDeclProp (id, v, conc_prop pa pmap e)
     | MAssume (id, e) ->
             MUnsafe (id, (sprintf "/* %s */" (expr_s e)))
     | MIf (id, options) ->
-            MIf (id, (List.map (conc_opt pa) options))
+            MIf (id, (List.map (conc_opt (concretize_stmt pa pmap)) options))
     | MAtomic (id, seq) ->
-            MAtomic (id, (conc_seq pa seq))
+            MAtomic (id, (conc_seq (concretize_stmt pa pmap) seq))
     | MD_step (id, seq) ->
-            MD_step (id, (conc_seq pa seq))
+            MD_step (id, (conc_seq (concretize_stmt pa pmap) seq))
     | _ as s -> s
 and 
-    conc_opt pa = function
-        | MOptGuarded seq -> MOptGuarded (conc_seq pa seq)
-        | MOptElse seq -> MOptElse (conc_seq pa seq)
+    conc_opt cfun = function
+        | MOptGuarded seq -> MOptGuarded (conc_seq cfun seq)
+        | MOptElse seq -> MOptElse (conc_seq cfun seq)
 and
-    conc_seq pa seq = (List.map (concretize_stmt pa) seq)
+    conc_seq cfun seq = (List.map cfun seq)
 ;;
 
-let concretize_proc pa p =
-    let count = match (conc_expr pa p#get_active_expr) with
-    | Const i -> i
-    | _ as e -> raise (Failure ("Failed to compute: " ^ (expr_s e)))
-    in
-    let new_p = proc_replace_body p (List.map (concretize_stmt pa count) p#get_stmts)
+let concretize_proc pa pmap p =
+    let new_seq = (List.map (concretize_stmt pa pmap) p#get_stmts) in
+    let new_p = proc_replace_body p new_seq in
+    let count =
+        try (StringMap.find p#get_name pmap)
+        with Not_found -> raise (Failure ("No process count for " ^ p#get_name))
     in
     new_p#set_active_expr (Const count);
     new_p
 ;;
 
-let concretize_unit param_assignments = function
+let concretize_unit param_vals pmap lmap = function
     | None -> None
-    | Ltl (_, _) as e -> e
-    | Stmt s -> Stmt (concretize_stmt param_assignments s)
-    | Proc p -> Proc (concretize_proc param_assignments p)
+    | Ltl (name, form) ->
+            let fairness = StringMap.find "fairness" lmap in
+            let embedded = BinEx (IMPLIES, fairness, form) in
+            if name <> "fairness"
+            then begin
+                let out = open_out (sprintf "%s.ltl" name) in
+                fprintf out "%s\n" (expr_s embedded);
+                close_out out
+            end;
+            None
+    | Stmt s ->
+            Stmt (concretize_stmt param_vals pmap s)
+    | Proc p ->
+            Proc (concretize_proc param_vals pmap p)
 ;;
 
-let do_substitution (param_assignments: int StringMap.t)
+let do_substitution (param_vals: int StringMap.t)
         (units: 't prog_unit list) : ('t prog_unit list) =
-    List.map (concretize_unit param_assignments) units
+    let count_proc pmap = function
+        | Proc p -> 
+            let cnt = begin match (conc_expr param_vals p#get_active_expr) with
+            | Const i -> i
+            | _ as e -> raise (Failure ("Failed to compute: " ^ (expr_s e)))
+            end in
+            StringMap.add p#get_name cnt pmap
+        | _ -> pmap
+    in
+    let pmap = List.fold_left count_proc StringMap.empty units in
+    let collect_ltl fmap = function
+        | Ltl (name, form) -> StringMap.add name form fmap
+        | _ -> fmap
+    in
+    let lmap = List.fold_left collect_ltl StringMap.empty units in
+    List.map (concretize_unit param_vals pmap lmap) units
 ;;

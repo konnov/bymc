@@ -168,6 +168,7 @@ var name_i =
         (* a forward reference to a context (a process) that has not been
            defined yet *)
         val mutable m_proc_name: string = "" 
+        val mutable m_proc_index: int = -1
 
         method get_sym_type = SymVar
         
@@ -194,6 +195,9 @@ var name_i =
         method proc_name = m_proc_name
         method set_proc_name r = m_proc_name <- r
 
+        method proc_index = m_proc_index
+        method set_proc_index i = m_proc_index <- i
+
         method copy new_name =
             let new_var = new var new_name in
             new_var#set_type vtype;
@@ -203,6 +207,7 @@ var name_i =
             new_var#set_ini ini;
             if self#is_symbolic then new_var#set_symbolic;
             new_var#set_proc_name m_proc_name;
+            new_var#set_proc_index m_proc_index;
             new_var
     end
 and
