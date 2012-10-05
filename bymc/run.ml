@@ -5,7 +5,7 @@ module StringMap = Map.Make (String)
 
 open Parse;;
 open Abstract;;
-open Substitution;;
+open Instantiation;;
 open Writer;;
 open Debug;;
 
