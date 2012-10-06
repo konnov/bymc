@@ -9,7 +9,7 @@ if [ "$#" -lt 3 ]; then
     exit 1
 fi
 
-trap "exit" SIGHUP SIGINT SIGTERM
+trap "killall pan; exit 99" SIGHUP SIGINT SIGTERM
 
 PROG=$2
 PROP=$3
@@ -19,7 +19,8 @@ BYMC_HOME=`dirname $0`
 SPIN=spin
 PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"
 PAN_FLAGS="-m100000" #-m50000000"
-SPIN_OUT="spin.out"
+SPIN_OUT="spin-`basename $PROG`-$PROP-$PARAM.out"
+SPIN_TRACE="spin-`basename $PROG`-$PROP-$PARAM.trace"
 cmd=""
 step="0"
 rand=""
@@ -32,7 +33,7 @@ cd $CUR_DIR
 
 START_TIME=$(date +%s)
 
-rm -rf $SPIN_OUT spin.trace refinement.out
+rm -rf "$SPIN_OUT" "$SPIN_TRACE"
 
 $BYMC_HOME/run.native -s "$PARAM" $PROG || (echo "FAILURE"; exit 1)
 
@@ -45,7 +46,7 @@ if egrep -q "errors: +0" $SPIN_OUT; then
     echo "The property is verified in $step refinement steps"
     out="|00:exitcode=ok|01:valid=yes"
 else
-    ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee spin.trace
+    ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee "$SPIN_TRACE"
     out="|00:exitcode=ok|01:valid=no"
 fi
 
