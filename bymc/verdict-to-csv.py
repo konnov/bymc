@@ -15,7 +15,8 @@ while line:
     row = {}
     for f in fields:
         if f.strip() != "":
-            k, v = f.split("=")
+            vs = f.split("=")
+            k, v = vs[0], "=".join(vs[1:])
             row[k] = v
             columns.add(k)
 
