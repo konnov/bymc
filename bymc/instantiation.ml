@@ -42,6 +42,7 @@ type quant = ForAll | Exist
 let conc_prop pa pmap prop = 
     let rec find_proc_name = function
         | Var v -> v#proc_name
+        | LabelRef (proc_name, _) -> proc_name
         | BinEx (_, l, r) ->
                 let ln, rn = find_proc_name l, find_proc_name r in
                 if ln <> rn && ln <> "" && rn <> ""
@@ -58,6 +59,8 @@ let conc_prop pa pmap prop =
                 then v#get_name
                 else sprintf "%s[%d]:%s" v#proc_name idx v#get_name in
                 Var (v#copy name)
+        | LabelRef (proc_name, lab) ->
+                LabelRef (sprintf "%s[%d]" proc_name idx, lab)
         | UnEx (tok, l) -> UnEx (tok, mk_inst l idx)
         | BinEx (tok, l, r) -> BinEx (tok, mk_inst l idx, mk_inst r idx)
         | _ -> e
@@ -79,6 +82,11 @@ let conc_prop pa pmap prop =
                     let clones = List.map (mk_inst e) (range 0 count) in
                     let tok = if q = ForAll then AND else OR in
                     list_to_binex tok clones
+        | LabelRef (pname, label) as e ->
+                let count = StringMap.find pname pmap in
+                let clones = List.map (mk_inst e) (range 0 count) in
+                let tok = if q = ForAll then AND else OR in
+                list_to_binex tok clones
         | _ as e -> e
     in
     let rec replace_card = function
