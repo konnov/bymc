@@ -15,6 +15,7 @@ PROG=$2
 PROP=$3
 PARAM=$1
 BYMC_HOME=`dirname $0`
+PROG_S=`basename $PROG .pml`
 
 SPIN=spin
 PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"
@@ -34,6 +35,8 @@ cd $CUR_DIR
 START_TIME=$(date +%s)
 
 rm -rf "$SPIN_OUT" "$SPIN_TRACE"
+
+echo "INPUT: $PROG_S, $PARAM, $PROP"
 
 $BYMC_HOME/run.native -s "$PARAM" $PROG || (echo "FAILURE"; exit 1)
 
@@ -58,6 +61,6 @@ END_TIME=$(date +%s)
 DIFF_TIME=$(($END_TIME-$START_TIME))
 
 spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
-common="|02:param=$PARAM|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
 echo "$out|$common|$spin_data" >>verdict-concrete.txt
 
