@@ -31,7 +31,7 @@ for r in rows:
     lst = []
     for c in cols:
         if r.has_key(c):
-            lst.append(r[c])
+            lst.append('"%s"' % r[c])
         else:
             lst.append("")
 
