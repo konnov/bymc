@@ -22,15 +22,18 @@ let try_eval = function
             Const (li / ri)
     | _ as e -> e
 
-let rec conc_expr pa = function
+let rec conc_expr pa exp =
+    let find_var name =
+        try StringMap.find name pa
+        with Not_found -> raise (Failure ("Parameter not found: " ^ name))
+    in
+    match exp with
     | Var v ->
             if not v#is_symbolic
             then Var v
             else 
-                let value =
-                    try (StringMap.find v#get_name pa)
-                    with Not_found -> raise (Failure ("No param: " ^ v#get_name))
-                in Const value
+                let value = find_var v#get_name in
+                Const value
     | UnEx (t, l) -> UnEx (t, conc_expr pa l)
     | BinEx (t, l, r) ->
             let sl, sr = conc_expr pa l, conc_expr pa r in
@@ -65,6 +68,10 @@ let conc_prop pa pmap prop =
         | BinEx (tok, l, r) -> BinEx (tok, mk_inst l idx, mk_inst r idx)
         | _ -> e
     in
+    let find_proc pname =
+        try StringMap.find pname pmap
+        with Not_found -> raise (Failure ("Process name not found: " ^ pname))
+    in
     let rec unfold q = function
         | BinEx (AND, l, r) -> BinEx (AND, unfold q l, unfold q r)
         | BinEx (OR, l, r) -> BinEx (OR, unfold q l, unfold q r)
@@ -78,12 +85,12 @@ let conc_prop pa pmap prop =
                 let pname = find_proc_name e in
                 if pname = ""
                 then e (* no process variables inside *)
-                else let count = StringMap.find pname pmap in
+                else let count = find_proc pname in
                     let clones = List.map (mk_inst e) (range 0 count) in
                     let tok = if q = ForAll then AND else OR in
                     list_to_binex tok clones
         | LabelRef (pname, label) as e ->
-                let count = StringMap.find pname pmap in
+                let count = find_proc pname in
                 let clones = List.map (mk_inst e) (range 0 count) in
                 let tok = if q = ForAll then AND else OR in
                 list_to_binex tok clones
@@ -100,11 +107,16 @@ let conc_prop pa pmap prop =
     | PropSome e -> PropGlob (conc_expr pa (unfold Exist e))
     | PropGlob e -> PropGlob (conc_expr pa (replace_card e))
 
-let rec concretize_stmt pa pmap = function
+let rec concretize_stmt pa pmap stmt =
+    let find_var name =
+        try StringMap.find name pa
+        with Not_found -> raise (Failure ("Parameter not found: " ^ name))
+    in
+    match stmt with
     | MDecl (id, v, e) as d ->
             if v#is_symbolic
             then let n = v#get_name in
-                MUnsafe (id, (sprintf "/* %s = %d */" n (StringMap.find n pa)))
+                MUnsafe (id, (sprintf "/* %s = %d */" n (find_var n)))
             else d
     | MExpr (id, e) ->
             MExpr (id, conc_expr pa e)

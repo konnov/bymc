@@ -392,22 +392,27 @@ let is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_a
     res, core_exprs_s
 ;;
 
-let check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts =
-    log INFO ("  Checking if the loop is fair..."); flush stdout;
-    let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
-        let sat, core_exprs_s =
-            is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_asserts
+let check_loop_unfair
+        solver ctr_ctx xducers rev_map fair_forms inv_forms loop_asserts =
+    let check_one ff = 
+        log INFO ("  Checking if the loop is fair..."); flush stdout;
+        let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
+            let sat, core_exprs_s =
+                is_loop_state_fair solver ctr_ctx xducers rev_map
+                    ff inv_forms state_asserts
+            in
+            (all_sat || sat, core_exprs_s :: all_core_exprs_s)
         in
-        (all_sat || sat, core_exprs_s :: all_core_exprs_s)
+        let (sat, exprs) =
+            List.fold_left check_and_collect_cores (false, []) loop_asserts in
+        if not sat
+        then begin
+            let pred_no = intro_new_pred pred_recur in
+            let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
+            fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
+            close_out cout;
+        end;
+        not sat
     in
-    let (sat, exprs) =
-        List.fold_left check_and_collect_cores (false, []) loop_asserts in
-    if not sat
-    then begin
-        let pred_no = intro_new_pred pred_recur in
-        let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
-        fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
-        close_out cout;
-    end;
-    not sat
+    List.fold_left (||) false (List.map check_one fair_forms)
 ;;

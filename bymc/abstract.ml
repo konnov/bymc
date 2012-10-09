@@ -110,11 +110,23 @@ let check_invariant inv_name units =
     solver#set_collect_asserts false;
 ;;
 
+let filter_good_fairness aprops fair_forms =
+    let err_fun f =
+        printf "Fairness formula not supported by refinement (ignored): %s\n" 
+            (expr_s f);
+        Nop ""
+    in
+    let fair_atoms = List.map (find_fair_atoms err_fun aprops) fair_forms in
+    let filtered = List.filter not_nop fair_atoms in
+    List.iter (fun fa -> printf "added fairness: %s\n" (expr_s fa)) filtered;
+    filtered
+;;
+
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
     let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) = construct_vass units in
-    let fairness = find_fairness_assertion aprops ltls in
+    let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =

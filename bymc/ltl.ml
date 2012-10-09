@@ -70,7 +70,6 @@ let normalize_form form =
     norm false form
 ;;
 
-
 let embed_atomics aprops form =
     let get_atomic name =
         try
@@ -92,31 +91,44 @@ let embed_atomics aprops form =
     embed form
 ;;
 
+let find_fair_atoms error_fun aprops = function
+    | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) as ff ->
+        if is_propositional f
+        then normalize_form (embed_atomics aprops f)
+        else error_fun ff
+    | UnEx(EVENTUALLY, UnEx(ALWAYS, f)) as ff ->
+        if is_propositional f
+        then normalize_form (embed_atomics aprops f)
+        else error_fun ff
+    | _ as ff -> error_fun ff
+;;
 
-let find_fairness_assertion aprops ltl_forms =
+let collect_fairness_forms ltl_forms =
     let fairness =
         try Hashtbl.find ltl_forms "fairness"
         with Not_found ->
             raise (Fairness_error "No LTL formula called \"fairness\" found!")
     in
-    let strange_fairness () =
-        let m = "Don't know how to handle fairness: " ^ (expr_s fairness) in
-        raise (Fairness_error m)
+    (* break down boolean combinations of formulas into a list *)
+    let rec collect = function
+    | BinEx (AND, l, r) ->
+            List.append (collect l) (collect r)
+    | BinEx (OR, _, _) as f ->
+            let m = ("f||g is not supported in fairness: " ^ (expr_s f)) in
+            raise (Fairness_error m)
+    | BinEx (IMPLIES, _, _) as f ->
+            let m = ("f->g is not supported in fairness: " ^ (expr_s f)) in
+            raise (Fairness_error m)
+    | BinEx (EQUIV, _, _) as f ->
+            let m = ("f<->g is not supported in fairness: " ^ (expr_s f)) in
+            raise (Fairness_error m)
+    | UnEx (NEG, _) as f -> 
+            let m = ("!f is not supported in fairness (please normalize): "
+                ^ (expr_s f)) in
+            raise (Fairness_error m)
+    | _ as f -> [f]
     in
-    let proposition = 
-        match fairness with
-        | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) ->
-            if is_propositional f
-            then normalize_form (embed_atomics aprops f)
-            else strange_fairness ()
-        | UnEx(EVENTUALLY, UnEx(ALWAYS, f)) ->
-            if is_propositional f
-            then normalize_form (embed_atomics aprops f)
-            else strange_fairness ()
-        | _ -> strange_fairness ()
-    in
-    log DEBUG ("fairness proposition: " ^ (expr_s proposition));
-    proposition
+    collect fairness
 ;;
 
 
