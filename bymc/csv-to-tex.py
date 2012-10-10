@@ -28,13 +28,13 @@ def spec_format(field_name, val):
         return str(val)
 
 
-if len(sys.argv) <= 2:
-    print "Use: %s csv-file column1,column2,column3" % sys.argv[0]
+if len(sys.argv) <= 3:
+    print "Use: %s csv-file out-file column1,column2,column3" % sys.argv[0]
     sys.exit(1)
 
-columns = sys.argv[2].split(",")
+columns = sys.argv[3].split(",")
 
-out = open("table.tex", 'w+')
+out = open(sys.argv[2], 'w+')
 out.write("\\begin{table*}\n")
 out.write(" \\begin{center}\n")
 with open(sys.argv[1], 'rb') as csvfile:
