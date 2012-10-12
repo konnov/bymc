@@ -393,41 +393,35 @@ let sort_thresholds solver ctx conds =
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
     solver#push_ctx;
     let cmp_tbl = Hashtbl.create 10 in
-    List.iter (fun c1 -> List.iter
-        (fun c2 ->
-            if c1 <> c2
-            then begin
-                solver#append_assert (sprintf "(not (< %s %s))"
-                    (expr_to_smt c1) (expr_to_smt c2));
-                if not solver#check
-                then (Hashtbl.add cmp_tbl
-                    ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
-                solver#pop_ctx; solver#push_ctx
-            end
-        ) conds)
-        conds;
+    let compare c1 c2 =
+        if c1 <> c2
+        then begin
+            let asrt =
+                sprintf "(not (< %s %s))" (expr_to_smt c1) (expr_to_smt c2) in
+            solver#append_assert asrt;
+            if not solver#check
+            then (Hashtbl.add cmp_tbl
+                ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
+            solver#pop_ctx; solver#push_ctx
+        end
+    in
+    List.iter (fun c1 -> List.iter (compare c1) conds) conds;
     solver#pop_ctx;
-    List.iter (fun c1 -> List.iter (fun c2 ->
+    let check_ord c1 c2 = 
         let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
         if i1 <> i2
         then if not (Hashtbl.mem cmp_tbl (i1, i2))
             && not (Hashtbl.mem cmp_tbl (i2, i1))
         then raise (Abstraction_error (sprintf "No order for %s and %s"
-            (expr_s c1) (expr_s c2))))
-        conds) conds;
+            (expr_s c1) (expr_s c2)))
+    in
+    List.iter (fun c1 -> List.iter (check_ord c1) conds) conds;
 
-    List.sort
-        (fun c1 c2 ->
-            if c1 = c2
-            then 0
-            else
-                let i1 = (Hashtbl.find id_map c1)
-                    and i2 = (Hashtbl.find id_map c2) in
-                if (Hashtbl.mem cmp_tbl (i1, i2))
-                then -1
-                else 1
-        )
-        conds
+    let cmp_using_tbl c1 c2 =
+        let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
+        if c1 = c2 then 0 else if (Hashtbl.mem cmp_tbl (i1, i2)) then -1 else 1
+    in
+    List.sort cmp_using_tbl conds
 ;;
 
 let mk_context units =
