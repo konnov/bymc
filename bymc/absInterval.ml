@@ -393,30 +393,49 @@ let sort_thresholds solver ctx conds =
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
     solver#push_ctx;
     let cmp_tbl = Hashtbl.create 10 in
-    let compare c1 c2 =
+    let compare op c1 c2 =
         if c1 <> c2
         then begin
             let asrt =
-                sprintf "(not (< %s %s))" (expr_to_smt c1) (expr_to_smt c2) in
+                sprintf "(not (%s %s %s))" op (expr_to_smt c1) (expr_to_smt c2)
+            in
             solver#append_assert asrt;
-            if not solver#check
+            let res = not solver#check in
+            if res
             then (Hashtbl.add cmp_tbl
                 ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
-            solver#pop_ctx; solver#push_ctx
+            solver#pop_ctx; solver#push_ctx;
+            res
         end
+        else false
     in
-    List.iter (fun c1 -> List.iter (compare c1) conds) conds;
-    solver#pop_ctx;
+    let lt c1 c2 = let _ = compare "<" c1 c2 in () in
+    List.iter (fun c1 -> List.iter (lt c1) conds) conds;
+    let rm_tbl = Hashtbl.create 10 in
     let check_ord c1 c2 = 
         let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
         if i1 <> i2
         then if not (Hashtbl.mem cmp_tbl (i1, i2))
             && not (Hashtbl.mem cmp_tbl (i2, i1))
-        then raise (Abstraction_error (sprintf "No order for %s and %s"
-            (expr_s c1) (expr_s c2)))
+        then begin
+            let m =
+                sprintf "No strict order for %s and %s" (expr_s c1) (expr_s c2)
+            in
+            if compare "<=" c1 c2
+            then begin
+                printf "%s is subsumed by %s\n" (expr_s c2) (expr_s c1);
+                Hashtbl.replace rm_tbl c2 true
+            end else if compare "<=" c2 c1
+            then begin
+                printf "%s is subsumed by %s\n" (expr_s c1) (expr_s c2);
+                Hashtbl.replace rm_tbl c1 true
+            end else
+            raise (Abstraction_error m)
+        end
     in
     List.iter (fun c1 -> List.iter (check_ord c1) conds) conds;
-
+    solver#pop_ctx;
+    let conds = List.filter (fun c -> not (Hashtbl.mem rm_tbl c)) conds in
     let cmp_using_tbl c1 c2 =
         let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
         if c1 = c2 then 0 else if (Hashtbl.mem cmp_tbl (i1, i2)) then -1 else 1
@@ -456,6 +475,7 @@ let mk_domain solver ctx units =
     let sorted_conds = sort_thresholds solver ctx conds in
     let dom = new abs_domain sorted_conds in
     dom#print;
+    flush stdout;
     dom
 ;;
 
