@@ -47,11 +47,11 @@ $SPIN -a -N $PROP.never concrete.prm \
 
 if egrep -q "errors: +0" $SPIN_OUT; then
     out="|00:exitcode=ok|01:valid=yes"
-elif egrep -q "Search not completed" $SPIN_OUT; then
-    out="|00:exitcode=incomplete|01:valid=maybe"
-else
+elif egrep -q "errors: " $SPIN_OUT; then
     ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee "$SPIN_TRACE"
     out="|00:exitcode=ok|01:valid=no"
+else
+    out="|00:exitcode=incomplete|01:valid=maybe"
 fi
 
 END_TIME=$(date +%s)
