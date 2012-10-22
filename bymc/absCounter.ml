@@ -88,7 +88,7 @@ class ctr_abs_ctx dom t_ctx =
 ;;
 
 
-let mk_nondet_choice seq_list =
+let mk_nondet_choice = function
 (*
 if
     :: seq_0;
@@ -96,7 +96,9 @@ if
 ...
 fi
 *)
-    MIf (-1, List.map (fun seq -> MOptGuarded seq) seq_list)
+    | [] -> raise (Abstraction_error "An alternative in the empty list")
+    | [seq] -> seq
+    | seqs -> [MIf (-1, List.map (fun seq -> MOptGuarded seq) seqs)]
 ;;
 
 let rec remove_bad_statements stmts =
@@ -233,6 +235,27 @@ let find_init_local_vals ctr_ctx decls init_stmts =
         ) [] ctr_ctx#var_vec
 ;;
 
+(* remove assignments to local variables from the initialization section *)
+let omit_local_assignments ctx init_stmts =
+    let rec tr = function
+        | MExpr (id, BinEx(ASGN, Var v, rhs)) as s ->
+            if ctx#is_global v
+            then s
+            else MExpr (id, Nop ("/* " ^ (mir_stmt_s s) ^ " */"))
+        | MAtomic (id, seq) ->
+                MAtomic (id, List.map tr seq)
+        | MD_step (id, seq) ->
+                MD_step (id, List.map tr seq)
+        | MIf (id, opts) ->
+                MIf (id, List.map tr_opt opts)
+        | _ as s -> s
+    and tr_opt = function
+        | MOptGuarded seq -> MOptGuarded (List.map tr seq)
+        | MOptElse seq -> MOptElse (List.map tr seq)
+    in
+    List.map tr init_stmts
+;;
+
 (* abstraction of functions different in VASS and our counter abstraction *)
 class virtual ctr_funcs ctr_ctx =
     object
@@ -312,7 +335,9 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     (fun d -> List.map2 mk_option init_locals d
                     ) size_dist_list
             in
-            [mk_nondet_choice option_list]
+            (omit_local_assignments t_ctx init_stmts)
+            @ 
+            (mk_nondet_choice option_list)
                 @ self#mk_post_asserts active_expr (Const (-1)) (Const 0)
 
         method mk_counter_update prev_idx next_idx =
@@ -387,7 +412,8 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun (Nop "") i))
             in
             let other0 = List.map mk_oth other_indices in
-            sum_eq_n :: other0
+            (omit_local_assignments t_ctx init_stmts)
+            @ sum_eq_n :: other0
                 @ (self#mk_post_asserts active_expr (Const 0) (Const 0))
 
         method mk_counter_update prev_idx next_idx =
@@ -481,7 +507,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
                     (ctr_ctx#unpack_from_const idx) [])
         in
         let indices = range 0 ctr_ctx#get_ctr_dim in
-        [mk_nondet_choice (List.map make_opt indices)]
+        mk_nondet_choice (List.map make_opt indices)
     in
     let replace_update active_expr update stmts =
         (* all local variables should be reset to 0 *)

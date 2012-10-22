@@ -480,16 +480,7 @@ cexpr	: C_EXPR	{
                 }
     ;
 
-body	: LCURLY			/* { (* open_seq(1); *) } */
-          sequence OS	/* { (* add_seq(Stop); *) } */
-          RCURLY			{
-              $2
-           (* $$->sq = close_seq(0);
-              if (scope_level != 0)
-              {	non_fatal("missing '}' ?", 0);
-                scope_level = 0;
-              } *)
-            }
+body	: LCURLY sequence OS RCURLY    { $2 }
     ;
 
 sequence: step			{ $1 }
