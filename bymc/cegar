@@ -29,7 +29,7 @@ if [ "x$DEBUG" == "x" ]; then
     TOOL="$BYMC_HOME/run.native"
 else
     BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
-    TOOL="ocamldebug $BYMC_HOME/run.byte"
+    TOOL="ocamldebug $BYMC_HOME/run.byte -v"
 fi
 cd $CUR_DIR
 
