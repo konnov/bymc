@@ -27,6 +27,9 @@ let may_log level =
 
 let log level message =
     if may_log level
-    then Printf.printf "%s %s\n" (verbosity_s level) message
+    then begin
+      Printf.printf "%s %s\n" (verbosity_s level) message;
+      flush stdout;
+    end
 ;;
 
