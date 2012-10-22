@@ -712,7 +712,11 @@ let translate_stmt ctx dom solver stmt =
                             (fun e -> is_var e && not (has_expr_symbolic e)) rhs in
                     (mk_assign_unfolding lhs expr_abs_vals)
 
-            | _ -> MExpr (id, translate_expr ctx dom solver ExistAbs e)
+            | _ ->
+                    solver#push_ctx;
+                    let out = MExpr (id, translate_expr ctx dom solver ExistAbs e) in
+                    solver#pop_ctx;
+                    out
         end                
 
     | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
