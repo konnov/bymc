@@ -24,13 +24,19 @@ out=""
 
 CUR_DIR=`pwd`
 cd $BYMC_HOME
-./make.sh || (cd $CUR_DIR; exit 1)
+if [ "x$DEBUG" == "x" ]; then
+    ./make.sh || (cd $CUR_DIR; exit 1)
+    TOOL="$BYMC_HOME/run.native"
+else
+    BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
+    TOOL="$BYMC_HOME/run.byte"
+fi
 cd $CUR_DIR
 
 START_TIME=$(date +%s)
 
 if [ "$CONTINUE" == "" ]; then
-    CAMLRUNPARAM="b" $BYMC_HOME/run.native -a $PROG || exit 1
+    CAMLRUNPARAM="b" $TOOL -a $PROG || exit 1
 fi
 
 rm -rf $SPIN_OUT spin.trace refinement.out
@@ -47,7 +53,7 @@ while [ "$cmd" != "q" ]; do
         cmd="q"
     else
         ./pan -r | egrep '(^GS{|START OF CYCLE)' | tee spin.trace \
-        && CAMLRUNPARAM="b" $BYMC_HOME/run.native -t spin.trace $PROG 2>&1 | tee refinement.out
+        && CAMLRUNPARAM="b" $TOOL -t spin.trace $PROG 2>&1 | tee refinement.out
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0
         tail -n '+2' spin.trace | cat -n
