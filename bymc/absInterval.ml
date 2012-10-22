@@ -594,6 +594,7 @@ let var_trait t_ctx v =
     (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)
 *)
 let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
+    solver#comment ("abstract_pointwise: " ^ (expr_s symb_expr));
     let mk_eq (var, abs_val) = coord_point_fun var abs_val in
     let mk_point point_tuple = list_to_binex AND (List.map mk_eq point_tuple)
     in

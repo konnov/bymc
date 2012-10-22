@@ -1,6 +1,7 @@
 (* utility functions to integrate with Yices *)
 
 open Printf;;
+open Str;;
 
 open SpinTypes;;
 open Spin;;
@@ -116,6 +117,7 @@ class yices_smt =
                 let stop = ref false in
                 while not !stop do
                     let len = Unix.read fd buf 0 buf_len in
+                    printf "%s\n" buf; flush stdout;
                     fprintf cerrlog "%s" buf; flush cerrlog;
                     stop := (len < buf_len);
                 done
@@ -175,6 +177,7 @@ class yices_smt =
             done
 
         method read_line =
+            let start_tm = Unix.time () in (* raise the watchdog time *)
             let fd = self#poll_read in
             (* too inefficient??? *)
             let collected = ref [] in
@@ -190,22 +193,27 @@ class yices_smt =
                         try read := Unix.read fd small_buf !pos 1;
                         with Invalid_argument s ->
                             self#consume_errors;
-                            fprintf
-                                stderr "Read so far: %s\n" (collected_str ());
+                            fprintf stderr "Read so far: %s\n" (collected_str ());
                             raise (Communication_failure "Yices output closed?")
                     end;
-                    let c = String.get small_buf !pos in
-                    pos := !pos + 1;
-                    if c == '\n'
+                    if !read > 0
                     then begin
-                        stop := true;
-                        pos := !pos - 1 (* strip '\n' *)
+                        let c = String.get small_buf !pos in
+                        pos := !pos + 1;
+                        if c == '\n'
+                        then begin
+                            stop := true;
+                            pos := !pos - 1 (* strip '\n' *)
+                        end
                     end
                 done;
                 if !pos > 0
                 then collected := (String.sub small_buf 0 !pos) :: !collected;
                 if not !stop
-                then let _ = self#poll_read in ()
+                then
+                    let _ = self#poll_read in
+                    if ((Unix.time ()) -. start_tm) > poll_tm_sec
+                    then raise (Communication_failure "Yices is not responding")
             done;
             let out = collected_str () in
             log TRACE (sprintf "YICES: ^^^%s$$$\n" out);
@@ -221,6 +229,9 @@ class yices_smt =
 
         method append_var_def (v: var) =
             self#append (var_to_smt v)
+
+        method comment (line: string) =
+            self#append (";; " ^ line)
 
         method append_expr expr =
             let eid = ref 0 in
