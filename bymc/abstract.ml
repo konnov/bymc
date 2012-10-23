@@ -24,7 +24,7 @@ let write_to_file name units =
 let do_abstraction is_first_run units =
     if is_first_run
     then begin 
-        (* wipe the files left from other refinement sessions *)
+        (* wipe the files left from previous refinement sessions *)
         close_out (open_out "cegar_decl.inc");
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
@@ -48,7 +48,7 @@ let do_abstraction is_first_run units =
     ctrabs_units
 ;;
 
-let construct_vass units =
+let construct_vass embed_inv units =
     let ctx = mk_context units in
     ctx#set_hack_shared true; (* XXX: hack mode on *)
     let solver = ctx#run_solver in
@@ -60,6 +60,7 @@ let construct_vass units =
     log INFO "> Constructing VASS and transducers...";
     let ctr_ctx = new ctr_abs_ctx dom ctx in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
+    vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =
         do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
     in
@@ -81,18 +82,14 @@ let print_vass_trace t_ctx solver num_states =
     List.iter (print_st) (range 0 num_states)
 ;;
 
-let check_invariant inv_name units =
+let check_invariant units inv_name =
     let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltl_forms)
-        = construct_vass units in
-    let inv_expr =
-        try
-            match Hashtbl.find aprops inv_name with
-            | PropGlob e -> e
-            | _ -> raise (Failure (sprintf "Invariant %s is not a global property" inv_name))
-        with Not_found ->
-            raise (Failure (sprintf "No atomic proposition %s" inv_name))
+        = construct_vass false units in
+    let inv_expr = match Hashtbl.find aprops inv_name with
+    | PropGlob e -> e
+    | _ -> raise (Failure ("Invalid invariant " ^ inv_name))
     in
-    printf "The invariant candidate to check:\n %s\n\n" (expr_s inv_expr);
+    printf "Check the invariant candidate:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
     let step_asserts = [[Expr (0, inv)]; [Expr (1, not_inv)]] in
     let rev_map = Hashtbl.create 10 in
@@ -101,13 +98,24 @@ let check_invariant inv_name units =
     solver#set_need_evidence true;
     let res, smt_rev_map =
         (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1) in
+    solver#set_collect_asserts false;
     if not res
-    then printf "The invariant holds!\n\n"
+    then printf "The invariant holds.\n\n"
     else begin
         printf "The invariant is violated!\n\nHere is an example:\n";
-        print_vass_trace ctx solver 2
-    end;
-    solver#set_collect_asserts false;
+        print_vass_trace ctx solver 2;
+        raise (Failure "At least one invariant is incorrect")
+    end
+;;
+
+let check_all_invariants units =
+    let collect_invariants lst = function
+        | Stmt (MDeclProp (_, v, PropGlob e)) ->
+            if is_invariant_atomic v#get_name then v#get_name :: lst else lst
+        | _ -> lst
+    in
+    let invs = List.fold_left collect_invariants [] units in
+    List.iter (check_invariant units) invs
 ;;
 
 let filter_good_fairness aprops fair_forms =
@@ -125,7 +133,8 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) = construct_vass units in
+    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) =
+        construct_vass true units in
     let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";

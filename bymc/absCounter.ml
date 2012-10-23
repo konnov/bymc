@@ -15,6 +15,7 @@ open Debug;;
 open AbsBasics;;
 open AbsInterval;;
 open Refinement;;
+open Ltl;;
 
 class ctr_abs_ctx dom t_ctx =
     object(self)
@@ -279,6 +280,9 @@ class virtual ctr_funcs ctr_ctx =
 
         method virtual keep_assume:
             token expr -> bool
+
+        method virtual embed_inv: bool
+        method virtual set_embed_inv: bool -> unit
     end;;
 
 class abs_ctr_funcs dom t_ctx ctr_ctx solver =
@@ -358,6 +362,9 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
 
         method keep_assume e = false
+        
+        method embed_inv = false
+        method set_embed_inv _ = ()
     end;;
 
 class vass_funcs dom t_ctx ctr_ctx solver =
@@ -366,6 +373,8 @@ class vass_funcs dom t_ctx ctr_ctx solver =
 
         (* a free variable delta describing how many processes made a step *)
         val mutable delta = new var "vass_dta"
+
+        val mutable m_embed_inv = true
 
         method introduced_vars = [delta]
 
@@ -435,6 +444,9 @@ class vass_funcs dom t_ctx ctr_ctx solver =
             [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
 
         method keep_assume e = true
+        
+        method embed_inv = m_embed_inv
+        method set_embed_inv v = m_embed_inv <- v
     end;;
 
 
@@ -565,18 +577,23 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx funcs units =
         in
         List.map hack_nsnt (List.map replace_assume stmts)
     in
+    let mk_assume e = MAssume (-1, e) in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc p =
+        let invs = if funcs#embed_inv
+            then List.map mk_assume (find_invariants atomic_props)
+            else [] in
         let body = remove_bad_statements p#get_stmts in
         let skel = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init = funcs#mk_init p#get_active_expr skel.decl skel.init in
         let new_update = replace_update p#get_active_expr skel.update body in
         let new_comp = replace_comp skel.comp in
-        let new_comp_upd = MAtomic (-1, new_comp @ new_update) in
+        let new_comp_upd = MAtomic (-1, new_comp @ new_update @ invs) in
         let new_loop_body =
             [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
             @ (funcs#mk_pre_loop p#get_active_expr)
+            @ invs
             @ counter_guard
             @ [MIf (-1,
                 [MOptGuarded ([new_comp_upd])]);

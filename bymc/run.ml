@@ -79,9 +79,11 @@ let _ =
         log INFO "  [DONE]";
         log DEBUG (sprintf "#units: %d" (List.length units));
         match opts.action with
-          OptAbstract -> let _ = do_abstraction true units in ()
+          OptAbstract ->
+              check_all_invariants units;
+              let _ = do_abstraction true units in ()
         | OptRefine -> let _ = do_refinement opts.trail_name units in ()
-        | OptCheckInv -> let _ = check_invariant opts.inv_name units in ()
+        | OptCheckInv -> ()
         | OptSubstitute ->
             let new_units = do_substitution opts.param_assignments units in
             write_to_file "concrete.prm" new_units;

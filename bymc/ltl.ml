@@ -131,9 +131,11 @@ let collect_fairness_forms ltl_forms =
     collect fairness
 ;;
 
+let is_invariant_atomic name =
+    Str.string_match (Str.regexp ".*_inv") name 0
+;;
 
 let find_invariants aprops =
-    let re = Str.regexp ".*_inv" in
     let collect_invariants name prop inv_props =
         let form = match prop with
         | PropGlob e -> e
@@ -141,11 +143,7 @@ let find_invariants aprops =
             let m = "An invariant must be a glob property: " ^ name in
             raise (Prop_error m)
         in
-        if Str.string_match re name 0
-        then begin
-            log INFO ("    adding invariant: " ^ name);
-            form :: inv_props
-        end else inv_props
+        if is_invariant_atomic name then form :: inv_props else inv_props
     in
     Hashtbl.fold collect_invariants aprops []
 ;;
