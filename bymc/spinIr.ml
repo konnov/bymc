@@ -8,6 +8,7 @@
  * lot to fit into the OCAML concepts.
  *)
 
+open Printf;;
 open SpinTypes;;
 
 module StringSet = Set.Make(String);;
@@ -88,9 +89,9 @@ var name_i =
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
 
-        (* a forward reference to a context (a process) that has not been
-           defined yet *)
+        (* the name of the owning process type (if there is one) *)
         val mutable m_proc_name: string = "" 
+        (* the index of the owner process (if known) *)
         val mutable m_proc_index: int = -1
 
         method get_sym_type = SymVar
@@ -120,6 +121,16 @@ var name_i =
 
         method proc_index = m_proc_index
         method set_proc_index i = m_proc_index <- i
+
+        (* get a qualified name with
+           the prepending proctype and the index (if known) *)
+        method qual_name =
+            let q = if m_proc_name <> "" then m_proc_name else "" in
+            let qi =
+                if m_proc_index <> -1
+                then sprintf "%s[%d]" q m_proc_index
+                else q in
+            if qi <> "" then qi ^ "." ^ name else name
 
         method copy new_name =
             let new_var = new var new_name in
@@ -152,10 +163,12 @@ label name_i num_i =
 exception Symbol_not_found of string;;
 
 (* a symbol table *)
-class symb_tab =
+class symb_tab i_tab_name =
     object(self)
         val tab: (string, symb) Hashtbl.t = Hashtbl.create 10
         val mutable parent: symb_tab option = None
+
+        method tab_name = i_tab_name
 
         method add_symb name symb = Hashtbl.add tab name symb
         method add_all_symb symb_list =
@@ -167,8 +180,12 @@ class symb_tab =
             with Not_found ->
                 match parent with
                 | None -> (* XXX: show the position in the file! *)
+                    let ts =
+                        if i_tab_name <> "" 
+                        then sprintf "(%s)" i_tab_name
+                        else i_tab_name in
                     raise (Symbol_not_found
-                        (Printf.sprintf "Variable %s is not declared" name))
+                        (sprintf "Variable %s is not declared %s" name ts))
                 | Some p -> p#lookup name
 
         method find_or_error name = Hashtbl.find tab name
@@ -200,6 +217,17 @@ let is_var = function
 
 let cmp_vars vx vy =
     String.compare vx#get_name vy#get_name;;
+
+(* Sort the variables such that an unqualified name goes before a qualified one.
+   Variables inside of their categories are sorted normally
+ *)
+let cmp_qual_vars vx vy =
+    match (vx#qual_name == vx#get_name), (vy#qual_name == vy#get_name) with
+    | true, true -> String.compare vx#get_name vy#get_name
+    | false, false -> String.compare vx#qual_name vy#qual_name
+    | false, true -> 1
+    | true, false -> -1
+;;
 
 let expr_used_vars (expression: 't expr) : var list =
     let rec find_used e =
@@ -350,7 +378,7 @@ let is_mdecl = function
 class ['t] proc name_i active_expr_i =
     object(self)
         inherit symb name_i
-        inherit symb_tab
+        inherit symb_tab name_i
 
         val mutable args: var list = []
         val mutable stmts: 't mir_stmt list = []

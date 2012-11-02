@@ -47,7 +47,9 @@ let is_shared_unbounded = function
     | _ -> false
 ;;
 
-(* XXX: it works only for one process prototype *)
+(* Context of parametric interval abstraction.
+   It collects variable roles over different process prototypes.
+ *)
 class ['tok] trans_context =
     object(self)
         val mutable globals: var list = []
@@ -447,10 +449,11 @@ let mk_context units =
     let ctx = new trans_context in
     ctx#set_var_roles (identify_var_roles units);
     log INFO " # Variable roles:";
-    Hashtbl.iter
-        (fun v r ->
-            log INFO (sprintf "   %s -> %s" v#get_name (var_role_s r)))
-        ctx#get_var_roles;
+    let sorted = List.sort cmp_qual_vars (hashtbl_keys ctx#get_var_roles) in
+    let print_var_role v =
+        let r = Hashtbl.find ctx#get_var_roles v in
+        log INFO (sprintf "   %s -> %s" v#qual_name (var_role_s r)) in
+    List.iter print_var_role sorted;
     ctx#set_assumps (extract_assumptions units);
     log INFO " # Assumptions:";
     List.iter
@@ -667,6 +670,7 @@ let translate_expr ctx dom solver atype expr =
             BinEx (AND, (trans_e lhs), (trans_e rhs))
         | BinEx (OR, lhs, rhs) ->
             BinEx (OR, (trans_e lhs), (trans_e rhs))
+        (* TODO: push negations inside as they do in all papers! *)
         | UnEx  (NEG, lhs) ->
             UnEx (NEG, (trans_e lhs))
 

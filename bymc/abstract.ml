@@ -38,7 +38,7 @@ let do_abstraction is_first_run units =
     write_to_file "abs-interval.prm" intabs_units;
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
-    let ctr_ctx = new ctr_abs_ctx dom ctx in
+    let ctr_ctx = new ctr_abs_ctx dom ctx "0" in (* move it to absCounter *)
     let funcs = new abs_ctr_funcs dom ctx ctr_ctx solver in
     let ctrabs_units, _, _, _ =
         do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
@@ -58,7 +58,7 @@ let construct_vass embed_inv units =
     let intabs_units = do_interval_abstraction ctx dom solver units in
     log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
-    let ctr_ctx = new ctr_abs_ctx dom ctx in
+    let ctr_ctx = new ctr_abs_ctx dom ctx "0" in
     let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =

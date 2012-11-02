@@ -1,3 +1,10 @@
+(*
+  The place where we do counter abstraction w.r.t. interval domain.
+  This code was written in an ad-hoc way and requires refactoring.
+
+  Igor Konnov 2012
+ *)
+
 open Printf;;
 
 open Accums;;
@@ -17,13 +24,14 @@ open AbsInterval;;
 open Refinement;;
 open Ltl;;
 
-class ctr_abs_ctx dom t_ctx =
+(* counter abstraction context for one process *)
+class ctr_abs_ctx dom t_ctx proctype_name =
     object(self)
         val mutable control_vars: var list = []
         val mutable control_size = 0
         val mutable data_vars = []
         val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
-        val ctr_var = new var "bymc_k"
+        val ctr_var = new var ("bymc_k" ^ proctype_name)
         val spur_var = new var "bymc_spur"
         
         initializer
@@ -305,15 +313,6 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
             let mk_deref i = self#deref_ctr (Const i) in
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) t_ctx#get_shared) in
-            (*
-            let prev_ne_next =
-                let sp = Var ctr_ctx#get_spur in
-                let eq = BinEx (EQ, prev_idx, next_idx) in
-                let e = BinEx (ASGN, sp, BinEx (OR, sp, eq)) in
-                (* other transformations do not touch it *)
-                MUnsafe (-1, (expr_s e) ^ ";")
-            in
-            *)
             
             [ MPrint (-1, str, prev_idx :: next_idx :: es)]
 

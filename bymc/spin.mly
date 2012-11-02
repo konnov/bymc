@@ -73,8 +73,8 @@ let stmt_cnt = ref 0;;
 let met_else = ref false;;
 let fwd_labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
-let global_scope = new symb_tab;;
-let spec_scope = new symb_tab;;
+let global_scope = new symb_tab "";;
+let spec_scope = new symb_tab "spec";;
 let current_scope = ref global_scope;;
 
 let new_id () =
@@ -218,64 +218,34 @@ unit	: proc	/* proctype        */    { [Proc $1] }
 	;
 
 proc	: inst		/* optional instantiator */
-	  proctype NAME	/* { 
-          (*
-			  setptype($3, PROCTYPE, ZN);
-			  setpname($3);
-			  context = $3->sym;
-			  context->ini = $2; (* linenr and file *)
-			  Expand_Ok++; (* expand struct names in decl *)
-			  has_ini = 0;
-          *)
-			} */
-	  LPAREN decl RPAREN	/* { (* Expand_Ok--;
-			  if (has_ini)
-			  fatal("initializer in parameter list", (char * ) 0); *)
-			} */
+	  proctype_name
+	  LPAREN decl RPAREN
 	  Opt_priority
 	  Opt_enabler
 	  body	{
-                let p = new proc $3 $1 in
+                let p = new proc !current_scope#tab_name $1 in
                 let unpack e =
                     match e with    
                     | MDecl (_, v, i) -> v#add_flag HFormalPar; v
                     | _ -> fatal "Not a decl in proctype args" p#get_name
                 in
-                p#set_args (List.map unpack $5);
-                p#set_stmts $9;
+                p#set_args (List.map unpack $4);
+                p#set_stmts $8;
                 p#add_all_symb (List.map (fun (_, s) -> s) !current_scope#get_symbs);
                 current_scope := global_scope;
                 Hashtbl.clear fwd_labels;
                 p
-               (* ProcList *rl;
-                  if ($1 != ZN && $1->val > 0)
-                  {	int j;
-                    rl = ready($3->sym, $6, $11->sq, $2->val, $10, A_PROC);
-                    for (j = 0; j < $1->val; j++)
-                    {	runnable(rl, $9?$9->val:1, 1);
-                    }
-                    announce(":root:");
-                    if (dumptab) $3->sym->ini = $1;
-                  } else
-                  {	rl = ready($3->sym, $6, $11->sq, $2->val, $10, P_PROC);
-                  }
-                  if (rl && has_ini == 1)	/* global initializations, unsafe */
-                  {	/* printf("proctype %s has initialized data\n",
-                        $3->sym->name);
-                     */
-                    rl->unsafe = 1;
-                  }
-                  context = ZS; *)
-                }
+            }
         ;
 
-proctype: PROCTYPE	{
-        current_scope := new symb_tab;
+proctype_name: PROCTYPE NAME {
+        current_scope := new symb_tab $2;
         !current_scope#set_parent global_scope
-        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 0; *) }
-    | D_PROCTYPE	{
-        current_scope := new symb_tab;
-        (* $$ = nn(ZN,CONST,ZN,ZN); $$->val = 1; *) }
+        }
+    | D_PROCTYPE NAME {
+        current_scope := new symb_tab $2;
+        !current_scope#set_parent global_scope
+        }
     ;
 
 inst	: /* empty */	{ Const 0 }
@@ -601,21 +571,20 @@ ch_init : LBRACE CONST RBRACE OF
                     }
     ;
 
-vardcl  : NAME  		{ new var $1 }
+vardcl  : NAME {
+        let v = new var $1 in
+        v#set_proc_name !current_scope#tab_name;
+        v
+        }
     | NAME COLON CONST	{
         let v = new var $1 in
+        v#set_proc_name !current_scope#tab_name;
         v#set_nbits $3;
         v
-        (* $1->sym->nbits = $3->val;
-          if ($3->val >= 8*sizeof(long))
-          {	non_fatal("width-field %s too large",
-                $1->sym->name);
-            $3->val = 8*sizeof(long)-1;
-          }
-          $1->sym->nel = 1; $$ = $1; *)
         }
     | NAME LBRACE CONST RBRACE	{
         let v = new var $1 in
+        v#set_proc_name !current_scope#tab_name;
         v#set_isarray true;
         v#set_num_elems $3;
         v
@@ -711,9 +680,6 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                 pop_labs ();                
                 met_else := false;
                 [ MIf (new_id (), $2) ]
-                (* $$ = nn($1, IF, ZN, ZN);
-                 $$->sl = $2->sl;
-                 prune_opts($$); *)
           }
     | do_begin 		/* one more rule as ocamlyacc does not support multiple
                        actions like this: { (* pushbreak(); *) } */
@@ -1020,7 +986,7 @@ prop_decl:
     ATOMIC NAME ASGN atomic_prop {
         let v = new var($2) in
         v#set_type SpinTypes.TBIT;
-        v#set_proc_name "spec" (* special name to distinguish *);
+        v#set_proc_name spec_scope#tab_name;
         spec_scope#add_symb v#get_name (v :> symb);
         MDeclProp (new_id (), v, $4)
     }
