@@ -38,10 +38,10 @@ let do_abstraction is_first_run units =
     write_to_file "abs-interval.prm" intabs_units;
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
-    let ctr_ctx = new ctr_abs_ctx dom ctx "0" in (* move it to absCounter *)
-    let funcs = new abs_ctr_funcs dom ctx ctr_ctx solver in
+    let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
+    let funcs = new abs_ctr_funcs dom ctx solver in
     let ctrabs_units, _, _, _ =
-        do_counter_abstraction ctx dom solver ctr_ctx funcs intabs_units in
+        do_counter_abstraction ctx dom solver ctr_ctx_tbl funcs intabs_units in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
     let _ = solver#stop in
@@ -58,16 +58,16 @@ let construct_vass embed_inv units =
     let intabs_units = do_interval_abstraction ctx dom solver units in
     log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
-    let ctr_ctx = new ctr_abs_ctx dom ctx "0" in
-    let vass_funcs = new vass_funcs dom ctx ctr_ctx solver in
+    let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
+    let vass_funcs = new vass_funcs dom ctx solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =
-        do_counter_abstraction ctx dom solver ctr_ctx vass_funcs intabs_units
+        do_counter_abstraction ctx dom solver ctr_ctx_tbl vass_funcs intabs_units
     in
     write_to_file "abs-vass.prm" vass_units;
     log INFO "  [DONE]"; flush stdout;
 
-    (ctx, solver, dom, ctr_ctx, xducers, atomic_props, ltl_forms)
+    (ctx, solver, dom, ctr_ctx_tbl, xducers, atomic_props, ltl_forms)
 ;;
 
 let print_vass_trace t_ctx solver num_states = 
@@ -83,7 +83,9 @@ let print_vass_trace t_ctx solver num_states =
 ;;
 
 let check_invariant units inv_name =
-    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltl_forms)
+    () (* needs refactoring *)
+    (*
+    let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltl_forms)
         = construct_vass false units in
     let inv_expr = match Hashtbl.find aprops inv_name with
     | PropGlob e -> e
@@ -97,7 +99,7 @@ let check_invariant units inv_name =
     solver#set_collect_asserts true;
     solver#set_need_evidence true;
     let res, smt_rev_map =
-        (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1) in
+        (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1) in
     solver#set_collect_asserts false;
     if not res
     then printf "The invariant holds.\n\n"
@@ -106,6 +108,7 @@ let check_invariant units inv_name =
         print_vass_trace ctx solver 2;
         raise (Failure "At least one invariant is incorrect")
     end
+    *)
 ;;
 
 let check_all_invariants units =
@@ -133,13 +136,15 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    let (ctx, solver, dom, ctr_ctx, xducers, aprops, ltls) =
+    raise (Failure "Needs refactoring")
+    (*
+    let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltls) =
         construct_vass true units in
     let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
-        parse_spin_trail trail_filename dom ctx ctr_ctx in
+        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl in
     log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
     (* FIXME: deal somehow with this stupid message *)
     if (List.length trail_asserts) <= 1
@@ -150,7 +155,7 @@ let do_refinement trail_filename units =
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
-                solver ctx ctr_ctx xducers trail_asserts rev_map n_steps in
+                solver ctx ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
         if res
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
@@ -169,7 +174,7 @@ let do_refinement trail_filename units =
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         solver#set_collect_asserts true;
         let res, smt_rev_map =
-            (simulate_in_smt solver ctx ctr_ctx xducers step_asserts rev_map 1)
+            (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1)
         in
         solver#set_collect_asserts false;
         if not res
@@ -195,7 +200,7 @@ let do_refinement trail_filename units =
     then begin
         print_vass_trace ctx solver num_states;
         let spur_loop =
-            check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts in
+            check_loop_unfair solver ctr_ctx_tbl xducers rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin
             log INFO "The loop is unfair. Refined.";
@@ -213,7 +218,7 @@ let do_refinement trail_filename units =
         then refined := true
         else begin
             let spur_loop =
-                check_loop_unfair solver ctr_ctx xducers rev_map fairness inv_forms loop_asserts in
+                check_loop_unfair solver ctr_ctx_tbl xducers rev_map fairness inv_forms loop_asserts in
             if spur_loop
             then begin
                 log INFO "The loop is unfair. Refined.";
@@ -239,4 +244,5 @@ let do_refinement trail_filename units =
         (* formulas must be regenerated *)
         let _ = do_abstraction false units in ()
     end
+    *)
 ;;

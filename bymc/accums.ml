@@ -171,3 +171,22 @@ let rec ipow a n =
     else a * (ipow a (n - 1))
 ;;
 
+(* make a short version of a string (by taking a prefix) and ensure there is
+   no such a string in the table. If no short version can be generated, then
+   a unique number is appended to the string.
+ *)
+let rec str_shorten tbl s =
+    let rec append_num i =
+        let news = s ^ (string_of_int i) in
+        if not (Hashtbl.mem tbl news)
+        then news
+        else append_num (i + 1)
+    in
+    let rec gen l sz =
+        let sub = String.sub s 0 l in
+        if not (Hashtbl.mem tbl sub)
+        then sub
+        else if (l >= sz) then append_num 0 else gen (l + 1) sz
+    in
+    gen 1 (String.length s)
+;;

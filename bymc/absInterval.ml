@@ -20,9 +20,9 @@ type var_role =
 
 let var_role_s r =
     match r with
-    | BoundedInt (a, b) -> sprintf "bound[%d, %d]" a b
-    | SharedUnbounded -> "shared-unbound"
-    | LocalUnbounded -> "local-unbound"
+    | BoundedInt (a, b) -> sprintf "bounded[%d, %d]" a b
+    | SharedUnbounded -> "shared-unbounded"
+    | LocalUnbounded -> "local-unbounded"
     | Scratch -> "scratch"
 ;;
 
