@@ -35,16 +35,25 @@ class ctr_abs_ctx dom t_ctx proctype_name =
         val spur_var = new var "bymc_spur"
         
         initializer
-            control_vars <- hashtbl_filter_keys is_bounded t_ctx#get_var_roles;
-            if control_vars = []
-            then raise (Abstraction_error "No control variables (like pc) found.");
+            let is_proc_var v = (v#proc_name == proctype_name) in
+            let cvs = List.filter is_proc_var
+                (hashtbl_filter_keys is_bounded t_ctx#get_var_roles) in
+            if cvs == []
+            then let m = "No status variable (like pc) in "
+                        ^ proctype_name ^ " found." in
+                raise (Abstraction_error m);
+            control_vars <- cvs;
             let var_dom_size v =
                 match t_ctx#get_role v with
-                | BoundedInt (a, b) -> (b - a) + 1
-                | _ -> 1 in
+                | BoundedInt (a, b) ->
+                    if is_proc_var v then (b - a) + 1 else 1
+                | _ -> 1
+            in
             control_size <- List.fold_left ( * ) 1 (List.map var_dom_size control_vars);
             List.iter (fun v -> Hashtbl.add var_sizes v (var_dom_size v)) control_vars;
-            data_vars <- hashtbl_filter_keys is_local_unbounded t_ctx#get_var_roles;
+            let dvs = List.filter is_proc_var
+                (hashtbl_filter_keys is_local_unbounded t_ctx#get_var_roles) in
+            data_vars <- dvs;
             List.iter (fun v -> Hashtbl.add var_sizes v dom#length) data_vars;
             ctr_var#set_isarray true;
             ctr_var#set_num_elems
@@ -265,6 +274,7 @@ let omit_local_assignments ctx init_stmts =
     List.map tr init_stmts
 ;;
 
+
 (* abstraction of functions different in VASS and our counter abstraction *)
 class virtual ctr_funcs ctr_ctx =
     object
@@ -292,6 +302,7 @@ class virtual ctr_funcs ctr_ctx =
         method virtual embed_inv: bool
         method virtual set_embed_inv: bool -> unit
     end;;
+
 
 class abs_ctr_funcs dom t_ctx ctr_ctx solver =
     object(self)
@@ -323,14 +334,10 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
                     solver active_expr (List.length init_locals) in
             let mk_option local_vals abs_size =
                 let valuation = Hashtbl.create 10 in
-                List.iter
-                    (fun (var, i) ->
-                        Hashtbl.add valuation var i
-                    ) local_vals;
+                let add_var (var, i) = Hashtbl.add valuation var i in
+                List.iter add_var local_vals;
                 let idx = ctr_ctx#pack_to_const valuation in
-                let lhs =
-                    BinEx (ARR_ACCESS,
-                        Var ctr_ctx#get_ctr, Const idx) in
+                let lhs = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const idx) in
                 MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
             in
             let option_list =
@@ -365,6 +372,7 @@ class abs_ctr_funcs dom t_ctx ctr_ctx solver =
         method embed_inv = false
         method set_embed_inv _ = ()
     end;;
+
 
 class vass_funcs dom t_ctx ctr_ctx solver =
     object(self)
