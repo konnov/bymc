@@ -68,6 +68,9 @@ class ctr_abs_ctx dom t_ctx proctype_name short_name =
                 ((ipow dom#length (List.length data_vars))  * control_size);
             spur_var#set_type SpinTypes.TBIT
            
+        method proctype_name = proctype_name
+        method short_name = short_name
+
         method get_control_vars = control_vars
         method get_control_size = control_size
         method get_locals = data_vars
@@ -372,8 +375,10 @@ class abs_ctr_funcs dom t_ctx solver =
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
             let n = c_ctx#get_ctr_dim in
             let m = List.length t_ctx#get_shared in
-            let str = sprintf "GS{%%d->%%d:%s}\\n"
-                (String.concat "," (Accums.n_copies (n + m) "%d")) in
+            let str = sprintf "%s:GS{%%d->%%d:{%s},%s}\\n"
+                c_ctx#short_name
+                (String.concat "," (Accums.n_copies n "%d"))
+                (String.concat "," (Accums.n_copies m "%d")) in
             let mk_deref i = self#deref_ctr c_ctx (Const i) in
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) t_ctx#get_shared) in
