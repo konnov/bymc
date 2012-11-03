@@ -27,13 +27,13 @@ open Ltl;;
 (* Counter abstraction context. Each process prototype has its own counter
    abstraction context as the abstraction depends on the local state space.
  *)
-class ctr_abs_ctx dom t_ctx proctype_name short_name =
+class ctr_abs_ctx dom t_ctx proctype_name abbrev_name =
     object(self)
         val mutable control_vars: var list = []
         val mutable control_size = 0
         val mutable data_vars = []
         val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
-        val ctr_var = new var ("bymc_k" ^ short_name)
+        val ctr_var = new var ("bymc_k" ^ abbrev_name)
         val spur_var = new var "bymc_spur"
         
         initializer
@@ -69,7 +69,7 @@ class ctr_abs_ctx dom t_ctx proctype_name short_name =
             spur_var#set_type SpinTypes.TBIT
            
         method proctype_name = proctype_name
-        method short_name = short_name
+        method abbrev_name = abbrev_name
 
         method get_control_vars = control_vars
         method get_control_size = control_size
@@ -122,14 +122,18 @@ class ctr_abs_ctx_tbl dom t_ctx units =
     object(self)
         val mutable tbl: (string, ctr_abs_ctx) Hashtbl.t
             = Hashtbl.create (List.length units)
+        val mutable abbrev_tbl: (string, ctr_abs_ctx) Hashtbl.t
+            = Hashtbl.create (List.length units)
         val spur_var = new var "bymc_spur"
         
         initializer
             let mk = function
                 | Proc p ->
                     let pname = p#get_name in
-                    let s = str_shorten tbl pname in
-                    Hashtbl.add tbl pname (new ctr_abs_ctx dom t_ctx pname s)
+                    let abbrev = str_shorten tbl pname in
+                    let c_ctx = new ctr_abs_ctx dom t_ctx pname abbrev in
+                    Hashtbl.add tbl pname c_ctx;
+                    Hashtbl.add abbrev_tbl abbrev c_ctx
                 | _ -> ()
             in
             List.iter mk units
@@ -137,6 +141,10 @@ class ctr_abs_ctx_tbl dom t_ctx units =
         method get_ctx name =
             try Hashtbl.find tbl name
             with Not_found -> raise (Failure ("No context for " ^ name))
+
+        method get_ctx_by_abbrev short =
+            try Hashtbl.find abbrev_tbl short
+            with Not_found -> raise (Failure ("No context for " ^ short))
 
         method all_counters =
             List.map (fun c -> c#get_ctr) (hashtbl_vals tbl)
@@ -382,7 +390,7 @@ class abs_ctr_funcs dom t_ctx solver =
             let n = c_ctx#get_ctr_dim in
             let m = List.length t_ctx#get_shared in
             let str = sprintf "%s:GS{%%d->%%d:{%s},%s}\\n"
-                c_ctx#short_name
+                c_ctx#abbrev_name
                 (String.concat "," (Accums.n_copies n "%d"))
                 (String.concat "," (Accums.n_copies m "%d")) in
             let mk_deref i = self#deref_ctr c_ctx (Const i) in

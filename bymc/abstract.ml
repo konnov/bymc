@@ -136,8 +136,6 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    raise (Failure "Needs refactoring")
-    (*
     let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltls) =
         construct_vass true units in
     let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
@@ -151,6 +149,9 @@ let do_refinement trail_filename units =
     then raise (Failure "The system loops forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS..."; flush stdout;
+    raise (Failure "Needs refactoring")
+
+    (*
     assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
