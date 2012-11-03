@@ -243,17 +243,22 @@ let trans_prop_decl t_ctx ctr_ctx_tbl dom solver decl_expr =
             UnEx (tok, repl_ctr lhs)
         | _ as e -> e
     in
-    let rec find_proc_name = function
+    let find_proc_name e =
+        let rec fnd = function
         | Var v -> v#proc_name
         | LabelRef (proc_name, _) -> proc_name
         | BinEx (_, l, r) ->
-                let ln, rn = find_proc_name l, find_proc_name r in
+                let ln, rn = fnd l, fnd r in
                 if ln <> rn && ln <> "" && rn <> ""
                 then let m = (sprintf "2 procs in one property: %s <> %s" ln rn)
                 in raise (Failure m)
                 else if ln <> "" then ln else rn
-        | UnEx (_, l) -> find_proc_name l
-        | _ -> ""
+        | UnEx (_, l) -> fnd l
+        | _ -> "" in
+        let name = fnd e in
+        if name = ""
+        then raise (Abstraction_error ("Atomic: No process name in " ^ (expr_s e)))
+        else name
     in
     match decl_expr with
         | MDeclProp (id, v, PropAll e) ->
