@@ -245,6 +245,7 @@ let trans_prop_decl t_ctx ctr_ctx_tbl dom solver decl_expr =
     in
     let rec find_proc_name = function
         | Var v -> v#proc_name
+        | LabelRef (proc_name, _) -> proc_name
         | BinEx (_, l, r) ->
                 let ln, rn = find_proc_name l, find_proc_name r in
                 if ln <> rn && ln <> "" && rn <> ""
