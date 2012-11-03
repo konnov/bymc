@@ -20,7 +20,6 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
     let state_re = Str.regexp r in
     let loop_re = Str.regexp ".*<<<<<START OF CYCLE>>>>>.*" in
     let rev_rows = ref [] in
-    let vec_len = ref 0 in
     let loop_pos = ref 0 in
     let fin = open_in filename in
     begin
@@ -35,7 +34,6 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
                     let group = no_clutter (Str.matched_group 2 line) in
                     let strs = (Str.split (Str.regexp ",") group) in
                     let ints = List.map int_of_string strs in
-                    vec_len := List.length ints;
                     rev_rows := (proc, ints) :: !rev_rows;
                     if may_log DEBUG
                     then begin
@@ -81,7 +79,7 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
             Hashtbl.add rev_map id (state_no, abs_ex);
             Expr (id, conc_ex) in
         (* a list of concrete constraints on each column of the row *)
-        (proc, List.map2 map_one (range 0 !vec_len) row)
+        (proc, List.map2 map_one (range 0 (List.length row)) row)
     in
     let prefix_asserts = List.map2 row_to_exprs (range 0 num_rows) rows in
     let loop_asserts = list_sub prefix_asserts !loop_pos (num_rows - !loop_pos) in
@@ -128,7 +126,7 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
 ;;
 
 
-let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
+let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_steps =
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
@@ -145,17 +143,20 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
 
         | _ -> ()
     in
-    let append_trail_asserts state_no asserts =
+    let append_trail_asserts state_no (proc, asserts) =
         List.iter (append_one_assert state_no) asserts
     in
     solver#push_ctx;
     (* put asserts from the control flow graph *)
-    assert (1 = (Hashtbl.length xducers));
-    let proc_xducer = (List.hd (hashtbl_vals xducers))#get_trans_form in
-    log INFO "    collecting declarations and transducer asserts...";
+    log INFO (sprintf 
+        "    collecting declarations and xducer asserts (%d xducers)..."
+        (Hashtbl.length xducers));
     flush stdout;
-    let xducer_asserts =
-        create_path (ctr_ctx#get_ctr :: t_ctx#get_shared) proc_xducer n_steps in
+    let proc_asserts proc =
+        let c_ctx = ctr_ctx_tbl#get_ctx proc in
+        let proc_xd = (hashtbl_find_str xducers proc)#get_trans_form in
+        create_path (c_ctx#get_ctr :: t_ctx#get_shared) proc_xd n_steps in
+    let xducer_asserts = List.concat (List.map proc_asserts (hashtbl_keys xducers)) in
     let decls = expr_list_used_vars xducer_asserts in
 
     log INFO (sprintf "    appending %d declarations..."
@@ -164,6 +165,8 @@ let simulate_in_smt solver t_ctx ctr_ctx xducers trail_asserts rev_map n_steps =
     log INFO (sprintf "    appending %d transducer asserts..."
         (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
+    (* TODO: it will work unexpectedly for several proctypes as trail asserts
+      do not specify that others' proctype variables do not change! *)
     log INFO (sprintf "    appending %d trail asserts..."
         (List.length trail_asserts)); flush stdout;
     (* put asserts from the counter example *)
@@ -355,7 +358,8 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     close_out cout
 ;;
 
-let is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_asserts =
+let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
+        inv_forms (proc_abbrev, state_asserts) =
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     let smt_to_expr = function
         | Expr (_, e) -> e
@@ -364,17 +368,16 @@ let is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_a
     let add_assert_expr e =
         let _ = solver#append_expr e in ()
     in
-    (* TODO: shall we use a transducer that carries all the constraints? *)
-    let get_active_expr xducers =
-        assert(1 = (Hashtbl.length xducers));
-        let p = (List.hd (hashtbl_vals xducers)) in
-        p#get_orig_proc#get_active_expr
+    let c_ctx = ctr_ctx_tbl#get_ctx_by_abbrev proc_abbrev in
+    let proc_xducer = hashtbl_find_str xducers c_ctx#proctype_name in
+    let active_expr = proc_xducer#get_orig_proc#get_active_expr
     in
+    (* TODO: shall we instead use a transducer that carries all constraints? *)
     let num_procs_preserved =
-        let acc i = BinEx (ARR_ACCESS, Var ctr_ctx#get_ctr, Const i) in
+        let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
         let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i in
-        let sum = List.fold_left add (Const 0) (range 0 ctr_ctx#get_ctr_dim) in
-        BinEx (EQ, (get_active_expr xducers), sum)
+        let sum = List.fold_left add (Const 0) (range 0 c_ctx#get_ctr_dim) in
+        BinEx (EQ, active_expr, sum)
     in
     solver#set_collect_asserts true; (* we need unsat cores *)
     solver#push_ctx;
@@ -399,12 +402,12 @@ let is_loop_state_fair solver ctr_ctx xducers rev_map fairness inv_forms state_a
 ;;
 
 let check_loop_unfair
-        solver ctr_ctx xducers rev_map fair_forms inv_forms loop_asserts =
+        solver ctr_abs_tbl xducers rev_map fair_forms inv_forms loop_asserts =
     let check_one ff = 
         log INFO ("  Checking if the loop is fair..."); flush stdout;
         let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
             let sat, core_exprs_s =
-                is_loop_state_fair solver ctr_ctx xducers rev_map
+                is_loop_state_fair solver ctr_abs_tbl xducers rev_map
                     ff inv_forms state_asserts
             in
             (all_sat || sat, core_exprs_s :: all_core_exprs_s)

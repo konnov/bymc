@@ -148,6 +148,17 @@ let hashtbl_filter_keys (pred: 'b -> bool) (tbl: ('a, 'b) Hashtbl.t) : ('a list)
     Hashtbl.fold filter tbl [] 
 ;;
 
+(* a convenience function to avoid the plain Not_found message and exceptions *)
+let hashtbl_find (err_fun: 'a -> string) (tbl: ('a, 'b) Hashtbl.t) (a: 'a): 'b =
+    try Hashtbl.find tbl a
+    with Not_found -> raise (Failure ("Not_found: " ^ (err_fun a)))
+;;
+
+(* an oftenly needed version of hashtbl_find when a key is a string *)
+let hashtbl_find_str (tbl: (string, 'b) Hashtbl.t) (a: string): 'b =
+    hashtbl_find (fun s -> s) tbl a
+;;
+
 let n_copies n e =
     let rec gen = function
     | 0 -> []

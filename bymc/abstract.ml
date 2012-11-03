@@ -83,8 +83,6 @@ let print_vass_trace t_ctx solver num_states =
 ;;
 
 let check_invariant units inv_name =
-    () (* needs refactoring *)
-    (*
     let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltl_forms)
         = construct_vass false units in
     let inv_expr = match Hashtbl.find aprops inv_name with
@@ -93,7 +91,8 @@ let check_invariant units inv_name =
     in
     printf "Check the invariant candidate:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
-    let step_asserts = [[Expr (0, inv)]; [Expr (1, not_inv)]] in
+    let step_asserts =
+        [("proc", [Expr (0, inv)]); ("proc", [Expr (1, not_inv)])] in
     let rev_map = Hashtbl.create 10 in
     Hashtbl.add rev_map 0 (0, inv); Hashtbl.add rev_map 1 (1, not_inv);
     solver#set_collect_asserts true;
@@ -108,7 +107,6 @@ let check_invariant units inv_name =
         print_vass_trace ctx solver 2;
         raise (Failure "At least one invariant is incorrect")
     end
-    *)
 ;;
 
 let check_all_invariants units =
@@ -149,10 +147,7 @@ let do_refinement trail_filename units =
     then raise (Failure "The system loops forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS..."; flush stdout;
-    raise (Failure "Needs refactoring")
 
-    (*
-    assert (1 = (Hashtbl.length xducers));
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
@@ -245,5 +240,4 @@ let do_refinement trail_filename units =
         (* formulas must be regenerated *)
         let _ = do_abstraction false units in ()
     end
-    *)
 ;;

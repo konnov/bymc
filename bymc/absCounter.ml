@@ -149,6 +149,8 @@ class ctr_abs_ctx_tbl dom t_ctx units =
         method all_counters =
             List.map (fun c -> c#get_ctr) (hashtbl_vals tbl)
 
+        method all_ctxs = hashtbl_vals tbl
+
         method get_spur = spur_var
     end
 ;;
