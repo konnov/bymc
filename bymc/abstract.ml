@@ -91,22 +91,26 @@ let check_invariant units inv_name =
     in
     printf "Check the invariant candidate:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
-    let step_asserts =
-        [("proc", [Expr (0, inv)]); ("proc", [Expr (1, not_inv)])] in
-    let rev_map = Hashtbl.create 10 in
-    Hashtbl.add rev_map 0 (0, inv); Hashtbl.add rev_map 1 (1, not_inv);
-    solver#set_collect_asserts true;
-    solver#set_need_evidence true;
-    let res, smt_rev_map =
-        (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1) in
-    solver#set_collect_asserts false;
-    if not res
-    then printf "The invariant holds.\n\n"
-    else begin
-        printf "The invariant is violated!\n\nHere is an example:\n";
-        print_vass_trace ctx solver 2;
-        raise (Failure "At least one invariant is incorrect")
-    end
+    let check_proc_step proctype (* for a step by each proctype *) =
+        (* XXX: replace proc by a normal process name! *)
+        let step_asserts =
+            [(proctype, [Expr (0, inv)]); (proctype, [Expr (1, not_inv)])] in
+        let rev_map = Hashtbl.create 10 in
+        Hashtbl.add rev_map 0 (0, inv); Hashtbl.add rev_map 1 (1, not_inv);
+        solver#set_collect_asserts true;
+        solver#set_need_evidence true;
+        let res, smt_rev_map =
+            (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1) in
+        solver#set_collect_asserts false;
+        if res then begin
+            printf "The invariant %s is violated!\n\n" inv_name;
+            printf "Here is an example:\n";
+            print_vass_trace ctx solver 2;
+            raise (Failure (sprintf "The invariant %s is violated" inv_name))
+        end
+    in
+    List.iter check_proc_step
+        (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
 ;;
 
 let check_all_invariants units =
@@ -144,7 +148,7 @@ let do_refinement trail_filename units =
     log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
     (* FIXME: deal somehow with this stupid message *)
     if (List.length trail_asserts) <= 1
-    then raise (Failure "The system loops forever at the initial state");
+    then raise (Failure "All processes can do idle steps and stay forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS..."; flush stdout;
 
@@ -191,7 +195,10 @@ let do_refinement trail_filename units =
     let num_states = (List.length trail_asserts) in
     solver#set_need_evidence true;
     let refined = ref false in
-    (* check the finite prefix first *)
+    (* Check the finite prefix first: this is an experimental feature,
+       as we do not really know, whether it works in general; the detection of
+       spurious transitions and unfair paths is sound (discussed in the TACAS
+       paper) *)
     if not (sim_prefix (num_states - 1))
     then begin
         print_vass_trace ctx solver num_states;
@@ -224,20 +231,18 @@ let do_refinement trail_filename units =
 
                 log INFO "Sorry, I am afraid I cannot do that, Dave.";
                 log INFO "I need a human assistance to find an invariant.";
-                log INFO "  Trying to find the shortest spurious path for you...";
-                (* then check its prefixes, from the shortest to the longest *)
-                let short_len = List.find sim_prefix (range 1 num_states) in
-                log INFO (sprintf "  The shortest path is 0:%d" short_len);
-                flush stdout;
             end
         end
     end;
     log INFO "  [DONE]";
     let _ = solver#stop in
+    ()
+    (*
     if !refined
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
         let _ = do_abstraction false units in ()
     end
+    *)
 ;;

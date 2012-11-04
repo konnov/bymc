@@ -90,24 +90,50 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
 let map_to_in v = if v#is_symbolic then v else v#copy (v#get_name ^ "_IN") ;;
 let map_to_out v = if v#is_symbolic then v else v#copy (v#get_name ^ "_OUT") ;;
 let map_to_step step v =
-    if v#is_symbolic then v else v#copy (sprintf "S%d_%s" step v#get_name) ;;
+    if v#is_symbolic
+    then v
+    else v#copy (sprintf "S%d_%s" step v#get_name)
+;;
 
 let stick_var map_fun v = Var (map_fun v);;
 
-
-let connect_steps shared_vars step =
+let connect_steps tracked_vars step =
     let connect v =
         let ov = map_to_step step (map_to_out v) in
         let iv = map_to_step (step + 1) (map_to_in v) in
         BinEx (EQ, Var ov, Var iv) in
-    list_to_binex AND (List.map connect shared_vars)
+    list_to_binex AND (List.map connect tracked_vars)
 ;;
 
-let create_path shared_vars xducer n_steps =
-    let map_xducer n = List.map (map_vars (stick_var (map_to_step n))) xducer in
-    let xducers = List.concat (List.map map_xducer (range 0 n_steps)) in
+(* the process is skipping the step, not moving *)
+let skip_step local_vars step =
+    let eq v =
+        let iv = map_to_step step (map_to_in v) in
+        let ov = map_to_step step (map_to_out v) in
+        BinEx (EQ, Var ov, Var iv) in
+    list_to_binex AND (List.map eq local_vars)
+;;
+
+let create_path proc xducer local_vars shared_vars when_moving n_steps =
+    let tracked_vars = local_vars @ shared_vars in
+    let map_xducer n =
+        List.map (map_vars (stick_var (map_to_step n))) xducer
+    in
+    (* different proctypes will not clash on their local variables as only
+       one of them is taking at each point of time *)
+    let move_or_skip is_moving step =
+        if is_moving
+        then map_xducer step
+        else [skip_step local_vars step]
+    in
+    let xducers = List.concat
+        (* the first element of when_moving represents a dummy element,
+           showing the initial state. Skip it. *)
+        (List.map2 move_or_skip (List.tl when_moving) (range 0 n_steps)) in
     let connections =
-        List.map (connect_steps shared_vars) (range 0 (n_steps - 1)) in
+        List.map
+            (connect_steps tracked_vars)
+            (range 0 (n_steps - 1)) in
     xducers @ connections
 ;;
 
@@ -125,17 +151,20 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
     | _ -> ()
 ;;
 
-
+(* TODO: optimize it for the case of checking one transition only! *)
+(* TODO: mark the case of replaying a path (not a transition) as experimental
+         and remove it out from here, it is heavy *)
 let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_steps =
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
-    let append_one_assert state_no asrt =
+    let append_one_assert proc shared state_no asrt =
         match asrt with
         | Expr (id, e) ->
             let new_e =
                 if state_no = 0
-                then map_vars (fun v -> Var (map_to_step 0 (map_to_in v))) e
+                then map_vars
+                    (fun v -> Var (map_to_step 0 (map_to_in v))) e
                 else map_vars
                     (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) e
             in
@@ -144,9 +173,11 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
         | _ -> ()
     in
     let append_trail_asserts state_no (proc, asserts) =
-        List.iter (append_one_assert state_no) asserts
+        List.iter (append_one_assert proc t_ctx#get_shared state_no) asserts
     in
     solver#push_ctx;
+    (* project the trace to the names of processes taking steps *)
+    let moving_procs = List.map (fun (p, _) -> p) trail_asserts in
     (* put asserts from the control flow graph *)
     log INFO (sprintf 
         "    collecting declarations and xducer asserts (%d xducers)..."
@@ -155,8 +186,12 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
     let proc_asserts proc =
         let c_ctx = ctr_ctx_tbl#get_ctx proc in
         let proc_xd = (hashtbl_find_str xducers proc)#get_trans_form in
-        create_path (c_ctx#get_ctr :: t_ctx#get_shared) proc_xd n_steps in
-    let xducer_asserts = List.concat (List.map proc_asserts (hashtbl_keys xducers)) in
+        let when_moving = List.map (fun p -> p = c_ctx#abbrev_name) moving_procs
+        in
+        let local_vars = [c_ctx#get_ctr] and shared_vars =  t_ctx#get_shared in
+        create_path c_ctx#abbrev_name proc_xd local_vars shared_vars when_moving n_steps in
+    let xducer_asserts =
+        List.concat (List.map proc_asserts (hashtbl_keys xducers)) in
     let decls = expr_list_used_vars xducer_asserts in
 
     log INFO (sprintf "    appending %d declarations..."
@@ -165,8 +200,6 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
     log INFO (sprintf "    appending %d transducer asserts..."
         (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
-    (* TODO: it will work unexpectedly for several proctypes as trail asserts
-      do not specify that others' proctype variables do not change! *)
     log INFO (sprintf "    appending %d trail asserts..."
         (List.length trail_asserts)); flush stdout;
     (* put asserts from the counter example *)

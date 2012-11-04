@@ -74,7 +74,7 @@ while [ "$cmd" != "q" ]; do
             cmd="q"
         else
             step=$((step+1))
-            if [ "$DEBUG" != "" ]; then
+            if [ "$DEBUG" != "" -o "$ASK" != "" ]; then
                 echo "Enter to continue, q<Enter> to exit"
                 read cmd
             fi
