@@ -131,7 +131,7 @@ let filter_good_fairness aprops fair_forms =
     in
     let fair_atoms = List.map (find_fair_atoms err_fun aprops) fair_forms in
     let filtered = List.filter not_nop fair_atoms in
-    List.iter (fun fa -> printf "added fairness: %s\n" (expr_s fa)) filtered;
+    printf "added %d fairness constraints\n" (List.length filtered);
     filtered
 ;;
 
@@ -195,54 +195,48 @@ let do_refinement trail_filename units =
     let num_states = (List.length trail_asserts) in
     solver#set_need_evidence true;
     let refined = ref false in
-    (* Check the finite prefix first: this is an experimental feature,
-       as we do not really know, whether it works in general; the detection of
-       spurious transitions and unfair paths is sound (discussed in the TACAS
-       paper) *)
-    if not (sim_prefix (num_states - 1))
-    then begin
-        print_vass_trace ctx solver num_states;
+    (* Try to detect spurious transitions and unfair paths
+       (discussed in the TACAS paper) *)
+    log INFO "  Trying to find a spurious transition...";
+    flush stdout;
+    let sp_st =
+        try List.find check_trans (range 0 (num_states - 1))
+        with Not_found -> -1 in
+    if sp_st <> -1
+    then refined := true
+    else begin
         let spur_loop =
-            check_loop_unfair solver ctr_ctx_tbl xducers rev_map fairness inv_forms loop_asserts in
+            check_loop_unfair solver ctr_ctx_tbl xducers
+                rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin
             log INFO "The loop is unfair. Refined.";
             refined := true;
-        end else
-            log INFO "  The finite prefix (of the counterex.) is not spurious!";
-    end else begin
-        log INFO "  Trying to find a spurious transition...";
-        flush stdout;
-        let sp_st =
-            try List.find check_trans (range 0 (num_states - 1))
-            with Not_found -> -1
-        in
-        if sp_st <> -1
-        then refined := true
-        else begin
-            let spur_loop =
-                check_loop_unfair solver ctr_ctx_tbl xducers rev_map fairness inv_forms loop_asserts in
-            if spur_loop
-            then begin
-                log INFO "The loop is unfair. Refined.";
-                refined := true;
-            end else begin
-                log INFO "The loop is okay";
+        end else begin
+            log INFO "The loop is okay";
 
-                log INFO "Sorry, I am afraid I cannot do that, Dave.";
-                log INFO "I need a human assistance to find an invariant.";
+            log INFO "This counterexample does not have spurious transitions or states.";
+            log INFO "If it does not show a real problem, provide me with an invariant.";
+            (* this is an experimental feature! *)
+            (* then check its prefixes, from the shortest to the longest *)
+            if not (sim_prefix (num_states - 1))
+            then begin
+                log INFO "The path is not spurious.";
+                print_vass_trace ctx solver num_states;
+            end else begin
+                let short_len = List.find sim_prefix (range 1 num_states) in
+                log INFO (sprintf "  The shortest spurious path is 0:%d"
+                    short_len);
+                flush stdout;
             end
         end
     end;
     log INFO "  [DONE]";
     let _ = solver#stop in
-    ()
-    (*
     if !refined
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
         let _ = do_abstraction false units in ()
     end
-    *)
 ;;
