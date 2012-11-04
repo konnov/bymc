@@ -145,7 +145,8 @@ let do_refinement trail_filename units =
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
         parse_spin_trail trail_filename dom ctx ctr_ctx_tbl in
-    log INFO (sprintf "  %d step(s)" ((List.length trail_asserts) - 1));
+    let total_steps = (List.length trail_asserts) - 1 in
+    log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
     if (List.length trail_asserts) <= 1
     then raise (Failure "All processes can do idle steps and stay forever at the initial state");
@@ -185,8 +186,8 @@ let do_refinement trail_filename units =
             refine_spurious_step solver smt_rev_map st;
             true
         end else begin
-            log INFO
-                (sprintf "  The transition %d -> %d is OK." st (st + 1));
+            log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
+                    st (st + 1) total_steps);
             flush stdout;
             (*print_vass_trace ctx solver 2;*)
             false

@@ -401,12 +401,10 @@ let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
     let add_assert_expr e =
         let _ = solver#append_expr e in ()
     in
-    let c_ctx = ctr_ctx_tbl#get_ctx_by_abbrev proc_abbrev in
-    let proc_xducer = hashtbl_find_str xducers c_ctx#proctype_name in
-    let active_expr = proc_xducer#get_orig_proc#get_active_expr
-    in
     (* TODO: shall we instead use a transducer that carries all constraints? *)
-    let num_procs_preserved =
+    let num_procs_preserved c_ctx =
+        let proc_xducer = hashtbl_find_str xducers c_ctx#proctype_name in
+        let active_expr = proc_xducer#get_orig_proc#get_active_expr in
         let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
         let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i in
         let sum = List.fold_left add (Const 0) (range 0 c_ctx#get_ctr_dim) in
@@ -415,14 +413,16 @@ let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
     solver#set_collect_asserts true; (* we need unsat cores *)
     solver#push_ctx;
     solver#set_collect_asserts true;
-    let decls = expr_list_used_vars (List.map smt_to_expr state_asserts) in
+    let decls = expr_list_used_vars
+        (fairness :: (List.map smt_to_expr state_asserts) @ inv_forms) in
     log INFO (sprintf "    appending %d declarations..."
         (List.length decls)); flush stdout;
     List.iter solver#append_var_def decls;
     log INFO (sprintf "    appending %d assertions..."
         (1 + (List.length inv_forms) + (List.length state_asserts)));
     add_assert_expr fairness;
-    add_assert_expr num_procs_preserved;
+    List.iter
+        (fun c -> add_assert_expr (num_procs_preserved c)) ctr_ctx_tbl#all_ctxs;
     List.iter add_assert_expr inv_forms;
     List.iter (smt_append_bind solver rev_map smt_rev_map) state_asserts;
     log INFO "    waiting for SMT..."; flush stdout;
