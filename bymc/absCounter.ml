@@ -37,10 +37,6 @@ class ctr_abs_ctx dom t_ctx proctype_name abbrev_name =
         val spur_var = new var "bymc_spur"
         
         initializer
-            (* XXX: debug *)
-            List.iter
-                (fun v -> printf "@%s___*%s*_*%s*\n" proctype_name v#proc_name v#qual_name)
-                (hashtbl_filter_keys is_bounded t_ctx#get_var_roles);
             let is_proc_var v = (v#proc_name = proctype_name) in
             let cvs = List.filter is_proc_var
                 (hashtbl_filter_keys is_bounded t_ctx#get_var_roles) in
