@@ -227,7 +227,9 @@ let rec fprint_expr ff e =
         Format.fprintf ff "%s" rhs_s;
         Format.fprintf ff ")"
     | LabelRef (proc_name, lab_name) ->
-        Format.fprintf ff "%s%%@%s" proc_name lab_name
+        Format.fprintf ff "%s" proc_name;
+        Format.pp_print_string ff "@";
+        Format.fprintf ff "%s" lab_name
 ;;
 
 let op_of_expr e =
