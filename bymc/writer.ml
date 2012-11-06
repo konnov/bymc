@@ -70,6 +70,7 @@ let rec write_stmt ff lvl lab_tab s =
             Format.fprintf ff "@ =@ ";
             fprint_expr ff e
         end;
+        Format.pp_print_string ff ";"; 
         closeb ff
     | MDeclProp (_, v, PropAll e) ->
         let out, flush, newline, spaces =
@@ -117,7 +118,7 @@ let rec write_stmt ff lvl lab_tab s =
         openb ff lvl;
         if Hashtbl.mem lab_tab l
         then Format.fprintf ff "goto %s;" (Hashtbl.find lab_tab l)
-        else Format.fprintf ff "goto %d;" l;
+        else Format.fprintf ff "goto lab%d;" l;
         closeb ff
     | MIf (_, opts) ->
         openb ff lvl; Format.pp_print_string ff "if"; closeb ff;
