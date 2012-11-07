@@ -214,7 +214,7 @@ let do_refinement trail_filename units =
             log INFO "The loop is unfair. Refined.";
             refined := true;
         end else begin
-            log INFO "The loop is okay";
+            log INFO "The loop is fair";
 
             log INFO "This counterexample does not have spurious transitions or states.";
             log INFO "If it does not show a real problem, provide me with an invariant.";
