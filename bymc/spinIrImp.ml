@@ -408,3 +408,15 @@ let symm_of_arith_rel = function
         raise (Invalid_argument m)
 ;;
 
+let not_of_arith_rel = function
+    | LT -> GE
+    | LE -> GT
+    | GT -> LE
+    | GE -> LT
+    | EQ -> NE
+    | NE -> EQ
+    | _ as tok ->
+        let m = "Not an arithmetic relation: " ^ (token_s tok) in
+        raise (Invalid_argument m)
+;;
+

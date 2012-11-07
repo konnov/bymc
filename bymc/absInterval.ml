@@ -664,15 +664,21 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
 ;;
 
 let translate_expr ctx dom solver atype expr =
-    let rec trans_e = function
+    let invert_abs_type neg_sign = function
+        | ExistAbs -> if neg_sign then UnivAbs else ExistAbs
+        | UnivAbs  -> if neg_sign then ExistAbs else UnivAbs
+    in
+    let rec trans_e neg_sign = function
         (* boolean combination of arithmetic constraints *)
         | BinEx (AND, lhs, rhs) ->
-            BinEx (AND, (trans_e lhs), (trans_e rhs))
+            BinEx ((if neg_sign then OR else AND),
+                (trans_e neg_sign lhs), (trans_e neg_sign rhs))
         | BinEx (OR, lhs, rhs) ->
-            BinEx (OR, (trans_e lhs), (trans_e rhs))
-        (* TODO: push negations inside as they do in all papers! *)
+            BinEx ((if neg_sign then AND else OR),
+                (trans_e neg_sign lhs), (trans_e neg_sign rhs))
+        (* push negations inside as (as in Kesten, Pnueli. Cornerstones...) *)
         | UnEx  (NEG, lhs) ->
-            UnEx (NEG, (trans_e lhs))
+            trans_e (not neg_sign) lhs
 
         (* arithmetic comparisons *)
         | BinEx (LT, lhs, rhs)
@@ -681,12 +687,16 @@ let translate_expr ctx dom solver atype expr =
         | BinEx (GE, lhs, rhs)
         | BinEx (EQ, lhs, rhs)
         | BinEx (NE, lhs, rhs) as e ->
-            abstract_arith_rel ctx dom solver atype (op_of_expr e) lhs rhs
+            let eff_op = if neg_sign
+            then (not_of_arith_rel (op_of_expr e))
+            else (op_of_expr e) in
+            let eff_abs = (invert_abs_type neg_sign atype) in
+            abstract_arith_rel ctx dom solver eff_abs eff_op lhs rhs
 
         | _ -> raise (Abstraction_error
             (sprintf "No abstraction for: %s" (expr_s expr)))
     in
-    trans_e expr
+    trans_e false expr
 ;;
 
 (* The first phase of the abstraction takes place here *)
