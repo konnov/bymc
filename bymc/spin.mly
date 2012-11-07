@@ -169,7 +169,7 @@ let fatal msg payload =
 %token  UMIN NEG VARREF ARR_ACCESS ARR_UPDATE
 
 %right	ASGN
-%left	SND O_SND RCV R_RCV     /* SND doubles as boolean negation */
+%left	O_SND R_RCV
 %left	IMPLIES EQUIV			/* ltl */
 %left	OR
 %left	AND
@@ -183,7 +183,7 @@ let fatal msg payload =
 %left	PLUS MINUS
 %left	MULT DIV MOD
 %left	INCR DECR
-%right	NEG UMIN BITNOT
+%right	NEG UMIN BITNOT SND RCV /* SND is both negation and send */
 %left	DOT
 %start program
 %type <token SpinIr.prog_unit list> program

@@ -393,6 +393,7 @@ let refine_spurious_step solver smt_rev_map src_state_no =
 
 let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
         inv_forms (proc_abbrev, state_asserts) =
+    solver#comment ("is_loop_state_fair: " ^ (expr_s fairness));
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     let smt_to_expr = function
         | Expr (_, e) -> e
