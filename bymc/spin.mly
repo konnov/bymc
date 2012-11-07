@@ -169,7 +169,7 @@ let fatal msg payload =
 %token  UMIN NEG VARREF ARR_ACCESS ARR_UPDATE
 
 %right	ASGN
-%left	O_SND R_RCV
+%left	O_SND R_RCV SND RCV
 %left	IMPLIES EQUIV			/* ltl */
 %left	OR
 %left	AND
@@ -183,7 +183,7 @@ let fatal msg payload =
 %left	PLUS MINUS
 %left	MULT DIV MOD
 %left	INCR DECR
-%right	NEG UMIN BITNOT SND RCV /* SND is both negation and send */
+%right	UMIN BITNOT NEG
 %left	DOT
 %start program
 %type <token SpinIr.prog_unit list> program
@@ -293,14 +293,14 @@ ltl_body: LCURLY ltl_expr RCURLY { $2 }
 /* this rule is completely different from Spin's ltl_expr  */
 ltl_expr:
       LPAREN ltl_expr RPAREN        { $2 }
-    | SND ltl_expr                  { UnEx(NEG, $2) }
+    | NEG ltl_expr                  { UnEx(NEG, $2) }
     | ltl_expr UNTIL ltl_expr	    { BinEx(UNTIL, $1, $3) }
 	| ltl_expr RELEASE ltl_expr	    { BinEx(RELEASE, $1, $3) }
 	| ltl_expr WEAK_UNTIL ltl_expr	{ BinEx(WEAK_UNTIL, $1, $3) }
 	| ltl_expr IMPLIES ltl_expr     { BinEx(OR, UnEx(NEG, $1), $3) }
 	| ltl_expr EQUIV ltl_expr	    { BinEx(EQUIV, $1, $3) }
-	| ALWAYS ltl_expr     %prec NEG { UnEx(ALWAYS, $2) }
-	| EVENTUALLY ltl_expr %prec NEG { UnEx(EVENTUALLY, $2) }
+	| ALWAYS ltl_expr     { UnEx(ALWAYS, $2) }
+	| EVENTUALLY ltl_expr { UnEx(EVENTUALLY, $2) }
     | ltl_expr AND ltl_expr         { BinEx(AND, $1, $3) }
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
@@ -897,7 +897,7 @@ expr    : LPAREN expr RPAREN		{ $2 }
 	| expr RSHIFT expr	    { BinEx(RSHIFT, $1, $3) }
 	| BITNOT expr		    { UnEx(BITNOT, $2) }
 	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2) }
-	| SND expr %prec NEG	{ UnEx(NEG, $2) }
+	| NEG expr	            { UnEx(NEG, $2) }
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")
                  (*
@@ -1004,7 +1004,7 @@ prop_expr   :
       LPAREN prop_expr RPAREN       { $2 }
     | prop_expr AND prop_expr       { BinEx(AND, $1, $3) }
     | prop_expr OR prop_expr        { BinEx(OR, $1, $3) }
-    | SND prop_expr                 { UnEx(NEG, $2) }
+    | NEG prop_expr                 { UnEx(NEG, $2) }
     | NAME AT NAME                  { LabelRef ($1, $3) }
 	| prop_arith_expr GT prop_arith_expr		{ BinEx(GT, $1, $3) }
 	| prop_arith_expr LT prop_arith_expr		{ BinEx(LT, $1, $3) }

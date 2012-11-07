@@ -11,7 +11,7 @@ open SpinTypes;;
 
 let token_s t =
     match t with
-      ASSERT -> "ASSERT"
+      | ASSERT -> "ASSERT"
       | PRINT -> "PRINT"
       | PRINTM -> "PRINTM"
       | C_CODE -> "C_CODE"
@@ -139,6 +139,15 @@ let token_s t =
       | CARD -> "card"
 ;;
 
+let is_name = function
+    | NAME _ -> true
+    | FNAME _ -> true
+    | UNAME _ -> true
+    | PNAME _ -> true
+    | INAME _ -> true
+    | _ -> false
+;;
+
 let rec expr_s e =
     match e with
     | Nop comment -> sprintf "skip /* %s */" comment
@@ -180,7 +189,7 @@ let rec fprint_expr ff e =
         fprint_expr ff f;
         Format.fprintf ff ")"
     | UnEx (tok, f) ->
-        Format.fprintf ff "(";
+        Format.fprintf ff "(%s" (token_s tok);
         fprint_expr ff f;
         Format.fprintf ff ")"
     | BinEx (ARR_ACCESS, arr, idx) ->
@@ -362,6 +371,7 @@ let rec mir_stmt_s s =
     | MPrint (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s"
             id s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
+;;
 
 let prog_unit_s u =
     match u with
