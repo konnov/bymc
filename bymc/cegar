@@ -14,8 +14,8 @@ PROP=$2
 BYMC_HOME=`dirname $0`
 
 SPIN=spin
-PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC $PAN_COMP_FLAGS"
-PAN_FLAGS="-m100000 $PAN_FLAGS" #-m50000000"
+PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC"}
+PAN_FLAGS=${PAN_FLAGS:-"-m100000"}
 SPIN_OUT="spin.out"
 cmd=""
 step="0"
@@ -44,7 +44,7 @@ rm -rf $SPIN_OUT spin.trace refinement.out
 while [ "$cmd" != "q" ]; do
     $SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
     $SPIN -a -N $PROP.never abs-counter.prm \
-        && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
+        && gcc $rand $PANCC_FLAGS -o ./pan pan.c \
         && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 
     if egrep -q "errors: +0" $SPIN_OUT; then
