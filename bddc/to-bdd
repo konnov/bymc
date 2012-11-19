@@ -1,0 +1,10 @@
+#!/bin/sh
+
+DIR=`dirname $0`
+PYCUDD=`cd $DIR/../deps/pycudd2.0.2/pycudd/; pwd`
+CUDD=`cd $DIR/../deps/pycudd2.0.2/cudd-2.4.2/; pwd`
+echo "PYCUDD=$PYCUDD"
+export LD_LIBRARY_PATH="$PYCUDD:$CUDD/lib:$LD_LIBRARY_PATH"
+export PYTHONPATH="$PYCUDD:$PYTHONPATH"
+
+python toBdd.py $1

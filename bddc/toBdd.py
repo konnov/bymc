@@ -2,6 +2,7 @@
 #
 # Read a formula in a simple representation and construct a BDD
 
+import pycudd
 import sys
 from tokenize import *
 from StringIO import StringIO
