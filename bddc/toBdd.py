@@ -2,10 +2,12 @@
 #
 # Read a formula in a simple representation and construct a BDD
 
-import pycudd
 import sys
+from array import array
 from tokenize import *
 from StringIO import StringIO
+
+import pycudd
 
 LET = "let"
 AND = "and"
@@ -24,19 +26,15 @@ def expr_s(e):
     elif typ in [AND, OR, NOT]:
         return "(%s %s)" % (typ, " ".join([expr_s(v) for v in e[1]]))
     elif typ == EXISTS:
-        vs, es = e[1], e[2]
+        vs, f = e[1], e[2]
         return "(%s [%s] %s)" \
-                % (typ, " ".join([str(v) for v in vs]),
-                        " ".join([expr_s(v) for v in es]))
+                % (typ, " ".join([str(v) for v in vs]), expr_s(f))
     elif typ == LET:
         name, es = e[1]
-        if isinstance(es, list):
-            s = " ".join([expr_s(v) for v in es])
-        else:
-            s = expr_s(es)
+        s = expr_s(es)
         return "(let %s %s)" % (name, s)
     else:
-        return "{Unknown expr: '%s'}" % typ
+        return "{Unknown expr: '%s'}" % str(typ)
 
 
 class ParseError(Exception):
@@ -67,22 +65,20 @@ class Parser:
                 self.error(op, srow, scol)
             if op == EXISTS:
                 vs = self.parse_list()
+                bound_expr = self.parse_expr()
+                self.expect(OP, ')')
+                return (EXISTS, vs, bound_expr)
             else:
-                vs = None
-
-            tok = self.get()
-            tn, tv, (srow, scol), _, _ = tok
-            es = []
-            while tn != OP or tv != ')':
-                self.put(tok)
-                es.append(self.parse_expr())
                 tok = self.get()
-                tn, tv, _, _, _ = tok
-            # skip the trailing ')'
+                tn, tv, (srow, scol), _, _ = tok
+                es = []
+                while tn != OP or tv != ')':
+                    self.put(tok)
+                    es.append(self.parse_expr())
+                    tok = self.get()
+                    tn, tv, _, _, _ = tok
+                # skip the trailing ')'
 
-            if vs:
-                return (op, vs, es)
-            else:
                 return (op, es)
         else:
             self.error(tv, srow, scol)
@@ -138,6 +134,57 @@ class Parser:
             f.close()
 
 
+class BddError(Exception):
+    def __init__(self, m):
+        Exception.__init__(self, m)
+
+
+class Bdder:
+    def __init__(self, mgr):
+        self.mgr = mgr
+
+    def expr_as_bdd(self, e):
+        sys.stdout.flush()
+        typ = e[0]
+        if typ == NUM:
+            return mgr.IthVar(e[1])
+        elif typ == id:
+            raise BddError("How to convert id?")
+        elif typ == NOT:
+            return ~(self.expr_as_bdd(e[1][0]))
+        elif typ == AND:
+            bdds = [self.expr_as_bdd(s) for s in e[1]]
+            res = bdds[0]
+            for bdd in bdds[1:]:
+                res &= bdd
+            return res
+        elif typ == OR:
+            bdds = [self.expr_as_bdd(s) for s in e[1]]
+            res = bdds[0]
+            for bdd in bdds[1:]:
+                res |= bdd
+            return res
+        elif typ == EXISTS:
+            vs, es = e[1], e[2]
+            bdd = self.expr_as_bdd(es)
+            intarr = pycudd.IntArray(len(vs))
+            for (i, v) in enumerate(vs):
+                intarr[i] = v
+            cube = self.mgr.IndicesToCube(intarr, len(vs))
+            return bdd.ExistAbstract(cube)
+        elif typ == LET:
+            name, snd = e[1]
+            bdd = self.expr_as_bdd(snd)
+            print "bdd " + name
+            pycudd.set_iter_meth(0)
+            for cube in bdd:
+                print pycudd.cube_tuple_to_str(cube)
+
+            return (name, bdd)
+        else:
+            raise BddError("Unknown expr met: " + str(typ))
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 1:
         print "Use: toBdd <filename>"
@@ -145,8 +192,13 @@ if __name__ == "__main__":
 
     filename = sys.argv[1]
     try:
-        e = Parser().parse_form(filename)
-        print expr_s(e)
+        expr = Parser().parse_form(filename)
+        print expr_s(expr)
     except ParseError, e:
         print "%s:%s" % (filename, str(e))
         sys.exit(1)
+
+    mgr = pycudd.DdManager()
+    mgr.SetDefault()
+    (name, bdd) = Bdder(mgr).expr_as_bdd(expr)
+    mgr.PrintStdOut()
