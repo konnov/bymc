@@ -1,0 +1,6 @@
+(let R (exists [2 5]
+ (and (or (and 0 1) (and (not 0) (not 1)))
+      (or (and 2 3) (and (not 2) (not 3)))
+      (or (and 3 5) (and (not 3) (not 5)))
+      (or (and 1 5) (and (not 1) (not 5)))
+ )))
