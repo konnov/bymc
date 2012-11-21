@@ -1,0 +1,6 @@
+#define DOCSTRING PyCUDD 2.0.1\n\
+Python interface to Colorado University Decision Diagram package\n\
+With BREL support\n\
+Compiled on __DATE__, __TIME__\nBugs to:aravind@engr.ucsb.edu 
+DOCSTRING
+

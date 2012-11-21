@@ -1,0 +1,85 @@
+GETTING STARTED:
+
+The script 'example1.py' shows how to create a BDD manager, various BDD variables
+and how to find the truth set of a small function. Look at the comments and code in
+this script to see how it is done. This script is executable from the command line.
+Alternativley, Python may be started and individual commands may be entered at the
+Python prompt.
+
+Refer to the excellent documentation in the doc directory of the CUDD distribution for 
+details on CUDD functions. The various .i files show what CUDD functions are available 
+in PyCUDD. For example, from ddmanager.i:
+
+DdNode *  zddIthVar( int i) { DdNode* result = Cudd_zddIthVar(self,  i); Cudd_Ref(result); return result; }
+
+indicates that the CUDD function 'Cudd_zddIthVar' is available as the DdManager method 
+'zddIthVar' in Python. It would be called as:
+
+x = mgr.zddIthVar(i)
+
+from Python. x is a returned Python DdNode object, mgr is an existing Python DdManager object, i is an integer.
+
+
+As a general rule, drop the 'Cudd' or 'Cudd_bdd' from the prefix of the CUDD function to 
+arrive at the Python method. If a CUDD function requires a DdNode argument, it will 
+typically be a method of the Python DdNode class. The first DdNode in the argument list is 
+the 'self' or 'this' pointer. For example, 
+
+DdNode* Cudd_bddAndAbstract(DdManager *manager, DdNode *f, DdNode *g, DdNode *cube) 
+
+is callable from python as 
+
+x = f.AndAbstract(g,cube)
+
+ZBDDs and ADDs are available in PyCUDD as well. The CUDD package treats a BDD, 
+ZBDD or ADD as a DdNode. For ease of implementation, this version of PyCUDD also
+has only one DdNode object. This means that many methods are unprotected. If you
+call a method that expects BDDs but you pass ZBDDs, then pycudd will probably
+crash. This also means that operator overloading applies only to BDDs. 
+(See pycudd.i for operator overloading details.) For example, if you want the union 
+of two ZBDDs, you must use
+
+x = y.zddUnion(z)
+
+where y and z are Python DdNode objects and x is a returned Python DdNode object. 
+In this case, all DdNode objects are ZBDDs. Calling 
+
+x = y + z
+
+where y and z are ZBDD Python DdNode objects will crash as the + operator is 
+overloaded only for DdNode objects which are BDDs. Future versions of PyCUDD will 
+deal with this situation in a better way.
+
+CUDD sometimes requires arguments or returns values that are DdNode, int or double 
+arrays. Use the helper objects DdArray, IntArray or DoubleArray when this is required.
+For example, the CUDD function
+
+int Cudd_SetVarMap(DdManager *manager, DdNode **x, DdNode **y, int n)
+
+is called from Python as
+
+mgr.SetVarMap(x,y,n)
+
+where x and y are existing DdArray objects and n is an integer. Refer
+to the .i files and pycudd.cpp to see how helper objects are created.
+
+The CUDD package has been extended in pycudd. Extended features are indicated in 
+the .i files by the comments 'Added to DdManager' and 'Added to DdNode'. The helper 
+class DdArray also has some extended features. For example, given a DdArray object ddarray,
+
+f = ddarray.Constraint(low, high)
+
+will return a DdNode object f where terms of f are all possible combinations of 
+subterms in the DdArray. All terms in f will contain no less than low and no more than 
+high subterms from the DdArray.
+
+USING BREL (beta)
+
+The BREL interface is still in testing -- it currently has just the basic functionality.
+Refer to example3.py for usage.
+
+
+ 
+
+
+

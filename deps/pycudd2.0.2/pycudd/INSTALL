@@ -1,0 +1,130 @@
+INSTALLATION DIRECTIONS FOR PYCUDD
+----------------------------------
+
+Pycudd allows Python users to access about 96% of the Colorado Decision Diagram 
+(CUDD) in a simplified object oriented manner. Pycudd hides many of the details 
+associated with using CUDD such as garbage collection and manager references. 
+The current version of Pycudd has been tested on Linux machines running 
+Mandrake 10.1 on x86 as well as amd64 archs. This version has quite a bit of 
+added functionality -- please refer the README file for more details.
+
+INSTALLATION:
+
+1. Install Python 2.3+, SWIG 1.3-SWIG 2.0.x and CUDD >= 2.3.0
+
+This software package has been successfully tested with Python version 2.3-2.7,
+and SWIG 1.3-SWIG 2.0.x. It currently supports CUDD 2.4.2.
+
+Although most Linux distros have Python pre-installed, ensure that you have the 
+devel packages, which provide the header files that provide the various APIs.
+
+Python source and documentation is at http://www.python.org
+SWIG source and documentation is at http://www.swig.org
+CUDD source and documentation is at http://vlsi.colorado.edu
+
+All these packages are well maintained and documented. Follow their installation
+instructions. Please note that the SWIG interface file will NOT work with 
+SWIG 1.1p5 -- use at least SWIG 1.3.15, preferrable >= 1.3.21.
+For docstring generation in pycudd.py, you'll need SWIG 1.3.24, the latest stable
+version at the time of writing.
+
+(Our local installation uses Python 2.7, SWIG 2.0.1 and CUDD 2.4.2)
+
+2. Compile CUDD. To create the shared object libraries we need, add a 
+directory 'lib' in the main CUDD directory and add the target libso to the 
+respective Makefiles in the sub-directories of the cudd distro: 
+
+	libso:
+  		gcc -shared $(POBJ) -o ../lib/lib<libname>.so
+
+Make sure that you call 'make libso' in each sub-dir either via the main Makefile
+or through a script for the shell of your choice.
+The following libraries are placed as CUDD/lib/lib<libname>.so: 
+        libname = cudd, cuddmtr, cuddst, cuddutil, cuddepd, dddmp
+There is no need to move the CUDD libraries to the system library directories --
+the -Xlinker -rpath option in the Makefile specifies where to find the libs at 
+runtime. This means you don't have to set LD_LIBRARY_PATH, if you don't have root
+and can't modify the system lib dirs.
+
+4. If you have BREL, the Boolean Relation minimisation package from the Univ. 
+Politec. de Catalunya, compile that as a shared object library as well. 
+For that, add the following to the top-level BREL Makefile:
+        
+	.PHONY : list
+	libso:  $(POBJ) list
+		gcc -shared $(POBJ) ./list/list.o -o libbrel.so
+	list:
+		cd list && make list.o
+
+Again, make sure you call 'make libso' either from the Makefile or from the command line
+
+3. Edit the pycudd Makefile. If you have BREL, set USE_BREL=1.
+If you have CUDD 2.4.0, set CUDDVER = 240, else leave it undefined. 2.4.0 provides
+several new functions as well as an iterator over primes. Consider getting it!
+Note: If you compiled CUDD with -malign-double, leave that option in, else, remove it. 
+
+4. Execute 'make depend'. The following warnings (if present) may be ignored:
+   - regarding whitespace in stubs.h
+   - regarding pycudd_wrap.cpp (this will be produced by SWIG) 
+
+5. Execute 'make'. Ignore warnings for redefinition of _POSIX_C_SOURCE. If you are using
+BREL, you'll get a warning for the redefinition of FREE -- feel 'free' to modify BREL to
+use BRELFREE instead of FREE. I use a target that does the follwing in the BREL Makefile: 
+	
+for f in $(PSRC) $(PHDR); do mv $$f temp; sed -e "s/FREE/BRELFREE/" temp > $$f; done
+rm -f temp
+
+For obvious reasons, run this only once! (unless you really want macros called BRELBRELFREE!)
+
+6. Python must be able to find the module pycudd.py. Set the environment 
+variable PYTHONPATH to include the pycudd directory.
+
+7. To create the documentation, execute "make docs". For this to work properly,
+you must have Swig 1.3.24 and the CUDD documentation. If you don't, don't worry -- 
+the README has most of the details you need. The documentation is installed in
+the doc directory as pycudd_doc.html and cuddAllDet.html.
+
+8. That's it! The README file contains package usage details. 
+
+FILES:
+
+*** SWIG interface files ***
+brel.i          Wrappers for BREL (beta)
+utils.i         Internal typemap info
+ddgen.i         Generator for iteration
+ddnode.i        DdNode methods
+pycudd.i        Overall SWIG interface
+pyiter.i        Iteration helpers
+externs.i       
+tlcinfo.i      
+ddmanager.i     DdManager methods
+
+*** Misc. ***
+Makefile      
+pycudd.cpp      Support structures DdArray, IntArray and DoubleArray. 
+pycudd.h        
+             
+*** SWIG produced files *** 
+pycudd_wrap.cpp	SWIG produced C++ code
+pycudd.py	SWIG produced pycudd module
+_pycudd.so	Shared object file needed by Python to access CUDD
+
+*** Documentation ***
+INSTALL             This file
+README              Usage info
+doc/pycudd_doc.html PyCUDD documentation
+doc/cuddAllDet.html The CUDD documentation
+doccer.py           Documentation creator
+
+*** Example python scripts ***
+example1.py     Basic usage demonstration
+example2.py     Iteration demonstration
+example3.py     BREL interface usage
+
+CREDITS
+
+Current maintainer : Merritt Miller
+                     merrittmiller@umail.ucsb.edu
+Former maintainer  : Aravind Vijayakumar
+Original PyCUDD by : Steve Haynal
+Thanks to Hao Xin for pointing out a change in SWIG convention.

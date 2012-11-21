@@ -1,0 +1,66 @@
+UNNECESSARY FUNCTIONS
+---------------------
+Reference counting and manager init and shutdown are all implicitly done:
+
+Cudd_DelayedDerefBdd
+Cudd_Deref
+Cudd_IterDerefBdd
+Cudd_RecursiveDeref
+Cudd_RecursiveDerefZdd
+Cudd_Ref
+Cudd_Init
+Cudd_Quit
+
+Hooks are meaningless in this context:
+Cudd_RemoveHook
+Cudd_StdPostReordHook
+Cudd_StdPreReordHook
+Cudd_AddHook
+Cudd_IsInHook
+
+The following iterator functions have been replaced by being made available directly
+as for constructs in Python:
+
+Cudd_ForeachCube
+Cudd_ForeachNode
+Cudd_ForeachPrime
+Cudd_GenFree
+Cudd_IsGenEmpty
+Cudd_ReadIthClause
+Cudd_tlcInfoFree
+Cudd_FirstPrime
+Cudd_NextPrime
+
+Refer example2.py to see how to use the loops.
+
+UNIMPLEMENTED FUNCTIONS
+-----------------------
+
+ZDD iterator functions:
+
+Cudd_zddForeachPath
+Cudd_zddCoverPathToString
+Cudd_zddFirstPath
+Cudd_zddNextPath
+
+ADD functions:
+
+Cudd_addApply
+Cudd_addGeneralVectorCompose
+Cudd_addLog
+Cudd_addMonadicApply
+Cudd_addOuterSum
+
+WILL NOT BE IMPLEMENTED UNLESS THE NEED ARISES
+----------------------------------------------
+
+No intention of wrapping the following (comments given alongside):
+
+Cudd_PrintTwoLiteralClauses -- Might as well iterate over two-literal and print 'em
+Cudd_addHarwell             -- specific benchmark reading routine. Will wrap if ever needed
+Cudd_bddRead                -- Don't see a need for these 4 functions.
+Cudd_addRead                   If you would like them wrapped/have wrapped them,
+Cudd_SubsetWithMaskVars        please get in touch with me at: aravind at engr dot ucsb dot edu
+Cudd_SolveEqn                
+Cudd_PrioritySelect         -- funky function to pointer ... need to think about it
+
