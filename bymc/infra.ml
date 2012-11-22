@@ -3,6 +3,10 @@
    Igor Konnov, 2012
  *)
 
+open VarRole;;
+
+exception CacheStateError of string;;
+
 (*
   All analysis and transformation passes have an access to this cache.
   Every pass may update the attributes of this cache. If a pass corrupts certain
@@ -11,6 +15,7 @@
 class AnalysisCache =
     object(self)
         (* variable roles *)
+        val mutable var_roles: (var, var_role) Hashtbl.t option = Hashtbl.create 1
         (* PIA domain *)
         (* PIADataAbsCtx *)
         (* PIACounterAbsCtx *)
