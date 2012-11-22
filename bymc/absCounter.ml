@@ -615,7 +615,6 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
             List.map (fun e -> replace_assume (replace_expr e)) update
         in
         let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
-        (* XXX: it might break with several process prototypes *)
         let prev_idx_ex = c_ctx#pack_index_expr in
         let next_idx_ex =
             map_vars

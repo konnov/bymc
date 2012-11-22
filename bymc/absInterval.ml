@@ -227,7 +227,7 @@ class abs_domain conds_i =
         method scatter_abs_vals (solver: yices_smt)
                 (num_expr: 't expr) (n: int) : int list list =
             if n > 4 (* the magic number which means explosion of variants *)
-            then raise (Abstraction_error "scatter_abs_vals for n > 4");
+            then raise (Abstraction_error "scatter_abs_vals for n > 4 (A LOT!)");
             
             let combinations = (Accums.mk_product cond_intervals n) in
             let sat_triples_list = List.filter
