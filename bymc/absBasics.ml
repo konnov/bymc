@@ -12,6 +12,8 @@ open SpinIrImp;;
 
 exception Abstraction_error of string;;
 
+type abs_type = ExistAbs | UnivAbs;;
+
 (* each expression is characterized by its trait w.r.t. abstraction *)
 type expr_abs_trait =
     ConstExpr  (* a constant expression, may be abstracted *)
