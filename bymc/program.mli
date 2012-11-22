@@ -7,28 +7,28 @@
 
 module StringMap = Map.Make (String)
 
-(*
-  Representation of a program under analysis and transformation.
- *)
-class type Program =
-    object(self)
-        (* TODO: the fields must go to the implementation! *)
+(* a program under analysis and transformation.  *)
 
-        (* global declarations *)
-        val params: var list
-        val shared: var list
+type program
 
-        (* assumptions *)
-        val assumps: Spin.token expr list
+let program_of_units: Spin.token prog_unit -> program
+let empty_program: program
 
-        (* processes *)
-        val procs: Spin.token proc StringMap
+val get_params: program -> var list
+val set_params: program -> var list -> program
 
-        (* atomic propositions *)
-        val atomics: Spin.token expr StringMap
+val get_shared: program -> var list
+val set_shared: program -> var list -> program
 
-        (* ltl formulas *)
-        val ltl_forms: Spin.token expr StringMap
-    end
-;;
+val get_assumes: program -> Spin.token expr list
+val set_assumes: program -> Spin.token expr list -> program
+
+val get_procs: program -> Spin.token proc StringMap
+val set_procs: program -> Spin.token proc StringMap -> program
+
+val get_atomics: program -> Spin.token expr StringMap
+val set_atomics: program -> Spin.token expr StringMap -> program
+
+val get_ltl_forms: program -> Spin.token expr StringMap
+val set_ltl_forms: program -> Spin.token expr StringMap -> program
 

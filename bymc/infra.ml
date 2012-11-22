@@ -33,7 +33,6 @@ class AnalysisCache =
 class ProcStrucCache =
     object(self)
         (* statements *)
-        (* control flow graph *)
         (* regions *)
     end
 ;;
