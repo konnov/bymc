@@ -20,6 +20,7 @@ open CfgSmt;;
 open Debug;;
 
 open AbsBasics;;
+open VarRole;;
 open AbsInterval;;
 open Refinement;;
 open Ltl;;

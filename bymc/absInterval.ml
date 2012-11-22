@@ -12,40 +12,9 @@ open Writer;;
 open Debug;;
 
 open AbsBasics;;
+open VarRole;;
 
 exception Skeleton_not_supported of string;;
-
-type var_role =
-    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch;;
-
-let var_role_s r =
-    match r with
-    | BoundedInt (a, b) -> sprintf "bounded[%d, %d]" a b
-    | SharedUnbounded -> "shared-unbounded"
-    | LocalUnbounded -> "local-unbounded"
-    | Scratch -> "scratch"
-;;
-
-let is_unbounded = function
-    | SharedUnbounded
-    | LocalUnbounded -> true
-    | _ -> false
-;;
-
-let is_bounded = function
-    | BoundedInt (_, _) -> true
-    | _ -> false
-;;
-
-let is_local_unbounded = function
-    | LocalUnbounded -> true
-    | _ -> false
-;;
-
-let is_shared_unbounded = function
-    | SharedUnbounded -> true
-    | _ -> false
-;;
 
 (* Context of parametric interval abstraction.
    It collects variable roles over different process prototypes.
@@ -83,10 +52,8 @@ class ['tok] trans_context =
         method get_globals = globals
         method set_globals g = globals <- g
         method is_global v =
-            try
-                v = (List.find ((=) v) globals)
-            with Not_found ->
-                false
+            try v = (List.find ((=) v) globals)
+            with Not_found -> false
 
         method get_shared =
             List.filter (fun v -> not v#is_symbolic) globals

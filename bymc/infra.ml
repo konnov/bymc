@@ -48,6 +48,7 @@ class PassCaches =
 class Program =
     object(self)
         (* global declarations *)
+        (* assumptions *)
         (* processes *)
         (* atomic propositions *)
         (* ltl formulas *)
@@ -55,20 +56,6 @@ class Program =
 ;;
 
 
-class AnalysisPass =
-    object(self)
-        method make (prog: Program) (caches: PassCaches):
-                PassCaches =
-            None
-    end
-;;
-
-
-class TranslationPass =
-    object(self)
-        method make (prog: Program) (caches: PassCaches): 
-                (Program * PassCaches) =
-            None
-    end
-;;
+type analysis_fun = PassCaches -> Program -> PassCaches;;
+type translation_fun = PassCaches -> Program -> (PassCaches * Program);;
 
