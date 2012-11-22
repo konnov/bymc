@@ -16,7 +16,7 @@ class AnalysisCache =
     object(self)
         (* variable roles *)
         val mutable var_roles: (var, var_role) Hashtbl.t option = Hashtbl.create 1
-        (* PIA domain *)
+        val mutable pia_dom: pia_domain
         (* PIADataAbsCtx *)
         (* PIACounterAbsCtx *)
     end
@@ -46,19 +46,6 @@ class PassCaches =
     end
 ;;
 
-
-(*
-  Program under analysis and transformation.
- *)
-class Program =
-    object(self)
-        (* global declarations *)
-        (* assumptions *)
-        (* processes *)
-        (* atomic propositions *)
-        (* ltl formulas *)
-    end
-;;
 
 
 type analysis_fun = PassCaches -> Program -> PassCaches;;
