@@ -87,7 +87,7 @@ exception Found of int;;
 
 type abs_type = ExistAbs | UnivAbs;;
 
-class abs_domain conds_i =
+class pia_domain conds_i =
     object(self)
         val mutable conds = conds_i      (* thresholds *)
         (* symbolic intervals, i.e., triples of
@@ -389,7 +389,7 @@ let mk_domain solver ctx units =
     let all_stmts = List.fold_left collect_stmts [] units in
     let conds = identify_conditions ctx#get_var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver ctx conds in
-    let dom = new abs_domain sorted_conds in
+    let dom = new pia_domain sorted_conds in
     dom#print;
     flush stdout;
     dom
