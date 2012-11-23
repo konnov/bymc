@@ -45,8 +45,6 @@ class PassCaches =
     end
 ;;
 
-
-
 type analysis_fun = PassCaches -> Program -> PassCaches;;
 type translation_fun = PassCaches -> Program -> (PassCaches * Program);;
 

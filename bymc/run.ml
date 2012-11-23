@@ -1,9 +1,10 @@
 open Printf;;
 open Str;;
 open Map
-module StringMap = Map.Make (String)
+module StringMap = Map.Make(String)
 
 open Parse;;
+open Program;;
 open Abstract;;
 open Instantiation;;
 open Writer;;
