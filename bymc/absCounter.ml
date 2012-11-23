@@ -187,7 +187,7 @@ let rec remove_bad_statements stmts =
     List.rev (List.fold_left filter [] stmts)
 ;;
 
-let trans_prop_decl t_ctx ctr_ctx_tbl dom solver decl_expr =
+let trans_prop_decl t_ctx ctr_ctx_tbl dom solver atomic_expr =
     let mk_cons c_ctx tok sep indices =
         let add_cons e idx =
             let ke = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx) in
@@ -267,21 +267,19 @@ let trans_prop_decl t_ctx ctr_ctx_tbl dom solver decl_expr =
         then raise (Abstraction_error ("Atomic: No process name in " ^ (expr_s e)))
         else name
     in
-    match decl_expr with
-        | MDeclProp (id, v, PropAll e) ->
+    match atomic_expr with
+        | PropAll e ->
             let c_ctx = ctr_ctx_tbl#get_ctx (find_proc_name e) in
-            t_e (mk_all c_ctx) e
-        | MDeclProp (id, v, PropSome e) ->
+            PropGlob (t_e (mk_all c_ctx) e)
+        | PropSome e ->
             let c_ctx = ctr_ctx_tbl#get_ctx (find_proc_name e) in
-            t_e (mk_some c_ctx) e
-        | MDeclProp (id, v, PropGlob e) ->
+            PropGlob (t_e (mk_some c_ctx) e)
+        | PropGlob e ->
             let has_card = function
                 | UnEx (CARD, _) -> true
                 | _ -> false
             in
-            if expr_exists has_card e then repl_ctr e else e
-        | _ as s ->
-            raise (Abstraction_error ("Don't know how to handle " ^ (mir_stmt_s s)))
+            if expr_exists has_card e then PropGlob (repl_ctr e) else PropGlob e
 ;;
 
 (* TODO: find out the values at the end of the init_stmts,
@@ -562,23 +560,22 @@ let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
 ;;
 
 
-let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
-    let atomic_props = Hashtbl.create 10 in
+let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
     let ltl_forms = Hashtbl.create 10 in
-    let extract_atomic_prop name =
+    let extract_atomic_prop atomics name =
         try
-            match (Hashtbl.find atomic_props name) with
+            match (Program.StringMap.find name atomics) with
             | PropGlob e -> e
             | _ -> raise (Abstraction_error ("Cannot extract " ^ name))
         with Not_found ->
             raise (Abstraction_error ("No atomic expression: " ^ name))
     in
-    let replace_assume = function
+    let replace_assume atomics = function
         | MAssume (id, Var v) as s ->
             if funcs#keep_assume (Var v)
             then 
                 if v#proc_name = "spec"
-                then MAssume (id, extract_atomic_prop v#get_name)
+                then MAssume (id, extract_atomic_prop atomics v#get_name)
                 else s
             else MSkip id
         | _ as s -> s
@@ -599,7 +596,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
         let indices = range 0 c_ctx#get_ctr_dim in
         mk_nondet_choice (List.map make_opt indices)
     in
-    let replace_update c_ctx active_expr update stmts =
+    let replace_update c_ctx active_expr update atomics stmts =
         (* all local variables should be reset to 0 *)
         let new_update =
             let replace_expr = function
@@ -613,7 +610,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
                     end
                 | _ as s -> s
             in
-            List.map (fun e -> replace_assume (replace_expr e)) update
+            List.map (fun e -> replace_assume atomics (replace_expr e)) update
         in
         let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
         let prev_idx_ex = c_ctx#pack_index_expr in
@@ -634,7 +631,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
         @ post_asserts
         @ new_update
     in
-    let replace_comp stmts =
+    let replace_comp atomics stmts =
         let rec hack_nsnt = function
             (* XXX: this is a hack saying if we have nsnt + 1,
                 then it must be nsnt + delta *)
@@ -652,20 +649,22 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        List.map hack_nsnt (List.map replace_assume stmts)
+        List.map hack_nsnt (List.map (replace_assume atomics) stmts)
     in
     let mk_assume e = MAssume (-1, e) in
     let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
-        let abstract_proc c_ctx p =
+    let abstract_proc atomics p =
+        let c_ctx = ctr_ctx_tbl#get_ctx p#get_name in
         let invs = if funcs#embed_inv
-            then List.map mk_assume (find_invariants atomic_props)
+            then List.map mk_assume (find_invariants atomics)
             else [] in
         let body = remove_bad_statements p#get_stmts in
         let skel = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init = funcs#mk_init c_ctx p#get_active_expr skel.decl skel.init in
-        let new_update = replace_update c_ctx p#get_active_expr skel.update body in
-        let new_comp = replace_comp skel.comp in
+        let new_update =
+            replace_update c_ctx p#get_active_expr skel.update atomics body in
+        let new_comp = replace_comp atomics skel.comp in
         let new_comp_upd = MAtomic (-1, new_comp @ new_update @ invs) in
         let new_loop_body =
             [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
@@ -686,6 +685,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
         new_proc#set_active_expr (Const 1);
         (* SMT xducer: exactly at this moment we have all information to
            generate a xducer of a process *)
+        (* TODO: this must be a translation pass on its own *)
         let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
         let all_vars =
             (c_ctx#get_ctr :: t_ctx#get_shared) @ funcs#introduced_vars in
@@ -696,43 +696,28 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs units =
         Hashtbl.add xducers p#get_name (new proc_xducer p transd);
         Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
         (* end of xducer *)
+        new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
         new_proc
     in
-
-    let abs_unit = function
-    | Proc p ->
-        let c_ctx = ctr_ctx_tbl#get_ctx p#get_name in
-        let np = abstract_proc c_ctx p in
-        np#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
-        Proc np
-
-    | Stmt (MDeclProp (id, v, _) as d) ->
-        begin
-            let trd = (trans_prop_decl t_ctx ctr_ctx_tbl dom solver d) in
-            Hashtbl.add atomic_props v#get_name (PropGlob trd);
-            Stmt (MDeclProp (id, v, PropGlob trd))
-        end
-
-    | Ltl(name, ltl_expr) ->
+    let abstract_atomic ae =
+        (trans_prop_decl t_ctx ctr_ctx_tbl dom solver ae)
+    in
+    let save_ltl_form name ltl_expr =
         fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr
-
-    | _ as u -> u
     in
-    let new_units = List.map abs_unit units in
-    let keep_unit = function
-        | Stmt (MDecl (_, v, _)) -> not v#is_symbolic
-        | Stmt (MAssume (_, _)) -> false
-        | Stmt (MSkip _) -> false
-        | _ -> true
-    in
-    let ctr_decls =
-        List.map (fun v -> (Stmt (MDecl (-1, v, Nop ""))))
-            ctr_ctx_tbl#all_counters in
-    let out_units =
-        Stmt (MUnsafe (-1, "#include \"cegar_decl.inc\""))
-        :: (Stmt (MDecl (-1, ctr_ctx_tbl#get_spur, Const 0)))
-        :: ctr_decls 
-        @  (List.filter keep_unit new_units) in
-    (out_units, xducers, atomic_props, ltl_forms)
+    let new_atomics =
+        Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
+    let new_procs =
+        List.map (abstract_proc new_atomics) (Program.get_procs prog) in
+    let new_unsafes = ["#include \"cegar_decl.inc\""] in
+    let new_decls = ctr_ctx_tbl#get_spur :: ctr_ctx_tbl#all_counters in
+    (* XXX: fix *)
+    let _ = Program.StringMap.mapi save_ltl_form (Program.get_ltl_forms prog) in
+    let new_prog =
+        (Program.set_shared (new_decls @ (Program.get_shared prog))
+          (Program.set_atomics new_atomics
+            (Program.set_unsafes new_unsafes
+              (Program.set_procs new_procs (Program.empty))))) in
+    (Program.units_of_program new_prog, xducers, new_atomics, ltl_forms)
 ;;
 

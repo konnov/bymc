@@ -2,35 +2,41 @@ open SpinIr
 
 module StringMap = Map.Make (String)
 
+type expr_t = Spin.token expr
+
 type program = {
-    f_params: var list; f_shared: var list; f_assumes: Spin.token expr list;
+    f_params: var list; f_shared: var list;
+    f_assumes: expr_t list; f_unsafes: string list;
     f_procs: Spin.token proc list;
     f_atomics: Spin.token atomic_expr StringMap.t;
-    f_ltl_forms: Spin.token expr StringMap.t
+    f_ltl_forms: expr_t StringMap.t
 }
 
-let empty_program = {
-    f_params = []; f_shared = []; f_assumes = []; f_procs = [];
+let empty = {
+    f_params = []; f_shared = []; f_assumes = []; f_procs = []; f_unsafes = [];
     f_atomics = StringMap.empty; f_ltl_forms = StringMap.empty
 }
 
 let get_params prog = prog.f_params
-let set_params prog new_params = {prog with f_params = new_params}
+let set_params new_params prog = {prog with f_params = new_params}
 
 let get_shared prog = prog.f_shared
-let set_shared prog new_shared = {prog with f_shared = new_shared}
+let set_shared new_shared prog = {prog with f_shared = new_shared}
 
 let get_assumes prog = prog.f_assumes
-let set_assumes prog new_assumes = {prog with f_assumes = new_assumes}
+let set_assumes new_assumes prog = {prog with f_assumes = new_assumes}
+
+let get_unsafes prog = prog.f_unsafes
+let set_unsafes new_unsafes prog = {prog with f_unsafes = new_unsafes}
 
 let get_procs prog = prog.f_procs
-let set_procs prog new_procs = {prog with f_procs = new_procs}
+let set_procs new_procs prog = {prog with f_procs = new_procs}
 
 let get_atomics prog = prog.f_atomics
-let set_atomics prog new_atomics = {prog with f_atomics = new_atomics}
+let set_atomics new_atomics prog = {prog with f_atomics = new_atomics}
 
 let get_ltl_forms prog = prog.f_ltl_forms
-let set_ltl_forms prog new_ltl_forms = {prog with f_ltl_forms = new_ltl_forms}
+let set_ltl_forms new_ltl_forms prog = {prog with f_ltl_forms = new_ltl_forms}
 
 exception Program_error of string
 
@@ -43,7 +49,7 @@ let program_of_units units =
     | Stmt (MDeclProp(_, v, e)) ->
             let new_ap = (StringMap.add v#get_name e prog.f_atomics) in
             { prog with f_atomics = new_ap }
-    | Stmt (MExpr(_, e)) ->
+    | Stmt (MAssume(_, e)) ->
             { prog with f_assumes = (e :: prog.f_assumes) }
     | Stmt (_ as s) ->
             raise (Program_error
@@ -56,7 +62,7 @@ let program_of_units units =
     | None ->
             prog
     in
-    List.fold_left fold_u empty_program (List.rev units)
+    List.fold_left fold_u empty (List.rev units)
 
 
 let units_of_program program =
@@ -66,13 +72,15 @@ let units_of_program program =
         (Stmt (MDeclProp(-1, new var(name), expr))) :: accum in
     let form_to_ltl name expr accum =
         (Ltl(name, expr)) :: accum in
-    let to_expr e = Stmt (MExpr(-1, e)) in
+    let to_assume e = Stmt (MAssume(-1, e)) in
+    let to_unsafe e = Stmt (MUnsafe(-1, e)) in
     let to_proc p = Proc p in
     (List.concat
         [(List.map var_to_decl program.f_params);
          (List.map var_to_decl program.f_shared);
          (StringMap.fold atomic_to_decl program.f_atomics []);
-         (List.map to_expr program.f_assumes);
+         (List.map to_assume program.f_assumes);
+         (List.map to_unsafe program.f_unsafes);
          (List.map to_proc program.f_procs);
          (StringMap.fold form_to_ltl program.f_ltl_forms [])])
 

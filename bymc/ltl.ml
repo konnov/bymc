@@ -73,7 +73,7 @@ let normalize_form form =
 let embed_atomics aprops form =
     let get_atomic name =
         try
-            match Hashtbl.find aprops name with
+            match Program.StringMap.find name aprops with
             | PropGlob e -> e
             | _ -> raise (Fairness_error ("Incorrect atomic expr: " ^ name))
         with Not_found ->
@@ -135,7 +135,8 @@ let is_invariant_atomic name =
     Str.string_match (Str.regexp ".*_inv") name 0
 ;;
 
-let find_invariants aprops =
+let find_invariants (aprops: Spin.token atomic_expr Program.StringMap.t):
+        Spin.token expr list =
     let collect_invariants name prop inv_props =
         let form = match prop with
         | PropGlob e -> e
@@ -145,6 +146,6 @@ let find_invariants aprops =
         in
         if is_invariant_atomic name then form :: inv_props else inv_props
     in
-    Hashtbl.fold collect_invariants aprops []
+    Program.StringMap.fold collect_invariants aprops []
 ;;
 

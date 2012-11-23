@@ -13,24 +13,30 @@ module StringMap: Map.S with type key = string
 
 type program
 
+type expr_t = Spin.token expr
+
 val program_of_units: Spin.token prog_unit list -> program
-val empty_program: program
+val units_of_program: program -> Spin.token prog_unit list
+val empty: program
 
 val get_params: program -> var list
-val set_params: program -> var list -> program
+val set_params: var list -> program -> program
 
 val get_shared: program -> var list
-val set_shared: program -> var list -> program
+val set_shared: var list -> program -> program
 
-val get_assumes: program -> Spin.token expr list
-val set_assumes: program -> Spin.token expr list -> program
+val get_assumes: program -> expr_t list
+val set_assumes: expr_t list -> program -> program
+
+val get_unsafes: program -> string list
+val set_unsafes: string list -> program -> program
 
 val get_procs: program -> (Spin.token proc) list
-val set_procs: program -> (Spin.token proc) list -> program
+val set_procs: (Spin.token proc) list -> program -> program
 
 val get_atomics: program -> (Spin.token atomic_expr) StringMap.t
-val set_atomics: program -> (Spin.token atomic_expr) StringMap.t -> program
+val set_atomics: (Spin.token atomic_expr) StringMap.t -> program -> program
 
-val get_ltl_forms: program -> (Spin.token expr) StringMap.t
-val set_ltl_forms: program -> (Spin.token expr) StringMap.t -> program
+val get_ltl_forms: program -> (expr_t) StringMap.t
+val set_ltl_forms: (expr_t) StringMap.t -> program -> program
 

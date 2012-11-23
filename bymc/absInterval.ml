@@ -519,7 +519,7 @@ let translate_stmt ctx dom solver stmt =
     abs_stmt stmt 
 ;;
 
-let trans_prop_decl ctx dom solver decl_expr =
+let trans_prop_decl ctx dom solver atomic_expr =
     let tr_e e =
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
@@ -530,39 +530,39 @@ let trans_prop_decl ctx dom solver decl_expr =
         solver#pop_ctx;
         abs_ex
     in
-    match decl_expr with
-        | MDeclProp (id, v, PropAll e) ->
+    match atomic_expr with
+        | PropAll e ->
             if not (expr_exists (over_dom ctx) e)
-            then decl_expr
-            else MDeclProp (id, v, PropAll (tr_e e))
-        | MDeclProp (id, v, PropSome e) ->
+            then atomic_expr
+            else PropAll (tr_e e)
+        | PropSome e ->
             if not (expr_exists (over_dom ctx) e)
-            then decl_expr
-            else MDeclProp (id, v, PropSome (tr_e e))
-        | MDeclProp (id, v, PropGlob e) ->
+            then atomic_expr
+            else PropSome (tr_e e)
+        | PropGlob e ->
             if not (expr_exists (over_dom ctx) e)
-            then decl_expr
-            else MDeclProp (id, v, PropGlob (tr_e e))
-        | _ -> decl_expr
+            then atomic_expr
+            else PropGlob (tr_e e)
 ;;
 
-let do_interval_abstraction ctx dom solver units = 
-    let on_unit = function
-        | Proc p ->
-            solver#push_ctx;
-            List.iter solver#append_var_def p#get_locals;
-            List.iter solver#append_var_def ctx#get_shared;
-            let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
-            log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
-            List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
-            solver#pop_ctx;
-            Proc (proc_replace_body p body)
-
-        | Stmt (MDeclProp (_, _, _) as d) ->
-            Stmt (trans_prop_decl ctx dom solver d)
-
-        | _ as u -> u
+let do_interval_abstraction ctx dom solver prog = 
+    let abstract_proc p =
+        solver#push_ctx;
+        List.iter solver#append_var_def p#get_locals;
+        List.iter solver#append_var_def ctx#get_shared;
+        let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
+        log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
+        List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
+        solver#pop_ctx;
+        proc_replace_body p body
     in
-    List.map on_unit units
+    let abstract_atomic ae = 
+        trans_prop_decl ctx dom solver ae
+    in
+    let new_procs =
+        List.map abstract_proc (Program.get_procs prog) in
+    let new_atomics =
+        Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
+    (Program.set_atomics new_atomics (Program.set_procs new_procs prog))
 ;;
 

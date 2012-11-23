@@ -21,7 +21,7 @@ let write_to_file name units =
 ;;
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction is_first_run units =
+let do_abstraction is_first_run units prog =
     if is_first_run
     then begin 
         (* wipe the files left from previous refinement sessions *)
@@ -34,35 +34,35 @@ let do_abstraction is_first_run units =
     let dom = mk_domain solver ctx units in
 
     log INFO "> Constructing interval abstraction";
-    let intabs_units = do_interval_abstraction ctx dom solver units in
-    write_to_file "abs-interval.prm" intabs_units;
+    let intabs_prog = do_interval_abstraction ctx dom solver prog in
+    write_to_file "abs-interval.prm" (Program.units_of_program intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
     let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
     let funcs = new abs_ctr_funcs dom ctx solver in
     let ctrabs_units, _, _, _ =
-        do_counter_abstraction ctx dom solver ctr_ctx_tbl funcs intabs_units in
+        do_counter_abstraction ctx dom solver ctr_ctx_tbl funcs intabs_prog in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
     let _ = solver#stop in
     ctrabs_units
 ;;
 
-let construct_vass embed_inv units =
+let construct_vass embed_inv units prog =
     let ctx = mk_context units in
     ctx#set_hack_shared true; (* XXX: hack mode on *)
     let solver = ctx#run_solver in
 
     let dom = mk_domain solver ctx units in
     log INFO "> Constructing interval abstraction...";
-    let intabs_units = do_interval_abstraction ctx dom solver units in
+    let intabs_prog = do_interval_abstraction ctx dom solver prog in
     log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
     let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
     let vass_funcs = new vass_funcs dom ctx solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =
-        do_counter_abstraction ctx dom solver ctr_ctx_tbl vass_funcs intabs_units
+        do_counter_abstraction ctx dom solver ctr_ctx_tbl vass_funcs intabs_prog
     in
     write_to_file "abs-vass.prm" vass_units;
     log INFO "  [DONE]"; flush stdout;
@@ -84,8 +84,8 @@ let print_vass_trace t_ctx solver num_states =
 
 let check_invariant units inv_name =
     let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltl_forms)
-        = construct_vass false units in
-    let inv_expr = match Hashtbl.find aprops inv_name with
+        = construct_vass false units (Program.program_of_units units) in
+    let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
     | _ -> raise (Failure ("Invalid invariant " ^ inv_name))
     in
@@ -139,7 +139,7 @@ let filter_good_fairness aprops fair_forms =
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
     let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltls) =
-        construct_vass true units in
+        construct_vass true units (Program.program_of_units units) in
     let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
