@@ -5,7 +5,7 @@ module StringMap = Map.Make (String)
 type expr_t = Spin.token expr
 
 type program = {
-    f_params: var list; f_shared: var list;
+    f_params: var list; f_shared: var list; f_instrumental: var list;
     f_assumes: expr_t list; f_unsafes: string list;
     f_procs: Spin.token proc list;
     f_atomics: Spin.token atomic_expr StringMap.t;
@@ -13,7 +13,8 @@ type program = {
 }
 
 let empty = {
-    f_params = []; f_shared = []; f_assumes = []; f_procs = []; f_unsafes = [];
+    f_params = []; f_shared = []; f_instrumental = [];
+    f_assumes = []; f_procs = []; f_unsafes = [];
     f_atomics = StringMap.empty; f_ltl_forms = StringMap.empty
 }
 
@@ -22,6 +23,9 @@ let set_params new_params prog = {prog with f_params = new_params}
 
 let get_shared prog = prog.f_shared
 let set_shared new_shared prog = {prog with f_shared = new_shared}
+
+let get_instrumental prog = prog.f_instrumental
+let set_instrumental new_instr prog = {prog with f_instrumental = new_instr}
 
 let get_assumes prog = prog.f_assumes
 let set_assumes new_assumes prog = {prog with f_assumes = new_assumes}
@@ -85,6 +89,7 @@ let units_of_program program =
     (List.concat
         [(List.map var_to_decl program.f_params);
          (List.map var_to_decl program.f_shared);
+         (List.map var_to_decl program.f_instrumental);
          (StringMap.fold atomic_to_decl program.f_atomics []);
          (List.map to_assume program.f_assumes);
          (List.map to_unsafe program.f_unsafes);

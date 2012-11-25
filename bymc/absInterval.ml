@@ -320,11 +320,9 @@ let do_interval_abstraction solver caches prog =
         solver#pop_ctx;
         proc_replace_body p body
     in
-    let abstract_atomic ae = 
-        trans_prop_decl solver caches prog ae
+    let abstract_atomic ae = trans_prop_decl solver caches prog ae
     in
-    let new_procs =
-        List.map abstract_proc (Program.get_procs prog) in
+    let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_atomics =
         Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
     (Program.set_atomics new_atomics (Program.set_procs new_procs prog))

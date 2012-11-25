@@ -22,8 +22,14 @@ val empty: program
 val get_params: program -> var list
 val set_params: var list -> program -> program
 
+(* shared variables *)
 val get_shared: program -> var list
 val set_shared: var list -> program -> program
+
+(* instrumental variables added by the abstractions,
+   not part of the original problem *)
+val get_instrumental: program -> var list
+val set_instrumental: var list -> program -> program
 
 val get_assumes: program -> expr_t list
 val set_assumes: expr_t list -> program -> program

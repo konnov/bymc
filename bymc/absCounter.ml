@@ -39,7 +39,7 @@ fi
     | [] -> raise (Abstraction_error "An alternative in the empty list")
     | [seq] -> seq
     | seqs -> [MIf (-1, List.map (fun seq -> MOptGuarded seq) seqs)]
-;;
+
 
 let rec remove_bad_statements stmts =
     let pred s =
@@ -60,7 +60,7 @@ let rec remove_bad_statements stmts =
     in
     let filter l s = if pred s then (rem_s s) :: l else l in
     List.rev (List.fold_left filter [] stmts)
-;;
+
 
 let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     let mk_cons c_ctx tok sep indices =
@@ -155,7 +155,7 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
                 | _ -> false
             in
             if expr_exists has_card e then PropGlob (repl_ctr e) else PropGlob e
-;;
+
 
 (* TODO: find out the values at the end of the init_stmts,
    not the accumulated values
@@ -192,7 +192,7 @@ let find_init_local_vals ctr_ctx decls init_stmts =
                     "Unbounded after abstraction: %s" v#get_name in
                 raise (Abstraction_error m)
         ) [] ctr_ctx#var_vec
-;;
+
 
 (* remove assignments to local variables from the initialization section *)
 let omit_local_assignments prog init_stmts =
@@ -213,7 +213,6 @@ let omit_local_assignments prog init_stmts =
         | MOptElse seq -> MOptElse (List.map tr seq)
     in
     List.map tr init_stmts
-;;
 
 
 (* abstraction of functions different in VASS and our counter abstraction *)
@@ -243,7 +242,7 @@ class virtual ctr_funcs =
 
         method virtual embed_inv: bool
         method virtual set_embed_inv: bool -> unit
-    end;;
+    end
 
 
 class abs_ctr_funcs dom prog solver =
@@ -315,7 +314,7 @@ class abs_ctr_funcs dom prog solver =
         
         method embed_inv = false
         method set_embed_inv _ = ()
-    end;;
+    end
 
 
 class vass_funcs dom prog solver =
@@ -398,7 +397,7 @@ class vass_funcs dom prog solver =
         
         method embed_inv = m_embed_inv
         method set_embed_inv v = m_embed_inv <- v
-    end;;
+    end
 
 
 let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
@@ -432,7 +431,6 @@ let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
         close_out out
     end;
     None
-;;
 
 
 let do_counter_abstraction funcs solver caches prog =
@@ -595,10 +593,10 @@ let do_counter_abstraction funcs solver caches prog =
     (* XXX: fix *)
     let _ = Program.StringMap.mapi save_ltl_form (Program.get_ltl_forms prog) in
     let new_prog =
-        (Program.set_shared (new_decls @ (Program.get_shared prog))
+        (Program.set_shared (Program.get_shared prog)
+        (Program.set_instrumental new_decls
         (Program.set_atomics new_atomics
         (Program.set_unsafes new_unsafes
-        (Program.set_procs new_procs (Program.empty))))) in
-    (Program.units_of_program new_prog, xducers, new_atomics, ltl_forms)
-;;
+        (Program.set_procs new_procs (Program.empty)))))) in
+    (new_prog, xducers, new_atomics, ltl_forms)
 

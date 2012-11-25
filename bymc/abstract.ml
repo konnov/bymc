@@ -1,28 +1,28 @@
 
-open Printf;;
+open Printf
 
-open Accums;;
-open AbsInterval;;
-open AbsCounter;;
-open Infra;;
-open Ltl;;
+open Accums
+open AbsInterval
+open AbsCounter
+open Infra
+open Ltl
 open PiaDataCtx
 open PiaCtrCtx
-open Refinement;;
-open Smt;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open VarRole;;
-open Writer;;
+open Program
+open Refinement
+open Smt
+open Spin
+open SpinIr
+open SpinIrImp
+open VarRole
+open Writer
 
-open Debug;;
+open Debug
 
 let write_to_file name units =
     let fo = open_out name in
     List.iter (write_unit fo 0) units;
     close_out fo
-;;
 
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction is_first_run prog =
@@ -50,12 +50,12 @@ let do_abstraction is_first_run prog =
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_units, _, _, _ =
+    let ctrabs_prog, _, _, _ =
         do_counter_abstraction funcs solver caches intabs_prog in
-    write_to_file "abs-counter.prm" ctrabs_units;
+    write_to_file "abs-counter.prm" (units_of_program ctrabs_prog);
     log INFO "[DONE]";
     let _ = solver#stop in
-    ctrabs_units
+    ctrabs_prog
 ;;
 
 let construct_vass embed_inv prog =
@@ -77,13 +77,13 @@ let construct_vass embed_inv prog =
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
-    let vass_units, xducers, atomic_props, ltl_forms =
+    let vass_prog, xducers, atomic_props, ltl_forms =
         do_counter_abstraction vass_funcs solver caches intabs_prog
     in
-    write_to_file "abs-vass.prm" vass_units;
+    write_to_file "abs-vass.prm" (units_of_program vass_prog);
     log INFO "  [DONE]"; flush stdout;
 
-    (solver, caches, intabs_prog, xducers, atomic_props, ltl_forms)
+    (solver, caches, vass_prog, xducers, atomic_props, ltl_forms)
 ;;
 
 let print_vass_trace prog solver num_states = 
