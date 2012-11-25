@@ -50,7 +50,7 @@ class var_role_tbl (i_roles: (var, var_role) Hashtbl.t) =
     end
 
 
-let identify_var_roles units =
+let identify_var_roles prog =
     let roles = Hashtbl.create 10 in
     let fill_roles proc =
         let cfg = Cfg.mk_cfg (mir_to_lir proc#get_stmts) in
@@ -87,18 +87,15 @@ let identify_var_roles units =
                 Hashtbl.replace roles v new_role (* XXX: can we lose types? *)
             ) body_sum;
     in
-    List.iter (function Proc proc -> fill_roles proc | _ -> ()) units;
+    List.iter fill_roles (Program.get_procs prog);
 
-    let replace_global = function
-        | MDecl (_, v, e) -> (* global declaration *)
-            if not v#is_symbolic
-            then if LocalUnbounded <> (Hashtbl.find roles v)
-            then raise (Role_error
-                    (sprintf "Shared variable %s is not unbounded" v#get_name))
-            else Hashtbl.replace roles v SharedUnbounded
-        | _ -> ()
+    let replace_global v =
+        if LocalUnbounded <> (Hashtbl.find roles v)
+        then raise (Role_error
+            (sprintf "Shared variable %s is bounded" v#get_name))
+        else Hashtbl.replace roles v SharedUnbounded
     in
-    List.iter (function | Stmt s -> replace_global s | _ -> ()) units;
+    List.iter replace_global (Program.get_shared prog);
 
     log INFO " # Variable roles:";
     let sorted = List.sort cmp_qual_vars (hashtbl_keys roles) in

@@ -95,20 +95,6 @@ let identify_conditions var_roles stmts =
     Hashtbl.fold (fun text cond lst -> cond :: lst) tbl []
 ;;
 
-let rec extract_assumptions units =
-    match units with
-    | Stmt (MAssume (_, e)) :: tl -> e :: (extract_assumptions tl)
-    | _ :: tl -> extract_assumptions tl
-    | [] -> []
-;;
-
-let rec extract_globals units =
-    match units with
-    | Stmt MDecl (_, v, _) :: tl -> v :: (extract_globals tl)
-    | _ :: tl -> extract_globals tl
-    | [] -> []
-;;
-
 let sort_thresholds solver conds =
     let id_map = Hashtbl.create 10 in
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
@@ -164,13 +150,10 @@ let sort_thresholds solver conds =
     List.sort cmp_using_tbl conds
 ;;
 
-let mk_domain solver var_roles units =
+let mk_domain solver var_roles prog =
     log INFO "> Extracting an abstract domain...";
-    let collect_stmts l = function
-        | Proc p -> p#get_stmts @ l
-        | _ -> l
-    in
-    let all_stmts = List.fold_left collect_stmts [] units in
+    let collect_stmts l p = p#get_stmts @ l in
+    let all_stmts = List.fold_left collect_stmts [] (Program.get_procs prog) in
     let conds = identify_conditions var_roles#get_all (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver conds in
     let dom = PiaDom.create sorted_conds in

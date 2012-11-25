@@ -98,25 +98,23 @@ class ctr_abs_ctx dom role_tbl proctype_name abbrev_name =
 
 
 (* Collection of counter abstraction contexts: one for a process prototype. *)
-class ctr_abs_ctx_tbl dom role_tbl units =
+class ctr_abs_ctx_tbl dom role_tbl prog =
     object(self)
         val mutable tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length units)
+            = Hashtbl.create (List.length (Program.get_procs prog))
         val mutable abbrev_tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length units)
+            = Hashtbl.create (List.length (Program.get_procs prog))
         val spur_var = new var "bymc_spur"
         
         initializer
-            let mk = function
-                | Proc p ->
-                    let pname = p#get_name in
-                    let abbrev = str_shorten tbl pname in
-                    let c_ctx = new ctr_abs_ctx dom role_tbl pname abbrev in
-                    Hashtbl.add tbl pname c_ctx;
-                    Hashtbl.add abbrev_tbl abbrev c_ctx
-                | _ -> ()
+            let mk p =
+                let pname = p#get_name in
+                let abbrev = str_shorten tbl pname in
+                let c_ctx = new ctr_abs_ctx dom role_tbl pname abbrev in
+                Hashtbl.add tbl pname c_ctx;
+                Hashtbl.add abbrev_tbl abbrev c_ctx
             in
-            List.iter mk units
+            List.iter mk (Program.get_procs prog)
 
         method get_ctx name =
             try Hashtbl.find tbl name

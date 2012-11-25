@@ -25,7 +25,7 @@ let write_to_file name units =
 ;;
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction is_first_run units prog =
+let do_abstraction is_first_run prog =
     if is_first_run
     then begin 
         (* wipe the files left from previous refinement sessions *)
@@ -34,10 +34,10 @@ let do_abstraction is_first_run units prog =
         close_out (open_out "cegar_post.inc")
     end;
     let analysis = new analysis_cache in
-    let roles = identify_var_roles units in
+    let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
     let solver = run_solver prog in
-    let dom = mk_domain solver roles units in
+    let dom = mk_domain solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     analysis#set_pia_data_ctx pia_data;
@@ -48,7 +48,7 @@ let do_abstraction is_first_run units prog =
     write_to_file "abs-interval.prm" (Program.units_of_program intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
-    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles units);
+    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
     let ctrabs_units, _, _, _ =
         do_counter_abstraction funcs solver caches intabs_prog in
@@ -58,12 +58,12 @@ let do_abstraction is_first_run units prog =
     ctrabs_units
 ;;
 
-let construct_vass embed_inv units prog =
+let construct_vass embed_inv prog =
     let analysis = new analysis_cache in
-    let roles = identify_var_roles units in
+    let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
     let solver = run_solver prog in
-    let dom = mk_domain solver roles units in
+    let dom = mk_domain solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     pia_data#set_hack_shared true;
@@ -74,7 +74,7 @@ let construct_vass embed_inv units prog =
     let intabs_prog = do_interval_abstraction solver caches prog in
     log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
-    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles units);
+    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =
@@ -98,9 +98,9 @@ let print_vass_trace prog solver num_states =
     List.iter (print_st) (range 0 num_states)
 ;;
 
-let check_invariant units inv_name =
+let check_invariant prog inv_name =
     let (solver, caches, intabs_prog, xducers, aprops, ltl_forms)
-        = construct_vass false units (Program.program_of_units units) in
+        = construct_vass false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
@@ -131,14 +131,15 @@ let check_invariant units inv_name =
         (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
 ;;
 
-let check_all_invariants units =
-    let collect_invariants lst = function
-        | Stmt (MDeclProp (_, v, PropGlob e)) ->
-            if is_invariant_atomic v#get_name then v#get_name :: lst else lst
+let check_all_invariants prog =
+    let fold_invs name ae lst =
+        match ae with
+        | PropGlob e ->
+            if is_invariant_atomic name then name :: lst else lst
         | _ -> lst
     in
-    let invs = List.fold_left collect_invariants [] units in
-    List.iter (check_invariant units) invs
+    let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) [] in
+    List.iter (check_invariant prog) invs
 ;;
 
 let filter_good_fairness aprops fair_forms =
@@ -155,9 +156,9 @@ let filter_good_fairness aprops fair_forms =
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
-let do_refinement trail_filename units =
+let do_refinement trail_filename prog =
     let (solver, caches, intabs_prog, xducers, aprops, ltls) =
-        construct_vass true units (Program.program_of_units units) in
+        construct_vass true prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
@@ -170,7 +171,8 @@ let do_refinement trail_filename units =
     log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
     if (List.length trail_asserts) <= 1
-    then raise (Failure "All processes can do idle steps and stay forever at the initial state");
+    then raise (Failure
+        "All processes can do idle steps and stay forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS..."; flush stdout;
 
@@ -259,6 +261,6 @@ let do_refinement trail_filename units =
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
-        let _ = do_abstraction false units in ()
+        let _ = do_abstraction false prog in ()
     end
 ;;

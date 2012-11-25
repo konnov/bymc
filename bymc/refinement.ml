@@ -13,7 +13,7 @@ open Debug
 let pred_reach = "p";;
 let pred_recur = "r";;
 
-let parse_spin_trail filename dom t_ctx ctr_ctx_tbl prog =
+let parse_spin_trail filename dom data_ctx ctr_ctx_tbl prog =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
     let r = " *\\([A-Za-z0-9]+\\):GS{[0-9-]*->[0-9-]*:\\(\\([{}0-9,]\\)*\\)}.*" in
@@ -65,7 +65,7 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl prog =
             let shared = (Program.get_shared prog) in
             let v = Var (List.nth shared shared_no) in
             let e =
-                if t_ctx#must_keep_concrete v
+                if data_ctx#must_keep_concrete v
                 then dom#expr_is_concretization v value
                 else BinEx (EQ, v, Const value) (* keep it abstract *)
             in

@@ -80,11 +80,13 @@ let _ =
         log INFO "  [DONE]";
         log DEBUG (sprintf "#units: %d" (List.length units));
         match opts.action with
-          OptAbstract ->
+        | OptAbstract ->
               let prog = program_of_units units in
-              check_all_invariants units;
-              let _ = do_abstraction true units prog in ()
-        | OptRefine -> let _ = do_refinement opts.trail_name units in ()
+              check_all_invariants prog;
+              let _ = do_abstraction true prog in ()
+        | OptRefine ->
+              let prog = program_of_units units in
+              let _ = do_refinement opts.trail_name prog in ()
         | OptCheckInv -> ()
         | OptSubstitute ->
             let new_units = do_substitution opts.param_assignments units in
