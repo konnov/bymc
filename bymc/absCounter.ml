@@ -5,152 +5,27 @@
   Igor Konnov 2012
  *)
 
-open Printf;;
+open Printf
 
-open Accums;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open Smt;;
-open Cfg;;
-open Analysis;;
-open Ssa;;
-open SkelStruc;;
-open CfgSmt;;
-open Debug;;
+open Accums
+open Spin
+open SpinIr
+open SpinIrImp
+open Smt
+open Cfg
+open Analysis
+open Ssa
+open SkelStruc
+open CfgSmt
+open Debug
 
-open AbsBasics;;
-open VarRole;;
-open AbsInterval;;
-open Refinement;;
-open Ltl;;
+open AbsBasics
+open VarRole
+open AbsInterval
+open Refinement
+open Ltl
 
-(* Counter abstraction context. Each process prototype has its own counter
-   abstraction context as the abstraction depends on the local state space.
- *)
-class ctr_abs_ctx dom t_ctx proctype_name abbrev_name =
-    object(self)
-        val mutable control_vars: var list = []
-        val mutable control_size = 0
-        val mutable data_vars = []
-        val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
-        val ctr_var = new var ("bymc_k" ^ abbrev_name)
-        val spur_var = new var "bymc_spur"
-        
-        initializer
-            let is_proc_var v = (v#proc_name = proctype_name) in
-            let cvs = List.filter is_proc_var
-                (hashtbl_filter_keys is_bounded t_ctx#get_var_roles) in
-            if cvs == []
-            then begin
-                let m = "No status variable (like pc) in "
-                    ^ proctype_name ^ " found." in
-                raise (Abstraction_error m)
-            end;
-            control_vars <- cvs;
-            let var_dom_size v =
-                match t_ctx#get_role v with
-                | BoundedInt (a, b) ->
-                    if is_proc_var v then (b - a) + 1 else 1
-                | _ -> 1
-            in
-            control_size <- List.fold_left ( * ) 1 (List.map var_dom_size control_vars);
-            List.iter (fun v -> Hashtbl.add var_sizes v (var_dom_size v)) control_vars;
-            let dvs = List.filter is_proc_var
-                (hashtbl_filter_keys is_local_unbounded t_ctx#get_var_roles) in
-            data_vars <- dvs;
-            List.iter (fun v -> Hashtbl.add var_sizes v dom#length) data_vars;
-            ctr_var#set_isarray true;
-            ctr_var#set_num_elems
-                ((ipow dom#length (List.length data_vars))  * control_size);
-            spur_var#set_type SpinTypes.TBIT
-           
-        method proctype_name = proctype_name
-        method abbrev_name = abbrev_name
-
-        method get_control_vars = control_vars
-        method get_control_size = control_size
-        method get_locals = data_vars
-        method get_ctr = ctr_var
-        method get_ctr_dim = ctr_var#get_num_elems
-        method get_spur = spur_var
-
-        method var_vec = (self#get_locals @ self#get_control_vars)
-
-        method unpack_from_const i =
-            let vsz v = Hashtbl.find var_sizes v in
-            let valuation = Hashtbl.create (List.length self#var_vec) in
-            let unpack_one big_num var =
-                Hashtbl.add valuation var (big_num mod (vsz var));
-                big_num / (vsz var) in
-            let _ = List.fold_left unpack_one i self#var_vec in
-            valuation
-
-        method pack_to_const valuation =
-            let get_val var =
-                try Hashtbl.find valuation var
-                with Not_found ->
-                    raise (Failure
-                        (sprintf "Valuation of %s not found" var#get_name))
-            in
-            let pack_one sum var =
-                sum * (Hashtbl.find var_sizes var) + (get_val var) in
-            List.fold_left pack_one 0 (List.rev self#var_vec)
-
-        method pack_index_expr =
-            let pack_one subex var =
-                if is_nop subex
-                then Var var
-                else let shifted =
-                        BinEx (MULT, subex, Const (Hashtbl.find var_sizes var)) in
-                    BinEx (PLUS, shifted, Var var)
-            in
-            List.fold_left pack_one (Nop "") (List.rev self#var_vec)
-
-        method all_indices_for check_val_fun =
-            let has_v i = (check_val_fun (self#unpack_from_const i)) in
-            List.filter has_v (range 0 self#get_ctr_dim)
-    end
-;;
-
-
-(* Collection of counter abstraction contexts: one for a process prototype. *)
-class ctr_abs_ctx_tbl dom t_ctx units =
-    object(self)
-        val mutable tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length units)
-        val mutable abbrev_tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length units)
-        val spur_var = new var "bymc_spur"
-        
-        initializer
-            let mk = function
-                | Proc p ->
-                    let pname = p#get_name in
-                    let abbrev = str_shorten tbl pname in
-                    let c_ctx = new ctr_abs_ctx dom t_ctx pname abbrev in
-                    Hashtbl.add tbl pname c_ctx;
-                    Hashtbl.add abbrev_tbl abbrev c_ctx
-                | _ -> ()
-            in
-            List.iter mk units
-
-        method get_ctx name =
-            try Hashtbl.find tbl name
-            with Not_found -> raise (Failure ("No context for " ^ name))
-
-        method get_ctx_by_abbrev short =
-            try Hashtbl.find abbrev_tbl short
-            with Not_found -> raise (Failure ("No context for " ^ short))
-
-        method all_counters =
-            List.map (fun c -> c#get_ctr) (hashtbl_vals tbl)
-
-        method all_ctxs = hashtbl_vals tbl
-
-        method get_spur = spur_var
-    end
-;;
+open PiaCtrCtx
 
 
 let mk_nondet_choice = function
@@ -187,7 +62,7 @@ let rec remove_bad_statements stmts =
     List.rev (List.fold_left filter [] stmts)
 ;;
 
-let trans_prop_decl t_ctx ctr_ctx_tbl dom solver atomic_expr =
+let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     let mk_cons c_ctx tok sep indices =
         let add_cons e idx =
             let ke = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx) in
@@ -203,13 +78,13 @@ let trans_prop_decl t_ctx ctr_ctx_tbl dom solver atomic_expr =
         mk_cons c_ctx NE OR (c_ctx#all_indices_for check_fun) in
     let rec t_e mk_fun = function
         | BinEx (EQ, Var v, Const c) as e ->
-            if not (t_ctx#is_global v)
+            if not (Program.is_global prog v)
             then mk_fun (fun m -> c = (Hashtbl.find m v))
             else e
         | BinEx (EQ, Const c, Var v) ->
             t_e mk_fun (BinEx (EQ, Var v, Const c))
         | BinEx (NE, Var v, Const c) as e ->
-            if not (t_ctx#is_global v)
+            if not (Program.is_global prog v)
             then mk_fun (fun m -> c <> (Hashtbl.find m v))
             else e
         | BinEx (NE, Const c, Var v) ->
@@ -222,7 +97,7 @@ let trans_prop_decl t_ctx ctr_ctx_tbl dom solver atomic_expr =
             UnEx (NEG, t_e mk_fun s)
         | _ as e ->
             let not_local = function
-            | Var v -> t_ctx#is_global v
+            | Var v -> Program.is_global prog v
             | _ -> true
             in
             if not (expr_forall not_local e)
@@ -320,10 +195,10 @@ let find_init_local_vals ctr_ctx decls init_stmts =
 ;;
 
 (* remove assignments to local variables from the initialization section *)
-let omit_local_assignments ctx init_stmts =
+let omit_local_assignments prog init_stmts =
     let rec tr = function
         | MExpr (id, BinEx(ASGN, Var v, rhs)) as s ->
-            if ctx#is_global v
+            if Program.is_global prog v
             then s
             else MExpr (id, Nop ("/* " ^ (mir_stmt_s s) ^ " */"))
         | MAtomic (id, seq) ->
@@ -371,7 +246,7 @@ class virtual ctr_funcs =
     end;;
 
 
-class abs_ctr_funcs dom t_ctx solver =
+class abs_ctr_funcs dom prog solver =
     object(self)
         inherit ctr_funcs
 
@@ -385,14 +260,14 @@ class abs_ctr_funcs dom t_ctx solver =
 
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
             let n = c_ctx#get_ctr_dim in
-            let m = List.length t_ctx#get_shared in
+            let m = List.length (Program.get_shared prog) in
             let str = sprintf "%s:GS{%%d->%%d:{%s},%s}\\n"
                 c_ctx#abbrev_name
                 (String.concat "," (Accums.n_copies n "%d"))
                 (String.concat "," (Accums.n_copies m "%d")) in
             let mk_deref i = self#deref_ctr c_ctx (Const i) in
             let es = (List.map mk_deref (range 0 n))
-                @ (List.map (fun v -> Var v) t_ctx#get_shared) in
+                @ (List.map (fun v -> Var v) (Program.get_shared prog)) in
             
             [ MPrint (-1, str, prev_idx :: next_idx :: es)]
 
@@ -414,7 +289,7 @@ class abs_ctr_funcs dom t_ctx solver =
                     (fun d -> List.map2 mk_option init_locals d
                     ) size_dist_list
             in
-            (omit_local_assignments t_ctx init_stmts)
+            (omit_local_assignments prog init_stmts)
             @ 
             (mk_nondet_choice option_list)
                 @ self#mk_post_asserts c_ctx active_expr (Const (-1)) (Const 0)
@@ -443,7 +318,7 @@ class abs_ctr_funcs dom t_ctx solver =
     end;;
 
 
-class vass_funcs dom t_ctx solver =
+class vass_funcs dom prog solver =
     object(self)
         inherit ctr_funcs
 
@@ -497,7 +372,7 @@ class vass_funcs dom t_ctx solver =
             let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun (Nop "") i))
             in
             let other0 = List.map mk_oth other_indices in
-            (omit_local_assignments t_ctx init_stmts)
+            (omit_local_assignments prog init_stmts)
             @ sum_eq_n :: other0
                 @ (self#mk_post_asserts c_ctx active_expr (Const 0) (Const 0))
 
@@ -560,7 +435,10 @@ let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
 ;;
 
 
-let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
+let do_counter_abstraction funcs solver caches prog =
+    let t_ctx = caches#get_analysis#get_pia_data_ctx in
+    let roles = caches#get_analysis#get_var_roles in
+    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let ltl_forms = Hashtbl.create 10 in
     let extract_atomic_prop atomics name =
         try
@@ -602,7 +480,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
             let replace_expr = function
                 | MExpr (_1, BinEx (ASGN, Var var, rhs)) as s ->
                     begin
-                        match t_ctx#get_role var with
+                        match roles#get_role var with
                         | LocalUnbounded
                         | BoundedInt (_, _) ->
                             MExpr (-1, BinEx (ASGN, Var var, Const 0))
@@ -688,8 +566,11 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
         (* TODO: this must be a translation pass on its own *)
         let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
         let all_vars =
-            (c_ctx#get_ctr :: t_ctx#get_shared) @ funcs#introduced_vars in
-        let cfg = mk_ssa true all_vars t_ctx#get_non_shared (mk_cfg lirs) in
+            (c_ctx#get_ctr :: (Program.get_shared prog)
+             @ funcs#introduced_vars) in
+        let non_shared = List.filter
+            (Program.is_not_global prog) (hashtbl_keys roles#get_all) in
+        let cfg = mk_ssa true all_vars non_shared (mk_cfg lirs) in
         if may_log DEBUG
         then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
         let transd = cfg_to_constraints cfg in
@@ -700,7 +581,7 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
         new_proc
     in
     let abstract_atomic ae =
-        (trans_prop_decl t_ctx ctr_ctx_tbl dom solver ae)
+        (trans_prop_decl solver ctr_ctx_tbl prog ae)
     in
     let save_ltl_form name ltl_expr =
         fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr
@@ -715,9 +596,9 @@ let do_counter_abstraction t_ctx dom solver ctr_ctx_tbl funcs prog =
     let _ = Program.StringMap.mapi save_ltl_form (Program.get_ltl_forms prog) in
     let new_prog =
         (Program.set_shared (new_decls @ (Program.get_shared prog))
-          (Program.set_atomics new_atomics
-            (Program.set_unsafes new_unsafes
-              (Program.set_procs new_procs (Program.empty))))) in
+        (Program.set_atomics new_atomics
+        (Program.set_unsafes new_unsafes
+        (Program.set_procs new_procs (Program.empty))))) in
     (Program.units_of_program new_prog, xducers, new_atomics, ltl_forms)
 ;;
 

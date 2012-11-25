@@ -1,17 +1,21 @@
 
 open Printf;;
 
+open Accums;;
 open AbsInterval;;
 open AbsCounter;;
+open Infra;;
+open Ltl;;
+open PiaDataCtx
+open PiaCtrCtx
 open Refinement;;
 open Smt;;
-
 open Spin;;
 open SpinIr;;
 open SpinIrImp;;
-open Ltl;;
+open VarRole;;
 open Writer;;
-open Accums;;
+
 open Debug;;
 
 let write_to_file name units =
@@ -29,19 +33,25 @@ let do_abstraction is_first_run units prog =
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
     end;
-    let ctx = mk_context units in
-    let solver = ctx#run_solver in
-    let dom = mk_domain solver ctx units in
+    let analysis = new analysis_cache in
+    let roles = identify_var_roles units in
+    analysis#set_var_roles roles;
+    let solver = run_solver prog in
+    let dom = mk_domain solver roles units in
+    analysis#set_pia_dom dom;
+    let pia_data = new pia_data_ctx roles in
+    analysis#set_pia_data_ctx pia_data;
+    let caches = new pass_caches analysis in
 
     log INFO "> Constructing interval abstraction";
-    let intabs_prog = do_interval_abstraction ctx dom solver prog in
+    let intabs_prog = do_interval_abstraction solver caches prog in
     write_to_file "abs-interval.prm" (Program.units_of_program intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
-    let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
-    let funcs = new abs_ctr_funcs dom ctx solver in
+    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles units);
+    let funcs = new abs_ctr_funcs dom intabs_prog solver in
     let ctrabs_units, _, _, _ =
-        do_counter_abstraction ctx dom solver ctr_ctx_tbl funcs intabs_prog in
+        do_counter_abstraction funcs solver caches intabs_prog in
     write_to_file "abs-counter.prm" ctrabs_units;
     log INFO "[DONE]";
     let _ = solver#stop in
@@ -49,31 +59,37 @@ let do_abstraction is_first_run units prog =
 ;;
 
 let construct_vass embed_inv units prog =
-    let ctx = mk_context units in
-    ctx#set_hack_shared true; (* XXX: hack mode on *)
-    let solver = ctx#run_solver in
+    let analysis = new analysis_cache in
+    let roles = identify_var_roles units in
+    analysis#set_var_roles roles;
+    let solver = run_solver prog in
+    let dom = mk_domain solver roles units in
+    analysis#set_pia_dom dom;
+    let pia_data = new pia_data_ctx roles in
+    pia_data#set_hack_shared true;
+    analysis#set_pia_data_ctx pia_data;
+    let caches = new pass_caches analysis in
 
-    let dom = mk_domain solver ctx units in
     log INFO "> Constructing interval abstraction...";
-    let intabs_prog = do_interval_abstraction ctx dom solver prog in
+    let intabs_prog = do_interval_abstraction solver caches prog in
     log INFO "  [DONE]";
     log INFO "> Constructing VASS and transducers...";
-    let ctr_ctx_tbl = new ctr_abs_ctx_tbl dom ctx units in
-    let vass_funcs = new vass_funcs dom ctx solver in
+    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles units);
+    let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_units, xducers, atomic_props, ltl_forms =
-        do_counter_abstraction ctx dom solver ctr_ctx_tbl vass_funcs intabs_prog
+        do_counter_abstraction vass_funcs solver caches intabs_prog
     in
     write_to_file "abs-vass.prm" vass_units;
     log INFO "  [DONE]"; flush stdout;
 
-    (ctx, solver, dom, ctr_ctx_tbl, xducers, atomic_props, ltl_forms)
+    (solver, caches, intabs_prog, xducers, atomic_props, ltl_forms)
 ;;
 
-let print_vass_trace t_ctx solver num_states = 
+let print_vass_trace prog solver num_states = 
     printf "Here is a CONCRETE trace in VASS violating the property.\n";
     printf "See concrete values of parameters at the state 0.\n\n";
-    let vals = parse_smt_evidence t_ctx solver in
+    let vals = parse_smt_evidence prog solver in
     let print_st i =
         printf "%d: " i;
         pretty_print_exprs (Hashtbl.find vals i);
@@ -83,8 +99,9 @@ let print_vass_trace t_ctx solver num_states =
 ;;
 
 let check_invariant units inv_name =
-    let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltl_forms)
+    let (solver, caches, intabs_prog, xducers, aprops, ltl_forms)
         = construct_vass false units (Program.program_of_units units) in
+    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
     | _ -> raise (Failure ("Invalid invariant " ^ inv_name))
@@ -100,12 +117,13 @@ let check_invariant units inv_name =
         solver#set_collect_asserts true;
         solver#set_need_evidence true;
         let res, smt_rev_map =
-            (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1) in
+            (simulate_in_smt solver intabs_prog ctr_ctx_tbl
+                xducers step_asserts rev_map 1) in
         solver#set_collect_asserts false;
         if res then begin
             printf "The invariant %s is violated!\n\n" inv_name;
             printf "Here is an example:\n";
-            print_vass_trace ctx solver 2;
+            print_vass_trace intabs_prog solver 2;
             raise (Failure (sprintf "The invariant %s is violated" inv_name))
         end
     in
@@ -138,13 +156,16 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename units =
-    let (ctx, solver, dom, ctr_ctx_tbl, xducers, aprops, ltls) =
+    let (solver, caches, intabs_prog, xducers, aprops, ltls) =
         construct_vass true units (Program.program_of_units units) in
+    let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
+    let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
+    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
-        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl in
+        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl intabs_prog in
     let total_steps = (List.length trail_asserts) - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
@@ -156,7 +177,7 @@ let do_refinement trail_filename units =
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
-                solver ctx ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
+                solver intabs_prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
         if res
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
@@ -175,7 +196,7 @@ let do_refinement trail_filename units =
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         solver#set_collect_asserts true;
         let res, smt_rev_map =
-            (simulate_in_smt solver ctx ctr_ctx_tbl xducers step_asserts rev_map 1)
+            (simulate_in_smt solver intabs_prog ctr_ctx_tbl xducers step_asserts rev_map 1)
         in
         solver#set_collect_asserts false;
         if not res
@@ -223,7 +244,7 @@ let do_refinement trail_filename units =
             if not (sim_prefix (num_states - 1))
             then begin
                 log INFO "The path is not spurious.";
-                print_vass_trace ctx solver num_states;
+                print_vass_trace intabs_prog solver num_states;
             end else begin
                 let short_len = List.find sim_prefix (range 1 num_states) in
                 log INFO (sprintf "  The shortest spurious path is 0:%d"

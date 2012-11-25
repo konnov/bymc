@@ -13,7 +13,7 @@ open Debug
 let pred_reach = "p";;
 let pred_recur = "r";;
 
-let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
+let parse_spin_trail filename dom t_ctx ctr_ctx_tbl prog =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
     let r = " *\\([A-Za-z0-9]+\\):GS{[0-9-]*->[0-9-]*:\\(\\([{}0-9,]\\)*\\)}.*" in
@@ -62,7 +62,8 @@ let parse_spin_trail filename dom t_ctx ctr_ctx_tbl =
             (* constraint no, concrete expression, abstract expression *)
             (id, e, BinEx (EQ, arr_ctr_elem, Const value))
         else let shared_no = pos - c_ctx#get_ctr_dim in
-            let v = Var (List.nth t_ctx#get_shared shared_no) in
+            let shared = (Program.get_shared prog) in
+            let v = Var (List.nth shared shared_no) in
             let e =
                 if t_ctx#must_keep_concrete v
                 then dom#expr_is_concretization v value
@@ -154,7 +155,8 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
 (* TODO: optimize it for the case of checking one transition only! *)
 (* TODO: mark the case of replaying a path (not a transition) as experimental
          and remove it out from here, it is heavy *)
-let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_steps =
+let simulate_in_smt solver prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps =
+    let shared_vars = (Program.get_shared prog) in
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
@@ -173,7 +175,7 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
         | _ -> ()
     in
     let append_trail_asserts state_no (proc, asserts) =
-        List.iter (append_one_assert proc t_ctx#get_shared state_no) asserts
+        List.iter (append_one_assert proc shared_vars state_no) asserts
     in
     solver#push_ctx;
     (* project the trace to the names of processes taking steps *)
@@ -188,7 +190,7 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
         let proc_xd = (hashtbl_find_str xducers proc)#get_trans_form in
         let when_moving = List.map (fun p -> p = c_ctx#abbrev_name) moving_procs
         in
-        let local_vars = [c_ctx#get_ctr] and shared_vars =  t_ctx#get_shared in
+        let local_vars = [c_ctx#get_ctr] in
         create_path c_ctx#abbrev_name proc_xd local_vars shared_vars when_moving n_steps in
     let xducer_asserts =
         List.concat (List.map proc_asserts (hashtbl_keys xducers)) in
@@ -210,7 +212,7 @@ let simulate_in_smt solver t_ctx ctr_ctx_tbl xducers trail_asserts rev_map n_ste
     (result, smt_rev_map)
 ;;
 
-let parse_smt_evidence t_ctx solver =
+let parse_smt_evidence prog solver =
     let vals = Hashtbl.create 10 in
     let lines = solver#get_evidence in
     let param_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
@@ -235,7 +237,8 @@ let parse_smt_evidence t_ctx solver =
             let value = int_of_string (Str.matched_group 4 line) in
             let state = if dir = "IN" then step else (step + 1) in
             let e = BinEx (ASGN, Var (new var name), Const value) in
-            if List.exists (fun v -> v#get_name = name) t_ctx#get_shared
+            if List.exists
+                (fun v -> v#get_name = name) (Program.get_shared prog)
             then add_state_expr state e;
         end else if Str.string_match arr_re line 0
         then begin

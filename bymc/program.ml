@@ -38,6 +38,13 @@ let set_atomics new_atomics prog = {prog with f_atomics = new_atomics}
 let get_ltl_forms prog = prog.f_ltl_forms
 let set_ltl_forms new_ltl_forms prog = {prog with f_ltl_forms = new_ltl_forms}
 
+let is_global prog v =
+    try v = (List.find ((=) v) (prog.f_params @ prog.f_shared))
+    with Not_found -> false
+
+let is_not_global prog v =
+    not (is_global prog v)
+
 exception Program_error of string
 
 let program_of_units units =

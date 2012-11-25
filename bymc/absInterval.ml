@@ -16,72 +16,20 @@ open VarRole;;
 
 exception Skeleton_not_supported of string;;
 
-(* Context of parametric interval abstraction.
-   It collects variable roles over different process prototypes.
- *)
-class ['tok] trans_context =
-    object(self)
-        val mutable globals: var list = []
-        val mutable assumps: 'tok expr list = []
-        val mutable var_roles: (var, var_role) Hashtbl.t = Hashtbl.create 1
-        (* XXX: special hack mode for VASS, shared variables
-           treated differently.
-           TODO: do it w/o hack after the deadline!
-         *)
-        val mutable m_hack_shared: bool = false
+(* TODO: it does not belong to this module. Move to Program? *)
+let run_solver (prog: Program.program) =
+    let smt_exprs =
+        List.append
+            (List.map var_to_smt (Program.get_params prog))
+            (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e))
+                (Program.get_assumes prog))
+    in
+    let solver = new yices_smt in
+    solver#start;
+    (* solver#set_debug true; *) (* see yices.log *)
+    List.iter solver#append smt_exprs;
+    solver
 
-        (*
-          Run a solver prepopulated with a context.
-          The callee has to call solver#stop afterwards
-         *)
-        method run_solver =
-            let smt_exprs =
-                List.append
-                    (List.map var_to_smt self#get_symbolic)
-                    (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e))
-                        assumps)
-            in
-            let solver = new yices_smt in
-            solver#start;
-            (* solver#set_debug true; *) (* see yices.log *)
-            List.iter solver#append smt_exprs;
-            solver
-
-        method get_role v = Hashtbl.find var_roles v
-
-        method get_globals = globals
-        method set_globals g = globals <- g
-        method is_global v =
-            try v = (List.find ((=) v) globals)
-            with Not_found -> false
-
-        method get_shared =
-            List.filter (fun v -> not v#is_symbolic) globals
-
-        method get_non_shared =
-            List.filter (fun v -> not (self#is_global v)) (hashtbl_keys var_roles)
-
-        method get_symbolic =
-            List.filter (fun v -> v#is_symbolic) globals
-
-        method get_var_roles = var_roles
-        method set_var_roles r = var_roles <- r
-        method get_assumps = assumps
-        method set_assumps a = assumps <- a
-
-        method is_hack_shared = m_hack_shared
-        method set_hack_shared b = m_hack_shared <- b
-
-        method must_keep_concrete (e: token expr) = 
-            match e with
-            | Var v -> m_hack_shared && is_shared_unbounded (self#get_role v)
-            | _ -> false
-
-        method var_needs_abstraction (v: var) =
-            let r = self#get_role v in
-            (not (self#must_keep_concrete (Var v))) && (not (is_bounded r))
-    end
-;;
 
 (* XXX: copied from spin.mly *)
 let rec has_expr_symbolic e =
@@ -95,6 +43,7 @@ let rec has_expr_symbolic e =
     | _ -> false
 ;;
 
+(* TODO: move to piaDom *)
 let identify_conditions var_roles stmts =
     let is_threshold v e =
         let r = Hashtbl.find var_roles v in
@@ -160,7 +109,7 @@ let rec extract_globals units =
     | [] -> []
 ;;
 
-let sort_thresholds solver ctx conds =
+let sort_thresholds solver conds =
     let id_map = Hashtbl.create 10 in
     List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
     solver#push_ctx;
@@ -215,37 +164,15 @@ let sort_thresholds solver ctx conds =
     List.sort cmp_using_tbl conds
 ;;
 
-let mk_context units =
-    let ctx = new trans_context in
-    ctx#set_var_roles (identify_var_roles units);
-    log INFO " # Variable roles:";
-    let sorted = List.sort cmp_qual_vars (hashtbl_keys ctx#get_var_roles) in
-    let print_var_role v =
-        let r = Hashtbl.find ctx#get_var_roles v in
-        log INFO (sprintf "   %s -> %s" v#qual_name (var_role_s r)) in
-    List.iter print_var_role sorted;
-    ctx#set_assumps (extract_assumptions units);
-    log INFO " # Assumptions:";
-    List.iter
-        (fun e -> log INFO (sprintf "   assume(%s)" (expr_s e)))
-        ctx#get_assumps;
-    ctx#set_globals (extract_globals units);
-    log INFO " # Globals:";
-    List.iter
-        (fun v -> log INFO (sprintf "   var %s" v#get_name))
-        ctx#get_globals;
-    ctx
-;;
-
-let mk_domain solver ctx units =
+let mk_domain solver var_roles units =
     log INFO "> Extracting an abstract domain...";
     let collect_stmts l = function
         | Proc p -> p#get_stmts @ l
         | _ -> l
     in
     let all_stmts = List.fold_left collect_stmts [] units in
-    let conds = identify_conditions ctx#get_var_roles (mir_to_lir all_stmts) in
-    let sorted_conds = sort_thresholds solver ctx conds in
+    let conds = identify_conditions var_roles#get_all (mir_to_lir all_stmts) in
+    let sorted_conds = sort_thresholds solver conds in
     let dom = PiaDom.create sorted_conds in
     dom#print;
     flush stdout;
@@ -331,11 +258,11 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
     MIf (-1, guarded_actions)
 ;;
 
-let over_dom ctx = function
+let over_dom (roles: var_role_tbl) = function
     | Var v ->
         begin
             try
-                v#is_symbolic || (is_unbounded (ctx#get_role v))
+                v#is_symbolic || (is_unbounded (roles#get_role v))
             with Not_found ->
                 raise (Abstraction_error (sprintf "No role for %s" v#get_name))
         end
@@ -471,11 +398,14 @@ let translate_expr ctx dom solver atype expr =
 
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
-let translate_stmt ctx dom solver stmt =
+let translate_stmt solver caches stmt =
+    let ctx = caches#get_analysis#get_pia_data_ctx in
+    let roles = caches#get_analysis#get_var_roles in
+    let dom = caches#get_analysis#get_pia_dom in
     let rec abs_seq seq = List.fold_right (fun s l -> (abs_stmt s) :: l) seq [] 
     and abs_stmt = function
     | MExpr (id, e) as s ->
-        if not (expr_exists (over_dom ctx) e)
+        if not (expr_exists (over_dom roles) e)
         then s (* no domain variables, keep as it is *)
         else begin
             match e with
@@ -519,45 +449,48 @@ let translate_stmt ctx dom solver stmt =
     abs_stmt stmt 
 ;;
 
-let trans_prop_decl ctx dom solver atomic_expr =
+let trans_prop_decl solver caches prog atomic_expr =
+    let ctx = caches#get_analysis#get_pia_data_ctx in
+    let dom = caches#get_analysis#get_pia_dom in
+    let roles = caches#get_analysis#get_var_roles in
     let tr_e e =
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
         solver#push_ctx;
         List.iter solver#append_var_def locals;
-        List.iter solver#append_var_def ctx#get_shared;
+        List.iter solver#append_var_def (Program.get_shared prog);
         let abs_ex = translate_expr ctx dom solver UnivAbs e in
         solver#pop_ctx;
         abs_ex
     in
     match atomic_expr with
         | PropAll e ->
-            if not (expr_exists (over_dom ctx) e)
+            if not (expr_exists (over_dom roles) e)
             then atomic_expr
             else PropAll (tr_e e)
         | PropSome e ->
-            if not (expr_exists (over_dom ctx) e)
+            if not (expr_exists (over_dom roles) e)
             then atomic_expr
             else PropSome (tr_e e)
         | PropGlob e ->
-            if not (expr_exists (over_dom ctx) e)
+            if not (expr_exists (over_dom roles) e)
             then atomic_expr
             else PropGlob (tr_e e)
 ;;
 
-let do_interval_abstraction ctx dom solver prog = 
+let do_interval_abstraction solver caches prog = 
     let abstract_proc p =
         solver#push_ctx;
         List.iter solver#append_var_def p#get_locals;
-        List.iter solver#append_var_def ctx#get_shared;
-        let body = List.map (translate_stmt ctx dom solver) p#get_stmts in
+        List.iter solver#append_var_def (Program.get_shared prog);
+        let body = List.map (translate_stmt solver caches) p#get_stmts in
         log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
         List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
         solver#pop_ctx;
         proc_replace_body p body
     in
     let abstract_atomic ae = 
-        trans_prop_decl ctx dom solver ae
+        trans_prop_decl solver caches prog ae
     in
     let new_procs =
         List.map abstract_proc (Program.get_procs prog) in

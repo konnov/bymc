@@ -1,14 +1,16 @@
-open Printf;;
+open Printf
 
-open Analysis;;
-open Cfg;;
-open SkelStruc;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
+open Accums
+open Analysis
+open Cfg
+open Debug
+open SkelStruc
+open Spin
+open SpinIr
+open SpinIrImp
 
 type var_role =
-    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch;;
+    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch
 
 let var_role_s r =
     match r with
@@ -16,30 +18,37 @@ let var_role_s r =
     | SharedUnbounded -> "shared-unbounded"
     | LocalUnbounded -> "local-unbounded"
     | Scratch -> "scratch"
-;;
 
 let is_unbounded = function
     | SharedUnbounded
     | LocalUnbounded -> true
     | _ -> false
-;;
 
 let is_bounded = function
     | BoundedInt (_, _) -> true
     | _ -> false
-;;
 
 let is_local_unbounded = function
     | LocalUnbounded -> true
     | _ -> false
-;;
 
 let is_shared_unbounded = function
     | SharedUnbounded -> true
     | _ -> false
-;;
 
-exception Role_error of string;;
+exception Role_error of string
+exception Var_not_found of string
+
+
+class var_role_tbl (i_roles: (var, var_role) Hashtbl.t) =
+    object
+        method get_role v =
+            try Hashtbl.find i_roles v
+            with Not_found -> raise (Var_not_found v#get_name)
+
+        method get_all = i_roles
+    end
+
 
 let identify_var_roles units =
     let roles = Hashtbl.create 10 in
@@ -57,8 +66,7 @@ let identify_var_roles units =
         let loc_roles =
             try Hashtbl.find int_roles fst_id
             with Not_found ->
-                let m =
-                    (sprintf "No analysis data for loc %d" fst_id) in
+                let m = (sprintf "No analysis data for loc %d" fst_id) in
                 raise (Failure m)
         in
         Hashtbl.iter
@@ -92,6 +100,12 @@ let identify_var_roles units =
     in
     List.iter (function | Stmt s -> replace_global s | _ -> ()) units;
 
-    roles
-;;
+    log INFO " # Variable roles:";
+    let sorted = List.sort cmp_qual_vars (hashtbl_keys roles) in
+    let print_var_role v =
+        let r = Hashtbl.find roles v in
+        log INFO (sprintf "   %s -> %s" v#qual_name (var_role_s r)) in
+    List.iter print_var_role sorted;
+
+    new var_role_tbl roles
 
