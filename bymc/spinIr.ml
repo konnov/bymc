@@ -260,6 +260,16 @@ let rec expr_exists func e =
     | _ -> false
 ;;
 
+let not_symbolic = function
+    | Var v -> not v#is_symbolic
+    | _ -> false
+;;
+
+let is_symbolic = function
+    | Var v -> v#is_symbolic
+    | _ -> false
+;;
+
 let rec expr_forall func e = not (expr_exists (fun f -> not (func f)) e) ;;
 
 (*

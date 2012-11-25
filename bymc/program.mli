@@ -43,3 +43,5 @@ val set_ltl_forms: (expr_t) StringMap.t -> program -> program
 val is_global: program -> var -> bool
 val is_not_global: program -> var -> bool
 
+val run_smt_solver: program -> Smt.yices_smt
+

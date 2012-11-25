@@ -14,153 +14,6 @@ open Debug;;
 open AbsBasics;;
 open VarRole;;
 
-exception Skeleton_not_supported of string;;
-
-(* TODO: it does not belong to this module. Move to Program? *)
-let run_solver (prog: Program.program) =
-    let smt_exprs =
-        List.append
-            (List.map var_to_smt (Program.get_params prog))
-            (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e))
-                (Program.get_assumes prog))
-    in
-    let solver = new yices_smt in
-    solver#start;
-    (* solver#set_debug true; *) (* see yices.log *)
-    List.iter solver#append smt_exprs;
-    solver
-
-
-(* XXX: copied from spin.mly *)
-let rec has_expr_symbolic e =
-    match e with
-    | Const _ -> true
-    | Var v -> v#is_symbolic
-    | UnEx (op, se) -> op = UMIN && has_expr_symbolic se
-    | BinEx (op, le, re) ->
-        (List.mem op [PLUS; MINUS; MULT; DIV; MOD])
-            && (has_expr_symbolic le) && (has_expr_symbolic re)
-    | _ -> false
-;;
-
-(* TODO: move to piaDom *)
-let identify_conditions var_roles stmts =
-    let is_threshold v e =
-        let r = Hashtbl.find var_roles v in
-        (r = LocalUnbounded || r = Scratch) && (has_expr_symbolic e)
-    in
-    let rec on_expr e =
-        match e with
-        | BinEx(AND, l, r) -> List.append (on_expr l) (on_expr r)
-        | BinEx(OR, l, r)  -> List.append (on_expr l) (on_expr r)
-        | UnEx(NEG, l)     -> on_expr l
-        | BinEx(LT, Var v, e) -> if is_threshold v e then [e] else []
-        | BinEx(GE, Var v, e) -> if is_threshold v e then [e] else []
-        | BinEx(LE, e, Var v) -> if is_threshold v e then [e] else []
-        | BinEx(GT, e, Var v) -> if is_threshold v e then [e] else []
-        | BinEx(LE, Var v, e) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported "var <= expr")
-            else []
-        | BinEx(GE, e, Var v) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported "expr >= var")
-            else []
-        | BinEx(GT, Var v, e) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported "var > expr")
-            else []
-        | BinEx(LT, e, Var v) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported "expr < var")
-            else []
-        | _ -> []
-    in
-    let rec on_stmts sts = match sts with
-        | Expr (_, e) :: tl -> List.append (on_expr e) (on_stmts tl)
-        | _ :: tl    -> on_stmts tl
-        | _ -> []
-    in
-    let cs = (Const 0) :: (Const 1) :: (on_stmts stmts) in
-    (* TODO: simplify and canonize expressions here, i.e.,
-       f+1 and 1+f should be the same expression *)
-
-    (* remove duplicates *)
-    let tbl = Hashtbl.create 10 in
-    List.iter
-        (fun c ->
-            let s = (expr_s c) in
-            if not (Hashtbl.mem tbl s) then Hashtbl.add tbl s c)
-        cs;
-    Hashtbl.fold (fun text cond lst -> cond :: lst) tbl []
-;;
-
-let sort_thresholds solver conds =
-    let id_map = Hashtbl.create 10 in
-    List.iter (fun c -> Hashtbl.add id_map c (Hashtbl.length id_map)) conds;
-    solver#push_ctx;
-    let cmp_tbl = Hashtbl.create 10 in
-    let compare op c1 c2 =
-        if c1 <> c2
-        then begin
-            let asrt =
-                sprintf "(not (%s %s %s))" op (expr_to_smt c1) (expr_to_smt c2)
-            in
-            solver#append_assert asrt;
-            let res = not solver#check in
-            if res
-            then (Hashtbl.add cmp_tbl
-                ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
-            solver#pop_ctx; solver#push_ctx;
-            res
-        end
-        else false
-    in
-    let lt c1 c2 = let _ = compare "<" c1 c2 in () in
-    List.iter (fun c1 -> List.iter (lt c1) conds) conds;
-    let rm_tbl = Hashtbl.create 10 in
-    let check_ord c1 c2 = 
-        let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
-        if i1 <> i2
-        then if not (Hashtbl.mem cmp_tbl (i1, i2))
-            && not (Hashtbl.mem cmp_tbl (i2, i1))
-        then begin
-            let m =
-                sprintf "No strict order for %s and %s" (expr_s c1) (expr_s c2)
-            in
-            if compare "<=" c1 c2
-            then begin
-                printf "%s is subsumed by %s\n" (expr_s c2) (expr_s c1);
-                Hashtbl.replace rm_tbl c2 true
-            end else if compare "<=" c2 c1
-            then begin
-                printf "%s is subsumed by %s\n" (expr_s c1) (expr_s c2);
-                Hashtbl.replace rm_tbl c1 true
-            end else
-            raise (Abstraction_error m)
-        end
-    in
-    List.iter (fun c1 -> List.iter (check_ord c1) conds) conds;
-    solver#pop_ctx;
-    let conds = List.filter (fun c -> not (Hashtbl.mem rm_tbl c)) conds in
-    let cmp_using_tbl c1 c2 =
-        let i1 = (Hashtbl.find id_map c1) and i2 = (Hashtbl.find id_map c2) in
-        if c1 = c2 then 0 else if (Hashtbl.mem cmp_tbl (i1, i2)) then -1 else 1
-    in
-    List.sort cmp_using_tbl conds
-;;
-
-let mk_domain solver var_roles prog =
-    log INFO "> Extracting an abstract domain...";
-    let collect_stmts l p = p#get_stmts @ l in
-    let all_stmts = List.fold_left collect_stmts [] (Program.get_procs prog) in
-    let conds = identify_conditions var_roles#get_all (mir_to_lir all_stmts) in
-    let sorted_conds = sort_thresholds solver conds in
-    let dom = PiaDom.create sorted_conds in
-    dom#print;
-    flush stdout;
-    dom
-;;
 
 (*
   Abstraction of an expression over a variable and symbolic parameters.
@@ -250,11 +103,6 @@ let over_dom (roles: var_role_tbl) = function
                 raise (Abstraction_error (sprintf "No role for %s" v#get_name))
         end
 
-    | _ -> false
-;;
-
-let non_symbolic = function
-    | Var v -> not v#is_symbolic
     | _ -> false
 ;;
 
@@ -396,7 +244,7 @@ let translate_stmt solver caches stmt =
                 (* special cases *)
                 if ctx#must_keep_concrete lhs
                 then s (* XXX: hack shared variables in VASS, keep untouched *)
-                else if not (expr_exists non_symbolic rhs)
+                else if not (expr_exists not_symbolic rhs)
                 (* substitute a constant expression
                    by its abstract value on the right-hand side *)
                 then MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
@@ -406,7 +254,7 @@ let translate_stmt solver caches stmt =
                 (* the general case: find all possible abstract values of the rhs *)
                 else let expr_abs_vals =
                         mk_expr_abstraction solver dom
-                            (fun e -> is_var e && not (has_expr_symbolic e)) rhs in
+                            (fun e -> is_var e && not_symbolic e) rhs in
                     (mk_assign_unfolding lhs expr_abs_vals)
 
             | _ ->

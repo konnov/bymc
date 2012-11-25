@@ -36,8 +36,8 @@ let do_abstraction is_first_run prog =
     let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
-    let solver = run_solver prog in
-    let dom = mk_domain solver roles prog in
+    let solver = Program.run_smt_solver prog in
+    let dom = PiaDom.create solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     analysis#set_pia_data_ctx pia_data;
@@ -62,8 +62,8 @@ let construct_vass embed_inv prog =
     let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
-    let solver = run_solver prog in
-    let dom = mk_domain solver roles prog in
+    let solver = Program.run_smt_solver prog in
+    let dom = PiaDom.create solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     pia_data#set_hack_shared true;

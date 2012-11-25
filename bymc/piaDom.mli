@@ -1,7 +1,9 @@
 open AbsBasics
+open Program
 open Spin
 open SpinIr
 open Smt
+open VarRole
 
 class type pia_domain =
     object
@@ -24,5 +26,5 @@ class type pia_domain =
     end
 
 
-val create: Spin.token expr list -> pia_domain
+val create: yices_smt -> var_role_tbl -> program -> pia_domain
 

@@ -91,3 +91,18 @@ let units_of_program program =
          (List.map to_proc program.f_procs);
          (StringMap.fold form_to_ltl program.f_ltl_forms [])])
 
+
+let run_smt_solver prog =
+    let smt_of_asrt e =
+        Printf.sprintf "(assert %s)" (Smt.expr_to_smt e) in
+    let smt_exprs =
+        List.append
+            (List.map Smt.var_to_smt (get_params prog))
+            (List.map smt_of_asrt (get_assumes prog))
+    in
+    let solver = new Smt.yices_smt in
+    solver#start;
+    (* solver#set_debug true; *) (* see yices.log *)
+    List.iter solver#append smt_exprs;
+    solver
+
