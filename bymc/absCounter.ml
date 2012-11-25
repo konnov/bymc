@@ -598,5 +598,5 @@ let do_counter_abstraction funcs solver caches prog =
         (Program.set_atomics new_atomics
         (Program.set_unsafes new_unsafes
         (Program.set_procs new_procs (Program.empty)))))) in
-    (new_prog, xducers, new_atomics, ltl_forms)
+    (new_prog, xducers, ltl_forms)
 

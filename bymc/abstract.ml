@@ -50,7 +50,7 @@ let do_abstraction is_first_run prog =
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_prog, _, _, _ =
+    let ctrabs_prog, _, _ =
         do_counter_abstraction funcs solver caches intabs_prog in
     write_to_file "abs-counter.prm" (units_of_program ctrabs_prog);
     log INFO "[DONE]";
@@ -77,13 +77,13 @@ let construct_vass embed_inv prog =
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
-    let vass_prog, xducers, atomic_props, ltl_forms =
+    let vass_prog, xducers, ltl_forms =
         do_counter_abstraction vass_funcs solver caches intabs_prog
     in
     write_to_file "abs-vass.prm" (units_of_program vass_prog);
     log INFO "  [DONE]"; flush stdout;
 
-    (solver, caches, vass_prog, xducers, atomic_props, ltl_forms)
+    (solver, caches, vass_prog, xducers, ltl_forms)
 ;;
 
 let print_vass_trace prog solver num_states = 
@@ -99,9 +99,10 @@ let print_vass_trace prog solver num_states =
 ;;
 
 let check_invariant prog inv_name =
-    let (solver, caches, intabs_prog, xducers, aprops, ltl_forms)
+    let (solver, caches, vass_prog, xducers, ltl_forms)
         = construct_vass false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
+    let aprops = (Program.get_atomics vass_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
     | _ -> raise (Failure ("Invalid invariant " ^ inv_name))
@@ -117,13 +118,13 @@ let check_invariant prog inv_name =
         solver#set_collect_asserts true;
         solver#set_need_evidence true;
         let res, smt_rev_map =
-            (simulate_in_smt solver intabs_prog ctr_ctx_tbl
+            (simulate_in_smt solver vass_prog ctr_ctx_tbl
                 xducers step_asserts rev_map 1) in
         solver#set_collect_asserts false;
         if res then begin
             printf "The invariant %s is violated!\n\n" inv_name;
             printf "Here is an example:\n";
-            print_vass_trace intabs_prog solver 2;
+            print_vass_trace vass_prog solver 2;
             raise (Failure (sprintf "The invariant %s is violated" inv_name))
         end
     in
@@ -157,16 +158,18 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename prog =
-    let (solver, caches, intabs_prog, xducers, aprops, ltls) =
+    let (solver, caches, vass_prog, xducers, ltl_forms) =
         construct_vass true prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
-    let fairness = filter_good_fairness aprops (collect_fairness_forms ltls) in
+    let aprops = (Program.get_atomics vass_prog) in
+    let fairness =
+        filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
-        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl intabs_prog in
+        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl vass_prog in
     let total_steps = (List.length trail_asserts) - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
@@ -179,7 +182,7 @@ let do_refinement trail_filename prog =
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
-                solver intabs_prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
+                solver vass_prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
         if res
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
@@ -198,7 +201,7 @@ let do_refinement trail_filename prog =
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         solver#set_collect_asserts true;
         let res, smt_rev_map =
-            (simulate_in_smt solver intabs_prog ctr_ctx_tbl xducers step_asserts rev_map 1)
+            (simulate_in_smt solver vass_prog ctr_ctx_tbl xducers step_asserts rev_map 1)
         in
         solver#set_collect_asserts false;
         if not res
@@ -246,7 +249,7 @@ let do_refinement trail_filename prog =
             if not (sim_prefix (num_states - 1))
             then begin
                 log INFO "The path is not spurious.";
-                print_vass_trace intabs_prog solver num_states;
+                print_vass_trace vass_prog solver num_states;
             end else begin
                 let short_len = List.find sim_prefix (range 1 num_states) in
                 log INFO (sprintf "  The shortest spurious path is 0:%d"
