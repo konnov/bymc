@@ -3,19 +3,13 @@
    init section, main loop, etc.
  *)
 
-open SpinIr;;
-open SpinIrImp;;
-open Cfg;;
+open Cfg
+open Regions
+open SpinIr
+open SpinIrImp
 
-type 't skel_struc = {
-    decl: 't mir_stmt list;
-    init: 't mir_stmt list;
-    loop_prefix: 't mir_stmt list;
-    comp: 't mir_stmt list;
-    update: 't mir_stmt list
-};;
 
-exception Skel_error of string;;
+exception Skel_error of string
 
 (*
   Here we check that a process body has the following structure:
@@ -84,7 +78,9 @@ let extract_skel proc_body =
     in
     let update = (List.rev hd) @ (List.rev assumps) in
     let comp = List.rev (el @ tl) in
-    { decl = decls; init = init_s;
-      loop_prefix = prefix_s; comp = comp; update = update }
-;;
+    let reg_tbl = new region_tbl in
+    reg_tbl#add "decl" decls; reg_tbl#add "init" init_s;
+    reg_tbl#add "loop_prefix" prefix_s; reg_tbl#add "comp" comp;
+    reg_tbl#add "update" update;
+    reg_tbl
 

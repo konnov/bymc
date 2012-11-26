@@ -23,6 +23,8 @@ let write_to_file externalize_ltl name units =
     let fo = open_out name in
     let save_unit = function
         | Ltl (form_name, form) as u->
+            (* Spin 6.2 does not support inline formulas longer that 1024 chars.
+               Put the formula into the file. *)
             if externalize_ltl
             then begin
                 let out = open_out (sprintf "%s.ltl" form_name) in
@@ -52,7 +54,7 @@ let do_abstraction is_first_run prog =
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     analysis#set_pia_data_ctx pia_data;
-    let caches = new pass_caches analysis in
+    let caches = new pass_caches analysis (new proc_struc_cache) in
 
     log INFO "> Constructing interval abstraction";
     let intabs_prog = do_interval_abstraction solver caches prog in
@@ -67,7 +69,7 @@ let do_abstraction is_first_run prog =
     log INFO "[DONE]";
     let _ = solver#stop in
     ctrabs_prog
-;;
+
 
 let construct_vass embed_inv prog =
     let analysis = new analysis_cache in
@@ -79,7 +81,7 @@ let construct_vass embed_inv prog =
     let pia_data = new pia_data_ctx roles in
     pia_data#set_hack_shared true;
     analysis#set_pia_data_ctx pia_data;
-    let caches = new pass_caches analysis in
+    let caches = new pass_caches analysis (new proc_struc_cache) in
 
     log INFO "> Constructing interval abstraction...";
     let intabs_prog = do_interval_abstraction solver caches prog in
@@ -95,7 +97,6 @@ let construct_vass embed_inv prog =
     log INFO "  [DONE]"; flush stdout;
 
     (solver, caches, vass_prog, xducers)
-;;
 
 let print_vass_trace prog solver num_states = 
     printf "Here is a CONCRETE trace in VASS violating the property.\n";
@@ -107,7 +108,6 @@ let print_vass_trace prog solver num_states =
         printf "\n";
     in
     List.iter (print_st) (range 0 num_states)
-;;
 
 let check_invariant prog inv_name =
     let (solver, caches, vass_prog, xducers)
@@ -141,7 +141,6 @@ let check_invariant prog inv_name =
     in
     List.iter check_proc_step
         (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
-;;
 
 let check_all_invariants prog =
     let fold_invs name ae lst =
@@ -152,7 +151,6 @@ let check_all_invariants prog =
     in
     let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) [] in
     List.iter (check_invariant prog) invs
-;;
 
 let filter_good_fairness aprops fair_forms =
     let err_fun f =
@@ -164,7 +162,6 @@ let filter_good_fairness aprops fair_forms =
     let filtered = List.filter not_nop fair_atoms in
     printf "added %d fairness constraints\n" (List.length filtered);
     filtered
-;;
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
@@ -278,4 +275,3 @@ let do_refinement trail_filename prog =
         (* formulas must be regenerated *)
         let _ = do_abstraction false prog in ()
     end
-;;

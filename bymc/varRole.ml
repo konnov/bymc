@@ -59,10 +59,10 @@ let identify_var_roles prog =
                 (join lub_int_role) (print_int_roles "roles") cfg in
         let body_sum =
             join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
-        let skel = extract_skel proc#get_stmts in
+        let reg_tab = extract_skel proc#get_stmts in
         let fst_id =
             let is_norm s = (m_stmt_id s) <> -1 in
-            (m_stmt_id (List.find is_norm skel.comp)) in
+            (m_stmt_id (List.find is_norm (reg_tab#get "comp"))) in
         let loc_roles =
             try Hashtbl.find int_roles fst_id
             with Not_found ->

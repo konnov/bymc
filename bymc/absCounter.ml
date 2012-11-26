@@ -417,8 +417,6 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
             UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var)))
         in
         let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
-        (* Spin 6.2 does not support inline formulas longer that 1024 chars.
-           Put the formula into the file. *)
         embed_fairness fairness no_inf_forms
     end else ltl_expr in
     form
@@ -525,12 +523,15 @@ let do_counter_abstraction funcs solver caches prog =
             then List.map mk_assume (find_invariants atomics)
             else [] in
         let body = remove_bad_statements p#get_stmts in
-        let skel = extract_skel body in
+        let reg_tab = extract_skel body in
         let main_lab = mk_uniq_label () in
-        let new_init = funcs#mk_init c_ctx p#get_active_expr skel.decl skel.init in
+        let new_init =
+            funcs#mk_init c_ctx p#get_active_expr
+            (reg_tab#get "decl") (reg_tab#get "init") in
         let new_update =
-            replace_update c_ctx p#get_active_expr skel.update atomics body in
-        let new_comp = replace_comp atomics skel.comp in
+            replace_update c_ctx p#get_active_expr
+            (reg_tab#get "update") atomics body in
+        let new_comp = replace_comp atomics (reg_tab#get "comp") in
         let new_comp_upd = MAtomic (-1, new_comp @ new_update @ invs) in
         let new_loop_body =
             [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
@@ -541,10 +542,10 @@ let do_counter_abstraction funcs solver caches prog =
                 [MOptGuarded ([new_comp_upd])]);
                MGoto (-1, main_lab)] in
         let new_body = 
-            skel.decl
+            (reg_tab#get "decl")
             @ new_init
             @ [MLabel (-1, main_lab)]
-            @ skel.loop_prefix
+            @ (reg_tab#get "loop_prefix")
             @ new_loop_body
         in
         let new_proc = proc_replace_body p new_body in

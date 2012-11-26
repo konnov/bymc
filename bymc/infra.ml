@@ -1,12 +1,14 @@
-(* Analysis and transformation infrastructure.
+(*
+ Analysis and transformation infrastructure.
 
-   Igor Konnov, 2012
+ Igor Konnov, 2012
  *)
 
 open VarRole
 open PiaDataCtx
 open PiaDom
 open PiaCtrCtx
+open Regions
 
 exception CacheStateError of string
 
@@ -61,25 +63,32 @@ class analysis_cache =
   cache is to collect the structural information about control flow and data
   flow. If a pass corrupts certain cached data, then the pass must reset this
   data.
-
-class ProcStrucCache =
-    object(self)
-        (* statements *)
-        (* regions *)
-    end
-;;
  *)
 
-
-class pass_caches (i_analysis: analysis_cache) =
+class proc_struc_cache =
     object(self)
-        (* procStrucCaches: string -> ProcStructCache *)
+        val mutable m_reg_tbl: (string, region_tbl) Hashtbl.t = Hashtbl.create 1
 
-        method get_analysis = i_analysis
+        method get_regions proc_name =
+            try Hashtbl.find m_reg_tbl proc_name
+            with Not_found ->
+                raise (CacheStateError "regions is not set")
+
+        method set_regions proc_name proc_regs =
+            Hashtbl.replace m_reg_tbl proc_name proc_regs
     end
 
-type analysis_fun = pass_caches -> Program.program -> pass_caches
-(*
-type translation_fun = PassCaches -> Program -> (PassCaches * Program);;
-*)
+
+class pass_caches (i_analysis: analysis_cache) (i_struc: proc_struc_cache) =
+    object(self)
+        method get_analysis = i_analysis
+        method get_struc = i_struc
+    end
+
+
+type analysis_fun =
+    pass_caches -> Program.program -> pass_caches
+
+type translation_fun =
+    pass_caches -> Program.program -> (pass_caches * Program.program)
 
