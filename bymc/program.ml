@@ -41,6 +41,11 @@ let set_atomics new_atomics prog = {prog with f_atomics = new_atomics}
 
 let get_ltl_forms prog = prog.f_ltl_forms
 let set_ltl_forms new_ltl_forms prog = {prog with f_ltl_forms = new_ltl_forms}
+let get_ltl_forms_as_hash prog =
+    let h = Hashtbl.create 10 in
+    let to_hash name form = Hashtbl.add h name form in
+    let _ = StringMap.mapi to_hash prog.f_ltl_forms in
+    h
 
 let is_global prog v =
     try v = (List.find ((=) v) (prog.f_params @ prog.f_shared))

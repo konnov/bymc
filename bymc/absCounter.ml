@@ -400,7 +400,7 @@ class vass_funcs dom prog solver =
     end
 
 
-let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
+let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
     let embed_fairness fair_expr no_inf_forms =
         let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)) in
         let spur_and_fair =
@@ -408,8 +408,7 @@ let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
         let precond = list_to_binex AND (spur_and_fair @ no_inf_forms) in
         BinEx(IMPLIES, precond, ltl_expr)
     in
-    Hashtbl.add ltl_forms name ltl_expr;
-    if (name <> "fairness") && (Hashtbl.mem ltl_forms "fairness")
+    let form = if (name <> "fairness") && (not_nop fairness)
     then begin
         (* add formulas saying that unfair predicates can't occur forever *)
         let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
@@ -420,24 +419,15 @@ let fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr =
         let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
         (* Spin 6.2 does not support inline formulas longer that 1024 chars.
            Put the formula into the file. *)
-        let fairness =
-            try (Hashtbl.find ltl_forms "fairness")
-            with Not_found ->
-                raise (Abstraction_error "No \"fairness\" ltl formula found")
-        in
-        let embedded = embed_fairness fairness no_inf_forms in
-        let out = open_out (sprintf "%s.ltl" name) in
-        fprintf out "%s\n" (expr_s embedded);
-        close_out out
-    end;
-    None
+        embed_fairness fairness no_inf_forms
+    end else ltl_expr in
+    form
 
 
 let do_counter_abstraction funcs solver caches prog =
     let t_ctx = caches#get_analysis#get_pia_data_ctx in
     let roles = caches#get_analysis#get_var_roles in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
-    let ltl_forms = Hashtbl.create 10 in
     let extract_atomic_prop atomics name =
         try
             match (Program.StringMap.find name atomics) with
@@ -581,8 +571,12 @@ let do_counter_abstraction funcs solver caches prog =
     let abstract_atomic ae =
         (trans_prop_decl solver ctr_ctx_tbl prog ae)
     in
-    let save_ltl_form name ltl_expr =
-        fuse_ltl_form ctr_ctx_tbl ltl_forms name ltl_expr
+    let fairness =
+        if Program.StringMap.mem "fairness" (Program.get_ltl_forms prog)
+        then Program.StringMap.find "fairness" (Program.get_ltl_forms prog)
+        else (Nop "") in
+    let map_ltl_form name ltl_expr =
+        fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr
     in
     let new_atomics =
         Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
@@ -590,13 +584,14 @@ let do_counter_abstraction funcs solver caches prog =
         List.map (abstract_proc new_atomics) (Program.get_procs prog) in
     let new_unsafes = ["#include \"cegar_decl.inc\""] in
     let new_decls = ctr_ctx_tbl#get_spur :: ctr_ctx_tbl#all_counters in
-    (* XXX: fix *)
-    let _ = Program.StringMap.mapi save_ltl_form (Program.get_ltl_forms prog) in
+    let new_ltl_forms =
+        Program.StringMap.mapi map_ltl_form (Program.get_ltl_forms prog) in
     let new_prog =
         (Program.set_shared (Program.get_shared prog)
         (Program.set_instrumental new_decls
         (Program.set_atomics new_atomics
         (Program.set_unsafes new_unsafes
-        (Program.set_procs new_procs (Program.empty)))))) in
-    (new_prog, xducers, ltl_forms)
+        (Program.set_ltl_forms new_ltl_forms
+        (Program.set_procs new_procs (Program.empty))))))) in
+    (new_prog, xducers)
 

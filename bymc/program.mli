@@ -44,6 +44,7 @@ val get_atomics: program -> (Spin.token atomic_expr) StringMap.t
 val set_atomics: (Spin.token atomic_expr) StringMap.t -> program -> program
 
 val get_ltl_forms: program -> (expr_t) StringMap.t
+val get_ltl_forms_as_hash: program -> (string, expr_t) Hashtbl.t
 val set_ltl_forms: (expr_t) StringMap.t -> program -> program
 
 val is_global: program -> var -> bool

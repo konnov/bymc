@@ -19,9 +19,20 @@ open Writer
 
 open Debug
 
-let write_to_file name units =
+let write_to_file externalize_ltl name units =
     let fo = open_out name in
-    List.iter (write_unit fo 0) units;
+    let save_unit = function
+        | Ltl (form_name, form) as u->
+            if externalize_ltl
+            then begin
+                let out = open_out (sprintf "%s.ltl" form_name) in
+                fprintf out "%s\n" (expr_s form);
+                close_out out
+            end else
+                write_unit fo 0 u
+        | _ as u -> write_unit fo 0 u
+    in
+    List.iter save_unit units;
     close_out fo
 
 (* units -> interval abstraction -> counter abstraction *)
@@ -45,14 +56,14 @@ let do_abstraction is_first_run prog =
 
     log INFO "> Constructing interval abstraction";
     let intabs_prog = do_interval_abstraction solver caches prog in
-    write_to_file "abs-interval.prm" (Program.units_of_program intabs_prog);
+    write_to_file false "abs-interval.prm" (Program.units_of_program intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_prog, _, _ =
+    let ctrabs_prog, _ =
         do_counter_abstraction funcs solver caches intabs_prog in
-    write_to_file "abs-counter.prm" (units_of_program ctrabs_prog);
+    write_to_file true "abs-counter.prm" (units_of_program ctrabs_prog);
     log INFO "[DONE]";
     let _ = solver#stop in
     ctrabs_prog
@@ -77,13 +88,13 @@ let construct_vass embed_inv prog =
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
-    let vass_prog, xducers, ltl_forms =
+    let vass_prog, xducers =
         do_counter_abstraction vass_funcs solver caches intabs_prog
     in
-    write_to_file "abs-vass.prm" (units_of_program vass_prog);
+    write_to_file false "abs-vass.prm" (units_of_program vass_prog);
     log INFO "  [DONE]"; flush stdout;
 
-    (solver, caches, vass_prog, xducers, ltl_forms)
+    (solver, caches, vass_prog, xducers)
 ;;
 
 let print_vass_trace prog solver num_states = 
@@ -99,7 +110,7 @@ let print_vass_trace prog solver num_states =
 ;;
 
 let check_invariant prog inv_name =
-    let (solver, caches, vass_prog, xducers, ltl_forms)
+    let (solver, caches, vass_prog, xducers)
         = construct_vass false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics vass_prog) in
@@ -158,12 +169,13 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename prog =
-    let (solver, caches, vass_prog, xducers, ltl_forms) =
+    let (solver, caches, vass_prog, xducers) =
         construct_vass true prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics vass_prog) in
+    let ltl_forms = (Program.get_ltl_forms_as_hash vass_prog) in
     let fairness =
         filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
     let inv_forms = find_invariants aprops in
