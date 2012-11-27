@@ -23,6 +23,7 @@ open AbsBasics
 open VarRole
 open AbsInterval
 open Refinement
+open Regions
 open Ltl
 
 open PiaCtrCtx
@@ -421,7 +422,9 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
     end else ltl_expr in
     form
 
-
+(* Transform the program using counter abstraction over the piaDomain.
+   Updates proc_struct_cache#regions.
+ *)
 let do_counter_abstraction funcs solver caches prog =
     let t_ctx = caches#get_analysis#get_pia_data_ctx in
     let roles = caches#get_analysis#get_var_roles in
@@ -523,6 +526,8 @@ let do_counter_abstraction funcs solver caches prog =
             then List.map mk_assume (find_invariants atomics)
             else [] in
         let body = remove_bad_statements p#get_stmts in
+        (* TODO: figure out why the order of the following calls affects
+           the number of refinement steps! *)
         let reg_tab = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init =
@@ -538,18 +543,24 @@ let do_counter_abstraction funcs solver caches prog =
             @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
             @ invs
             @ counter_guard c_ctx
-            @ [MIf (-1,
-                [MOptGuarded ([new_comp_upd])]);
+            @ [MIf (-1, [MOptGuarded ([new_comp_upd])]);
                MGoto (-1, main_lab)] in
+        let new_prefix =
+            (MLabel (-1, main_lab)) :: (reg_tab#get "loop_prefix") in
         let new_body = 
             (reg_tab#get "decl")
             @ new_init
-            @ [MLabel (-1, main_lab)]
-            @ (reg_tab#get "loop_prefix")
+            @ new_prefix
             @ new_loop_body
         in
-        let new_proc = proc_replace_body p new_body in
-        new_proc#set_active_expr (Const 1);
+        let new_reg_tbl = new region_tbl in
+        new_reg_tbl#add "decl" (reg_tab#get "decl");
+        new_reg_tbl#add "init" new_init;
+        new_reg_tbl#add "loop_prefix" new_prefix;
+        new_reg_tbl#add "comp" new_comp;
+        new_reg_tbl#add "update" new_update;
+        new_reg_tbl#add "loop_body" new_loop_body;
+        caches#get_struc#set_regions p#get_name new_reg_tbl;
         (* SMT xducer: exactly at this moment we have all information to
            generate a xducer of a process *)
         (* TODO: this must be a translation pass on its own *)
@@ -566,6 +577,8 @@ let do_counter_abstraction funcs solver caches prog =
         Hashtbl.add xducers p#get_name (new proc_xducer p transd);
         Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
         (* end of xducer *)
+        let new_proc = proc_replace_body p new_body in
+        new_proc#set_active_expr (Const 1);
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
         new_proc
     in
@@ -584,7 +597,9 @@ let do_counter_abstraction funcs solver caches prog =
     let new_procs =
         List.map (abstract_proc new_atomics) (Program.get_procs prog) in
     let new_unsafes = ["#include \"cegar_decl.inc\""] in
-    let new_decls = ctr_ctx_tbl#get_spur :: ctr_ctx_tbl#all_counters in
+    let new_decls =
+        ctr_ctx_tbl#get_spur
+            :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
     let new_ltl_forms =
         Program.StringMap.mapi map_ltl_form (Program.get_ltl_forms prog) in
     let new_prog =

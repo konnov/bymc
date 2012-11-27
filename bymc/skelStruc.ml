@@ -82,5 +82,6 @@ let extract_skel proc_body =
     reg_tbl#add "decl" decls; reg_tbl#add "init" init_s;
     reg_tbl#add "loop_prefix" prefix_s; reg_tbl#add "comp" comp;
     reg_tbl#add "update" update;
+    reg_tbl#add "loop_body" (if_s @ rest_s);
     reg_tbl
 

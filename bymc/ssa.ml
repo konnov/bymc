@@ -152,7 +152,7 @@ let optimize_ssa cfg =
     cfg
 ;;
 
-(* Ron Cytron et al. Efficientrly Computing Static Single Assignment Form and
+(* Ron Cytron et al. Efficiently Computing Static Single Assignment Form and
    the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
    pp. 451-490.
 

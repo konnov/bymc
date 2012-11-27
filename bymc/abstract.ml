@@ -93,6 +93,7 @@ let construct_vass embed_inv prog =
     let vass_prog, xducers =
         do_counter_abstraction vass_funcs solver caches intabs_prog
     in
+    let _ = SmtXducerPass.do_xducers caches vass_prog in
     write_to_file false "abs-vass.prm" (units_of_program vass_prog);
     log INFO "  [DONE]"; flush stdout;
 
