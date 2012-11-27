@@ -59,7 +59,7 @@ let block_to_constraints (bb: 't basic_block) =
         BinEx (OR, UnEx (NEG, at_var bb#label), e) in
     let convert s tl =
         match s with
-        | Expr (_, Phi (lhs, rhs)) ->
+        | Expr (_, (Phi (lhs, rhs) as e)) ->
             (* (at_i -> x = x_i) for x = phi(x_1, ..., x_k) *)
             let pred_labs = bb#pred_labs in
             let n_preds = List.length pred_labs in
@@ -69,33 +69,39 @@ let block_to_constraints (bb: 't basic_block) =
                     BinEx (EQ, Var lhs, Var (List.nth rhs i)))
             in
             let exprs = (List.map pred_selects_arg (range 0 n_preds)) in
-            (list_to_binex AND exprs) :: tl
+            (Nop (expr_s e)) :: (list_to_binex AND exprs) :: tl
 
         (* crazy array update form imposed by SSA *)
-        | Expr (_, BinEx (ASGN, Var new_arr,
-                    BinEx (ARR_UPDATE,
-                           BinEx (ARR_ACCESS, Var old_arr, idx), rhs))) ->
+        | Expr (_, (BinEx (ASGN, Var new_arr,
+                BinEx (ARR_UPDATE,
+                    BinEx (ARR_ACCESS, Var old_arr, idx), rhs)) as e)) ->
             let mk_arr v i = BinEx (ARR_ACCESS, Var v, i) in
             let keep_val l i =
                 let eq = BinEx (EQ,
                     mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
                 at_impl_expr (BinEx (OR, BinEx (EQ, idx, Const i), eq)) :: l in
-            (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, rhs)))
-            ::
-            List.fold_left keep_val tl (range 0 new_arr#get_num_elems)
+            (Nop (expr_s e))
+            :: (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, rhs)))
+            :: List.fold_left keep_val tl (range 0 new_arr#get_num_elems)
 
-        | Expr (_, BinEx (ASGN, lhs, rhs)) ->
-            (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
+        | Expr (_, (BinEx (ASGN, lhs, rhs) as e)) ->
+            (Nop (expr_s e)) :: (at_impl_expr (BinEx (EQ, lhs, rhs))) :: tl
 
         | Expr (_, Nop _) ->
             tl (* skip this *)
         | Expr (_, e) ->
             (* at_i -> e *)
-            (at_impl_expr e) :: tl
+            (Nop (expr_s e)) :: (at_impl_expr e) :: tl
 
-        | Decl (_, v, e) -> (at_impl_expr (BinEx (EQ, Var v, e))) :: tl
-        | Assume (_, e) -> (at_impl_expr e) :: tl
-        | Assert (_, e) -> (at_impl_expr e) :: tl
+        | Decl (_, v, e) ->
+            (Nop (sprintf "%s = %s" v#get_name (expr_s e)))
+            :: (at_impl_expr (BinEx (EQ, Var v, e))) :: tl
+        | Assume (_, e) ->
+            (Nop (sprintf "assume(%s)" (expr_s e)))
+            :: (at_impl_expr e) :: tl
+        | Assert (_, e) ->
+            (Nop (sprintf "assert(%s)" (expr_s e)))
+            :: (at_impl_expr e) :: tl
         | Skip _ -> tl
         | _ -> tl (* ignore all control flow constructs *)
     in

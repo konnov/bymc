@@ -86,13 +86,14 @@ let construct_vass embed_inv prog =
     log INFO "> Constructing interval abstraction...";
     let intabs_prog = do_interval_abstraction solver caches prog in
     log INFO "  [DONE]";
-    log INFO "> Constructing VASS and transducers...";
+    log INFO "> Constructing VASS...";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_prog, xducers =
         do_counter_abstraction vass_funcs solver caches intabs_prog
     in
+    log INFO "> Constructing SMT transducers...";
     let _ = SmtXducerPass.do_xducers caches vass_prog in
     write_to_file false "abs-vass.prm" (units_of_program vass_prog);
     log INFO "  [DONE]"; flush stdout;

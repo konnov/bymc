@@ -235,19 +235,25 @@ class yices_smt =
 
         method append_expr expr =
             let eid = ref 0 in
-            if not collect_asserts
-            then self#append (sprintf "(assert %s)" (expr_to_smt expr))
-            else begin
-                (* XXX: may block if the verbosity level < 2 *)
-                self#sync;
-                self#append (sprintf "(assert+ %s)" (expr_to_smt expr));
-                let line = self#read_line in
-                if (Str.string_match (Str.regexp "id: \\([0-9]+\\)") line 0)
-                then
-                    let id = int_of_string (Str.matched_group 1 line) in
-                    eid := id
-            end;
-            !eid
+            let e_s = (expr_to_smt expr) in
+            let is_comment = (String.length e_s) > 1
+                    && e_s.[0] = ';' && e_s.[1] = ';' in
+            if not is_comment
+            then begin 
+                if not collect_asserts
+                then self#append (sprintf "(assert %s)" e_s)
+                else begin
+                    (* XXX: may block if the verbosity level < 2 *)
+                    self#sync;
+                    self#append (sprintf "(assert+ %s)" e_s);
+                    let line = self#read_line in
+                    if (Str.string_match (Str.regexp "id: \\([0-9]+\\)") line 0)
+                    then
+                        let id = int_of_string (Str.matched_group 1 line) in
+                        eid := id
+                end;
+                !eid
+            end else -1
 
         method push_ctx = self#append "(push)"
 
