@@ -118,7 +118,8 @@ let skip_step local_vars step =
 let create_path proc xducer local_vars shared_vars when_moving n_steps =
     let tracked_vars = local_vars @ shared_vars in
     let map_xducer n =
-        List.map (map_vars (stick_var (map_to_step n))) xducer
+        let es = List.map expr_of_stmt xducer in
+        List.map (map_vars (stick_var (map_to_step n))) es
     in
     (* different proctypes will not clash on their local variables as only
        one of them is taking at each point of time *)

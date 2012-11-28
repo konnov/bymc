@@ -14,10 +14,23 @@ open SpinIr
 open SpinIrImp
 open Ssa
 
-let write_exprs name exprs =
+let write_exprs name stmts =
+    let mul = 1 + (List.length stmts) in
+    (* assign new ids to expression in a way that keeps the order between
+       old ids and blocks of statements between them *)
+    let num_stmt (num, lst) = function
+        | Expr (-1, e) ->
+                (num + 1, (Expr (num, e)) :: lst)
+        | Expr (id, e) ->
+                (id * mul + 1, (Expr (id * mul, e)) :: lst)
+        | _ ->
+                raise (Failure "Expected Expr (_, _)")
+    in
+    let _, numbered = (List.fold_left num_stmt (0, []) stmts) in
+    let sorted_stmts = List.sort cmp_stmt numbered in
     let out = open_out (sprintf "%s.xd" name) in
-    let write_e e = fprintf out "%s\n" (expr_s e) in
-    List.iter write_e exprs;
+    let write_e s = fprintf out "%s\n" (expr_s (expr_of_stmt s)) in
+    List.iter write_e sorted_stmts;
     close_out out
 
 let to_xducer caches prog p =

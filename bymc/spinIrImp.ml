@@ -150,7 +150,7 @@ let is_name = function
 
 let rec expr_s e =
     match e with
-    | Nop comment -> sprintf "skip /* %s */" comment
+    | Nop comment -> sprintf "/* %s */" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
     | UnEx (CARD, f) -> sprintf "card(%s)" (expr_s f)

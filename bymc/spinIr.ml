@@ -291,7 +291,6 @@ type 't stmt =
     | Assume of int * 't expr
     | Havoc of int * var (* forget about the current value of the variable *)
     | Print of int * string * 't expr list
-;;
 
 let stmt_id = function
       Skip id -> id
@@ -308,7 +307,13 @@ let stmt_id = function
     | Assume (id, _) -> id
     | Havoc (id, _) -> id
     | Print (id, _, _) -> id
-;;
+
+let expr_of_stmt = function
+    | Expr (_, e) -> e
+    | _ -> raise (Failure "Expected Expr (_, e), found another statement")
+
+let cmp_stmt s1 s2 =
+    compare (stmt_id s1) (stmt_id s2)
 
 let replace_stmt_id new_id = function
       Skip _ -> Skip new_id
