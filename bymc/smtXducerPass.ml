@@ -22,7 +22,7 @@ let write_exprs name stmts =
         | Expr (-1, e) ->
                 (num + 1, (Expr (num, e)) :: lst)
         | Expr (id, e) ->
-                (id * mul + 1, (Expr (id * mul, e)) :: lst)
+                ((id + 1) * mul + 1, (Expr ((id + 1) * mul, e)) :: lst)
         | _ ->
                 raise (Failure "Expected Expr (_, _)")
     in
