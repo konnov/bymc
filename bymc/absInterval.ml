@@ -1,18 +1,18 @@
-open Printf;;
+open Printf
 
-open Cfg;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open Smt;;
-open Analysis;;
-open SkelStruc;;
-open Accums;;
-open Writer;;
-open Debug;;
+open Cfg
+open Spin
+open SpinIr
+open SpinIrImp
+open Smt
+open Analysis
+open SkelStruc
+open Accums
+open Writer
+open Debug
 
-open AbsBasics;;
-open VarRole;;
+open AbsBasics
+open VarRole
 
 
 (*
@@ -61,7 +61,7 @@ let mk_expr_abstraction solver dom is_leaf_fun expr =
         else (Var var, abs_val)
     in
     List.map (List.map map_vars_back) matching_vals
-;;
+
 
 (* XXX: refactor *)
 let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
@@ -92,7 +92,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
         ) labs expr_abs_vals
     in
     MIf (-1, guarded_actions)
-;;
+
 
 let over_dom (roles: var_role_tbl) = function
     | Var v ->
@@ -104,7 +104,7 @@ let over_dom (roles: var_role_tbl) = function
         end
 
     | _ -> false
-;;
+
 
 let var_trait t_ctx v =
     if v#is_symbolic
@@ -112,7 +112,7 @@ let var_trait t_ctx v =
     else if t_ctx#var_needs_abstraction v
     then AbsExpr
     else ConcExpr
-;;
+
 
 (*
  Translate an arithmetic comparison to a pointwise comparison of
@@ -133,7 +133,7 @@ let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
     if points_lst <> []
     then list_to_binex OR (List.map mk_point points_lst)
     else Const 0 (* false *)
-;;
+
 
 (* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
 let abstract_arith_rel ctx dom solver atype tok lhs rhs =
@@ -191,7 +191,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
         let m = (sprintf "Mixture of abstract and concrete variables in %s"
                 (expr_s (BinEx (tok, lhs, rhs)))) in
         raise (Abstraction_error m)
-;;
+
 
 let translate_expr ctx dom solver atype expr =
     let invert_abs_type neg_sign = function
@@ -227,7 +227,7 @@ let translate_expr ctx dom solver atype expr =
             (sprintf "No abstraction for: %s" (expr_s expr)))
     in
     trans_e false expr
-;;
+
 
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
@@ -280,9 +280,13 @@ let translate_stmt solver caches stmt =
     | _ as s -> s
     in
     abs_stmt stmt 
-;;
 
-let trans_prop_decl solver caches prog atomic_expr =
+(* 
+  Abstract atomic expressions. We produce two types of expressions:
+  universally abstracted and existentially abstracted.
+  See our TACAS submission (or Pnueli, Zuck 2001) on that.
+ *)
+let trans_prop_decl solver caches prog atype atomic_expr =
     let ctx = caches#get_analysis#get_pia_data_ctx in
     let dom = caches#get_analysis#get_pia_dom in
     let roles = caches#get_analysis#get_var_roles in
@@ -292,7 +296,7 @@ let trans_prop_decl solver caches prog atomic_expr =
         solver#push_ctx;
         List.iter solver#append_var_def locals;
         List.iter solver#append_var_def (Program.get_shared prog);
-        let abs_ex = translate_expr ctx dom solver UnivAbs e in
+        let abs_ex = translate_expr ctx dom solver atype e in
         solver#pop_ctx;
         abs_ex
     in
@@ -314,7 +318,42 @@ let trans_prop_decl solver caches prog atomic_expr =
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
             else PropGlob (tr_e e)
-;;
+
+
+let trans_ltl_form name f =
+    let inv atype = if atype = UnivAbs then ExistAbs else UnivAbs in
+    let rec tr_f atype = function
+    | Var v ->
+        if atype = UnivAbs
+        then Var (new var (v#get_name ^ "_univ"))
+        else Var (new var (v#get_name ^ "_exst"))
+    | BinEx(AND, l, r) ->
+        BinEx(AND, tr_f atype l, tr_f atype r)
+    | BinEx(OR, l, r) ->
+        BinEx(OR, tr_f atype l, tr_f atype r)
+    | BinEx(IMPLIES, l, r) ->
+        BinEx(IMPLIES, tr_f (inv atype) l, tr_f atype r)
+    | BinEx(EQUIV, l, r) ->
+        BinEx(EQUIV, tr_f atype l, tr_f atype r)
+    | BinEx(UNTIL, l, r) ->
+        BinEx(UNTIL, tr_f atype l, tr_f atype r)
+    | BinEx(RELEASE, l, r) ->
+        BinEx(RELEASE, tr_f atype l, tr_f atype r)
+    | BinEx(WEAK_UNTIL, l, r) ->
+        BinEx(WEAK_UNTIL, tr_f atype l, tr_f atype r)
+    | UnEx(NEG, g) ->
+        UnEx(NEG, tr_f (inv atype) g)
+    | UnEx(ALWAYS, g) ->
+        UnEx(ALWAYS, tr_f atype g)
+    | UnEx(EVENTUALLY, g) ->
+        UnEx(EVENTUALLY, tr_f atype g)
+        | UnEx(NEXT, _) -> raise (Abstraction_error "Don't use nexttime!")
+    | _ as e -> raise (Abstraction_error ("Not an LTL formula: " ^ (expr_s e)))
+    in
+    if Str.string_match (Str.regexp_string "fairness") name 0
+    then tr_f ExistAbs f
+    else tr_f UnivAbs f
+
 
 let do_interval_abstraction solver caches prog = 
     let abstract_proc p =
@@ -327,11 +366,19 @@ let do_interval_abstraction solver caches prog =
         solver#pop_ctx;
         proc_replace_body p body
     in
-    let abstract_atomic ae = trans_prop_decl solver caches prog ae
+    let abstract_atomic name ae map =
+        let univ = trans_prop_decl solver caches prog UnivAbs ae in
+        let ex = trans_prop_decl solver caches prog ExistAbs ae in
+        Program.StringMap.add (name ^ "_exst") ex
+            (Program.StringMap.add (name ^ "_univ") univ map)
     in
     let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_atomics =
-        Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
-    (Program.set_atomics new_atomics (Program.set_procs new_procs prog))
-;;
+        Program.StringMap.fold
+            abstract_atomic (Program.get_atomics prog) Program.StringMap.empty
+    in
+    let new_forms =
+        Program.StringMap.mapi trans_ltl_form (Program.get_ltl_forms prog) in
+    (Program.set_ltl_forms new_forms
+        (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))
 
