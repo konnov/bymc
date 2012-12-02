@@ -240,30 +240,35 @@ let do_refinement trail_filename prog =
         try List.find check_trans (range 0 (num_states - 1))
         with Not_found -> -1 in
     if sp_st <> -1
-    then refined := true
-    else begin
+    then begin
+        log INFO "(status trace-refined)";
+        refined := true
+    end else begin
         let spur_loop =
             check_loop_unfair solver ctr_ctx_tbl xducers
                 rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin
             log INFO "The loop is unfair. Refined.";
+            log INFO "(status trace-refined)";
             refined := true;
         end else begin
             log INFO "The loop is fair";
 
             log INFO "This counterexample does not have spurious transitions or states.";
             log INFO "If it does not show a real problem, provide me with an invariant.";
+            log INFO "(status trace-no-refinement)";
             (* this is an experimental feature! *)
             (* then check its prefixes, from the shortest to the longest *)
             if not (sim_prefix (num_states - 1))
             then begin
                 log INFO "The path is not spurious.";
                 print_vass_trace vass_prog solver num_states;
+                log INFO "(status trace-concrete-example)";
             end else begin
                 let short_len = List.find sim_prefix (range 1 num_states) in
-                log INFO (sprintf "  The shortest spurious path is 0:%d"
-                    short_len);
+                log INFO
+                    (sprintf "  The shortest spurious path is 0:%d" short_len);
                 flush stdout;
             end
         end

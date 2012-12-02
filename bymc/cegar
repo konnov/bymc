@@ -59,7 +59,7 @@ while [ "$cmd" != "q" ]; do
         tail -n '+2' spin.trace | cat -n | head -n 30
         echo ""
         
-        if grep "Sorry" refinement.out; then
+        if grep "trace-no-refinement" refinement.out; then
             if [ "$AUTO" == "" ]; then
                 echo "Enter to try another trace, q<Enter> to exit"
                 rand="-DT_RAND"
@@ -68,16 +68,19 @@ while [ "$cmd" != "q" ]; do
                 cmd="q"
             fi
         elif grep "error" refinement.out \
-                || grep "not spurious" refinement.out; then
+                || grep "trace-concrete-example" refinement.out; then
             echo "It took $step refinement steps"
             out="|00:exitcode=ok|01:valid=no|02:spurious=no"
             cmd="q"
-        else
+        elif grep "trace-refined" refinement.out; then
             step=$((step+1))
             if [ "$DEBUG" != "" -o "$ASK" != "" ]; then
                 echo "Enter to continue, q<Enter> to exit"
                 read cmd
             fi
+        else
+            echo "Unknown refinement status. Aborted."
+            cmd="q"
         fi
     fi
 done
