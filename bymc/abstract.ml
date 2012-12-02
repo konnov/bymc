@@ -112,8 +112,7 @@ let print_vass_trace prog solver num_states =
     List.iter (print_st) (range 0 num_states)
 
 let check_invariant prog inv_name =
-    let (solver, caches, vass_prog, xducers)
-        = construct_vass false prog in
+    let (solver, caches, vass_prog, xducers) = construct_vass false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics vass_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with

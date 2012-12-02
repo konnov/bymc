@@ -371,8 +371,10 @@ let do_interval_abstraction solver caches prog =
     let abstract_atomic name ae map =
         let univ = trans_prop_decl solver caches prog UnivAbs ae in
         let ex = trans_prop_decl solver caches prog ExistAbs ae in
-        Program.StringMap.add (name ^ "_exst") ex
-            (Program.StringMap.add (name ^ "_univ") univ map)
+        if Ltl.is_invariant_atomic name
+        then Program.StringMap.add name ex map
+        else Program.StringMap.add (name ^ "_exst") ex
+                (Program.StringMap.add (name ^ "_univ") univ map)
     in
     let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_atomics =
