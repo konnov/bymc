@@ -324,9 +324,11 @@ let trans_ltl_form name f =
     let inv atype = if atype = UnivAbs then ExistAbs else UnivAbs in
     let rec tr_f atype = function
     | Var v ->
-        if atype = UnivAbs
-        then Var (new var (v#get_name ^ "_univ"))
-        else Var (new var (v#get_name ^ "_exst"))
+        let nv = if atype = UnivAbs
+            then new var (v#get_name ^ "_univ")
+            else new var (v#get_name ^ "_exst") in
+        nv#set_type SpinTypes.TPROPOSITION;
+        Var nv
     | BinEx(AND, l, r) ->
         BinEx(AND, tr_f atype l, tr_f atype r)
     | BinEx(OR, l, r) ->
@@ -347,7 +349,7 @@ let trans_ltl_form name f =
         UnEx(ALWAYS, tr_f atype g)
     | UnEx(EVENTUALLY, g) ->
         UnEx(EVENTUALLY, tr_f atype g)
-        | UnEx(NEXT, _) -> raise (Abstraction_error "Don't use nexttime!")
+    | UnEx(NEXT, _) -> raise (Abstraction_error "Don't use nexttime!")
     | _ as e -> raise (Abstraction_error ("Not an LTL formula: " ^ (expr_s e)))
     in
     if Str.string_match (Str.regexp_string "fairness") name 0
