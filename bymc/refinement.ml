@@ -216,13 +216,21 @@ let simulate_in_smt solver prog ctr_ctx_tbl xducers trail_asserts rev_map n_step
 let parse_smt_evidence prog solver =
     let vals = Hashtbl.create 10 in
     let lines = solver#get_evidence in
+    let aliases = Hashtbl.create 5 in
+    let is_alias full_name = Hashtbl.mem aliases full_name in
+    let add_alias full_name step name dir =
+        Hashtbl.add aliases full_name (step, name, dir) in
+    let get_alias full_name = Hashtbl.find aliases full_name in
     let param_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
     let var_re =
         Str.regexp "(= S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([-0-9]+\\))"
     in
     let arr_re =
-        Str.regexp "(= (S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([0-9]+\\)) \\([-0-9]+\\))"
+        Str.regexp "(= (S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\([A-Z0-9]+\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
+    let alias_re =
+        Str.regexp ("(= S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) "
+            ^ "S\\([0-9]+_[_a-zA-Z0-9]+_[A-Z0-9]+\\))") in
     let add_state_expr state expr =
         if not (Hashtbl.mem vals state)
         then Hashtbl.add vals state [expr]
@@ -231,6 +239,7 @@ let parse_smt_evidence prog solver =
     let parse_line line =
         if Str.string_match var_re line 0
         then begin
+            (* (= S0_nsnt_OUT 1) *)
             let step = int_of_string (Str.matched_group 1 line) in
             let name = (Str.matched_group 2 line) in
             let dir = (Str.matched_group 3 line) in
@@ -243,9 +252,13 @@ let parse_smt_evidence prog solver =
             then add_state_expr state e;
         end else if Str.string_match arr_re line 0
         then begin
-            let step = int_of_string (Str.matched_group 1 line) in
-            let name = (Str.matched_group 2 line) in
-            let dir = (Str.matched_group 3 line) in
+            (* (= (S0_bymc_kP_IN 11) 0) *)
+            let s = int_of_string (Str.matched_group 1 line) in
+            let n = (Str.matched_group 2 line) in
+            let d = (Str.matched_group 3 line) in
+            let full = sprintf "%d_%s_%s" s n d in
+            let step, name, dir =
+                if is_alias full then get_alias full else s, n, d in
             let idx = int_of_string (Str.matched_group 4 line) in
             (* we support ints only, don't we? *)
             let value = int_of_string (Str.matched_group 5 line) in
@@ -253,12 +266,23 @@ let parse_smt_evidence prog solver =
             let e = BinEx (ASGN,
                 BinEx (ARR_ACCESS, Var (new var name), Const idx),
                 Const value) in
-            add_state_expr state e;
+            if dir = "IN" || dir = "OUT"
+            then add_state_expr state e; (* and ignore auxillary arrays *)
+        end else if Str.string_match alias_re line 0
+        then begin
+            (* (= S0_bymc_kP_OUT S0_bymc_kP_Y2) *)
+            let target = (Str.matched_group 4 line) in
+            let step = int_of_string (Str.matched_group 1 line) in
+            let name = (Str.matched_group 2 line) in
+            let dir = (Str.matched_group 3 line) in
+            add_alias target step name dir
         end else if Str.string_match param_re line 0
-        then
+        then begin
+            (* (= T 2) *)
             let name = (Str.matched_group 1 line) in
             let value = int_of_string (Str.matched_group 2 line) in
             add_state_expr 0 (BinEx (ASGN, Var (new var name), Const value))
+        end
     in
     List.iter parse_line lines;
     let cmp e1 e2 =
