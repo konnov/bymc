@@ -130,7 +130,9 @@ let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
     let mk_point point_tuple = list_to_binex AND (List.map mk_eq point_tuple)
     in
     let points_lst = (dom#find_abs_vals atype solver symb_expr) in
-    list_to_binex OR (List.map mk_point points_lst)
+    if points_lst <> []
+    then list_to_binex OR (List.map mk_point points_lst)
+    else Const 0 (* false *)
 ;;
 
 (* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
@@ -294,15 +296,20 @@ let trans_prop_decl solver caches prog atomic_expr =
         solver#pop_ctx;
         abs_ex
     in
+    let drop_quantifier_if_const = function
+        | PropAll (Const i as e) -> PropGlob e
+        | PropSome (Const i as e) -> PropGlob e
+        | _ as qe -> qe
+    in
     match atomic_expr with
         | PropAll e ->
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
-            else PropAll (tr_e e)
+            else drop_quantifier_if_const (PropAll (tr_e e))
         | PropSome e ->
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
-            else PropSome (tr_e e)
+            else drop_quantifier_if_const (PropSome (tr_e e))
         | PropGlob e ->
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
