@@ -122,7 +122,6 @@ let check_invariant prog inv_name =
     printf "Check the invariant candidate:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
     let check_proc_step proctype (* for a step by each proctype *) =
-        (* XXX: replace proc by a normal process name! *)
         let step_asserts =
             [(proctype, [Expr (0, inv)]); (proctype, [Expr (1, not_inv)])] in
         let rev_map = Hashtbl.create 10 in
@@ -164,15 +163,12 @@ let filter_good_fairness aprops fair_forms =
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename prog =
-    let (solver, caches, vass_prog, xducers) =
-        construct_vass true prog in
+    let (solver, caches, vass_prog, xducers) = construct_vass true prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics vass_prog) in
     let ltl_forms = (Program.get_ltl_forms_as_hash vass_prog) in
-    let fairness =
-        filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
@@ -241,8 +237,10 @@ let do_refinement trail_filename prog =
         log INFO "(status trace-refined)";
         refined := true
     end else begin
+        let fairness =
+            filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
         let spur_loop =
-            check_loop_unfair solver ctr_ctx_tbl xducers
+            check_loop_unfair solver vass_prog ctr_ctx_tbl xducers
                 rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin

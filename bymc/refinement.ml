@@ -145,10 +145,12 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
         let smt_id = solver#append_expr e in
         (* bind ids from the solver with reverse mapping on
            concrete expressions *)
-        let s, abs_expr = (Hashtbl.find rev_map id) in
-        log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
-        if solver#get_collect_asserts
-        then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
+        if id >= 0 then begin
+            let s, abs_expr = (Hashtbl.find rev_map id) in
+            log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
+            if solver#get_collect_asserts
+            then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
+        end
 
     | _ -> ()
 ;;
@@ -463,14 +465,49 @@ let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
     res, core_exprs_s
 ;;
 
+let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
+        (proc_abbrev, state_asserts) =
+    solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
+    let new_rev_map = Hashtbl.copy rev_map in
+    let next_id = 1 + (List.fold_left max 0 (hashtbl_keys rev_map)) in
+    (* add the assumption that state 0 is fair! *)
+    Hashtbl.add new_rev_map next_id (0, fairness);
+    solver#set_collect_asserts true;
+    solver#set_need_evidence true;
+
+    (* State 0 is fair and it is a concretization of the abstract state
+       kept in state_asserts. State 1 is anything we can go to via
+       the transducer. *)
+    let step_asserts =
+        [(proc_abbrev, state_asserts @ [Expr(-1, fairness)]);
+            (proc_abbrev, [])] in
+
+    (* simulate one step *)
+    let res, smt_rev_map =
+        (simulate_in_smt solver prog ctr_ctx_tbl
+            xducers step_asserts rev_map 1) in
+
+    (* collect unsat cores if there is no step *)
+    let _, core_exprs =
+        if not res
+        then retrieve_unsat_cores solver smt_rev_map (-1)
+        else [], []
+    in
+    solver#set_collect_asserts false;
+    solver#set_need_evidence false;
+    let core_exprs_s = (String.concat " && " core_exprs) in
+    printf "core_exprs_s: %s\n" core_exprs_s;
+    res, core_exprs_s
+;;
+
 let check_loop_unfair
-        solver ctr_abs_tbl xducers rev_map fair_forms inv_forms loop_asserts =
+        solver prog ctr_abs_tbl xducers rev_map fair_forms inv_forms loop_asserts =
     let check_one ff = 
         log INFO ("  Checking if the loop is fair..."); flush stdout;
         let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
             let sat, core_exprs_s =
-                is_loop_state_fair solver ctr_abs_tbl xducers rev_map
-                    ff inv_forms state_asserts
+                is_loop_state_fair_by_step solver prog ctr_abs_tbl xducers
+                    rev_map ff state_asserts
             in
             (all_sat || sat, core_exprs_s :: all_core_exprs_s)
         in
