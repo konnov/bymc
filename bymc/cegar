@@ -24,9 +24,10 @@ rand=""
 out=""
 
 if [ ! -x "$LTL2BA" ]; then
-    echo "WARNING: $LTL2BA is not found. Please go to `dirname $LTLBA` and invoke make."
-    echo "Using 'spin -f' instead of ltl2ba. It may slow down the performance."
-    exit 1
+    echo "WARNING: $LTL2BA is not found. Please go to `dirname $LTL2BA` and invoke make."
+    echo "WARNING: using 'spin -f' instead of ltl2ba. Performance may degrade."
+    echo "********************************************************************"
+    LTL2BA="$SPIN"
 fi
 
 CUR_DIR=`pwd`
