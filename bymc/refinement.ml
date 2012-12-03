@@ -434,7 +434,7 @@ let print_vass_trace prog solver num_states =
 
 
 let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
-        (proc_abbrev, state_asserts) =
+        (proc_abbrev, state_asserts) state_num =
     solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
     let new_rev_map = Hashtbl.copy rev_map in
     let next_id = 1 + (List.fold_left max 0 (hashtbl_keys rev_map)) in
@@ -465,7 +465,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     let core_exprs_s = (String.concat " && " core_exprs) in
 
     if res then begin
-        log INFO "The state is fair. The example is below.";
+        log INFO "State %d in the loop is fair. The example is below.";
         print_vass_trace prog solver 2;
     end else 
         printf "core_exprs_s: %s\n" core_exprs_s;
@@ -476,19 +476,20 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     res, core_exprs_s
 
 
-let check_loop_unfair
-        solver prog ctr_abs_tbl xducers rev_map fair_forms inv_forms loop_asserts =
+let check_loop_unfair solver prog ctr_abs_tbl xducers
+        rev_map fair_forms inv_forms loop_asserts =
     let check_one ff = 
         log INFO ("  Checking if the loop is fair..."); flush stdout;
-        let check_and_collect_cores (all_sat, all_core_exprs_s) state_asserts =
+        let check_and_collect_cores (all_sat, all_core_exprs_s, num) state_asserts =
             let sat, core_exprs_s =
                 is_loop_state_fair_by_step solver prog ctr_abs_tbl xducers
-                    rev_map ff state_asserts
+                    rev_map ff state_asserts num
             in
-            (all_sat || sat, core_exprs_s :: all_core_exprs_s)
+            (all_sat || sat, core_exprs_s :: all_core_exprs_s, (num + 1))
         in
-        let (sat, exprs) =
-            List.fold_left check_and_collect_cores (false, []) loop_asserts in
+        let sat, exprs, _ =
+            List.fold_left check_and_collect_cores (false, [], 0) loop_asserts
+        in
         if not sat
         then begin
             let pred_no = intro_new_pred pred_recur in
