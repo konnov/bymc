@@ -145,10 +145,7 @@ let check_invariant prog inv_name =
 
 let check_all_invariants prog =
     let fold_invs name ae lst =
-        match ae with
-        | PropGlob e ->
-            if is_invariant_atomic name then name :: lst else lst
-        | _ -> lst
+        if is_invariant_atomic name then name :: lst else lst
     in
     let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) [] in
     List.iter (check_invariant prog) invs
