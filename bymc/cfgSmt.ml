@@ -11,6 +11,7 @@ open Ssa
 open Smt
 open Debug
 
+(* TODO: replace proc_xducer just by proc *)
 class ['t] proc_xducer (i_orig_proc: 't proc) (i_cons: 't stmt list) =
     object
         val orig_proc = i_orig_proc

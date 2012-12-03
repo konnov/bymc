@@ -100,17 +100,6 @@ let construct_vass embed_inv prog =
 
     (solver, caches, vass_prog, xducers)
 
-let print_vass_trace prog solver num_states = 
-    printf "Here is a CONCRETE trace in VASS violating the property.\n";
-    printf "See concrete values of parameters at the state 0.\n\n";
-    let vals = parse_smt_evidence prog solver in
-    let print_st i =
-        printf "%d: " i;
-        pretty_print_exprs (Hashtbl.find vals i);
-        printf "\n";
-    in
-    List.iter (print_st) (range 0 num_states)
-
 let check_invariant prog inv_name =
     let (solver, caches, vass_prog, xducers) = construct_vass false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in

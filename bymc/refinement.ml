@@ -10,8 +10,8 @@ open SpinIrImp
 open Smt
 open Debug
 
-let pred_reach = "p";;
-let pred_recur = "r";;
+let pred_reach = "p"
+let pred_recur = "r"
 
 let parse_spin_trail filename dom data_ctx ctr_ctx_tbl prog =
     let last_id = ref 0 in
@@ -85,7 +85,7 @@ let parse_spin_trail filename dom data_ctx ctr_ctx_tbl prog =
     let prefix_asserts = List.map2 row_to_exprs (range 0 num_rows) rows in
     let loop_asserts = list_sub prefix_asserts !loop_pos (num_rows - !loop_pos) in
     (prefix_asserts, loop_asserts, rev_map)
-;;
+
 
 (* don't touch symbolic variables --- they are the parameters! *)
 let map_to_in v = if v#is_symbolic then v else v#copy (v#get_name ^ "_IN") ;;
@@ -94,9 +94,9 @@ let map_to_step step v =
     if v#is_symbolic
     then v
     else v#copy (sprintf "S%d_%s" step v#get_name)
-;;
 
-let stick_var map_fun v = Var (map_fun v);;
+
+let stick_var map_fun v = Var (map_fun v)
 
 let connect_steps tracked_vars step =
     let connect v =
@@ -104,7 +104,7 @@ let connect_steps tracked_vars step =
         let iv = map_to_step (step + 1) (map_to_in v) in
         BinEx (EQ, Var ov, Var iv) in
     list_to_binex AND (List.map connect tracked_vars)
-;;
+
 
 (* the process is skipping the step, not moving *)
 let skip_step local_vars step =
@@ -113,7 +113,7 @@ let skip_step local_vars step =
         let ov = map_to_step step (map_to_out v) in
         BinEx (EQ, Var ov, Var iv) in
     list_to_binex AND (List.map eq local_vars)
-;;
+
 
 let create_path proc xducer local_vars shared_vars when_moving n_steps =
     let tracked_vars = local_vars @ shared_vars in
@@ -137,7 +137,7 @@ let create_path proc xducer local_vars shared_vars when_moving n_steps =
             (connect_steps tracked_vars)
             (range 0 (n_steps - 1)) in
     xducers @ connections
-;;
+
 
 let smt_append_bind solver rev_map smt_rev_map expr_stmt =
     match expr_stmt with
@@ -153,7 +153,7 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
         end
 
     | _ -> ()
-;;
+
 
 (* TODO: optimize it for the case of checking one transition only! *)
 (* TODO: mark the case of replaying a path (not a transition) as experimental
@@ -213,7 +213,7 @@ let simulate_in_smt solver prog ctr_ctx_tbl xducers trail_asserts rev_map n_step
     let result = solver#check in
     solver#pop_ctx;
     (result, smt_rev_map)
-;;
+
 
 let parse_smt_evidence prog solver =
     let vals = Hashtbl.create 10 in
@@ -317,7 +317,7 @@ let parse_smt_evidence prog solver =
         (fun k vs -> Hashtbl.add new_tbl k (list_sort_uniq cmp vs))
         vals;
     new_tbl
-;;
+
 
 (* group an expression in a sorted valuation *)
 let pretty_print_exprs exprs =
@@ -356,7 +356,7 @@ let pretty_print_exprs exprs =
         | _ -> ()
     in
     List.iter pp exprs
-;;
+
 
 let find_max_pred prefix = 
     let re = Str.regexp (".*bit bymc_" ^ prefix ^ "\\([0-9]+\\) = 0;.*") in
@@ -379,7 +379,7 @@ let find_max_pred prefix =
     in
     try read_from_file ()
     with Sys_error _ -> (-1)
-;;
+
 
 let intro_new_pred prefix (* pred_reach or pred_recur *) =
     let max_no = find_max_pred prefix in
@@ -388,7 +388,7 @@ let intro_new_pred prefix (* pred_reach or pred_recur *) =
     fprintf cout "bit bymc_%s%d = 0;\n" prefix pred_no;
     close_out cout;
     pred_no
-;;
+
 
 (* retrieve unsat cores, map back corresponding constraints on abstract values,
    partition the constraints into two categories:
@@ -404,7 +404,7 @@ let retrieve_unsat_cores solver smt_rev_map src_state_no =
     let b2 (s, e) = sprintf "(%s)" (expr_s e) in
     let pre, post = List.map b2 pre, List.map b2 post in
     (pre, post)
-;;
+
 
 let refine_spurious_step solver smt_rev_map src_state_no =
     let pre, post = retrieve_unsat_cores solver smt_rev_map src_state_no in
@@ -419,51 +419,19 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     fprintf cout "bymc_spur = (bymc_p%d && (%s)) || bymc_spur;\n"
         pred_no (String.concat " && " post);
     close_out cout
-;;
 
-let is_loop_state_fair solver ctr_ctx_tbl xducers rev_map fairness
-        inv_forms (proc_abbrev, state_asserts) =
-    solver#comment ("is_loop_state_fair: " ^ (expr_s fairness));
-    let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
-    let smt_to_expr = function
-        | Expr (_, e) -> e
-        | _ -> Nop ""
+
+let print_vass_trace prog solver num_states = 
+    printf "Here is a CONCRETE trace in VASS violating the property.\n";
+    printf "State 0 gives concrete parameters.\n\n";
+    let vals = parse_smt_evidence prog solver in
+    let print_st i =
+        printf "%d: " i;
+        pretty_print_exprs (Hashtbl.find vals i);
+        printf "\n";
     in
-    let add_assert_expr e =
-        let _ = solver#append_expr e in ()
-    in
-    (* TODO: shall we instead use a transducer that carries all constraints? *)
-    let num_procs_preserved c_ctx =
-        let proc_xducer = hashtbl_find_str xducers c_ctx#proctype_name in
-        let active_expr = proc_xducer#get_orig_proc#get_active_expr in
-        let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
-        let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i in
-        let sum = List.fold_left add (Const 0) (range 0 c_ctx#get_ctr_dim) in
-        BinEx (EQ, active_expr, sum)
-    in
-    solver#set_collect_asserts true; (* we need unsat cores *)
-    solver#push_ctx;
-    solver#set_collect_asserts true;
-    let decls = expr_list_used_vars
-        (fairness :: (List.map smt_to_expr state_asserts) @ inv_forms) in
-    log INFO (sprintf "    appending %d declarations..."
-        (List.length decls)); flush stdout;
-    List.iter solver#append_var_def decls;
-    log INFO (sprintf "    appending %d assertions..."
-        (1 + (List.length inv_forms) + (List.length state_asserts)));
-    add_assert_expr fairness;
-    List.iter
-        (fun c -> add_assert_expr (num_procs_preserved c)) ctr_ctx_tbl#all_ctxs;
-    List.iter add_assert_expr inv_forms;
-    List.iter (smt_append_bind solver rev_map smt_rev_map) state_asserts;
-    log INFO "    waiting for SMT..."; flush stdout;
-    let res = solver#check in
-    solver#set_collect_asserts false;
-    solver#pop_ctx;
-    let _, core_exprs = retrieve_unsat_cores solver smt_rev_map (-1) in
-    let core_exprs_s = (String.concat " && " core_exprs) in
-    res, core_exprs_s
-;;
+    List.iter (print_st) (range 0 num_states)
+
 
 let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
         (proc_abbrev, state_asserts) =
@@ -494,13 +462,19 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
         then retrieve_unsat_cores solver smt_rev_map (-1)
         else [], []
     in
+    let core_exprs_s = (String.concat " && " core_exprs) in
+
+    if res then begin
+        log INFO "The state is fair. The example is below.";
+        print_vass_trace prog solver 2;
+    end else 
+        printf "core_exprs_s: %s\n" core_exprs_s;
+
     solver#set_collect_asserts false;
     solver#set_need_evidence false;
     solver#pop_ctx;
-    let core_exprs_s = (String.concat " && " core_exprs) in
-    printf "core_exprs_s: %s\n" core_exprs_s;
     res, core_exprs_s
-;;
+
 
 let check_loop_unfair
         solver prog ctr_abs_tbl xducers rev_map fair_forms inv_forms loop_asserts =
@@ -525,4 +499,3 @@ let check_loop_unfair
         not sat
     in
     List.fold_left (||) false (List.map check_one fair_forms)
-;;
