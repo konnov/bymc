@@ -472,6 +472,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     let next_id = 1 + (List.fold_left max 0 (hashtbl_keys rev_map)) in
     (* add the assumption that state 0 is fair! *)
     Hashtbl.add new_rev_map next_id (0, fairness);
+    solver#push_ctx;
     solver#set_collect_asserts true;
     solver#set_need_evidence true;
 
@@ -495,6 +496,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     in
     solver#set_collect_asserts false;
     solver#set_need_evidence false;
+    solver#pop_ctx;
     let core_exprs_s = (String.concat " && " core_exprs) in
     printf "core_exprs_s: %s\n" core_exprs_s;
     res, core_exprs_s
