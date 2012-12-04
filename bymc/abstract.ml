@@ -122,10 +122,10 @@ let check_invariant prog inv_name =
                 xducers step_asserts rev_map 1) in
         solver#set_collect_asserts false;
         if res then begin
-            printf "The invariant %s is violated!\n\n" inv_name;
+            printf "Expression %s is not an invariant!\n\n" inv_name;
             printf "Here is an example:\n";
             print_vass_trace vass_prog solver 2;
-            raise (Failure (sprintf "The invariant %s is violated" inv_name))
+            raise (Failure (sprintf "Expression %s is not an invariant!" inv_name))
         end
     in
     List.iter check_proc_step
