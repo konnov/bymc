@@ -265,10 +265,37 @@ let translate_stmt solver caches stmt =
 
     | MD_step (id, seq) -> MD_step (id, (abs_seq seq))
 
-    | MIf (id, opts) ->
+    | MIf (id, opts) as if_s ->
+        (* Abstraction of options may lead to non-deterministic choices, even if
+            the original options were mutually exclusive. Else option must be
+            translated into the explicit negation of other guards and then
+            abstracted. Otherwise, the abstract relation does not simulate the
+            original program (the abstract conditions are not overapproximations).
+         *)
+        let get_guard accum = function
+            (* we expect guards to be free of side-effects, if there is an
+              'else' option. Otherwise, we cannot abstract 'else' properly *)
+            | MOptGuarded ((MExpr (_, g)) :: tl) ->
+                if (is_side_eff_free g)
+                then g :: accum
+                else raise (Abstraction_error
+                    (sprintf "The guard '%s' may have a side effect (how to treat 'else'?)" (expr_s g)))
+            | MOptGuarded (s :: tl) ->
+                raise (Abstraction_error
+                    ("Expected an expression, found: " ^ (mir_stmt_s s)))
+            | MOptGuarded [] ->
+                raise (Abstraction_error
+                    ("Met an empty option in: " ^ (mir_stmt_s if_s)))
+            | MOptElse _ -> accum
+        in
         let abs_opt = function
-            | MOptGuarded seq -> MOptGuarded (abs_seq seq)
-            | MOptElse seq -> MOptElse (abs_seq seq)
+            | MOptGuarded seq ->
+                MOptGuarded (abs_seq seq)
+            | MOptElse seq ->
+                (* all guards are evaluated to false *)
+                let guards = List.fold_left get_guard [] opts in
+                let noguard = UnEx(NEG, list_to_binex OR guards) in
+                MOptGuarded (abs_seq (MExpr (-1, noguard) :: seq))
         in
         MIf (id, List.map abs_opt opts)
 

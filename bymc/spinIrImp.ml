@@ -3,11 +3,11 @@
  * to avoid circular dependencies between Spin and Spin_ir
  *)
 
-open Printf;;
+open Printf
 
-open Spin;;
-open SpinIr;;
-open SpinTypes;;
+open Spin
+open SpinIr
+open SpinTypes
 
 let token_s t =
     match t with
@@ -137,7 +137,7 @@ let token_s t =
       | ALL -> "all"
       | SOME -> "some"
       | CARD -> "card"
-;;
+
 
 let is_name = function
     | NAME _ -> true
@@ -146,7 +146,7 @@ let is_name = function
     | PNAME _ -> true
     | INAME _ -> true
     | _ -> false
-;;
+
 
 let rec expr_s e =
     match e with
@@ -173,7 +173,7 @@ let rec expr_s e =
         sprintf "%s = phi(%s)" lhs#get_name rhs_s
     | LabelRef (proc_name, lab_name) ->
         sprintf "%s@%s" proc_name lab_name
-;;
+
 
 (* as expr_s but instead of assemblying a string, it prints using Format.fprintf *)
 let rec fprint_expr ff e =
@@ -239,14 +239,14 @@ let rec fprint_expr ff e =
         Format.fprintf ff "%s" proc_name;
         Format.pp_print_string ff "@";
         Format.fprintf ff "%s" lab_name
-;;
+
 
 let op_of_expr e =
     match e with
     | UnEx (tok, _) -> tok
     | BinEx (tok, _, _) -> tok
     | _ -> EOF
-;;
+
 
 let stmt_s s =
     match s with
@@ -270,7 +270,7 @@ let stmt_s s =
     | Print (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s" id s
             (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
-;;
+
 
 let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
     let mk_else_cond options =
@@ -331,7 +331,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         ) lstmts (-1, []) 
     in
     res
-;;
+
 
 let rec mir_stmt_s s =
     let seq_s seq = 
@@ -371,7 +371,7 @@ let rec mir_stmt_s s =
     | MPrint (id, s, es) ->
         sprintf "<%3d> print \"%s\"%s"
             id s (List.fold_left (fun a e -> a ^ ", " ^ (expr_s e)) "" es)
-;;
+
 
 let prog_unit_s u =
     match u with
@@ -393,7 +393,7 @@ let prog_unit_s u =
     | Ltl (name, exp) -> sprintf "ltl %s { %s }" name (expr_s exp)
 
     | None -> Printf.sprintf "skip\n"
-;;
+
 
 (* return a symmetric version of an arithmetic relation *)
 let symm_of_arith_rel = function
@@ -406,7 +406,7 @@ let symm_of_arith_rel = function
     | _ as tok ->
         let m = "Not an arithmetic relation: " ^ (token_s tok) in
         raise (Invalid_argument m)
-;;
+
 
 let not_of_arith_rel = function
     | LT -> GE
@@ -418,5 +418,17 @@ let not_of_arith_rel = function
     | _ as tok ->
         let m = "Not an arithmetic relation: " ^ (token_s tok) in
         raise (Invalid_argument m)
-;;
+
+
+let rec is_side_eff_free = function
+    | BinEx(LT, l, r)
+    | BinEx(LE, l, r)
+    | BinEx(GT, l, r)
+    | BinEx(GE, l, r)
+    | BinEx(EQ, l, r)
+    | BinEx(NE, l, r) -> true
+    | BinEx(AND, l, r) -> (is_side_eff_free l) && (is_side_eff_free r)
+    | BinEx(OR, l, r) -> (is_side_eff_free l) && (is_side_eff_free r)
+    | UnEx(NEG, l) -> (is_side_eff_free l)
+    | _ -> false
 
