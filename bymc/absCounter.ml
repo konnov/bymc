@@ -556,7 +556,6 @@ let do_counter_abstraction funcs solver caches prog =
         List.map hack_nsnt (List.map (replace_assume atomics) stmts)
     in
     let mk_assume e = MAssume (-1, e) in
-    let xducers = Hashtbl.create 1 in (* transition relations in SMT *)
     let abstract_proc atomics p =
         let c_ctx = ctr_ctx_tbl#get_ctx p#get_name in
         let invs = if funcs#embed_inv
@@ -598,22 +597,6 @@ let do_counter_abstraction funcs solver caches prog =
         new_reg_tbl#add "update" new_update;
         new_reg_tbl#add "loop_body" new_loop_body;
         caches#get_struc#set_regions p#get_name new_reg_tbl;
-        (* SMT xducer: exactly at this moment we have all information to
-           generate a xducer of a process *)
-        (* TODO: this must be a translation pass on its own *)
-        let lirs = (mir_to_lir (new_loop_body @ [MLabel (-1, main_lab)])) in
-        let all_vars =
-            (c_ctx#get_ctr :: (Program.get_shared prog)
-             @ funcs#introduced_vars) in
-        let non_shared = List.filter
-            (Program.is_not_global prog) (hashtbl_keys roles#get_all) in
-        let cfg = mk_ssa true all_vars non_shared (mk_cfg lirs) in
-        if may_log DEBUG
-        then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
-        let transd = cfg_to_constraints cfg in
-        Hashtbl.add xducers p#get_name (new proc_xducer p transd);
-        Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
-        (* end of xducer *)
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
@@ -646,5 +629,5 @@ let do_counter_abstraction funcs solver caches prog =
         (Program.set_unsafes new_unsafes
         (Program.set_ltl_forms new_ltl_forms
         (Program.set_procs new_procs (Program.empty))))))) in
-    (new_prog, xducers)
+    new_prog
 

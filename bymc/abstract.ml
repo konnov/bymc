@@ -37,6 +37,7 @@ let write_to_file externalize_ltl name units =
     List.iter save_unit units;
     close_out fo
 
+
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction is_first_run prog =
     if is_first_run
@@ -63,15 +64,14 @@ let do_abstraction is_first_run prog =
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_prog, _ =
-        do_counter_abstraction funcs solver caches intabs_prog in
+    let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog in
     write_to_file true "abs-counter.prm" (units_of_program ctrabs_prog);
     log INFO "[DONE]";
     let _ = solver#stop in
     ctrabs_prog
 
 
-let construct_vass embed_inv prog =
+let make_vass_xducers embed_inv prog =
     let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
@@ -90,20 +90,20 @@ let construct_vass embed_inv prog =
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
-    let vass_prog, xducers =
-        do_counter_abstraction vass_funcs solver caches intabs_prog
-    in
-    log INFO "> Constructing SMT transducers...";
-    let _ = SmtXducerPass.do_xducers caches vass_prog in
+    let vass_prog =
+        do_counter_abstraction vass_funcs solver caches intabs_prog in
     write_to_file false "abs-vass.prm" (units_of_program vass_prog);
+    log INFO "> Constructing SMT transducers...";
+    let xducer_prog = SmtXducerPass.do_xducers caches vass_prog in
+    write_to_file false "abs-xducers.prm" (units_of_program xducer_prog);
     log INFO "  [DONE]"; flush stdout;
+    (solver, caches, xducer_prog)
 
-    (solver, caches, vass_prog, xducers)
 
 let check_invariant prog inv_name =
-    let (solver, caches, vass_prog, xducers) = construct_vass false prog in
+    let (solver, caches, xducers_prog) = make_vass_xducers false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
-    let aprops = (Program.get_atomics vass_prog) in
+    let aprops = (Program.get_atomics xducers_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
     | _ -> raise (Failure ("Invariant must be a global expression: " ^ inv_name))
@@ -118,18 +118,18 @@ let check_invariant prog inv_name =
         solver#set_collect_asserts true;
         solver#set_need_evidence true;
         let res, smt_rev_map =
-            (simulate_in_smt solver vass_prog ctr_ctx_tbl
-                xducers step_asserts rev_map 1) in
+            (simulate_in_smt solver xducers_prog ctr_ctx_tbl step_asserts rev_map 1) in
         solver#set_collect_asserts false;
         if res then begin
             printf "Expression %s is not an invariant!\n\n" inv_name;
             printf "Here is an example:\n";
-            print_vass_trace vass_prog solver 2;
+            print_vass_trace xducers_prog solver 2;
             raise (Failure (sprintf "Expression %s is not an invariant!" inv_name))
         end
     in
     List.iter check_proc_step
         (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
+
 
 let check_all_invariants prog =
     let fold_invs name ae lst =
@@ -149,19 +149,20 @@ let filter_good_fairness aprops fair_forms =
     printf "added %d fairness constraints\n" (List.length filtered);
     filtered
 
+
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement trail_filename prog =
-    let (solver, caches, vass_prog, xducers) = construct_vass true prog in
+    let (solver, caches, xducers_prog) = make_vass_xducers true prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
-    let aprops = (Program.get_atomics vass_prog) in
-    let ltl_forms = (Program.get_ltl_forms_as_hash vass_prog) in
+    let aprops = (Program.get_atomics xducers_prog) in
+    let ltl_forms = (Program.get_ltl_forms_as_hash xducers_prog) in
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
-        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl vass_prog in
+        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl xducers_prog in
     let total_steps = (List.length trail_asserts) - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
@@ -174,7 +175,7 @@ let do_refinement trail_filename prog =
     let sim_prefix n_steps =
         solver#append (sprintf ";; Checking the path 0:%d" n_steps);
         let res, _ = simulate_in_smt
-                solver vass_prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps in
+                solver xducers_prog ctr_ctx_tbl trail_asserts rev_map n_steps in
         if res
         then begin
             log INFO (sprintf "  %d step(s). OK" n_steps);
@@ -193,7 +194,7 @@ let do_refinement trail_filename prog =
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         solver#set_collect_asserts true;
         let res, smt_rev_map =
-            (simulate_in_smt solver vass_prog ctr_ctx_tbl xducers step_asserts rev_map 1)
+            (simulate_in_smt solver xducers_prog ctr_ctx_tbl step_asserts rev_map 1)
         in
         solver#set_collect_asserts false;
         if not res
@@ -229,7 +230,7 @@ let do_refinement trail_filename prog =
         let fairness =
             filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
         let spur_loop =
-            check_loop_unfair solver vass_prog ctr_ctx_tbl xducers
+            check_loop_unfair solver xducers_prog ctr_ctx_tbl
                 rev_map fairness inv_forms loop_asserts in
         if spur_loop
         then begin
@@ -247,7 +248,7 @@ let do_refinement trail_filename prog =
             if not (sim_prefix (num_states - 1))
             then begin
                 log INFO "The path is not spurious.";
-                print_vass_trace vass_prog solver num_states;
+                print_vass_trace xducers_prog solver num_states;
                 log INFO "(status trace-concrete-example)";
             end else begin
                 let short_len = List.find sim_prefix (range 1 num_states) in

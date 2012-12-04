@@ -19,19 +19,20 @@ let write_exprs name stmts =
     (* assign new ids to expression in a way that keeps the order between
        old ids and blocks of statements between them *)
     let num_stmt (num, lst) = function
-        | Expr (-1, e) ->
-                (num + 1, (Expr (num, e)) :: lst)
-        | Expr (id, e) ->
-                ((id + 1) * mul + 1, (Expr ((id + 1) * mul, e)) :: lst)
+        | MExpr (-1, e) ->
+                (num + 1, (MExpr (num, e)) :: lst)
+        | MExpr (id, e) ->
+                ((id + 1) * mul + 1, (MExpr ((id + 1) * mul, e)) :: lst)
         | _ ->
                 raise (Failure "Expected Expr (_, _)")
     in
     let _, numbered = (List.fold_left num_stmt (0, []) stmts) in
-    let sorted_stmts = List.sort cmp_stmt numbered in
+    let sorted_stmts = List.sort cmp_m_stmt numbered in
     let out = open_out (sprintf "%s.xd" name) in
-    let write_e s = fprintf out "%s\n" (expr_s (expr_of_stmt s)) in
+    let write_e s = fprintf out "%s\n" (expr_s (expr_of_m_stmt s)) in
     List.iter write_e sorted_stmts;
     close_out out
+
 
 let to_xducer caches prog p =
     let roles = caches#get_analysis#get_var_roles in
@@ -50,9 +51,10 @@ let to_xducer caches prog p =
     Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
     let transd = cfg_to_constraints cfg in
     write_exprs p#get_name transd;
-    (* XXX: this pass produces not a Program.program, but proc_xducer! *)
-    (new proc_xducer p transd)
+    proc_replace_body p transd
+
 
 let do_xducers caches prog =
-    List.map (to_xducer caches prog) (Program.get_procs prog)
+    let new_procs = List.map (to_xducer caches prog) (Program.get_procs prog) in
+    (Program.set_procs new_procs prog)
 

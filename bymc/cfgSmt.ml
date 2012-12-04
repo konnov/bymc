@@ -11,29 +11,19 @@ open Ssa
 open Smt
 open Debug
 
-(* TODO: replace proc_xducer just by proc *)
-class ['t] proc_xducer (i_orig_proc: 't proc) (i_cons: 't stmt list) =
-    object
-        val orig_proc = i_orig_proc
-        val transition_cons: 't stmt list = i_cons
-
-        method get_orig_proc = orig_proc
-        method get_trans_form = transition_cons
-    end
-
 (*
  XXX: this translation does not work with a control flow graph like this:
      A -> (B, C); B -> D; C -> D; B -> C.
  To handle this case two copies of C must be introduced.
  *)
-let block_to_constraints (bb: 't basic_block): (Spin.token stmt list) =
+let block_to_constraints (bb: 't basic_block): (Spin.token mir_stmt list) =
     let at_var i =
         let nv = new var (sprintf "at_%d" i) in 
         nv#set_type SpinTypes.TBIT;
         Var nv
     in
-    let mke id e = Expr (id, e) in
-    let mkez e = Expr (-1, e) in
+    let mke id e = MExpr (id, e) in
+    let mkez e = MExpr (-1, e) in
     (* the entry block always gains control! *)
     let entry_starts =
         if bb#label <> 0 then mkez (Nop "") else mkez (at_var 0) in
@@ -64,8 +54,8 @@ let block_to_constraints (bb: 't basic_block): (Spin.token stmt list) =
     (* convert statements *)
     let at_impl_expr e =
         BinEx (OR, UnEx (NEG, at_var bb#label), e) in
-    let convert (s: Spin.token stmt) (tl: Spin.token stmt list):
-            Spin.token stmt list=
+    let convert (s: Spin.token stmt) (tl: Spin.token mir_stmt list):
+            Spin.token mir_stmt list=
         match s with
         | Expr (id, (Phi (lhs, rhs) as e)) ->
             (* (at_i -> x = x_i) for x = phi(x_1, ..., x_k) *)
@@ -118,7 +108,7 @@ let block_to_constraints (bb: 't basic_block): (Spin.token stmt list) =
     in
     let smt_es = (List.fold_right convert bb#get_seq []) in
     let stmt_not_nop = function
-        | Expr (_, Nop _) -> false
+        | MExpr (_, Nop _) -> false
         | _ -> true
     in
     let n_cons e es = if stmt_not_nop e then e :: es else es in
@@ -130,7 +120,7 @@ let cfg_to_constraints cfg =
     then begin
         printf "SMT constraints: \n";
         let print_stmt = function
-        | Expr (_, e) -> printf "%s\n" (expr_to_smt e)
+        | MExpr (_, e) -> printf "%s\n" (expr_to_smt e)
         | _ -> () in
         List.iter print_stmt cons;
     end;

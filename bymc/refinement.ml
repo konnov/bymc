@@ -118,7 +118,7 @@ let skip_step local_vars step =
 let create_path proc xducer local_vars shared_vars when_moving n_steps =
     let tracked_vars = local_vars @ shared_vars in
     let map_xducer n =
-        let es = List.map expr_of_stmt xducer in
+        let es = List.map expr_of_m_stmt xducer in
         List.map (map_vars (stick_var (map_to_step n))) es
     in
     (* different proctypes will not clash on their local variables as only
@@ -158,7 +158,7 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
 (* TODO: optimize it for the case of checking one transition only! *)
 (* TODO: mark the case of replaying a path (not a transition) as experimental
          and remove it out from here, it is heavy *)
-let simulate_in_smt solver prog ctr_ctx_tbl xducers trail_asserts rev_map n_steps =
+let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts rev_map n_steps =
     let shared_vars = (Program.get_shared prog) in
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
@@ -186,17 +186,17 @@ let simulate_in_smt solver prog ctr_ctx_tbl xducers trail_asserts rev_map n_step
     (* put asserts from the control flow graph *)
     log INFO (sprintf 
         "    collecting declarations and xducer asserts (%d xducers)..."
-        (Hashtbl.length xducers));
+        (List.length (Program.get_procs prog)));
     flush stdout;
     let proc_asserts proc =
-        let c_ctx = ctr_ctx_tbl#get_ctx proc in
-        let proc_xd = (hashtbl_find_str xducers proc)#get_trans_form in
+        let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
+        let proc_xd = proc#get_stmts in
         let when_moving = List.map (fun p -> p = c_ctx#abbrev_name) moving_procs
         in
         let local_vars = [c_ctx#get_ctr] in
         create_path c_ctx#abbrev_name proc_xd local_vars shared_vars when_moving n_steps in
     let xducer_asserts =
-        List.concat (List.map proc_asserts (hashtbl_keys xducers)) in
+        List.concat (List.map proc_asserts (Program.get_procs prog)) in
     let decls = expr_list_used_vars xducer_asserts in
 
     log INFO (sprintf "    appending %d declarations..."
@@ -433,7 +433,7 @@ let print_vass_trace prog solver num_states =
     List.iter (print_st) (range 0 num_states)
 
 
-let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
+let is_loop_state_fair_by_step solver prog ctr_ctx_tbl rev_map fairness
         (proc_abbrev, state_asserts) state_num =
     solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
     let new_rev_map = Hashtbl.copy rev_map in
@@ -454,7 +454,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     (* simulate one step *)
     let res, smt_rev_map =
         (simulate_in_smt solver prog ctr_ctx_tbl
-            xducers step_asserts rev_map 1) in
+            step_asserts rev_map 1) in
 
     (* collect unsat cores if there is no step *)
     let _, core_exprs =
@@ -465,7 +465,8 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     let core_exprs_s = (String.concat " && " core_exprs) in
 
     if res then begin
-        log INFO "State %d in the loop is fair. The example is below.";
+        log INFO (sprintf
+            "State %d in the loop is fair. See trace below." state_num);
         print_vass_trace prog solver 2;
     end else 
         printf "core_exprs_s: %s\n" core_exprs_s;
@@ -476,13 +477,13 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl xducers rev_map fairness
     res, core_exprs_s
 
 
-let check_loop_unfair solver prog ctr_abs_tbl xducers
+let check_loop_unfair solver prog ctr_abs_tbl
         rev_map fair_forms inv_forms loop_asserts =
     let check_one ff = 
         log INFO ("  Checking if the loop is fair..."); flush stdout;
         let check_and_collect_cores (all_sat, all_core_exprs_s, num) state_asserts =
             let sat, core_exprs_s =
-                is_loop_state_fair_by_step solver prog ctr_abs_tbl xducers
+                is_loop_state_fair_by_step solver prog ctr_abs_tbl
                     rev_map ff state_asserts num
             in
             (all_sat || sat, core_exprs_s :: all_core_exprs_s, (num + 1))

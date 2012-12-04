@@ -322,6 +322,7 @@ let cmp_stmt s1 s2 =
     compare (stmt_id s1) (stmt_id s2)
 
 
+
 let replace_stmt_id new_id = function
       Skip _ -> Skip new_id
     | Expr (_, e) -> Expr (new_id, e)
@@ -381,7 +382,16 @@ let m_stmt_id = function
     | MHavoc (id, _) -> id
     | MUnsafe (id, _) -> id
     | MDeclProp (id, _, _) -> id
-;;
+
+
+let cmp_m_stmt s1 s2 =
+    compare (m_stmt_id s1) (m_stmt_id s2)
+
+
+let expr_of_m_stmt = function
+    | MExpr (_, e) -> e
+    | _ -> raise (Failure "Expected MExpr (_, e), found another statement")
+
 
 (* find the first statement with a non-negative id *)
 let first_normal_stmt seq =
