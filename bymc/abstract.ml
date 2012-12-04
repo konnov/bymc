@@ -17,6 +17,8 @@ open SpinIrImp
 open VarRole
 open Writer
 
+open BddPass
+
 open Debug
 
 let write_to_file externalize_ltl name units =
