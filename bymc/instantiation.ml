@@ -102,10 +102,14 @@ let conc_prop pa pmap prop =
         | BinEx (t, l, r) -> BinEx (t, replace_card l, replace_card r)
         | _ as e -> e
     in
-    match prop with
+    let rec tr_ae = function
     | PropAll e -> PropGlob (conc_expr pa (unfold ForAll e))
     | PropSome e -> PropGlob (conc_expr pa (unfold Exist e))
     | PropGlob e -> PropGlob (conc_expr pa (replace_card e))
+    | PropAnd (l, r) -> PropAnd (tr_ae l, tr_ae r)
+    | PropOr (l, r) -> PropOr (tr_ae l, tr_ae r)
+    in
+    tr_ae prop
 
 let rec concretize_stmt pa pmap stmt =
     let find_var name =

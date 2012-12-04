@@ -161,7 +161,7 @@ let fatal msg payload =
 %token  <string> MACRO_OTHER
 %token  EOF
 /* FORSYTE extensions { */
-%token  ASSUME SYMBOLIC ALL SOME CARD
+%token  ASSUME SYMBOLIC ALL SOME CARD POR PAND
 /* FORSYTE extensions } */
 /* imaginary tokens not directly used in the grammar, but used in the
    intermediate representations
@@ -997,6 +997,8 @@ atomic_prop:
       ALL LPAREN prop_expr RPAREN { PropAll ($3)  }
     | SOME LPAREN prop_expr RPAREN { PropSome ($3) }
     | LPAREN prop_expr RPAREN { PropGlob ($2) }
+    | LPAREN atomic_prop PAND atomic_prop RPAREN { PropAnd($2, $4) }
+    | LPAREN atomic_prop POR atomic_prop RPAREN { PropOr($2, $4) }
     ;
 
 /* should we use full_expr here and then check the tree? */

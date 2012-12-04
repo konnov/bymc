@@ -143,7 +143,13 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
         then raise (Abstraction_error ("Atomic: No process name in " ^ (expr_s e)))
         else name
     in
-    match atomic_expr with
+    let join_two op l r =
+        match (l, r) with
+        | PropGlob lg, PropGlob rg ->
+            PropGlob (BinEx (op, lg, rg))
+        | _ -> raise (Abstraction_error "Illegal tr_atomic")
+    in
+    let rec tr_atomic = function
         | PropAll e ->
             let c_ctx = ctr_ctx_tbl#get_ctx (find_proc_name e) in
             PropGlob (t_e (mk_all c_ctx) e)
@@ -155,7 +161,15 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
                 | UnEx (CARD, _) -> true
                 | _ -> false
             in
-            if expr_exists has_card e then PropGlob (repl_ctr e) else PropGlob e
+            if expr_exists has_card e
+            then PropGlob (repl_ctr e)
+            else PropGlob e
+        | PropAnd (l, r) ->
+            join_two AND (tr_atomic l) (tr_atomic r)
+        | PropOr (l, r) ->
+            join_two OR (tr_atomic l) (tr_atomic r)
+    in
+    tr_atomic atomic_expr
 
 
 (* TODO: find out the values at the end of the init_stmts,

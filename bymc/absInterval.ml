@@ -308,7 +308,7 @@ let translate_stmt solver caches stmt =
   universally abstracted and existentially abstracted.
   See our TACAS submission (or Pnueli, Zuck 2001) on that.
  *)
-let trans_prop_decl solver caches prog atype atomic_expr =
+let rec trans_prop_decl solver caches prog atype atomic_expr =
     let ctx = caches#get_analysis#get_pia_data_ctx in
     let dom = caches#get_analysis#get_pia_dom in
     let roles = caches#get_analysis#get_var_roles in
@@ -327,7 +327,7 @@ let trans_prop_decl solver caches prog atype atomic_expr =
         | PropSome (Const i as e) -> PropGlob e
         | _ as qe -> qe
     in
-    match atomic_expr with
+    let rec tr_atomic = function
         | PropAll e ->
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
@@ -340,6 +340,12 @@ let trans_prop_decl solver caches prog atype atomic_expr =
             if not (expr_exists (over_dom roles) e)
             then atomic_expr
             else PropGlob (tr_e e)
+        | PropAnd (l, r) ->
+            PropAnd (tr_atomic l, tr_atomic r)
+        | PropOr (l, r) ->
+            PropOr (tr_atomic l, tr_atomic r)
+    in
+    tr_atomic atomic_expr
 
 
 let trans_ltl_form name f =

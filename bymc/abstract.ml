@@ -106,7 +106,7 @@ let check_invariant prog inv_name =
     let aprops = (Program.get_atomics vass_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
-    | _ -> raise (Failure ("Invalid invariant " ^ inv_name))
+    | _ -> raise (Failure ("Invariant must be a global expression: " ^ inv_name))
     in
     printf "Check the invariant candidate:\n %s\n\n" (expr_s inv_expr);
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in

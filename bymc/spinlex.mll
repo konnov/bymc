@@ -136,6 +136,8 @@ rule token = parse
  | "all"                 { ALL } 
  | "some"                { SOME } 
  | "card"                { CARD } 
+ | "and"                 { PAND } 
+ | "or"                  { POR } 
  (* end of FORSYTE extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*

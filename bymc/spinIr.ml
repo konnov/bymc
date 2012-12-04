@@ -359,6 +359,8 @@ and 't atomic_expr =
       PropAll of 't expr
     | PropSome of 't expr
     | PropGlob of 't expr (* refers to global variables only *)
+    | PropAnd of 't atomic_expr * 't atomic_expr
+    | PropOr of 't atomic_expr * 't atomic_expr
 and 't mir_option =
       MOptGuarded of 't mir_stmt list
     | MOptElse of 't mir_stmt list

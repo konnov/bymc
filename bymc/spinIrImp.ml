@@ -137,6 +137,8 @@ let token_s t =
       | ALL -> "all"
       | SOME -> "some"
       | CARD -> "card"
+      | POR -> "or"
+      | PAND -> "and"
 
 
 let is_name = function
@@ -333,6 +335,16 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
     res
 
 
+let rec atomic_expr_s = function
+    | PropAll e -> sprintf "all(%s)" (expr_s e)
+    | PropSome e -> sprintf "some(%s)" (expr_s e)
+    | PropGlob e -> sprintf "(%s)" (expr_s e)
+    | PropAnd (l, r) ->
+            sprintf "%s && %s" (atomic_expr_s l) (atomic_expr_s r)
+    | PropOr (l, r) ->
+            sprintf "%s || %s" (atomic_expr_s l) (atomic_expr_s r)
+
+
 let rec mir_stmt_s s =
     let seq_s seq = 
         List.fold_left (fun t s -> t ^ (mir_stmt_s s) ^ "\n") "" seq
@@ -343,12 +355,8 @@ let rec mir_stmt_s s =
     | MDecl (id, v, e) ->
         sprintf "<%3d> decl %s %s %s = %s"
             id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
-    | MDeclProp (id, v, PropAll e) ->
-            sprintf "<%3d> prop %s = all %s" id v#get_name (expr_s e)
-    | MDeclProp (id, v, PropSome e) ->
-            sprintf "<%3d> prop %s = some %s" id v#get_name (expr_s e)
-    | MDeclProp (id, v, PropGlob e) ->
-            sprintf "<%3d> prop %s = glob %s" id v#get_name (expr_s e)
+    | MDeclProp (id, v, ae) ->
+            sprintf "<%3d> prop %s = %s" id v#get_name (atomic_expr_s ae)
     | MLabel (id, l) -> sprintf "<%3d> %d: " id l
     | MAtomic (id, stmts) ->
         sprintf "<%3d> atomic {\n%s\n }" id (seq_s stmts)

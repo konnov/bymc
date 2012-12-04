@@ -106,10 +106,12 @@ let postprocess all_units u =
         | _ as e -> e
     in
     (* Proc (proc_replace_body p (merge_neighb_labels p#get_stmts)) *)
-    let on_atomic = function
+    let rec on_atomic = function
         | PropAll e -> PropAll (bind_var e)
         | PropSome e -> PropSome (bind_var e)
         | PropGlob e -> PropGlob (bind_var e)
+        | PropAnd (l, r) -> PropAnd (on_atomic l, on_atomic r)
+        | PropOr (l, r) -> PropOr (on_atomic l, on_atomic r)
     in
     match u with
     | Stmt (MDeclProp (id, v, ae)) ->

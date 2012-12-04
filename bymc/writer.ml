@@ -53,6 +53,34 @@ let hflag_promela f =
     | HNone -> ""
 ;;
 
+
+let rec write_atomic_expr ff = function
+    | PropAll e ->
+        Format.fprintf ff "ALL(";
+        fprint_expr ff e;
+        Format.pp_print_string ff ")"
+    | PropSome e ->
+        Format.fprintf ff "SOME(";
+        fprint_expr ff e;
+        Format.pp_print_string ff ")"
+    | PropGlob e ->
+        Format.fprintf ff "(";
+        fprint_expr ff e;
+        Format.pp_print_string ff ")"
+    | PropAnd (l, r) ->
+        Format.pp_print_string ff "(";
+        write_atomic_expr ff l;
+        Format.fprintf ff ") @ && (";
+        write_atomic_expr ff l;
+        Format.pp_print_string ff ")"
+    | PropOr (l, r) ->
+        Format.pp_print_string ff "(";
+        write_atomic_expr ff l;
+        Format.fprintf ff ") @ || (";
+        write_atomic_expr ff l;
+        Format.pp_print_string ff ")"
+
+
 let rec write_stmt ff lvl indent_first lab_tab s =
     match s with
     | MSkip _ ->
@@ -82,35 +110,17 @@ let rec write_stmt ff lvl indent_first lab_tab s =
         end;
         Format.pp_print_string ff ";"; 
         closeb ff
-    | MDeclProp (_, v, PropAll e) ->
+    | MDeclProp (_, v, ae) ->
         let out, flush, newline, spaces =
             Format.pp_get_all_formatter_output_functions ff () in
-        Format.pp_set_all_formatter_output_functions ff out flush (macro_newl out) spaces;
-        openb ff lvl indent_first;
-        Format.fprintf ff "#define %s ALL(" v#get_name;
-        fprint_expr ff e;
-        Format.pp_print_string ff ")";
-        Format.pp_set_all_formatter_output_functions ff out flush newline spaces;
-        closeb ff;
-    | MDeclProp (_, v, PropSome e) ->
-        let out, flush, newline, spaces =
-            Format.pp_get_all_formatter_output_functions ff () in
-        Format.pp_set_all_formatter_output_functions ff out flush (macro_newl out) spaces;
-        openb ff lvl indent_first;
-        Format.fprintf ff "#define %s SOME(" v#get_name;
-        fprint_expr ff e;
-        Format.pp_print_string ff ")";
-        Format.pp_set_all_formatter_output_functions ff out flush newline spaces;
-        closeb ff
-    | MDeclProp (_, v, PropGlob e) ->
-        let out, flush, newline, spaces =
-            Format.pp_get_all_formatter_output_functions ff () in
-        Format.pp_set_all_formatter_output_functions ff out flush (macro_newl out) spaces;
+        Format.pp_set_all_formatter_output_functions
+            ff out flush (macro_newl out) spaces;
         openb ff lvl indent_first;
         Format.fprintf ff "#define %s (" v#get_name;
-        fprint_expr ff e;
+        write_atomic_expr ff ae;
         Format.pp_print_string ff ")";
-        Format.pp_set_all_formatter_output_functions ff out flush newline spaces;
+        Format.pp_set_all_formatter_output_functions
+            ff out flush newline spaces;
         closeb ff
     | MLabel (_, l) ->
         if Hashtbl.mem lab_tab l
