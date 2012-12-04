@@ -10,14 +10,14 @@ let rec mk_product lst n =
         else List.concat
             (List.map (fun tuple -> List.map (fun e -> e :: tuple) lst)
                 (mk_product lst (n - 1)))
-;;
+
 
 (* like String.join in python *)
 let str_join sep list_of_strings =
     List.fold_left
         (fun res s -> if res <> "" then (res ^ sep ^ s) else res ^ s)
         "" list_of_strings
-;;
+
 
 (* separate a list into three parts:
     before a matching element, the matching element, the tail.
@@ -39,11 +39,13 @@ let list_cut_general ignore_dups match_fun lst =
             | _ -> raise
                 (Failure "Logic error: impossible combination of arguments")
         ) ([], [], []) lst
-;;
 
-let list_cut match_fun lst = list_cut_general false match_fun lst;;
 
-let list_cut_ignore match_fun lst = list_cut_general true match_fun lst;;
+let list_cut match_fun lst = list_cut_general false match_fun lst
+
+
+let list_cut_ignore match_fun lst = list_cut_general true match_fun lst
+
 
 (* Find the n-th element and
    return the elements before it, the element itself, and the elements after
@@ -57,7 +59,7 @@ let rec list_nth_slice lst n =
     | _ ->
         let (h, e, t) = list_nth_slice (List.tl lst) (n - 1) in
         ((List.hd lst) :: h, e, t)
-;;
+
 
 let rec list_sub lst start len =
     match lst with
@@ -71,7 +73,7 @@ let rec list_sub lst start len =
         else if len > 0
         then hd :: (list_sub tl 0 (len - 1))
         else []
-;;
+
 
 (* sort and remove duplicates, one could have used BatList.sort_unique *)
 let list_sort_uniq comp_fun lst =    
@@ -86,7 +88,7 @@ let list_sort_uniq comp_fun lst =
                 hd :: (List.rev (List.fold_left2 consume_copy [] tl wo_last))
     in
     no_dups
-;;
+
 
 (* Find the position of the first element equal to e *)
 let list_find_pos e lst =
@@ -96,18 +98,20 @@ let list_find_pos e lst =
             if hd = e then 0 else 1 + (fnd tl)
     in
     fnd lst
-;;
+
 
 (* Python-like range *)                                                         
 let rec range i j =
-    if j <= i then [] else i :: (range (i + 1) j);;
+    if j <= i then [] else i :: (range (i + 1) j)
+
 
 let rec rev_range i j =
-    if j <= i then [] else (j - 1) :: (rev_range i (j - 1));;
+    if j <= i then [] else (j - 1) :: (rev_range i (j - 1))
+
 
 let str_contains str substr =
     let re = Str.regexp_string substr in
-    try ((Str.search_forward re str 0) >= 0) with Not_found -> false;;
+    try ((Str.search_forward re str 0) >= 0) with Not_found -> false
 
 (*
    check two hash tables for element equality as standard "=" works
@@ -129,35 +133,38 @@ let hashtbl_eq lhs rhs =
             true
         with Not_found ->
             false
-;;
 
-let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl [];;
 
-let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl [];;
+let hashtbl_vals tbl = Hashtbl.fold (fun _ v s -> v :: s) tbl []
 
-let hashtbl_as_list tbl = Hashtbl.fold (fun k v s -> (k, v) :: s) tbl [];;
+
+let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl []
+
+
+let hashtbl_as_list tbl = Hashtbl.fold (fun k v s -> (k, v) :: s) tbl []
+
 
 let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
     let inv = Hashtbl.create (Hashtbl.length tbl) in
     Hashtbl.iter (fun k v -> Hashtbl.add inv v k) tbl;
     inv
-;;
+
 
 let hashtbl_filter_keys (pred: 'b -> bool) (tbl: ('a, 'b) Hashtbl.t) : ('a list) =
     let filter k v lst = if pred v then k :: lst else lst in
     Hashtbl.fold filter tbl [] 
-;;
+
 
 (* a convenience function to avoid the plain Not_found message and exceptions *)
 let hashtbl_find (err_fun: 'a -> string) (tbl: ('a, 'b) Hashtbl.t) (a: 'a): 'b =
     try Hashtbl.find tbl a
     with Not_found -> raise (Failure ("Not_found: " ^ (err_fun a)))
-;;
+
 
 (* an oftenly needed version of hashtbl_find when a key is a string *)
 let hashtbl_find_str (tbl: (string, 'b) Hashtbl.t) (a: string): 'b =
     hashtbl_find (fun s -> s) tbl a
-;;
+
 
 let n_copies n e =
     let rec gen = function
@@ -165,7 +172,7 @@ let n_copies n e =
     | i -> e :: (gen (i - 1))
     in
     gen n
-;;
+
 
 let bits_to_fit n =                                                             
     let rec f b m =
@@ -174,13 +181,13 @@ let bits_to_fit n =
         else f (b + 1) (2 * m)
     in
     f 1 2
-;;
+
 
 let rec ipow a n =
     if n <= 0
     then 1
     else a * (ipow a (n - 1))
-;;
+
 
 (* make a short version of a string (by taking a prefix) and ensure there is
    no such a string in the table. If no short version can be generated, then
@@ -200,4 +207,40 @@ let rec str_shorten tbl s =
         else if (l >= sz) then append_num 0 else gen (l + 1) sz
     in
     gen 1 (String.length s)
-;;
+
+
+(* stop watch class to measure time *)
+class stop_watch(is_wall: bool) =
+    object(self)
+        val mutable last_time = 0.0
+        val mutable last_event = ""
+
+        method next_event event_name =
+            let current_time = if is_wall then Unix.time() else Sys.time() in
+            if last_event <> ""
+            then Printf.printf "  %s: %f sec\n"
+                last_event (current_time -. last_time);
+            last_time <- current_time;
+            last_event <- event_name
+    end
+
+
+let days = [| "Sun"; "Mon"; "Tue"; "Wed"; "Thu"; "Fri"; "Sat" |]
+let months = [| "Jan"; "Feb"; "Mar"; "Apr"; "May"; "Jun";
+                "Jul"; "Aug"; "Sep"; "Oct"; "Nov"; "Dec" |]
+
+ 
+let format_time time =
+  let tm = Unix.localtime time in
+  Printf.sprintf "%s %s %2d %02d:%02d:%02d %04d"
+    days.(tm.Unix.tm_wday)
+    months.(tm.Unix.tm_mon)
+    tm.Unix.tm_mday
+    tm.Unix.tm_hour
+    tm.Unix.tm_min
+    tm.Unix.tm_sec
+    (tm.Unix.tm_year + 1900)
+
+
+let format_time_now () = format_time (Unix.time ())
+
