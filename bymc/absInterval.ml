@@ -97,8 +97,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
 let over_dom (roles: var_role_tbl) = function
     | Var v ->
         begin
-            try
-                v#is_symbolic || (is_unbounded (roles#get_role v))
+            try v#is_symbolic || (is_unbounded (roles#get_role v))
             with Not_found ->
                 raise (Abstraction_error (sprintf "No role for %s" v#get_name))
         end
@@ -144,17 +143,19 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
     match ltrait, rtrait with
     | ConstExpr, AbsExpr ->
         (* XXX: this optimization conflicts with complex atomic expressions
-            containing all(...) *)
+            like (all(P:x < T + 1)) *)
         (* do a single argument abstraction when rhs is var,
            otherwise do the general abstraction *)
         (*if is_var rhs
         then BinEx (tok, (dom#map_concrete solver lhs), rhs)
-        else*) abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        else*)
+        abstract_pointwise ctx dom solver atype mk_eq orig_expr
 
     | AbsExpr, ConstExpr ->
         (*if is_var lhs
         then BinEx (tok, lhs, (dom#map_concrete solver rhs))
-        else*) abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        else*)
+        abstract_pointwise ctx dom solver atype mk_eq orig_expr
 
     | AbsExpr, AbsExpr ->
         (* general abstraction *)
