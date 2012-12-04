@@ -77,37 +77,60 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             (c_ctx#all_indices_for (fun m -> not (check_fun m))) in
     let mk_some c_ctx check_fun =
         mk_cons c_ctx NE OR (c_ctx#all_indices_for check_fun) in
-    let rec t_e mk_fun = function
-        | BinEx (EQ, Var v, Const c) as e ->
-            if not (Program.is_global prog v)
-            then mk_fun (fun m -> c = (Hashtbl.find m v))
-            else e
-        | BinEx (EQ, Const c, Var v) ->
-            t_e mk_fun (BinEx (EQ, Var v, Const c))
-        | BinEx (NE, Var v, Const c) as e ->
-            if not (Program.is_global prog v)
-            then mk_fun (fun m -> c <> (Hashtbl.find m v))
-            else e
-        | BinEx (NE, Const c, Var v) ->
-            t_e mk_fun (BinEx (NE, Var v, Const c))
+    (* abstract expressions over locals as one boolean function *)
+    let rec eval_bool_expr e vals =
+        match e with
+        | BinEx (EQ, Var var, Const value) ->
+            if not (Program.is_global prog var)
+            then value = (Hashtbl.find vals var)
+            else true (* don't touch global variables *)
+        | BinEx (EQ, Const value, Var var) ->
+            eval_bool_expr (BinEx (EQ, Var var, Const value)) vals
+        | BinEx (NE, Var var, Const value) ->
+            if not (Program.is_global prog var)
+            then value != (Hashtbl.find vals var)
+            else true (* don't touch global variables *)
+        | BinEx (NE, Const value, Var var) ->
+            eval_bool_expr (BinEx (NE, Var var, Const value)) vals 
         | BinEx (AND, l, r) ->
-            BinEx (AND, t_e mk_fun l, t_e mk_fun r)
+            (eval_bool_expr l vals) && (eval_bool_expr r vals)
         | BinEx (OR, l, r) ->
-            BinEx (OR, t_e mk_fun l, t_e mk_fun r)
-        | UnEx (NEG, s) ->
-            UnEx (NEG, t_e mk_fun s)
+            (eval_bool_expr l vals) || (eval_bool_expr r vals)
+        | UnEx (NEG, l) ->
+            not (eval_bool_expr l vals)
         | _ as e ->
-            let not_local = function
-            | Var v -> Program.is_global prog v
-            | _ -> true
-            in
-            if not (expr_forall not_local e)
-            then raise (Abstraction_error
+            raise (Abstraction_error
                 (sprintf "Don't know how to do counter abstraction for %s"
                     (expr_s e)))
-            else e (* do not touch *)
     in
-    let rec repl_ctr = function
+    let is_global = function
+    | Var v -> Program.is_global prog v
+    | _ -> false
+    in
+    let not_local = function
+    | Var v -> Program.is_global prog v
+    | _ -> true
+    in
+    (* separate the expressions over locals from the expression over globals *)
+    let rec t_e mk_fun = function
+        | (BinEx (AND, l, r)) as e ->
+            if expr_exists is_global e
+            then BinEx (AND, t_e mk_fun l, t_e mk_fun r)
+            else mk_fun (eval_bool_expr e)
+        | (BinEx (OR, l, r)) as e ->
+            if expr_exists is_global e
+            then BinEx (OR, t_e mk_fun l, t_e mk_fun r)
+            else mk_fun (eval_bool_expr e)
+        | (UnEx (NEG, l)) as e ->
+            if expr_exists is_global e
+            then UnEx (NEG, t_e mk_fun l)
+            else mk_fun (eval_bool_expr e)
+        | _ as e -> 
+            if expr_forall not_local e
+            then e (* leave intact, it is an expression over globals *)
+            else mk_fun (eval_bool_expr e)
+    in
+    let rec replace_card = function
         | UnEx (CARD, BinEx (EQ, Var v, Const i)) ->
             let is_ok valuation = (i = (Hashtbl.find valuation v)) in
             let c_ctx = ctr_ctx_tbl#get_ctx v#proc_name in
@@ -121,9 +144,9 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             raise (Failure
                 (sprintf "Don't know how to handle card(%s)" (expr_s e)))
         | BinEx (tok, lhs, rhs) ->
-            BinEx (tok, repl_ctr lhs, repl_ctr rhs)
+            BinEx (tok, replace_card lhs, replace_card rhs)
         | UnEx (tok, lhs) ->
-            UnEx (tok, repl_ctr lhs)
+            UnEx (tok, replace_card lhs)
         | _ as e -> e
     in
     let find_proc_name e =
@@ -162,7 +185,7 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
                 | _ -> false
             in
             if expr_exists has_card e
-            then PropGlob (repl_ctr e)
+            then PropGlob (replace_card e)
             else PropGlob e
         | PropAnd (l, r) ->
             join_two AND (tr_atomic l) (tr_atomic r)

@@ -143,16 +143,18 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
     let mk_eq var abs_val = BinEx (EQ, Var var, Const abs_val) in
     match ltrait, rtrait with
     | ConstExpr, AbsExpr ->
+        (* XXX: this optimization conflicts with complex atomic expressions
+            containing all(...) *)
         (* do a single argument abstraction when rhs is var,
            otherwise do the general abstraction *)
-        if is_var rhs
+        (*if is_var rhs
         then BinEx (tok, (dom#map_concrete solver lhs), rhs)
-        else abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        else*) abstract_pointwise ctx dom solver atype mk_eq orig_expr
 
     | AbsExpr, ConstExpr ->
-        if is_var lhs
+        (*if is_var lhs
         then BinEx (tok, lhs, (dom#map_concrete solver rhs))
-        else abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        else*) abstract_pointwise ctx dom solver atype mk_eq orig_expr
 
     | AbsExpr, AbsExpr ->
         (* general abstraction *)
