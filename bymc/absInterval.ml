@@ -194,10 +194,6 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
 
 
 let translate_expr ctx dom solver atype expr =
-    let invert_abs_type neg_sign = function
-        | ExistAbs -> if neg_sign then UnivAbs else ExistAbs
-        | UnivAbs  -> if neg_sign then ExistAbs else UnivAbs
-    in
     let rec trans_e neg_sign = function
         (* boolean combination of arithmetic constraints *)
         | BinEx (AND, lhs, rhs) ->
@@ -220,8 +216,7 @@ let translate_expr ctx dom solver atype expr =
             let eff_op = if neg_sign
             then (not_of_arith_rel (op_of_expr e))
             else (op_of_expr e) in
-            let eff_abs = (invert_abs_type neg_sign atype) in
-            abstract_arith_rel ctx dom solver eff_abs eff_op lhs rhs
+            abstract_arith_rel ctx dom solver atype eff_op lhs rhs
 
         | _ -> raise (Abstraction_error
             (sprintf "No abstraction for: %s" (expr_s expr)))
