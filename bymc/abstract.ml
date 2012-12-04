@@ -70,6 +70,8 @@ let do_abstraction is_first_run prog =
     write_to_file true "abs-counter.prm" (units_of_program ctrabs_prog);
     log INFO "[DONE]";
     let _ = solver#stop in
+    let xducer_prog = SmtXducerPass.do_xducers caches ctrabs_prog in
+    BddPass.transform_to_bdd caches xducer_prog;
     ctrabs_prog
 
 
