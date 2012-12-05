@@ -290,11 +290,11 @@ class yices_smt =
         method get_evidence =
             (* same as sync but the lines are collected *)
             let lines = ref [] in
-            self#append "(echo \"EOI\\n\")"; flush cout;
+            self#append "(echo \"EOEV\\n\")"; flush cout;
             let stop = ref false in
             while not !stop do
                 let line = self#read_line in
-                if "EOI" = line
+                if "EOEV" = line
                 then stop := true
                 else lines := line :: !lines
             done;
