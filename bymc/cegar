@@ -52,7 +52,7 @@ rm -rf $SPIN_OUT spin.trace refinement.out
 while [ "$cmd" != "q" ]; do
     echo "Converting the spec: !`head $PROP.ltl`..."
     #$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
-    $LTL2BA -f "\!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
+    $LTL2BA -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
     echo "Generating pan..."
     $SPIN -a -N $PROP.never abs-counter.prm || exit 2
     (gcc $rand $PANCC_FLAGS -o ./pan pan.c \

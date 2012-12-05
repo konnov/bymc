@@ -450,14 +450,30 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
     then begin
         (* add formulas saying that unfair predicates can't occur forever *)
         let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
+        (* the old implementation produced a lot of []<>!bymc_r_i,
+           that lead to an extremely inefficient verification
+
         let mk_fair i =
             let r_var = Var (new var (sprintf "bymc_%s%d" pred_recur i)) in
-            UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var)))
-        in
+            UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var))) in
         let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
-        embed_fairness fairness no_inf_forms
+        *)
+        (* a lollipop is the same as a lasso, but it sounds nice! *)
+        let out_of_lollipop i =
+            let r_var = Var (new var (sprintf "bymc_%s%d" pred_recur i)) in
+            UnEx (NEG, r_var)
+        in
+        let leave_unfair_lollipops =
+            let indices = (range 0 recur_preds_cnt) in
+            let conj = list_to_binex AND (List.map out_of_lollipop indices) in
+            if recur_preds_cnt > 0
+            then [UnEx(ALWAYS, UnEx(EVENTUALLY, conj))]
+            else []
+        in
+        embed_fairness fairness leave_unfair_lollipops
     end else ltl_expr in
     form
+
 
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struct_cache#regions.
