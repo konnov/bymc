@@ -23,6 +23,23 @@ step="0"
 rand=""
 out=""
 
+START_TIME=0
+
+function appendToVerdict() {
+    if [ "$out" == "" ]; then
+        out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
+    fi
+
+    END_TIME=$(date +%s)
+    DIFF_TIME=$(($END_TIME-$START_TIME))
+
+    spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
+    common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+    echo "$out|$common|$spin_data" >>verdict.txt
+}
+
+trap "appendToVerdict" ERR EXIT
+
 if [ ! -x "$LTL2BA" ]; then
     echo "WARNING: $LTL2BA is not found. Please go to `dirname $LTL2BA` and invoke make."
     echo "WARNING: using 'spin -f' instead of ltl2ba. Performance may degrade."
@@ -96,14 +113,5 @@ while [ "$cmd" != "q" ]; do
     fi
 done
 
-if [ "$out" == "" ]; then
-    out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
-fi
-
-END_TIME=$(date +%s)
-DIFF_TIME=$(($END_TIME-$START_TIME))
-
-spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
-common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
-echo "$out|$common|$spin_data" >>verdict.txt
+# here appendToVerdict fires
 
