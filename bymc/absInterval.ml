@@ -31,7 +31,7 @@ let mk_expr_abstraction solver dom is_leaf_fun expr =
         then if Hashtbl.mem mapping e
             then Var (Hashtbl.find mapping e)
             else begin
-                let v = new var (sprintf "_arg%d" (Hashtbl.length mapping)) in
+                let v = new_var (sprintf "_arg%d" (Hashtbl.length mapping)) in
                 Hashtbl.add mapping e v;
                 Var v
             end
@@ -42,13 +42,15 @@ let mk_expr_abstraction solver dom is_leaf_fun expr =
     in
     (* FIXME: the number of variables is limited by two now for no reason *)
     assert ((Hashtbl.length mapping) <= 1);
-    let res_var = new var "_res" in
+    let res_var = new_var "_res" in
     let expr_w_args = sub expr in
     let vars_used = res_var :: (expr_used_vars expr_w_args) (* i.e. _res; _arg0 *)
     in
     solver#push_ctx;
     (* introduce the variables to the SMT solver *)
-    List.iter (solver#append_var_def) vars_used;
+    let append_def v =
+        solver#append_var_def v (new data_type SpinTypes.TINT) in
+    List.iter append_def vars_used;
     (* find matching combinations of _res and _arg0 *)
     let matching_vals =
         (dom#find_abs_vals ExistAbs solver (BinEx (EQ, Var res_var, expr_w_args))) in
@@ -113,6 +115,28 @@ let var_trait t_ctx v =
     else ConcExpr
 
 
+let refine_var_type ctx dom roles type_tab new_type_tab v =
+    let bounds = function
+        | BoundedInt (a, b) -> (a, b + 1)
+        | _ -> raise (Abstraction_error ("No bound for " ^ v#get_name))
+    in
+    let new_type =
+        let vrole = roles#get_role v in
+        if ctx#var_needs_abstraction v
+        then begin
+            let tp = new data_type SpinTypes.TINT in
+            tp#set_range 0 (dom#length + 1);
+            tp
+        end else if is_bounded vrole
+        then begin
+            let l, r = bounds vrole in
+            let tp = new data_type SpinTypes.TINT in
+            tp#set_range l (r + 1);
+            tp
+        end else type_tab#get_type v#id
+    in
+    new_type_tab#set_type v#id new_type
+
 (*
  Translate an arithmetic comparison to a pointwise comparison of
  abstract values. Find the vectors of abstract values that match
@@ -163,8 +187,8 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
 
     | ConcExpr, AbsExpr ->
         (* do abstract_pointwise general abstraction, then concretize lhs *)
-        let tmp_var = new var "_concX" in
-        solver#append_var_def tmp_var;
+        let tmp_var = new_var "_concX" in
+        solver#append_var_def tmp_var (new data_type SpinTypes.TINT);
         let new_expr = (BinEx (tok, Var tmp_var, rhs)) in
         let restore_lhs v abs_val =
             if v == tmp_var
@@ -174,8 +198,8 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
         abstract_pointwise ctx dom solver atype restore_lhs new_expr
 
     | AbsExpr, ConcExpr ->
-        let tmp_var = new var "_concX" in
-        solver#append_var_def tmp_var;
+        let tmp_var = new_var "_concX" in
+        solver#append_var_def tmp_var (new data_type SpinTypes.TINT);
         let new_expr = (BinEx (tok, lhs, Var tmp_var)) in
         let restore_rhs v abs_val =
             if v == tmp_var
@@ -229,7 +253,7 @@ let translate_expr ctx dom solver atype expr =
 
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
-let translate_stmt solver caches stmt =
+let translate_stmt solver caches type_tab new_type_tab stmt =
     let ctx = caches#get_analysis#get_pia_data_ctx in
     let roles = caches#get_analysis#get_var_roles in
     let dom = caches#get_analysis#get_pia_dom in
@@ -302,6 +326,11 @@ let translate_stmt solver caches stmt =
         in
         MIf (id, List.map abs_opt opts)
 
+    | MDecl (id, v, e) ->
+        refine_var_type ctx dom roles type_tab new_type_tab v;
+
+        MDecl (id, v, (dom#map_concrete solver e))
+
     | _ as s -> s
     in
     abs_stmt stmt 
@@ -318,9 +347,11 @@ let rec trans_prop_decl solver caches prog atype atomic_expr =
     let tr_e e =
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
+        let append_def v =
+            solver#append_var_def v (Program.get_type prog v) in
         solver#push_ctx;
-        List.iter solver#append_var_def locals;
-        List.iter solver#append_var_def (Program.get_shared prog);
+        List.iter append_def locals;
+        List.iter append_def (Program.get_shared prog);
         let abs_ex = translate_expr ctx dom solver atype e in
         solver#pop_ctx;
         abs_ex
@@ -351,14 +382,14 @@ let rec trans_prop_decl solver caches prog atype atomic_expr =
     tr_atomic atomic_expr
 
 
-let trans_ltl_form name f =
+let trans_ltl_form new_type_tab name f =
     let inv atype = if atype = UnivAbs then ExistAbs else UnivAbs in
     let rec tr_f atype = function
     | Var v ->
         let nv = if atype = UnivAbs
-            then new var (v#get_name ^ "_univ")
-            else new var (v#get_name ^ "_exst") in
-        nv#set_type SpinTypes.TPROPOSITION;
+            then new_var (v#get_name ^ "_univ")
+            else new_var (v#get_name ^ "_exst") in
+        new_type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
         Var nv
     | BinEx(AND, l, r) ->
         BinEx(AND, tr_f atype l, tr_f atype r)
@@ -389,11 +420,16 @@ let trans_ltl_form name f =
 
 
 let do_interval_abstraction solver caches prog = 
+    let type_tab = Program.get_type_tab prog in
+    let new_type_tab = type_tab#copy in
     let abstract_proc p =
+        let add_def v =
+            solver#append_var_def v (type_tab#get_type v#id) in
         solver#push_ctx;
-        List.iter solver#append_var_def p#get_locals;
-        List.iter solver#append_var_def (Program.get_shared prog);
-        let body = List.map (translate_stmt solver caches) p#get_stmts in
+        List.iter add_def p#get_locals;
+        List.iter add_def (Program.get_shared prog);
+        let body = List.map
+            (translate_stmt solver caches type_tab new_type_tab) p#get_stmts in
         log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
         List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
         solver#pop_ctx;
@@ -412,8 +448,18 @@ let do_interval_abstraction solver caches prog =
         Program.StringMap.fold
             abstract_atomic (Program.get_atomics prog) Program.StringMap.empty
     in
-    let new_forms =
-        Program.StringMap.mapi trans_ltl_form (Program.get_ltl_forms prog) in
-    (Program.set_ltl_forms new_forms
-        (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))
+    let new_forms = Program.StringMap.mapi
+        (trans_ltl_form new_type_tab) (Program.get_ltl_forms prog) in
+    let abs_shared shared_var =
+        let ctx = caches#get_analysis#get_pia_data_ctx in
+        let dom = caches#get_analysis#get_pia_dom in
+        let roles = caches#get_analysis#get_var_roles in
+        refine_var_type ctx dom roles type_tab new_type_tab shared_var;
+        shared_var
+    in
+    let new_shared = List.map abs_shared (Program.get_shared prog) in
+    (Program.set_shared new_shared
+        (Program.set_type_tab new_type_tab
+        (Program.set_ltl_forms new_forms
+        (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))))
 

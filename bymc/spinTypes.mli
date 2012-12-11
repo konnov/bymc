@@ -1,5 +1,5 @@
 type var_type = TBIT | TBYTE | TSHORT
-    | TINT | TUNSIGNED | TCHAN | TMTYPE | TPROPOSITION;;
+    | TINT | TUNSIGNED | TCHAN | TMTYPE | TPROPOSITION | TUNDEF;;
 type xu_type = XS | XR;;
 
 val var_type_s:

@@ -21,27 +21,30 @@ open BddPass
 
 open Debug
 
-let write_to_file externalize_ltl name units =
+let write_to_file externalize_ltl name units type_tab =
     let fo = open_out name in
     let save_unit = function
         | Ltl (form_name, form) as u->
-            (* Spin 6.2 does not support inline formulas longer that 1024 chars.
-               Put the formula into the file. *)
+            (* Spin 6.2 supports inline formulas no longer than 1024 chars.
+               It produces arbitrary compilation errors for those longer than
+               its authors expected. We thus put the formula into a file. *)
             if externalize_ltl
             then begin
                 let out = open_out (sprintf "%s.ltl" form_name) in
                 fprintf out "%s\n" (expr_s form);
                 close_out out
             end else
-                write_unit fo 0 u
-        | _ as u -> write_unit fo 0 u
+                write_unit type_tab fo 0 u
+        | _ as u -> write_unit type_tab fo 0 u
     in
     List.iter save_unit units;
     close_out fo
 
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction is_first_run prog =
+let do_abstraction solver is_first_run prog =
+    solver#push_ctx;
+    solver#comment "do_abstraction";
     if is_first_run
     then begin 
         (* wipe the files left from previous refinement sessions *)
@@ -52,7 +55,6 @@ let do_abstraction is_first_run prog =
     let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
-    let solver = Program.run_smt_solver prog in
     let dom = PiaDom.create solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
@@ -61,25 +63,28 @@ let do_abstraction is_first_run prog =
 
     log INFO "> Constructing interval abstraction";
     let intabs_prog = do_interval_abstraction solver caches prog in
-    write_to_file false "abs-interval.prm" (Program.units_of_program intabs_prog);
+    write_to_file false "abs-interval.prm"
+        (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
     let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog in
-    write_to_file true "abs-counter.prm" (units_of_program ctrabs_prog);
+    write_to_file true "abs-counter.prm"
+        (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
     log INFO "[DONE]";
-    let _ = solver#stop in
     let xducer_prog = SmtXducerPass.do_xducers caches ctrabs_prog in
-    BddPass.transform_to_bdd caches xducer_prog;
+    BddPass.transform_to_bdd solver caches xducer_prog;
+    solver#pop_ctx;
     ctrabs_prog
 
 
-let make_vass_xducers embed_inv prog =
+let make_vass_xducers solver embed_inv prog =
+    solver#push_ctx;
+    solver#comment "make_vass_xducers";
     let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
     analysis#set_var_roles roles;
-    let solver = Program.run_smt_solver prog in
     let dom = PiaDom.create solver roles prog in
     analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
@@ -89,6 +94,8 @@ let make_vass_xducers embed_inv prog =
 
     log INFO "> Constructing interval abstraction...";
     let intabs_prog = do_interval_abstraction solver caches prog in
+    write_to_file false "abs-interval.prm"
+        (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "  [DONE]";
     log INFO "> Constructing VASS...";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
@@ -96,16 +103,19 @@ let make_vass_xducers embed_inv prog =
     vass_funcs#set_embed_inv embed_inv;
     let vass_prog =
         do_counter_abstraction vass_funcs solver caches intabs_prog in
-    write_to_file false "abs-vass.prm" (units_of_program vass_prog);
+    write_to_file false "abs-vass.prm"
+        (units_of_program vass_prog) (get_type_tab vass_prog);
     log INFO "> Constructing SMT transducers...";
     let xducer_prog = SmtXducerPass.do_xducers caches vass_prog in
-    write_to_file false "abs-xducers.prm" (units_of_program xducer_prog);
+    write_to_file false "abs-xducers.prm"
+        (units_of_program xducer_prog) (get_type_tab xducer_prog);
     log INFO "  [DONE]"; flush stdout;
-    (solver, caches, xducer_prog)
+    solver#pop_ctx;
+    (caches, xducer_prog)
 
 
-let check_invariant prog inv_name =
-    let (solver, caches, xducers_prog) = make_vass_xducers false prog in
+let check_invariant solver prog inv_name =
+    let (caches, xducers_prog) = make_vass_xducers solver false prog in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics xducers_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with
@@ -135,20 +145,23 @@ let check_invariant prog inv_name =
         (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
 
 
-let check_all_invariants prog =
+let check_all_invariants solver prog =
     let fold_invs name ae lst =
         if is_invariant_atomic name then name :: lst else lst
     in
     let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) [] in
-    List.iter (check_invariant prog) invs
+    solver#push_ctx;
+    solver#comment "check_all_invariants";
+    List.iter (check_invariant solver prog) invs;
+    solver#pop_ctx
 
-let filter_good_fairness aprops fair_forms =
+let filter_good_fairness type_tab aprops fair_forms =
     let err_fun f =
         printf "Fairness formula not supported by refinement (ignored): %s\n" 
             (expr_s f);
         Nop ""
     in
-    let fair_atoms = List.map (find_fair_atoms err_fun aprops) fair_forms in
+    let fair_atoms = List.map (find_fair_atoms err_fun type_tab aprops) fair_forms in
     let filtered = List.filter not_nop fair_atoms in
     printf "added %d fairness constraints\n" (List.length filtered);
     filtered
@@ -156,8 +169,11 @@ let filter_good_fairness aprops fair_forms =
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
-let do_refinement trail_filename prog =
-    let (solver, caches, xducers_prog) = make_vass_xducers true prog in
+let do_refinement solver trail_filename prog =
+    solver#push_ctx;
+    solver#comment "do_refinement";
+    let (caches, xducers_prog) = make_vass_xducers solver true prog in
+    let type_tab = Program.get_type_tab xducers_prog in
     let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
     let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
@@ -232,7 +248,7 @@ let do_refinement trail_filename prog =
         refined := true
     end else begin
         let fairness =
-            filter_good_fairness aprops (collect_fairness_forms ltl_forms) in
+            filter_good_fairness type_tab aprops (collect_fairness_forms ltl_forms) in
         let spur_loop =
             check_loop_unfair solver xducers_prog ctr_ctx_tbl
                 rev_map fairness inv_forms loop_asserts in
@@ -263,10 +279,10 @@ let do_refinement trail_filename prog =
         end
     end;
     log INFO "  [DONE]";
-    let _ = solver#stop in
+    solver#pop_ctx;
     if !refined
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
-        let _ = do_abstraction false prog in ()
+        let _ = do_abstraction solver false prog in ()
     end

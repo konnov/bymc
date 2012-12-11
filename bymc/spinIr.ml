@@ -5,7 +5,8 @@
  *
  * The idea of this OCAML code was first derivated from the original
  * code of Spin 6.1.0, but since then the code has been refactored a
- * lot to fit into the OCAML concepts.
+ * lot to fit into the OCAML concepts. We further refactored the code to
+ * support several layers of code transformations.
  *)
 
 open Printf;;
@@ -14,12 +15,12 @@ open SpinTypes;;
 module StringSet = Set.Make(String);;
 
 (* here we use a global variable to generate unique variables everywhere *)
-let label_next = ref 1;;
+let label_next = ref 1
 
 let mk_uniq_label () =
     let n = !label_next in
         label_next := (n + 1); n
-;;
+
 
 type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
@@ -40,9 +41,67 @@ let hflag_s f =
     | HSymbolic -> ":symbolic:"
     | HNone -> ""
 
-exception Invalid_type of string;;
+exception Invalid_type of string
 
-type sym_type = SymGen | SymVar | SymLab;;
+type sym_type = SymGen | SymVar | SymLab
+
+class data_type i_basetype =
+    object(self)
+        (* the base type of a variable, e.g., int, byte, nat *)
+        val m_basetype: var_type = i_basetype
+        (* if this datatype represents not only one element, but an array *)
+        val mutable m_isarray: bool = false
+        (* the number of array elements, non-arrays have it set to 1 *)
+        val mutable m_nelems: int = 1
+        (* optional width specifier:
+           showing how many bits this datatype requires *)
+        val mutable m_nbits: int = 0
+        (* optional range of (integer-like) values represented by this datatype:
+           left margin is included, right margine is excluded *)
+        val mutable m_range: int * int = (0, 0)
+
+        method basetype = m_basetype
+        method is_array = m_nelems > 1
+
+        method nelems = m_nelems
+        method set_nelems n = m_nelems <- n
+
+        method nbits = m_nbits
+        method set_nbits n = m_nbits <- n
+
+        method has_range = let l, r = m_range in r > l
+        method range = m_range
+        method set_range l r = m_range <- (l, r)
+    end
+
+
+(* This table binds integer identifiers of (variables) to the datatypes *)
+class data_type_tab =
+    object
+        val mutable m_tab: (int, data_type) Hashtbl.t = Hashtbl.create 5
+
+        method has_type id = Hashtbl.mem m_tab id
+        method get_type id = Hashtbl.find m_tab id
+        method set_type id dtp = Hashtbl.replace m_tab id dtp
+        method set_all_types hash_tbl = m_tab <- hash_tbl
+
+        method length = Hashtbl.length m_tab
+
+        method copy =
+            let new_t = new data_type_tab in
+            new_t#set_all_types (Hashtbl.copy m_tab);
+            new_t
+    end
+
+
+(* the next var identifier *)
+let var_id_next = ref 0
+
+let fresh_var_id () =
+    let id = !var_id_next in
+    var_id_next := id + 1;
+    id
+
 
 (* a symbol of any origin *)
 class symb name_i =
@@ -71,21 +130,26 @@ class symb name_i =
 
         (* is there a better way to do this? *)
         method as_var =
-            raise (Invalid_type "symb is not var")
+            raise (Invalid_type "symb is not a var")
 
         (* is there a better way to do this? *)
         method as_label =
-            raise (Invalid_type "symb is not label")
+            raise (Invalid_type "symb is not a label")
     end
 and
-(* a variable, not a generalized symbol *)
-var name_i =
+(* A variable, not a generalized symbol.
+   Every variable has an identifier associated with it.
+ *)
+var name_i var_id =
     object(self)
         inherit symb name_i
-
+        
+        (* TODO: get rid of it *)
         val mutable vtype = TINT
         val mutable m_isarray: bool = false (* set if decl specifies array bound *)
         val mutable nbits: int = 0        (* optional width specifier *)
+        (* optional value range, left inclusive, right exclusive *)
+        val mutable m_range: int * int = (0, 0)
         val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
 
@@ -94,10 +158,13 @@ var name_i =
         (* the index of the owner process (if known) *)
         val mutable m_proc_index: int = -1
 
+        method id = var_id
+
         method get_sym_type = SymVar
         
         method as_var = (self :> var)
 
+        (*
         method set_type t = vtype <- t
         method get_type = vtype
 
@@ -107,8 +174,13 @@ var name_i =
         method set_nbits n = nbits <- n
         method get_nbits = nbits
 
+        method set_range l r = m_range <- (l, r)
+        method has_range = let l, r = m_range in r > l
+        method get_range = m_range
+
         method set_num_elems n = nel <- n
         method get_num_elems = nel
+        *)
 
         method set_ini i = ini <- i
         method get_ini = ini
@@ -132,12 +204,20 @@ var name_i =
                 else q in
             if qi <> "" then qi ^ "." ^ name else name
 
+        (* Make a copy of the variable, but keep id the same.
+           It means that two copies will be considered similar
+           (e.g., types and variable roles are the same). *)
         method copy new_name =
-            let new_var = new var new_name in
-            new_var#set_type vtype;
-            new_var#set_isarray m_isarray;
-            new_var#set_nbits nbits;
-            new_var#set_num_elems nel;
+            let new_var = new var new_name self#id in
+            new_var#set_ini ini;
+            if self#is_symbolic then new_var#set_symbolic;
+            new_var#set_proc_name m_proc_name;
+            new_var#set_proc_index m_proc_index;
+            new_var
+
+        (* Make a copy of the variable and assign a fresh id. *)
+        method fresh_copy new_name =
+            let new_var = new var new_name (fresh_var_id ()) in
             new_var#set_ini ini;
             if self#is_symbolic then new_var#set_symbolic;
             new_var#set_proc_name m_proc_name;
@@ -158,7 +238,10 @@ label name_i num_i =
 
         method get_num = num
     end
-;;
+
+
+let new_var name = new var name (fresh_var_id ())    
+
 
 exception Symbol_not_found of string;;
 

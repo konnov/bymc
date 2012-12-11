@@ -58,9 +58,9 @@ let parse_options =
     !opts
 ;;
 
-let write_to_file name units =
+let write_to_file name units type_tab =
     let fo = open_out name in
-    List.iter (write_unit fo 0) units;
+    List.iter (write_unit type_tab fo 0) units;
     close_out fo
 ;;
 
@@ -75,22 +75,27 @@ let _ =
             else raise (Failure (sprintf "File not found: %s" opts.filename))
         in
         log INFO (sprintf "> Parsing %s..." basename);
-        let units = parse_promela filename basename dirname in
-        write_to_file "original.prm" units;
+        let prog = parse_promela filename basename dirname in
+        write_to_file "original.prm"
+            (units_of_program prog) (get_type_tab prog);
         log INFO "  [DONE]";
-        log DEBUG (sprintf "#units: %d" (List.length units));
+        log DEBUG (sprintf "#units: %d" (List.length (units_of_program prog)));
+        log DEBUG (sprintf "#vars: %d" (get_type_tab prog)#length);
         match opts.action with
         | OptAbstract ->
-              let prog = program_of_units units in
-              check_all_invariants prog;
-              let _ = do_abstraction true prog in ()
+            let solver = Program.run_smt_solver prog in (* one solver log! *)
+            check_all_invariants solver prog;
+            let _ = do_abstraction solver true prog in
+            let _ = solver#stop in ()
         | OptRefine ->
-              let prog = program_of_units units in
-              let _ = do_refinement opts.trail_name prog in ()
+            let solver = Program.run_smt_solver prog in (* one solver log! *)
+            let _ = do_refinement solver opts.trail_name prog in
+            let _ = solver#stop in ()
         | OptCheckInv -> ()
         | OptSubstitute ->
+            let units = units_of_program prog in
             let new_units = do_substitution opts.param_assignments units in
-            write_to_file "concrete.prm" new_units;
+            write_to_file "concrete.prm" new_units (get_type_tab prog);
         | _ -> printf "No options given. Bye.\n"
     with End_of_file ->
         log ERROR "Premature end of file";

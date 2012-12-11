@@ -210,26 +210,26 @@ let find_init_local_vals ctr_ctx decls init_stmts =
         then List.map (fun x -> [x]) right
         else List.concat
             (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
-    List.fold_left
-        (fun lst v ->
-            let r =
-                try Hashtbl.find init_sum v
-                with Not_found ->
-                    let m = (sprintf
-                        "Variable %s not found in the init section"
-                        v#get_name) in
-                    raise (Abstraction_error m)
-            in
-            match r with
-            | IntervalInt (a, b) ->
-                let pairs =
-                    List.map (fun i -> (v, i)) (range a (b + 1)) in
-                mk_prod lst pairs
-            | _ ->
-                let m = sprintf
-                    "Unbounded after abstraction: %s" v#get_name in
+    let mk_vals lst v =
+        let r =
+            try Hashtbl.find init_sum v
+            with Not_found ->
+                let m = (sprintf
+                    "Variable %s not found in the init section" v#get_name) 
+                in
                 raise (Abstraction_error m)
-        ) [] ctr_ctx#var_vec
+        in
+        match r with
+        | IntervalInt (a, b) ->
+            let pairs =
+                List.map (fun i -> (v, i)) (range a (b + 1)) in
+            mk_prod lst pairs
+        | _ ->
+            let m = sprintf
+                "Unbounded after abstraction: %s" v#get_name in
+            raise (Abstraction_error m)
+    in
+    List.fold_left mk_vals [] ctr_ctx#var_vec
 
 
 (* remove assignments to local variables from the initialization section *)
@@ -280,6 +280,8 @@ class virtual ctr_funcs =
 
         method virtual embed_inv: bool
         method virtual set_embed_inv: bool -> unit
+
+        method virtual register_new_vars: ctr_abs_ctx_tbl -> data_type_tab -> unit
     end
 
 
@@ -352,6 +354,18 @@ class abs_ctr_funcs dom prog solver =
         
         method embed_inv = false
         method set_embed_inv _ = ()
+
+        method register_new_vars c_ctx_tbl type_tbl =
+            type_tbl#set_type
+                c_ctx_tbl#get_spur#id (new data_type SpinTypes.TBIT);
+
+            let reg_ctr ctx =
+                let tp = new data_type SpinTypes.TINT in
+                tp#set_range 0 dom#length; (* counters are bounded *)
+                tp#set_nelems ctx#get_ctr_dim;
+                type_tbl#set_type ctx#get_ctr#id tp
+            in
+            List.iter reg_ctr c_ctx_tbl#all_ctxs
     end
 
 
@@ -360,7 +374,7 @@ class vass_funcs dom prog solver =
         inherit ctr_funcs
 
         (* a free variable delta describing how many processes made a step *)
-        val mutable delta = new var "vass_dta"
+        val mutable delta = new_var "vass_dta"
 
         val mutable m_embed_inv = true
 
@@ -435,6 +449,19 @@ class vass_funcs dom prog solver =
         
         method embed_inv = m_embed_inv
         method set_embed_inv v = m_embed_inv <- v
+
+        method register_new_vars c_ctx_tbl type_tbl =
+            type_tbl#set_type delta#id (new data_type SpinTypes.TUNSIGNED);
+            type_tbl#set_type
+                c_ctx_tbl#get_spur#id (new data_type SpinTypes.TBIT);
+
+            let reg_ctr ctx =
+                let tp = new data_type SpinTypes.TUNSIGNED in
+                (* NOTE: no range set, the counters are unbounded *)
+                tp#set_nelems ctx#get_ctr_dim;
+                type_tbl#set_type ctx#get_ctr#id tp
+            in
+            List.iter reg_ctr c_ctx_tbl#all_ctxs
     end
 
 
@@ -454,13 +481,13 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
            that lead to an extremely inefficient verification
 
         let mk_fair i =
-            let r_var = Var (new var (sprintf "bymc_%s%d" pred_recur i)) in
+            let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
             UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var))) in
         let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
         *)
         (* a lollipop is the same as a lasso, but it sounds nice! *)
         let out_of_lollipop i =
-            let r_var = Var (new var (sprintf "bymc_%s%d" pred_recur i)) in
+            let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
             UnEx (NEG, r_var)
         in
         let leave_unfair_lollipops =
@@ -480,7 +507,6 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
  *)
 let do_counter_abstraction funcs solver caches prog =
     let t_ctx = caches#get_analysis#get_pia_data_ctx in
-    let roles = caches#get_analysis#get_var_roles in
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let extract_atomic_prop atomics name =
         try
@@ -520,14 +546,10 @@ let do_counter_abstraction funcs solver caches prog =
         (* all local variables should be reset to 0 *)
         let new_update =
             let replace_expr = function
-                | MExpr (_1, BinEx (ASGN, Var var, rhs)) as s ->
-                    begin
-                        match roles#get_role var with
-                        | LocalUnbounded
-                        | BoundedInt (_, _) ->
-                            MExpr (-1, BinEx (ASGN, Var var, Const 0))
-                        | _ -> s
-                    end
+                | MExpr (id, BinEx (ASGN, Var var, _)) as s ->
+                    if var#proc_name <> ""
+                    then MExpr (id, BinEx (ASGN, Var var, Const 0))
+                    else s
                 | _ as s -> s
             in
             List.map (fun e -> replace_assume atomics (replace_expr e)) update
@@ -559,7 +581,7 @@ let do_counter_abstraction funcs solver caches prog =
                 if t_ctx#must_keep_concrete (Var x) && x#get_name = y#get_name
                 then MExpr (id,
                         BinEx (ASGN, Var x,
-                            BinEx (PLUS, Var x, Var (new var "vass_dta"))))
+                            BinEx (PLUS, Var x, Var (new_var "vass_dta"))))
                 else s
             | MIf (id, opts) ->
                 let on_opt = function
@@ -638,12 +660,17 @@ let do_counter_abstraction funcs solver caches prog =
             :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
     let new_ltl_forms =
         Program.StringMap.mapi map_ltl_form (Program.get_ltl_forms prog) in
+    let new_type_tab = (Program.get_type_tab prog) in
+    funcs#register_new_vars ctr_ctx_tbl new_type_tab;
     let new_prog =
+        (Program.set_params []
+        (Program.set_assumes []
         (Program.set_shared (Program.get_shared prog)
         (Program.set_instrumental new_decls
+        (Program.set_type_tab new_type_tab
         (Program.set_atomics new_atomics
         (Program.set_unsafes new_unsafes
         (Program.set_ltl_forms new_ltl_forms
-        (Program.set_procs new_procs (Program.empty))))))) in
+        (Program.set_procs new_procs prog))))))))) in
     new_prog
 

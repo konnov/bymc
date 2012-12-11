@@ -177,6 +177,25 @@ let rec expr_s e =
         sprintf "%s@%s" proc_name lab_name
 
 
+let rec expr_tree_s e =
+    match e with
+    | Nop comment -> sprintf "Nop('%s')" comment
+    | Const i -> sprintf "Const(%d)" i
+    | Var v -> sprintf "Var(%s)" v#get_name
+    | UnEx (tok, f) -> sprintf "UnEx(%s,%s)" (token_s tok) (expr_tree_s f)
+    | BinEx (ARR_ACCESS, arr, idx) ->
+            sprintf "BinEx(ARR_ACCESS,%s,%s)"
+                (expr_tree_s arr) (expr_tree_s idx)
+    | BinEx (tok, f, g) ->
+            sprintf "BinEx(%s,%s,%s)"
+                (token_s tok) (expr_tree_s f) (expr_tree_s g)
+    | Phi (lhs, rhs) ->
+        let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs) in
+        sprintf "%s = phi(%s)" lhs#get_name rhs_s
+    | LabelRef (proc_name, lab_name) ->
+        sprintf "LabelRef(%s, %s)" proc_name lab_name
+
+
 (* as expr_s but instead of assemblying a string, it prints using Format.fprintf *)
 let rec fprint_expr ff e =
     match e with
@@ -255,8 +274,8 @@ let stmt_s s =
     | Skip id -> sprintf "<%3d> skip" id
     | Expr (id, e) -> sprintf "<%3d> (%s)" id (expr_s e)
     | Decl (id, v, e) ->
-        sprintf "<%3d> decl %s %s %s = %s"
-            id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
+        sprintf "<%3d> decl %s %s = %s"
+            id v#flags_s v#get_name (expr_s e)
     | Label (id, l) -> sprintf "<%3d> %d: " id l
     | Atomic_beg id -> sprintf "<%3d> atomic {" id
     | Atomic_end id -> sprintf "<%3d> } /* atomic */" id
@@ -353,8 +372,8 @@ let rec mir_stmt_s s =
     | MSkip id -> sprintf "<%3d> skip" id
     | MExpr (id, e) -> sprintf "<%3d> (%s)" id (expr_s e)
     | MDecl (id, v, e) ->
-        sprintf "<%3d> decl %s %s %s = %s"
-            id v#flags_s (var_type_s v#get_type) v#get_name (expr_s e)
+        sprintf "<%3d> decl %s %s = %s"
+            id v#flags_s v#get_name (expr_s e)
     | MDeclProp (id, v, ae) ->
             sprintf "<%3d> prop %s = %s" id v#get_name (atomic_expr_s ae)
     | MLabel (id, l) -> sprintf "<%3d> %d: " id l
@@ -388,8 +407,7 @@ let prog_unit_s u =
             then Printf.sprintf "active[%s] " (expr_s p#get_active_expr)
             else "" in
         let args = List.fold_left
-            (fun a arg -> Printf.sprintf
-                "%s %s %s;" a (var_type_s arg#get_type) arg#get_name)
+            (fun a arg -> Printf.sprintf "%s %s;" a arg#get_name)
             "" p#get_args in
         let h = (Printf.sprintf "%sproctype %s(%s) {" act p#get_name args) in
         let ss = List.fold_left

@@ -4,8 +4,11 @@ module StringMap = Map.Make (String)
 
 type expr_t = Spin.token expr
 
+exception Program_error of string
+
 type program = {
     f_params: var list; f_shared: var list; f_instrumental: var list;
+    f_type_tab: data_type_tab;
     f_assumes: expr_t list; f_unsafes: string list;
     f_procs: Spin.token proc list;
     f_atomics: Spin.token atomic_expr StringMap.t;
@@ -14,6 +17,7 @@ type program = {
 
 let empty = {
     f_params = []; f_shared = []; f_instrumental = [];
+    f_type_tab = new data_type_tab;
     f_assumes = []; f_procs = []; f_unsafes = [];
     f_atomics = StringMap.empty; f_ltl_forms = StringMap.empty
 }
@@ -26,6 +30,17 @@ let set_shared new_shared prog = {prog with f_shared = new_shared}
 
 let get_instrumental prog = prog.f_instrumental
 let set_instrumental new_instr prog = {prog with f_instrumental = new_instr}
+
+let get_type prog variable =
+    try prog.f_type_tab#get_type variable#id
+    with Not_found ->
+        raise (Program_error ("No data type for variable " ^ variable#get_name))
+
+let set_type_tab type_tab prog =
+    { prog with f_type_tab = type_tab }
+
+let get_type_tab prog =
+    prog.f_type_tab
 
 let get_assumes prog = prog.f_assumes
 let set_assumes new_assumes prog = {prog with f_assumes = new_assumes}
@@ -54,7 +69,17 @@ let is_global prog v =
 let is_not_global prog v =
     not (is_global prog v)
 
-exception Program_error of string
+
+let get_all_locals prog =
+    let collect lst = function
+    | MDecl (_, v, _) -> v :: lst
+    | _ -> lst
+    in
+    let collect_proc lst p =
+        List.fold_left collect lst p#get_stmts
+    in
+    List.fold_left collect_proc [] prog.f_procs
+
 
 let program_of_units units =
     let fold_u prog = function
@@ -85,7 +110,7 @@ let units_of_program program =
     let var_to_decl v =
         Stmt (MDecl (-1, v, (Nop ""))) in
     let atomic_to_decl name expr accum =
-        (Stmt (MDeclProp(-1, new var(name), expr))) :: accum in
+        (Stmt (MDeclProp(-1, new_var name, expr))) :: accum in
     let form_to_ltl name expr accum =
         (Ltl(name, expr)) :: accum in
     let to_assume e = Stmt (MAssume(-1, e)) in
@@ -105,9 +130,12 @@ let units_of_program program =
 let run_smt_solver prog =
     let smt_of_asrt e =
         Printf.sprintf "(assert %s)" (Smt.expr_to_smt e) in
+    let var_to_smt v =
+        let tp = get_type prog v in
+        Smt.var_to_smt v tp in
     let smt_exprs =
         List.append
-            (List.map Smt.var_to_smt (get_params prog))
+            (List.map var_to_smt (get_params prog))
             (List.map smt_of_asrt (get_assumes prog))
     in
     let solver = new Smt.yices_smt in

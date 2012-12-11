@@ -160,6 +160,7 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
          and remove it out from here, it is heavy *)
 let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts rev_map n_steps =
     let shared_vars = (Program.get_shared prog) in
+    let type_tab = (Program.get_type_tab prog) in
     let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
@@ -201,7 +202,10 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts rev_map n_steps =
 
     log INFO (sprintf "    appending %d declarations..."
         (List.length decls)); flush stdout;
-    List.iter solver#append_var_def decls;
+    let append_def v =
+        solver#append_var_def v (type_tab#get_type v#id)
+    in
+    List.iter append_def decls;
     log INFO (sprintf "    appending %d transducer asserts..."
         (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
@@ -248,7 +252,7 @@ let parse_smt_evidence prog solver =
             (* we support ints only, don't we? *)
             let value = int_of_string (Str.matched_group 4 line) in
             let state = if dir = "IN" then step else (step + 1) in
-            let e = BinEx (ASGN, Var (new var name), Const value) in
+            let e = BinEx (ASGN, Var (new_var name), Const value) in
             if List.exists
                 (fun v -> v#get_name = name) (Program.get_shared prog)
             then add_state_expr state e;
@@ -266,7 +270,7 @@ let parse_smt_evidence prog solver =
             let value = int_of_string (Str.matched_group 5 line) in
             let state = if dir = "IN" then step else (step + 1) in
             let e = BinEx (ASGN,
-                BinEx (ARR_ACCESS, Var (new var name), Const idx),
+                BinEx (ARR_ACCESS, Var (new_var name), Const idx),
                 Const value) in
             if dir = "IN" || dir = "OUT"
             then add_state_expr state e; (* and ignore auxillary arrays *)
@@ -283,7 +287,7 @@ let parse_smt_evidence prog solver =
             (* (= T 2) *)
             let name = (Str.matched_group 1 line) in
             let value = int_of_string (Str.matched_group 2 line) in
-            add_state_expr 0 (BinEx (ASGN, Var (new var name), Const value))
+            add_state_expr 0 (BinEx (ASGN, Var (new_var name), Const value))
         end
     in
     List.iter parse_line lines;

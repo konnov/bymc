@@ -76,6 +76,7 @@ let lab_stack = ref [];;
 let global_scope = new symb_tab "";;
 let spec_scope = new symb_tab "spec";;
 let current_scope = ref global_scope;;
+let type_tab = new data_type_tab;;
 
 let new_id () =
     let id = !stmt_cnt in
@@ -186,12 +187,12 @@ let fatal msg payload =
 %right	UMIN BITNOT NEG
 %left	DOT
 %start program
-%type <token SpinIr.prog_unit list> program
+%type <token SpinIr.prog_unit list * SpinIr.data_type_tab> program
 %%
 
 /** PROMELA Grammar Rules **/
 
-program	: units	EOF { $1 }
+program	: units	EOF { ($1, type_tab) }
 	;
 
 units	: unit      { $1 }
@@ -304,7 +305,9 @@ ltl_expr:
     | ltl_expr AND ltl_expr         { BinEx(AND, $1, $3) }
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
-        { let v = new var $1 in v#set_type SpinTypes.TPROPOSITION; Var v }
+        { let v = new_var $1 in
+          type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
+          Var v }
     | FNAME AT FNAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
     | LPAREN expr RPAREN            { }
@@ -478,21 +481,17 @@ asgn:	/* empty */ {}
     ;
 
 one_decl: vis TYPE var_list	{
-        let f = $1 and t = $2 in
-        let ds = (List.map
-            (fun (v, i) ->
-                v#add_flag f; v#set_type t; MDecl(new_id (), v, i)) $3) in
-        List.iter
-            (fun d ->
-                match d with
-                | MDecl(_, v, i) ->
-                        !current_scope#add_symb v#get_name (v :> symb)
-                | _ -> raise (Failure "Not a Decl")
-            )
-            ds;
-        ds
-       (* setptype($3, $2->val, $1);
-          $$ = $3; *)
+        let fl = $1 and tp = new data_type $2 in
+        let add_decl ((v, tp_rhs), init) =
+            (* type constraints in the right-hand side *)
+            tp#set_nelems tp_rhs#nelems;
+            tp#set_nbits tp_rhs#nbits;
+            v#add_flag fl;
+            type_tab#set_type v#id tp;
+            !current_scope#add_symb v#get_name (v :> symb);
+            MDecl(new_id (), v, init)
+        in
+        List.map add_decl $3
     }
     | vis UNAME var_list	{
                   raise (Not_implemented "variables of user-defined types")
@@ -572,22 +571,23 @@ ch_init : LBRACE CONST RBRACE OF
     ;
 
 vardcl  : NAME {
-        let v = new var $1 in
+        let v = new_var $1 in
         v#set_proc_name !current_scope#tab_name;
-        v
+        (v, new data_type SpinTypes.TUNDEF)
         }
     | NAME COLON CONST	{
-        let v = new var $1 in
+        let v = new_var $1 in
         v#set_proc_name !current_scope#tab_name;
-        v#set_nbits $3;
-        v
+        let tp = new data_type SpinTypes.TUNDEF in
+        tp#set_nbits $3;
+        (v, tp)
         }
     | NAME LBRACE CONST RBRACE	{
-        let v = new var $1 in
+        let v = new_var $1 in
         v#set_proc_name !current_scope#tab_name;
-        v#set_isarray true;
-        v#set_num_elems $3;
-        v
+        let tp = new data_type SpinTypes.TUNDEF in
+        tp#set_nelems $3;
+        (v, tp)
         }
     ;
 
@@ -984,9 +984,9 @@ expr    : LPAREN expr RPAREN		{ $2 }
 /* FORSYTE extension */
 prop_decl:
     ATOMIC NAME ASGN atomic_prop {
-        let v = new var($2) in
-        v#set_type SpinTypes.TBIT;
+        let v = new_var($2) in
         v#set_proc_name spec_scope#tab_name;
+        type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
         spec_scope#add_symb v#get_name (v :> symb);
         MDeclProp (new_id (), v, $4)
     }
@@ -1025,7 +1025,7 @@ prop_arith_expr    :
 	| CARD LPAREN prop_expr	RPAREN	{ UnEx(CARD, $3) }
     | NAME /* proctype */ COLON NAME
         {
-            let v = new var $3 in
+            let v = new_var $3 in
             v#set_proc_name $1;
             Var (v)
         }

@@ -123,7 +123,7 @@ let parse_promela filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
     let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
-    let units = Spin.program lfun lexbuf in
+    let units, type_tab = Spin.program lfun lexbuf in
 
     (* postprocess: check late variable bindings and remove artifacts *)
     let units = List.map (postprocess units) units in
@@ -142,5 +142,5 @@ let parse_promela filename basename dirname =
             List.iter p units;
         end
     end;
-    units
+    (Program.set_type_tab type_tab (Program.program_of_units units))
 

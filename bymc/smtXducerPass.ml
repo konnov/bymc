@@ -34,27 +34,27 @@ let write_exprs name stmts =
     close_out out
 
 
-let to_xducer caches prog p =
-    let roles = caches#get_analysis#get_var_roles in
+let to_xducer caches prog new_type_tab p =
     let reg_tbl = caches#get_struc#get_regions p#get_name in
-
     let loop_prefix = reg_tbl#get "loop_prefix" in
     let loop_body = reg_tbl#get "loop_body" in
     let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
     let globals =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in
-    let locals = List.filter
-        (Program.is_not_global prog) (hashtbl_keys roles#get_all) in
+    let locals = (Program.get_all_locals prog) in
     let cfg = mk_ssa true globals locals (mk_cfg lirs) in
     if may_log DEBUG
     then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
     Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
-    let transd = cfg_to_constraints cfg in
+    let transd = cfg_to_constraints new_type_tab cfg in
     write_exprs p#get_name transd;
     proc_replace_body p transd
 
 
 let do_xducers caches prog =
-    let new_procs = List.map (to_xducer caches prog) (Program.get_procs prog) in
-    (Program.set_procs new_procs prog)
+    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let new_procs = List.map
+        (to_xducer caches prog new_type_tab) (Program.get_procs prog) in
+    (Program.set_type_tab new_type_tab
+        (Program.set_procs new_procs prog))
 

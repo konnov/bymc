@@ -10,26 +10,30 @@ exception Ltl_error of string
 exception Fairness_error of string
 exception Prop_error of string
 
-let rec is_propositional = function
-    | Var v -> v#get_type = TPROPOSITION
+let is_propositional type_tab e =
+    let rec isp = function
+    | Var v ->
+            (type_tab#get_type v#id)#basetype = TPROPOSITION
     | BinEx(GT, _, _)
     | BinEx(GE, _, _)
     | BinEx(LT, _, _)
     | BinEx(LE, _, _)
     | BinEx(EQ, _, _)
     | BinEx(NE, _, _) -> true
-    | BinEx(AND, l, r) -> (is_propositional l) && (is_propositional r)
-    | BinEx(OR, l, r) -> (is_propositional l) && (is_propositional r)
-    | BinEx(IMPLIES, l, r) -> (is_propositional l) && (is_propositional r)
-    | BinEx(EQUIV, l, r) -> (is_propositional l) && (is_propositional r)
+    | BinEx(AND, l, r) -> (isp l) && (isp r)
+    | BinEx(OR, l, r) -> (isp l) && (isp r)
+    | BinEx(IMPLIES, l, r) -> (isp l) && (isp r)
+    | BinEx(EQUIV, l, r) -> (isp l) && (isp r)
     | BinEx(UNTIL, _, _) -> false
     | BinEx(RELEASE, _, _) -> false
     | BinEx(WEAK_UNTIL, _, _) -> false
-    | UnEx(NEG, a) -> is_propositional a
+    | UnEx(NEG, a) -> isp a
     | UnEx(ALWAYS, _) -> false
     | UnEx(EVENTUALLY, _) -> false
     | UnEx(NEXT, _) -> false
     | _ as e -> raise (Ltl_error ("Not an LTL formula: " ^ (expr_s e)))
+    in
+    isp e
 ;;
 
 let normalize_form form =
@@ -70,7 +74,7 @@ let normalize_form form =
     norm false form
 ;;
 
-let embed_atomics aprops form =
+let embed_atomics type_tab aprops form =
     let get_atomic name =
         try
             match Program.StringMap.find name aprops with
@@ -83,7 +87,7 @@ let embed_atomics aprops form =
         | BinEx(op, l, r) -> BinEx(op, embed l, embed r)
         | UnEx(op, r) -> UnEx(op, embed r)
         | Var v as e ->
-            if v#get_type = SpinTypes.TPROPOSITION
+            if (type_tab#get_type v#id)#basetype = SpinTypes.TPROPOSITION
             then embed (get_atomic v#get_name)
             else e
         | _ as e -> e
@@ -91,14 +95,14 @@ let embed_atomics aprops form =
     embed form
 ;;
 
-let find_fair_atoms error_fun aprops = function
+let find_fair_atoms error_fun type_tab aprops = function
     | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) as ff ->
-        if is_propositional f
-        then normalize_form (embed_atomics aprops f)
+        if is_propositional type_tab f
+        then normalize_form (embed_atomics type_tab aprops f)
         else error_fun ff
     | UnEx(EVENTUALLY, UnEx(ALWAYS, f)) as ff ->
-        if is_propositional f
-        then normalize_form (embed_atomics aprops f)
+        if is_propositional type_tab f
+        then normalize_form (embed_atomics type_tab aprops f)
         else error_fun ff
     | _ as ff -> error_fun ff
 ;;

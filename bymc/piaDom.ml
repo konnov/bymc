@@ -126,8 +126,11 @@ class pia_domain conds_i =
                 (fun comb ->
                     solver#push_ctx;
                     let vars = List.map
-                        (fun i -> (new var (sprintf "_a%d" i))) (range 0 n) in
-                    List.iter solver#append_var_def vars;
+                        (fun i -> (new_var (sprintf "_a%d" i))) (range 0 n) in
+                    let append_def v =
+                        solver#append_var_def v (new data_type SpinTypes.TINT)
+                    in
+                    List.iter append_def vars;
                     List.iter2
                         (fun v (i, l, r) ->
                             solver#append_assert
@@ -155,7 +158,7 @@ exception Skeleton_not_supported of string
 
 let identify_conditions var_roles stmts =
     let is_threshold v e =
-        let r = Hashtbl.find var_roles v in
+        let r = var_roles#get_role v in
         (r = LocalUnbounded || r = Scratch) && not (expr_exists not_symbolic e)
     in
     let rec on_expr e =
@@ -263,7 +266,7 @@ let create solver var_roles prog =
     log INFO "> Extracting an abstract domain...";
     let collect_stmts l p = p#get_stmts @ l in
     let all_stmts = List.fold_left collect_stmts [] (Program.get_procs prog) in
-    let conds = identify_conditions var_roles#get_all (mir_to_lir all_stmts) in
+    let conds = identify_conditions var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver conds in
     let dom = new pia_domain sorted_conds in
     dom#print;

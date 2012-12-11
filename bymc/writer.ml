@@ -1,43 +1,43 @@
 (* Write Promela code from its intermediate representation *)
 
-open Printf;;
+open Printf
 
-open Debug;;
-open SpinIr;;
-open SpinIrImp;;
-open SpinTypes;;
+open Debug
+open SpinIr
+open SpinIrImp
+open SpinTypes
 
-let indent level = String.make level ' ';;
+let indent level = String.make level ' '
 let rec tabify ff level =
   if level > 0
   then begin
     Format.pp_print_space ff ();
     tabify ff (level - 1)
-  end;;
+  end
 
 let openb ff lvl need_tab =
     let box_lvl = if need_tab then (lvl + 2) else 2 in
     Format.pp_open_hovbox ff box_lvl;
     if need_tab then tabify ff lvl
-;;
+
 let closeb ff =
     Format.pp_close_box ff ();
     Format.pp_print_newline ff ()
-;;
-(* macros have another rule for a line break *)
-let macro_newl out () = out "\\\n" 0 2;;
 
-let var_type_promela tp =
-    match tp with
-      TBIT -> "bit"
-      | TBYTE -> "byte"
-      | TSHORT -> "short"
-      | TINT -> "int"
-      | TUNSIGNED -> "unsigned"
-      | TCHAN -> "chan"
-      | TMTYPE -> "mtype"
-      | TPROPOSITION -> "proposition"
-;;
+(* macros have another rule for a line break *)
+let macro_newl out () = out "\\\n" 0 2
+
+let var_type_promela = function
+  | TBIT -> "bit"
+  | TBYTE -> "byte"
+  | TSHORT -> "short"
+  | TINT -> "int"
+  | TUNSIGNED -> "unsigned"
+  | TCHAN -> "chan"
+  | TMTYPE -> "mtype"
+  | TPROPOSITION -> "proposition"
+  | TUNDEF -> raise (Failure "Undefined type")
+
 
 let hflag_promela f =
     match f with
@@ -51,7 +51,6 @@ let hflag_promela f =
     | HReadOnce -> ""
     | HSymbolic -> "symbolic"
     | HNone -> ""
-;;
 
 
 let rec write_atomic_expr ff = function
@@ -81,17 +80,19 @@ let rec write_atomic_expr ff = function
         Format.pp_print_string ff ")"
 
 
-let rec write_stmt ff lvl indent_first lab_tab s =
+let rec write_stmt type_tab ff lvl indent_first lab_tab s =
     match s with
     | MSkip _ ->
         openb ff lvl indent_first;
         Format.fprintf ff "skip;";
         closeb ff
+
     | MExpr (_, e) ->
         openb ff lvl indent_first;
         fprint_expr ff e;
         Format.pp_print_string ff ";";
         closeb ff
+
     | MDecl (_, v, e) ->
         openb ff lvl indent_first;
         let print_flags =
@@ -102,14 +103,24 @@ let rec write_stmt ff lvl indent_first lab_tab s =
             List.iter pf v#get_flags
         in
         print_flags;
-        Format.fprintf ff "%s@ %s"(var_type_promela v#get_type) v#get_name;
-        if v#is_array then Format.fprintf ff "[%d]" v#get_num_elems;
+        let var_tp =
+            try type_tab#get_type v#id
+            with Not_found ->
+                raise (Failure ("No type for the variable " ^ v#get_name))
+        in
+        Format.fprintf ff "%s@ %s" (var_type_promela var_tp#basetype) v#get_name;
+        if var_tp#is_array then Format.fprintf ff "[%d]" var_tp#nelems;
         if not_nop e then begin
             Format.fprintf ff "@ =@ ";
             fprint_expr ff e
         end;
         Format.pp_print_string ff ";"; 
+        if var_tp#has_range then begin
+            let l, r = var_tp#range in
+            Format.fprintf ff " /* range: [%d, %d) */" l r
+        end;
         closeb ff
+
     | MDeclProp (_, v, ae) ->
         let out, flush, newline, spaces =
             Format.pp_get_all_formatter_output_functions ff () in
@@ -122,37 +133,42 @@ let rec write_stmt ff lvl indent_first lab_tab s =
         Format.pp_set_all_formatter_output_functions
             ff out flush newline spaces;
         closeb ff
+
     | MLabel (_, l) ->
         if Hashtbl.mem lab_tab l
         then Format.fprintf ff "%s:@\n" (Hashtbl.find lab_tab l)
         else Format.fprintf ff "lab%d:@\n" l
+
     | MAtomic (_, seq) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "atomic {";
         closeb ff;
-        List.iter (write_stmt ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab ff (lvl + 2) true lab_tab) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
+
     | MD_step (_, seq) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "d_step {";
         closeb ff;
-        List.iter (write_stmt ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab ff (lvl + 2) true lab_tab) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
+
     | MGoto (_, l) ->
         openb ff lvl indent_first;
         if Hashtbl.mem lab_tab l
         then Format.fprintf ff "goto %s;" (Hashtbl.find lab_tab l)
         else Format.fprintf ff "goto lab%d;" l;
         closeb ff
+
     | MIf (_, opts) ->
         openb ff lvl indent_first; Format.pp_print_string ff "if"; closeb ff;
         List.iter
             (function
                 | MOptGuarded seq ->
                     openb ff (lvl + 2) true; Format.fprintf ff "::@ @ @]";
-                    write_stmt ff (lvl + 4) false lab_tab (List.hd seq);
+                    write_stmt type_tab ff (lvl + 4) false lab_tab (List.hd seq);
                     List.iter
-                        (write_stmt ff (lvl + 6) true lab_tab)
+                        (write_stmt type_tab ff (lvl + 6) true lab_tab)
                         (List.tl seq);
 
                 | MOptElse seq ->
@@ -164,47 +180,53 @@ let rec write_stmt ff lvl indent_first lab_tab s =
                         match seq with
                         | [] -> ()
                         | hd :: tl ->
-                            write_stmt ff (lvl + 6) false lab_tab hd;
-                            List.iter (write_stmt ff (lvl + 4) true lab_tab) tl;
+                            write_stmt type_tab ff (lvl + 6) false lab_tab hd;
+                            List.iter (write_stmt type_tab ff (lvl + 4) true lab_tab) tl;
                     end
             ) opts;
         openb ff lvl true; Format.pp_print_string ff "fi;"; closeb ff;
+
     | MAssert (_, e) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "assert(";
         fprint_expr ff e;
         Format.pp_print_string ff ");";
         closeb ff
+
     | MAssume (_, e) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "assume(";
         fprint_expr ff e;
         Format.pp_print_string ff ");";
         closeb ff
+
     | MHavoc (_, v) ->
         openb ff lvl indent_first;
         Format.fprintf ff "havoc(%s);" v#get_name;
         closeb ff
+
     | MUnsafe (_, s) ->
         openb ff lvl indent_first;
         Format.fprintf ff "%s" s;
         closeb ff
+
     | MPrint (_, s, es) ->
         openb ff lvl indent_first;
         Format.fprintf ff "printf(\"%s\"" s;
         List.iter (fun e -> Format.fprintf ff ",@ "; fprint_expr ff e) es;
         Format.pp_print_string ff ");";
         closeb ff
-;;
+
   
-let write_proc ff lvl p =
+let write_proc type_tab ff lvl p =
     openb ff lvl true;
     if not_nop p#get_active_expr
     then begin Format.fprintf ff "active[%s]@ " (expr_s p#get_active_expr) end;
     Format.fprintf ff "proctype@ %s(" p#get_name;
     let p_arg delim v =
         if delim <> "" then begin Format.fprintf ff "%s@ " delim end;
-        Format.fprintf ff "%s@ %s" (var_type_promela v#get_type) v#get_name
+        Format.fprintf ff "%s@ %s"
+            (var_type_promela (type_tab#get_type v#id)#basetype) v#get_name
     in
     begin 
         match p#get_args with
@@ -226,19 +248,19 @@ let write_proc ff lvl p =
         (fun n l -> Hashtbl.add labels l#get_num n)
         p#labels_as_hash;
 
-    List.iter (write_stmt ff (lvl + 2) true labels) p#get_stmts;
+    List.iter (write_stmt type_tab ff (lvl + 2) true labels) p#get_stmts;
     (* end the body *)
 
     openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
-;;
 
-let write_unit cout lvl u =
+
+let write_unit type_tab cout lvl u =
     let ff = Format.formatter_of_out_channel cout in
     match u with
     | Stmt s ->
-        write_stmt ff lvl true (Hashtbl.create 0) s
+        write_stmt type_tab ff lvl true (Hashtbl.create 0) s
     | Proc p ->
-        write_proc ff lvl p
+        write_proc type_tab ff lvl p
     | Ltl (name, exp) ->
         openb ff lvl true;
         Format.fprintf ff "ltl@ %s@ {@ " name;
@@ -247,4 +269,4 @@ let write_unit cout lvl u =
         closeb ff
     | _ -> ();
     Format.pp_print_flush ff ()
-;;
+

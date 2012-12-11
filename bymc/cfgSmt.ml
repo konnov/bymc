@@ -16,10 +16,11 @@ open Debug
      A -> (B, C); B -> D; C -> D; B -> C.
  To handle this case two copies of C must be introduced.
  *)
-let block_to_constraints (bb: 't basic_block): (Spin.token mir_stmt list) =
+let block_to_constraints (new_type_tab: data_type_tab)
+        (bb: 't basic_block): (Spin.token mir_stmt list) =
     let at_var i =
-        let nv = new var (sprintf "at_%d" i) in 
-        nv#set_type SpinTypes.TBIT;
+        let nv = new_var (sprintf "at_%d" i) in 
+        new_type_tab#set_type nv#id (new data_type SpinTypes.TBIT);
         Var nv
     in
     let mke id e = MExpr (id, e) in
@@ -80,9 +81,10 @@ let block_to_constraints (bb: 't basic_block): (Spin.token mir_stmt list) =
                 let eq = BinEx (EQ,
                     mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
                 (mkez (at_impl_expr (BinEx (OR, BinEx (EQ, idx, Const i), eq)))) :: l in
+            let nelems = (new_type_tab#get_type new_arr#id)#nelems in
             (mke id (Nop (sprintf "%d: %s" id (expr_s e))))
             :: (mkez (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, rhs))))
-            :: (List.fold_left keep_val tl (range 0 new_arr#get_num_elems))
+            :: (List.fold_left keep_val tl (range 0 nelems))
 
         | Expr (id, (BinEx (ASGN, lhs, rhs) as e)) ->
             (mke id (Nop (expr_s e)))
@@ -114,8 +116,10 @@ let block_to_constraints (bb: 't basic_block): (Spin.token mir_stmt list) =
     let n_cons e es = if stmt_not_nop e then e :: es else es in
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 
-let cfg_to_constraints cfg =
-    let cons = List.concat (List.map block_to_constraints cfg#block_list) in
+let cfg_to_constraints new_type_tab cfg =
+    let cons_lists =
+        (List.map (block_to_constraints new_type_tab) cfg#block_list) in
+    let cons = List.concat cons_lists in
     if may_log DEBUG
     then begin
         printf "SMT constraints: \n";

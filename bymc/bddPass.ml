@@ -16,12 +16,16 @@ exception Bdd_error of string
 let proc_to_bdd prog proc =
     let rec bits_of_expr pos = function
         | Var v ->
-            if v#get_type != SpinTypes.TBIT
+            if (Program.get_type prog v)#basetype != SpinTypes.TBIT
             then raise (Bdd_error
                 (sprintf "Variables %s must be boolean" v#get_name))
             else if pos
             then Bits.V v#get_name
             else Bits.NV v#get_name
+        | BinEx (ASGN, Var v, Const i) ->
+            if pos
+            then Bits.VeqI (v#get_name, i)
+            else Bits.VneI (v#get_name, i)
         | BinEx (EQ, Var v, Const i) ->
             if pos
             then Bits.VeqI (v#get_name, i)
@@ -61,9 +65,9 @@ let proc_to_bdd prog proc =
         | UnEx (NEG, l) ->
             bits_of_expr (not pos) l
         | Nop text ->
-            Bits.ANNOTATION (text, Bits.B1)
+            Bits.ANNOTATION ("{" ^ text ^ "}", Bits.B1)
         | _ as e ->
-            Bits.ANNOTATION (expr_s e, Bits.B1)
+            Bits.ANNOTATION (expr_tree_s e, Bits.B1)
             (*
             raise (Bdd_error ("Cannot convert to BDD: " ^ (expr_s e)))
             *)
@@ -81,6 +85,25 @@ let proc_to_bdd prog proc =
     close_out out
 
 
-let transform_to_bdd caches prog =
-    List.iter (proc_to_bdd prog) (Program.get_procs prog)
+let enum_in_outs solver prog proc =
+    let exprs = List.map expr_of_m_stmt proc#get_stmts in
+    let decls = expr_list_used_vars exprs in
+    solver#push_ctx;
+    solver#set_need_evidence true;
+    List.iter solver#append_var_def decls;
+    List.iter (fun e -> let _ = solver#append_expr e in ()) exprs;
+    if solver#check then begin
+        printf "One value to take...\n";
+        let vals = Refinement.parse_smt_evidence prog solver in
+        Refinement.pretty_print_exprs (Hashtbl.find vals 0);
+        Refinement.pretty_print_exprs (Hashtbl.find vals 1);
+    end;
+    solver#pop_ctx
+
+
+let transform_to_bdd solver caches prog =
+    List.iter (proc_to_bdd prog) (Program.get_procs prog);
+    (*
+    List.iter (enum_in_outs solver prog) (Program.get_procs prog)
+    *)
 

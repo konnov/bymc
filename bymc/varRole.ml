@@ -42,11 +42,21 @@ exception Var_not_found of string
 
 class var_role_tbl (i_roles: (var, var_role) Hashtbl.t) =
     object
-        method get_role v =
-            try Hashtbl.find i_roles v
-            with Not_found -> raise (Var_not_found v#get_name)
+        val mutable m_tbl: (int, var_role) Hashtbl.t =
+            Hashtbl.create (Hashtbl.length i_roles)
 
-        method get_all = i_roles
+        initializer
+            let add_by_id v var_role =
+                Hashtbl.replace m_tbl v#id var_role
+            in
+            Hashtbl.iter add_by_id i_roles
+
+        method get_role (v: var) =
+            try Hashtbl.find m_tbl v#id
+            with Not_found ->
+                raise (Var_not_found (sprintf "%s (id=%d)" v#get_name v#id))
+
+        method add (v: var) (r: var_role) = Hashtbl.replace m_tbl v#id r
     end
 
 

@@ -12,25 +12,6 @@ open Debug;;
 exception Smt_error of string;;
 exception Communication_failure of string;;
 
-let rec var_to_smt var =
-    let wrap_arr type_s =
-        if var#is_array
-        then sprintf "(-> (subrange 0 %d) %s)" (var#get_num_elems - 1) type_s
-        else type_s
-    in
-    let ts = match var#get_type with
-    | TBIT -> wrap_arr "bool"
-    | TBYTE -> wrap_arr "int"
-    | TSHORT -> wrap_arr "int"
-    | TINT -> wrap_arr "int"
-    | TUNSIGNED -> wrap_arr "nat"
-    | TCHAN -> raise (Failure "Type chan is not supported")
-    | TMTYPE -> raise (Failure "Type mtype is not supported")
-    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
-    in
-    sprintf "(define %s :: %s)" var#get_name ts
-;;
-
 let rec expr_to_smt e =
     match e with
     | Nop comment -> sprintf ";; %s\n" comment
@@ -69,7 +50,33 @@ let rec expr_to_smt e =
 
     | LabelRef (proc_name, lab_name) ->
             raise (Failure "LabelRef to SMT is not supported")
-;;
+
+
+let var_to_smt var tp =
+    let base_type = match tp#basetype with
+    | TBIT -> "bool"
+    | TBYTE -> "int"
+    | TSHORT -> "int"
+    | TINT -> "int"
+    | TUNSIGNED -> "nat"
+    | TCHAN -> raise (Failure "Type chan is not supported")
+    | TMTYPE -> raise (Failure "Type mtype is not supported")
+    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
+    | TUNDEF -> raise (Failure "Undefined type met")
+    in
+    let complex_type =
+        let subtype =
+            if tp#has_range
+            then let l, r = tp#range in
+                sprintf "(subrange %d %d)" l r
+            else base_type
+        in
+        if tp#is_array
+        then sprintf "(-> (subrange 0 %d) %s)" (tp#nelems - 1) subtype
+        else subtype
+    in
+    sprintf "(define %s :: %s)" var#get_name complex_type
+
 
 (*
   The wrapper of an SMT solver (yices).
@@ -227,8 +234,8 @@ class yices_smt =
         method append_assert s =
             self#append (sprintf "(assert %s)" s)
 
-        method append_var_def (v: var) =
-            self#append (var_to_smt v)
+        method append_var_def (v: var) (tp: data_type) =
+            self#append (var_to_smt v tp)
 
         method comment (line: string) =
             self#append (";; " ^ line)
