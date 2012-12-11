@@ -2,10 +2,12 @@
 
 open Printf
 
-open Debug
+open Accums
 open SpinIr
 open SpinIrImp
 open SpinTypes
+
+open Debug
 
 let indent level = String.make level ' '
 let rec tabify ff level =
@@ -27,16 +29,31 @@ let closeb ff =
 (* macros have another rule for a line break *)
 let macro_newl out () = out "\\\n" 0 2
 
-let var_type_promela = function
-  | TBIT -> "bit"
-  | TBYTE -> "byte"
-  | TSHORT -> "short"
-  | TINT -> "int"
-  | TUNSIGNED -> "unsigned"
-  | TCHAN -> "chan"
-  | TMTYPE -> "mtype"
-  | TPROPOSITION -> "proposition"
-  | TUNDEF -> raise (Failure "Undefined type")
+let var_type_promela tp =
+    let base_str = function
+      | TBIT -> "bit"
+      | TBYTE -> "byte"
+      | TSHORT -> "short"
+      | TINT -> "int"
+      | TUNSIGNED -> "unsigned"
+      | TCHAN -> "chan"
+      | TMTYPE -> "mtype"
+      | TPROPOSITION -> "proposition"
+      | TUNDEF -> raise (Failure "Undefined type")
+    in
+    let l, r = tp#range in
+    if not tp#is_array && tp#has_range && l >= 0
+    then "unsigned" (* bitwidth will be specified *)
+    else base_str tp#basetype
+
+
+(* if we know the range of a variable, we can specify its bit width *)        
+let find_bit_width v_type =
+    let l, r = v_type#range in
+    if v_type#has_range && l >= 0
+        && not v_type#is_array && v_type#basetype <> SpinTypes.TCHAN
+    then bits_to_fit r
+    else 0
 
 
 let hflag_promela f =
@@ -108,8 +125,12 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
             with Not_found ->
                 raise (Failure ("No type for the variable " ^ v#get_name))
         in
-        Format.fprintf ff "%s@ %s" (var_type_promela var_tp#basetype) v#get_name;
+        Format.fprintf ff "%s@ %s" (var_type_promela var_tp) v#get_name;
         if var_tp#is_array then Format.fprintf ff "[%d]" var_tp#nelems;
+        let bit_width = find_bit_width var_tp in
+        if bit_width <> 0
+        then Format.fprintf ff ":%d" bit_width;
+
         if not_nop e then begin
             Format.fprintf ff "@ =@ ";
             fprint_expr ff e
@@ -226,7 +247,7 @@ let write_proc type_tab ff lvl p =
     let p_arg delim v =
         if delim <> "" then begin Format.fprintf ff "%s@ " delim end;
         Format.fprintf ff "%s@ %s"
-            (var_type_promela (type_tab#get_type v#id)#basetype) v#get_name
+            (var_type_promela (type_tab#get_type v#id)) v#get_name
     in
     begin 
         match p#get_args with

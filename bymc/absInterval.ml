@@ -125,13 +125,13 @@ let refine_var_type ctx dom roles type_tab new_type_tab v =
         if ctx#var_needs_abstraction v
         then begin
             let tp = new data_type SpinTypes.TINT in
-            tp#set_range 0 (dom#length + 1);
+            tp#set_range 0 dom#length;
             tp
         end else if is_bounded vrole
         then begin
             let l, r = bounds vrole in
             let tp = new data_type SpinTypes.TINT in
-            tp#set_range l (r + 1);
+            tp#set_range l r;
             tp
         end else type_tab#get_type v#id
     in
