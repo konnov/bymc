@@ -10,14 +10,14 @@ open SpinIr
 open SpinIrImp
 
 type var_role =
-    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch
+    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch of var
 
 let var_role_s r =
     match r with
     | BoundedInt (a, b) -> Printf.sprintf "bounded[%d, %d]" a b
     | SharedUnbounded -> "shared-unbounded"
     | LocalUnbounded -> "local-unbounded"
-    | Scratch -> "scratch"
+    | Scratch v -> sprintf "scratch(%s)" v#get_name
 
 let is_unbounded = function
     | SharedUnbounded
@@ -26,6 +26,10 @@ let is_unbounded = function
 
 let is_bounded = function
     | BoundedInt (_, _) -> true
+    | _ -> false
+
+let is_scratch = function
+    | Scratch _ -> true
     | _ -> false
 
 let is_local_unbounded = function
@@ -67,8 +71,13 @@ let identify_var_roles prog =
         let (int_roles: (int, (var, int_role) Hashtbl.t) Hashtbl.t) =
             visit_cfg (visit_basic_block transfer_roles)
                 (join lub_int_role) (print_int_roles "roles") cfg in
-        let body_sum =
+        let int_body_sum =
             join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
+        let (var_uses: (int, (var, var_use) Hashtbl.t) Hashtbl.t) =
+            visit_cfg (visit_basic_block transfer_var_use)
+                (join lub_var_use) (print_var_uses "var_use") cfg in
+        let use_body_sum =
+            join_all_locs (join lub_var_use) (mk_bottom_val ()) var_uses in
         let reg_tab = extract_skel proc#get_stmts in
         let fst_id =
             let is_norm s = (m_stmt_id s) <> -1 in
@@ -79,6 +88,19 @@ let identify_var_roles prog =
                 let m = (sprintf "No analysis data for loc %d" fst_id) in
                 raise (Failure m)
         in
+        let get_used_var v =
+            match Hashtbl.find use_body_sum v with
+            | VarUses vset ->
+                let vs = VarSet.elements vset in
+                if List.length vs = 1
+                then List.hd vs
+                else begin
+                    print_var_uses ("Uses for " ^ v#get_name) use_body_sum;
+                    raise (Analysis_error ("No rhs for scratch " ^ v#get_name))
+                end
+            | VarUsesUndef -> 
+                raise (Analysis_error ("No rhs for scratch " ^ v#get_name))
+        in
         Hashtbl.iter
             (fun v r ->
                 let is_const = match Hashtbl.find loc_roles v with
@@ -86,8 +108,8 @@ let identify_var_roles prog =
                     | _ -> false                    (* mutating *)
                 in
                 let new_role = if is_const
-                then Scratch
-                else match Hashtbl.find body_sum v with
+                then Scratch (get_used_var v)
+                else match Hashtbl.find int_body_sum v with
                     | IntervalInt (a, b) -> BoundedInt (a, b)
                     | UnboundedInt -> LocalUnbounded
                     | Undefined ->
@@ -95,7 +117,7 @@ let identify_var_roles prog =
                             (sprintf "Undefined type for %s" v#get_name))
                 in
                 Hashtbl.replace roles v new_role (* XXX: can we lose types? *)
-            ) body_sum;
+            ) int_body_sum;
     in
     List.iter fill_roles (Program.get_procs prog);
 

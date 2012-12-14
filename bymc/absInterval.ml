@@ -115,27 +115,29 @@ let var_trait t_ctx v =
     else ConcExpr
 
 
-let refine_var_type ctx dom roles type_tab new_type_tab v =
-    let bounds = function
-        | BoundedInt (a, b) -> (a, b + 1)
-        | _ -> raise (Abstraction_error ("No bound for " ^ v#get_name))
-    in
-    let new_type =
+let refine_var_type ctx dom roles type_tab new_type_tab theVar =
+    let rec new_type v =
         let vrole = roles#get_role v in
-        if ctx#var_needs_abstraction v
-        then begin
-            let tp = new data_type SpinTypes.TINT in
-            tp#set_range 0 dom#length;
-            tp
-        end else if is_bounded vrole
-        then begin
-            let l, r = bounds vrole in
-            let tp = new data_type SpinTypes.TINT in
-            tp#set_range l r;
-            tp
-        end else type_tab#get_type v
+        match vrole with
+            | Scratch v ->
+                    new_type v
+
+            | BoundedInt (l, r) ->
+                    let tp = new data_type SpinTypes.TINT in
+                    tp#set_range l (r + 1);
+                    tp
+
+            | LocalUnbounded
+            | SharedUnbounded ->
+                if ctx#var_needs_abstraction v
+                then begin
+                    let tp = new data_type SpinTypes.TINT in
+                    tp#set_range 0 dom#length;
+                    tp
+                end else
+                    type_tab#get_type v
     in
-    new_type_tab#set_type v new_type
+    new_type_tab#set_type theVar (new_type theVar)
 
 (*
  Translate an arithmetic comparison to a pointwise comparison of

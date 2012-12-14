@@ -159,7 +159,7 @@ exception Skeleton_not_supported of string
 let identify_conditions var_roles stmts =
     let is_threshold v e =
         let r = var_roles#get_role v in
-        (r = LocalUnbounded || r = Scratch) && not (expr_exists not_symbolic e)
+        (r = LocalUnbounded || is_scratch r) && not (expr_exists not_symbolic e)
     in
     let rec on_expr e =
         match e with

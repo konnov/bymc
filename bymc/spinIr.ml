@@ -9,10 +9,10 @@
  * support several layers of code transformations.
  *)
 
-open Printf;;
-open SpinTypes;;
+open Printf
+open SpinTypes
 
-module StringSet = Set.Make(String);;
+module StringSet = Set.Make(String)
 
 (* here we use a global variable to generate unique variables everywhere *)
 let label_next = ref 1
@@ -22,11 +22,11 @@ let mk_uniq_label () =
         label_next := (n + 1); n
 
 
-type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace;;
+type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
            (* our extensions *)
-           | HSymbolic ;;
+           | HSymbolic 
 
 let hflag_s f =
     match f with
@@ -176,8 +176,16 @@ label name_i num_i =
 
 let new_var name = new var name (fresh_var_id ())    
 
+module VarType =
+    struct
+        type t = var
+        let compare (v1: var) (v2: var) = compare v1#id v2#id
+    end
 
-exception Symbol_not_found of string;;
+module VarSet = Set.Make(VarType)
+
+
+exception Symbol_not_found of string
 
 (* a symbol table *)
 class symb_tab i_tab_name =
@@ -212,7 +220,7 @@ class symb_tab i_tab_name =
         method set_parent p = parent <- Some p
         method get_parent = parent
     end
-;;
+
 
 exception Type_not_found of string
 
@@ -273,22 +281,22 @@ type 't expr = Nop of string (* a comment *) | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
     | Phi of var * var list (* a phi function for SSA purposes *)
     | LabelRef of string * string (* a reference to a process label *)
-;;
+
 
 let is_nop = function
     | Nop _ -> true
     | _ -> false
-;;
 
-let not_nop e = not (is_nop e);; (* a shorthand *)
+
+let not_nop e = not (is_nop e) (* a shorthand *)
 
 let is_var = function
     | Var _ -> true
     | _ -> false
-;;
+
 
 let cmp_vars vx vy =
-    String.compare vx#get_name vy#get_name;;
+    String.compare vx#get_name vy#get_name
 
 (* Sort the variables such that an unqualified name goes before a qualified one.
    Variables inside of their categories are sorted normally
@@ -299,7 +307,7 @@ let cmp_qual_vars vx vy =
     | false, false -> String.compare vx#qual_name vy#qual_name
     | false, true -> 1
     | true, false -> -1
-;;
+
 
 let expr_used_vars (expression: 't expr) : var list =
     let rec find_used e =
@@ -310,7 +318,7 @@ let expr_used_vars (expression: 't expr) : var list =
         | _ -> []
     in
     Accums.list_sort_uniq cmp_vars (find_used expression)
-;;
+
 
 let expr_list_used_vars (exprs: 't expr list) : var list =
     (* by using hashtbl we avoid duplicate elements *)
@@ -321,7 +329,7 @@ let expr_list_used_vars (exprs: 't expr list) : var list =
     in
     List.iter collect_for_expr exprs;
     List.sort cmp_vars (Accums.hashtbl_vals tbl)
-;;
+
 
 let rec expr_exists func e =
     if (func e)
@@ -330,19 +338,19 @@ let rec expr_exists func e =
     | UnEx (_, f) -> expr_exists func f
     | BinEx (_, f, g) -> (expr_exists func f) || (expr_exists func g)
     | _ -> false
-;;
+
 
 let not_symbolic = function
     | Var v -> not v#is_symbolic
     | _ -> false
-;;
+
 
 let is_symbolic = function
     | Var v -> v#is_symbolic
     | _ -> false
-;;
 
-let rec expr_forall func e = not (expr_exists (fun f -> not (func f)) e) ;;
+
+let rec expr_forall func e = not (expr_exists (fun f -> not (func f)) e) 
 
 (*
  A low-level statement, no block structure preserved.
@@ -410,7 +418,7 @@ let replace_stmt_id new_id = function
     | Assume (_, e) -> Assume (new_id, e)
     | Havoc (_, v) -> Havoc (new_id, v)
     | Print (_, f, a) -> Print (new_id, f, a)
-;;
+
 
 (* A middle-level statement, the block structure is still in place.
    Each statement has an identifier attached.
@@ -437,7 +445,7 @@ and 't atomic_expr =
 and 't mir_option =
       MOptGuarded of 't mir_stmt list
     | MOptElse of 't mir_stmt list
-;;
+
 
 let m_stmt_id = function
       MSkip id -> id
@@ -468,17 +476,17 @@ let expr_of_m_stmt = function
 (* find the first statement with a non-negative id *)
 let first_normal_stmt seq =
     List.find (fun s -> (stmt_id s) >= 0) seq
-;;
+
 
 let is_decl = function
     | Decl (_, _, _) -> true
     | _ -> false
-;;
+
 
 let is_mdecl = function
     | MDecl (_, _, _) -> true
     | _ -> false
-;;
+
 
 (* a process *)
 class ['t] proc name_i active_expr_i =
@@ -523,7 +531,7 @@ class ['t] proc name_i active_expr_i =
             in
             List.fold_left add_decl [] stmts
     end
-;;
+
 
 let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
     let new_p = new proc p#get_name p#get_active_expr in
@@ -531,7 +539,7 @@ let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
     new_p#set_stmts new_body;
     (new_p :> symb_tab)#add_all_symb (List.map (fun (_, s) -> s) p#get_symbs);
     new_p
-;;
+
 
 let map_vars map_fun ex =
     let rec sub = function
@@ -541,16 +549,16 @@ let map_vars map_fun ex =
     | _ as e -> e
     in
     sub ex
-;;
+
 
 type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt
     | Ltl of string * 't expr | None
-;;
+
 
 let proc_of_unit = function
     | Proc p -> p
     | _ -> raise (Failure "Expected Proc p, found other unit")
-;;
+
 
 let collect_final_labs (stmts: 't mir_stmt list)
         : ('t mir_stmt list * 't mir_stmt list) =
@@ -563,7 +571,7 @@ let collect_final_labs (stmts: 't mir_stmt list)
     in
     let ls, os = collect (List.rev stmts) in
     (List.rev os, List.rev ls)
-;;
+
 
 (* convert a list of expressions [e1, ..., ek] to a binary tree
    (tok, e1, (tok, e2, (... (tok, e(k-1), ek) ...))).
@@ -576,5 +584,5 @@ let list_to_binex tok lst =
         else ae
     in
     List.fold_left join_e (Nop "") lst
-;;
+
 
