@@ -133,9 +133,9 @@ let refine_var_type ctx dom roles type_tab new_type_tab v =
             let tp = new data_type SpinTypes.TINT in
             tp#set_range l r;
             tp
-        end else type_tab#get_type v#id
+        end else type_tab#get_type v
     in
-    new_type_tab#set_type v#id new_type
+    new_type_tab#set_type v new_type
 
 (*
  Translate an arithmetic comparison to a pointwise comparison of
@@ -389,7 +389,7 @@ let trans_ltl_form new_type_tab name f =
         let nv = if atype = UnivAbs
             then new_var (v#get_name ^ "_univ")
             else new_var (v#get_name ^ "_exst") in
-        new_type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
+        new_type_tab#set_type nv (new data_type SpinTypes.TPROPOSITION);
         Var nv
     | BinEx(AND, l, r) ->
         BinEx(AND, tr_f atype l, tr_f atype r)
@@ -424,7 +424,7 @@ let do_interval_abstraction solver caches prog =
     let new_type_tab = type_tab#copy in
     let abstract_proc p =
         let add_def v =
-            solver#append_var_def v (type_tab#get_type v#id) in
+            solver#append_var_def v (type_tab#get_type v) in
         solver#push_ctx;
         List.iter add_def p#get_locals;
         List.iter add_def (Program.get_shared prog);

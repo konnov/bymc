@@ -13,7 +13,7 @@ exception Prop_error of string
 let is_propositional type_tab e =
     let rec isp = function
     | Var v ->
-            (type_tab#get_type v#id)#basetype = TPROPOSITION
+            (type_tab#get_type v)#basetype = TPROPOSITION
     | BinEx(GT, _, _)
     | BinEx(GE, _, _)
     | BinEx(LT, _, _)
@@ -87,7 +87,7 @@ let embed_atomics type_tab aprops form =
         | BinEx(op, l, r) -> BinEx(op, embed l, embed r)
         | UnEx(op, r) -> UnEx(op, embed r)
         | Var v as e ->
-            if (type_tab#get_type v#id)#basetype = SpinTypes.TPROPOSITION
+            if (type_tab#get_type v)#basetype = SpinTypes.TPROPOSITION
             then embed (get_atomic v#get_name)
             else e
         | _ as e -> e

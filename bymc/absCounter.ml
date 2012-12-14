@@ -357,13 +357,13 @@ class abs_ctr_funcs dom prog solver =
 
         method register_new_vars c_ctx_tbl type_tbl =
             type_tbl#set_type
-                c_ctx_tbl#get_spur#id (new data_type SpinTypes.TBIT);
+                c_ctx_tbl#get_spur (new data_type SpinTypes.TBIT);
 
             let reg_ctr ctx =
                 let tp = new data_type SpinTypes.TINT in
                 tp#set_range 0 dom#length; (* counters are bounded *)
                 tp#set_nelems ctx#get_ctr_dim;
-                type_tbl#set_type ctx#get_ctr#id tp
+                type_tbl#set_type ctx#get_ctr tp
             in
             List.iter reg_ctr c_ctx_tbl#all_ctxs
     end
@@ -451,15 +451,15 @@ class vass_funcs dom prog solver =
         method set_embed_inv v = m_embed_inv <- v
 
         method register_new_vars c_ctx_tbl type_tbl =
-            type_tbl#set_type delta#id (new data_type SpinTypes.TUNSIGNED);
+            type_tbl#set_type delta (new data_type SpinTypes.TUNSIGNED);
             type_tbl#set_type
-                c_ctx_tbl#get_spur#id (new data_type SpinTypes.TBIT);
+                c_ctx_tbl#get_spur (new data_type SpinTypes.TBIT);
 
             let reg_ctr ctx =
                 let tp = new data_type SpinTypes.TUNSIGNED in
                 (* NOTE: no range set, the counters are unbounded *)
                 tp#set_nelems ctx#get_ctr_dim;
-                type_tbl#set_type ctx#get_ctr#id tp
+                type_tbl#set_type ctx#get_ctr tp
             in
             List.iter reg_ctr c_ctx_tbl#all_ctxs
     end
@@ -660,7 +660,7 @@ let do_counter_abstraction funcs solver caches prog =
             :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
     let new_ltl_forms =
         Program.StringMap.mapi map_ltl_form (Program.get_ltl_forms prog) in
-    let new_type_tab = (Program.get_type_tab prog) in
+    let new_type_tab = (Program.get_type_tab prog)#copy in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
     let new_prog =
         (Program.set_params []

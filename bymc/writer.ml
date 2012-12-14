@@ -121,7 +121,7 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
         in
         print_flags;
         let var_tp =
-            try type_tab#get_type v#id
+            try type_tab#get_type v
             with Not_found ->
                 raise (Failure ("No type for the variable " ^ v#get_name))
         in
@@ -247,7 +247,7 @@ let write_proc type_tab ff lvl p =
     let p_arg delim v =
         if delim <> "" then begin Format.fprintf ff "%s@ " delim end;
         Format.fprintf ff "%s@ %s"
-            (var_type_promela (type_tab#get_type v#id)) v#get_name
+            (var_type_promela (type_tab#get_type v)) v#get_name
     in
     begin 
         match p#get_args with

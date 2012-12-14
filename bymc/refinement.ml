@@ -203,7 +203,7 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts rev_map n_steps =
     log INFO (sprintf "    appending %d declarations..."
         (List.length decls)); flush stdout;
     let append_def v =
-        solver#append_var_def v (type_tab#get_type v#id)
+        solver#append_var_def v (type_tab#get_type v)
     in
     List.iter append_def decls;
     log INFO (sprintf "    appending %d transducer asserts..."

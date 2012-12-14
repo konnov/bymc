@@ -45,54 +45,6 @@ exception Invalid_type of string
 
 type sym_type = SymGen | SymVar | SymLab
 
-class data_type i_basetype =
-    object(self)
-        (* the base type of a variable, e.g., int, byte, nat *)
-        val m_basetype: var_type = i_basetype
-        (* if this datatype represents not only one element, but an array *)
-        val mutable m_isarray: bool = false
-        (* the number of array elements, non-arrays have it set to 1 *)
-        val mutable m_nelems: int = 1
-        (* optional width specifier:
-           showing how many bits this datatype requires *)
-        val mutable m_nbits: int = 0
-        (* optional range of (integer-like) values represented by this datatype:
-           left margin is included, right margine is excluded *)
-        val mutable m_range: int * int = (0, 0)
-
-        method basetype = m_basetype
-        method is_array = m_nelems > 1
-
-        method nelems = m_nelems
-        method set_nelems n = m_nelems <- n
-
-        method nbits = m_nbits
-        method set_nbits n = m_nbits <- n
-
-        method has_range = let l, r = m_range in r > l
-        method range = m_range
-        method set_range l r = m_range <- (l, r)
-    end
-
-
-(* This table binds integer identifiers of (variables) to the datatypes *)
-class data_type_tab =
-    object
-        val mutable m_tab: (int, data_type) Hashtbl.t = Hashtbl.create 5
-
-        method has_type id = Hashtbl.mem m_tab id
-        method get_type id = Hashtbl.find m_tab id
-        method set_type id dtp = Hashtbl.replace m_tab id dtp
-        method set_all_types hash_tbl = m_tab <- hash_tbl
-
-        method length = Hashtbl.length m_tab
-
-        method copy =
-            let new_t = new data_type_tab in
-            new_t#set_all_types (Hashtbl.copy m_tab);
-            new_t
-    end
-
 
 (* the next var identifier *)
 let var_id_next = ref 0
@@ -163,24 +115,6 @@ var name_i var_id =
         method get_sym_type = SymVar
         
         method as_var = (self :> var)
-
-        (*
-        method set_type t = vtype <- t
-        method get_type = vtype
-
-        method set_isarray b = m_isarray <- b
-        method is_array = m_isarray
-
-        method set_nbits n = nbits <- n
-        method get_nbits = nbits
-
-        method set_range l r = m_range <- (l, r)
-        method has_range = let l, r = m_range in r > l
-        method get_range = m_range
-
-        method set_num_elems n = nel <- n
-        method get_num_elems = nel
-        *)
 
         method set_ini i = ini <- i
         method get_ini = ini
@@ -279,6 +213,61 @@ class symb_tab i_tab_name =
         method get_parent = parent
     end
 ;;
+
+exception Type_not_found of string
+
+class data_type i_basetype =
+    object(self)
+        (* the base type of a variable, e.g., int, byte, nat *)
+        val m_basetype: var_type = i_basetype
+        (* if this datatype represents not only one element, but an array *)
+        val mutable m_isarray: bool = false
+        (* the number of array elements, non-arrays have it set to 1 *)
+        val mutable m_nelems: int = 1
+        (* optional width specifier:
+           showing how many bits this datatype requires *)
+        val mutable m_nbits: int = 0
+        (* optional range of (integer-like) values represented by this datatype:
+           left margin is included, right margine is excluded *)
+        val mutable m_range: int * int = (0, 0)
+
+        method basetype = m_basetype
+        method is_array = m_nelems > 1
+
+        method nelems = m_nelems
+        method set_nelems n = m_nelems <- n
+
+        method nbits = m_nbits
+        method set_nbits n = m_nbits <- n
+
+        method has_range = let l, r = m_range in r > l
+        method range = m_range
+        method set_range l r = m_range <- (l, r)
+    end
+
+
+(* This table binds integer identifiers of (variables) to the datatypes *)
+class data_type_tab =
+    object
+        val mutable m_tab: (int, data_type) Hashtbl.t = Hashtbl.create 5
+
+        method has_type (v: var) = Hashtbl.mem m_tab v#id
+        method get_type (v: var) =
+            try Hashtbl.find m_tab v#id
+            with Not_found ->
+                raise (Type_not_found (sprintf "Type of %s not found" v#get_name))
+
+        method set_type (v: var) (dtp: data_type) =
+            Hashtbl.replace m_tab v#id dtp
+        method set_all_types hash_tbl = m_tab <- hash_tbl
+
+        method length = Hashtbl.length m_tab
+
+        method copy =
+            let new_t = new data_type_tab in
+            new_t#set_all_types (Hashtbl.copy m_tab);
+            new_t
+    end
 
 type 't expr = Nop of string (* a comment *) | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr

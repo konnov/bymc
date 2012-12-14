@@ -32,7 +32,7 @@ let get_instrumental prog = prog.f_instrumental
 let set_instrumental new_instr prog = {prog with f_instrumental = new_instr}
 
 let get_type prog variable =
-    try prog.f_type_tab#get_type variable#id
+    try prog.f_type_tab#get_type variable
     with Not_found ->
         raise (Program_error ("No data type for variable " ^ variable#get_name))
 

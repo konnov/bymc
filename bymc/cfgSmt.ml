@@ -20,7 +20,7 @@ let block_to_constraints (new_type_tab: data_type_tab)
         (bb: 't basic_block): (Spin.token mir_stmt list) =
     let at_var i =
         let nv = new_var (sprintf "at_%d" i) in 
-        new_type_tab#set_type nv#id (new data_type SpinTypes.TBIT);
+        new_type_tab#set_type nv (new data_type SpinTypes.TBIT);
         Var nv
     in
     let mke id e = MExpr (id, e) in
@@ -81,7 +81,7 @@ let block_to_constraints (new_type_tab: data_type_tab)
                 let eq = BinEx (EQ,
                     mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
                 (mkez (at_impl_expr (BinEx (OR, BinEx (EQ, idx, Const i), eq)))) :: l in
-            let nelems = (new_type_tab#get_type new_arr#id)#nelems in
+            let nelems = (new_type_tab#get_type new_arr)#nelems in
             (mke id (Nop (sprintf "%d: %s" id (expr_s e))))
             :: (mkez (at_impl_expr (BinEx (EQ, mk_arr new_arr idx, rhs))))
             :: (List.fold_left keep_val tl (range 0 nelems))

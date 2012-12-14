@@ -306,7 +306,7 @@ ltl_expr:
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
         { let v = new_var $1 in
-          type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
+          type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
           Var v }
     | FNAME AT FNAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
@@ -487,7 +487,7 @@ one_decl: vis TYPE var_list	{
             tp#set_nelems tp_rhs#nelems;
             tp#set_nbits tp_rhs#nbits;
             v#add_flag fl;
-            type_tab#set_type v#id tp;
+            type_tab#set_type v tp;
             !current_scope#add_symb v#get_name (v :> symb);
             MDecl(new_id (), v, init)
         in
@@ -986,7 +986,7 @@ prop_decl:
     ATOMIC NAME ASGN atomic_prop {
         let v = new_var($2) in
         v#set_proc_name spec_scope#tab_name;
-        type_tab#set_type v#id (new data_type SpinTypes.TPROPOSITION);
+        type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
         spec_scope#add_symb v#get_name (v :> symb);
         MDeclProp (new_id (), v, $4)
     }
