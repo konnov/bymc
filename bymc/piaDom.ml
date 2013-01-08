@@ -75,42 +75,33 @@ class pia_domain conds_i =
                 : (SpinIr.var * int) list list =
             let used = expr_used_vars symb_expr in
             let n_used = List.length used in
-            if n_used > 2
-            (* NOTE: nothing prevents us from handling multiple variables *)
-            (* if anybody needs it, remove the condition and check if it works *)
-            then raise (Abstraction_error
-                (sprintf "Expression %s has %d variables, we handle 1 or 2"
-                    (expr_s symb_expr) n_used))
-            else
             (* enumerate all possible abstract tuples of size n_used that have
                a concretization satisfying symb_expr *)
-            begin
-                let put_interval_constraint var (i, l, r) =
-                    solver#append_assert (expr_to_smt (BinEx (GE, Var var, l)));
-                    if not_nop r
-                    then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
-                in
+            let put_interval_constraint var (i, l, r) =
+                solver#append_assert (expr_to_smt (BinEx (GE, Var var, l)));
+                if not_nop r
+                then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
+            in
+            solver#push_ctx;
+            let has_concretization intervals =
                 solver#push_ctx;
-                let has_concretization intervals =
-                    solver#push_ctx;
-                    List.iter2 put_interval_constraint used intervals;
-                    let expr_to_check =
-                        if (at = ExistAbs) then symb_expr else UnEx(NEG, symb_expr) in
-                    solver#append_assert (expr_to_smt expr_to_check);
-                    let result = solver#check in
-                    solver#pop_ctx;
-                    if (at = ExistAbs) then result else (not result)
-                in
-                let all_interval_tuples =
-                    (Accums.mk_product cond_intervals n_used) in
-                let matching_interval_tuples =
-                    List.filter has_concretization all_interval_tuples in
-                let mk_var_val var (abs_val, _, _) = (var, abs_val) in
+                List.iter2 put_interval_constraint used intervals;
+                let expr_to_check =
+                    if (at = ExistAbs) then symb_expr else UnEx(NEG, symb_expr) in
+                solver#append_assert (expr_to_smt expr_to_check);
+                let result = solver#check in
                 solver#pop_ctx;
-                List.map
-                    (fun intervals -> List.map2 mk_var_val used intervals)
-                    matching_interval_tuples
-            end
+                if (at = ExistAbs) then result else (not result)
+            in
+            let all_interval_tuples =
+                (Accums.mk_product cond_intervals n_used) in
+            let matching_interval_tuples =
+                List.filter has_concretization all_interval_tuples in
+            let mk_var_val var (abs_val, _, _) = (var, abs_val) in
+            solver#pop_ctx;
+            List.map
+                (fun intervals -> List.map2 mk_var_val used intervals)
+                matching_interval_tuples
 
         (*
           distribute n abstract values x_i over the abstract domain s.t.
