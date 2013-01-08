@@ -20,10 +20,10 @@ def spec_format(field_name, val):
             return "%s sec." % val
     elif field_name.find("Mem") >= 0:
         return "%s MB" % val
-    elif val.isdigit() and int(val) > 1000000:
-        return "$%d \\cdot 10^6$" % (int(val) / 1000000)
-    elif val.isdigit() and int(val) > 1000:
-        return "$%d \\cdot 10^3$" % (int(val) / 1000)
+#    elif val.isdigit() and int(val) > 1000000:
+#        return "$%d \\cdot 10^6$" % (int(val) / 1000000)
+#    elif val.isdigit() and int(val) > 1000:
+#        return "$%d \\cdot 10^3$" % (int(val) / 1000)
     else:
         return str(val)
 
