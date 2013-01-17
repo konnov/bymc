@@ -67,10 +67,7 @@ let proc_to_bdd prog proc =
         | Nop text ->
             Bits.ANNOTATION ("{" ^ text ^ "}", Bits.B1)
         | _ as e ->
-            Bits.ANNOTATION (expr_tree_s e, Bits.B1)
-            (*
-            raise (Bdd_error ("Cannot convert to BDD: " ^ (expr_s e)))
-            *)
+            Bits.ANNOTATION ("skip: " ^ (expr_tree_s e), Bits.B1)
     in
     let to_bits = function
         | MExpr (_, e) ->
@@ -85,25 +82,27 @@ let proc_to_bdd prog proc =
     close_out out
 
 
-let enum_in_outs solver prog proc =
-    let exprs = List.map expr_of_m_stmt proc#get_stmts in
-    let decls = expr_list_used_vars exprs in
+(* Enumerate all possible combinations of inputs and outputs. It works only
+   after the counter abstraction. *)
+let enum_in_outs solver caches prog proc =
+    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
+    let abbrv = (ctr_ctx_tbl#get_ctx proc#get_name)#abbrev_name in
     solver#push_ctx;
     solver#set_need_evidence true;
-    List.iter solver#append_var_def decls;
-    List.iter (fun e -> let _ = solver#append_expr e in ()) exprs;
-    if solver#check then begin
+    solver#comment "enumerating inputs/outputs";
+    let res, _ = Refinement.simulate_in_smt solver prog
+        ctr_ctx_tbl [(abbrv, [(Expr (-1, Nop ""))]);
+            (abbrv, [(Expr (-1, Nop ""))])] (Hashtbl.create 1) 1 in
+    if res then begin
         printf "One value to take...\n";
         let vals = Refinement.parse_smt_evidence prog solver in
         Refinement.pretty_print_exprs (Hashtbl.find vals 0);
-        Refinement.pretty_print_exprs (Hashtbl.find vals 1);
+        (*Refinement.pretty_print_exprs (Hashtbl.find vals 1);*)
     end;
     solver#pop_ctx
 
 
 let transform_to_bdd solver caches prog =
     List.iter (proc_to_bdd prog) (Program.get_procs prog);
-    (*
-    List.iter (enum_in_outs solver prog) (Program.get_procs prog)
-    *)
+    (* List.iter (enum_in_outs solver caches prog) (Program.get_procs prog) *)
 

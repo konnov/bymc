@@ -85,3 +85,12 @@ let extract_skel proc_body =
     reg_tbl#add "loop_body" (if_s @ rest_s);
     reg_tbl
 
+
+let pass caches prog =
+    let cache_skel proc =
+        let reg_tab = extract_skel proc#get_stmts in
+        caches#get_struc#set_regions proc#get_name reg_tab
+    in
+    List.iter cache_skel (Program.get_procs prog);
+    prog
+

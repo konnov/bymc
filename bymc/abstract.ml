@@ -47,7 +47,7 @@ let do_abstraction solver is_first_run prog =
     solver#comment "do_abstraction";
     if is_first_run
     then begin 
-        (* wipe the files left from previous refinement sessions *)
+        (* wipe out the files left from previous refinement sessions *)
         close_out (open_out "cegar_decl.inc");
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
@@ -66,6 +66,11 @@ let do_abstraction solver is_first_run prog =
     write_to_file false "abs-interval.prm"
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
+    log INFO "> Constructing BDDs...";
+    let _ = SkelStruc.pass caches intabs_prog in
+    let xducer_prog = SmtXducerPass.do_xducers caches intabs_prog in
+    BddPass.transform_to_bdd solver caches xducer_prog;
+    log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
@@ -73,8 +78,6 @@ let do_abstraction solver is_first_run prog =
     write_to_file true "abs-counter.prm"
         (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
     log INFO "[DONE]";
-    let xducer_prog = SmtXducerPass.do_xducers caches ctrabs_prog in
-    BddPass.transform_to_bdd solver caches xducer_prog;
     solver#pop_ctx;
     ctrabs_prog
 
