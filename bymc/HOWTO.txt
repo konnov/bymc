@@ -5,7 +5,7 @@ cd theta/tools/bymc
 ./make.sh
 
 # checking models for concrete parameters
-../tools/bymc/run-concrete 'N=3,T=1,F=1' CBConsensus.pml termination
+../tools/bymc/run-concrete 'N=3,T=1,F=1' cond-consensus.pml termination
 
 # the automatic CEGAR loop
 
