@@ -4,6 +4,7 @@
 
 open Map
 module StringMap = Map.Make(String)
+module StringSet = Set.Make(String)
 open Format
 
 (* a SAT formula *)
@@ -368,7 +369,7 @@ let cnf_to_text cnf_f =
   let clauses = (cnf_to_lst cnf_f) in
   let fmt_lit l =
     match l with
-      True  -> ""
+      | True  -> ""
       | False -> "FALSE"
       | Var x -> x
       | Aux i -> "_" ^ (string_of_int i)
@@ -381,4 +382,17 @@ let cnf_to_text cnf_f =
    ^ (List.fold_left (fun x y -> (if x = "" then y else x ^ " + " ^ y)) ""
         (List.rev_map (fun l -> (fmt_lit l) ^ "") c)))
        "" clauses)
+
+
+let collect_vars f =
+    let rec collect set = function
+        | True -> set
+        | False -> set
+        | Var x -> StringSet.add x set
+        | Aux _ -> set
+        | Not g -> collect set g
+        | Or gs -> List.fold_left collect set gs
+        | And gs -> List.fold_left collect set gs
+    in
+    StringSet.elements (collect StringSet.empty f)
 

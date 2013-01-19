@@ -40,6 +40,13 @@ let proc_to_bdd prog proc =
         | _ ->
             var_map
     in
+    let is_inout v =
+        let isin =
+            Str.string_match (Str.regexp ".*_IN_[0-9]+$") v 0 in
+        let isout =
+            Str.string_match (Str.regexp ".*_OUT_[0-9]+$") v 0 in
+        isin || isout
+    in
     let collect_stmt_vars var_map = function
         | MExpr (_, e) -> collect_expr_vars var_map e
         | _ -> var_map
@@ -109,6 +116,7 @@ let proc_to_bdd prog proc =
         List.fold_left collect_stmt_vars StringMap.empty proc#get_stmts in
     let bits = Bits.AND (List.map to_bits proc#get_stmts) in
     let form = Bits.to_sat var_map (new Sat.fresh_pool 1) bits in
+    let inouts = List.filter is_inout (Sat.collect_vars form) in
     let out = open_out (sprintf "%s.bits" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
     Bits.format_bv_form ff bits;
@@ -116,9 +124,11 @@ let proc_to_bdd prog proc =
     let out = open_out (sprintf "%s.bdd" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
     Format.fprintf ff "%s" "# sat\n";
-    Format.fprintf ff "(let R @,";
+    Format.fprintf ff "(let R @,(exists [";
+    List.iter (fun v -> Format.fprintf ff "%s @," v) inouts;
+    Format.fprintf ff "]@, ";
     Sat.format_sat_form_polish ff form;
-    Format.fprintf ff ")";
+    Format.fprintf ff "))";
     Format.pp_print_flush ff ();
     close_out out
 
