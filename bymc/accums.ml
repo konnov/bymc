@@ -1,4 +1,9 @@
-(* Like batteries, but our own. Useful functions that do not fit elsewhere. *)
+(* Like batteries, but our own (when batteries are easy to install on our
+   desktops, let's make a transition).
+   Useful functions that do not fit elsewhere.
+
+   Igor Konnov, 2011
+*)
 
 (* make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =

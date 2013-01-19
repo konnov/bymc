@@ -7,21 +7,51 @@
 
 open Printf
 
+open Accums
 open Spin
 open SpinIr
 open SpinIrImp
 
 exception Bdd_error of string
 
+module StringMap = Map.Make(String)
+
 let proc_to_bdd prog proc =
+    let var_len v =
+        let tp = Program.get_type prog v in
+        match tp#basetype with
+        | SpinTypes.TBIT -> { Bits.len = 1; Bits.hidden = false }
+
+        | SpinTypes.TINT ->
+            if tp#has_range
+            then { Bits.len = tp#range_len; Bits.hidden = false }
+            else raise (Bdd_error (sprintf "%s is unbounded" v#get_name))
+
+        | _ -> raise (Bdd_error
+            (sprintf "Don't know how to translate %s to bdd" v#get_name))
+    in
+    let rec collect_expr_vars var_map = function
+        | Var v ->
+            StringMap.add v#get_name (var_len v) var_map
+        | BinEx (_, l, r) ->
+            collect_expr_vars (collect_expr_vars var_map l) r
+        | UnEx (_, e) ->
+            collect_expr_vars var_map e
+        | _ ->
+            var_map
+    in
+    let collect_stmt_vars var_map = function
+        | MExpr (_, e) -> collect_expr_vars var_map e
+        | _ -> var_map
+    in
     let rec bits_of_expr pos = function
         | Var v ->
-            if (Program.get_type prog v)#basetype != SpinTypes.TBIT
+            let basetype = (Program.get_type prog v)#basetype in
+            if basetype != SpinTypes.TBIT
             then raise (Bdd_error
                 (sprintf "Variables %s must be boolean" v#get_name))
-            else if pos
-            then Bits.V v#get_name
-            else Bits.NV v#get_name
+            else
+            if pos then Bits.V v#get_name else Bits.NV v#get_name
         | BinEx (ASGN, Var v, Const i) ->
             if pos
             then Bits.VeqI (v#get_name, i)
@@ -75,10 +105,21 @@ let proc_to_bdd prog proc =
         | _ as s -> 
             raise (Bdd_error ("Cannot convert to BDD: " ^ (mir_stmt_s s)))
     in
+    let var_map =
+        List.fold_left collect_stmt_vars StringMap.empty proc#get_stmts in
     let bits = Bits.AND (List.map to_bits proc#get_stmts) in
-    let out = open_out (sprintf "%s.bdd" proc#get_name) in
+    let form = Bits.to_sat var_map (new Sat.fresh_pool 1) bits in
+    let out = open_out (sprintf "%s.bits" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
     Bits.format_bv_form ff bits;
+    close_out out;
+    let out = open_out (sprintf "%s.bdd" proc#get_name) in
+    let ff = Format.formatter_of_out_channel out in
+    Format.fprintf ff "%s" "# sat\n";
+    Format.fprintf ff "(let R @,";
+    Sat.format_sat_form_polish ff form;
+    Format.fprintf ff ")";
+    Format.pp_print_flush ff ();
     close_out out
 
 

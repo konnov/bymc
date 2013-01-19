@@ -42,7 +42,7 @@ let write_to_file externalize_ltl name units type_tab =
 
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction solver is_first_run prog =
+let do_abstraction solver is_first_run bdd_pass prog =
     solver#push_ctx;
     solver#comment "do_abstraction";
     if is_first_run
@@ -66,11 +66,13 @@ let do_abstraction solver is_first_run prog =
     write_to_file false "abs-interval.prm"
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
-    log INFO "> Constructing BDDs...";
-    let _ = SkelStruc.pass caches intabs_prog in
-    let xducer_prog = SmtXducerPass.do_xducers caches intabs_prog in
-    BddPass.transform_to_bdd solver caches xducer_prog;
-    log INFO "[DONE]";
+    if bdd_pass then begin
+        log INFO "> Constructing BDDs...";
+        let _ = SkelStruc.pass caches intabs_prog in
+        let xducer_prog = SmtXducerPass.do_xducers caches intabs_prog in
+        BddPass.transform_to_bdd solver caches xducer_prog;
+        log INFO "[DONE]";
+    end;
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
@@ -287,5 +289,5 @@ let do_refinement solver trail_filename prog =
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
-        let _ = do_abstraction solver false prog in ()
+        let _ = do_abstraction solver false false prog in ()
     end

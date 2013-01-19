@@ -127,7 +127,9 @@ let mk_bool_var_names name bit_type =
 let rec mk_eq x y x_sz y_sz =
     if x_sz != y_sz
     then raise
-        (Invalid_argument (sprintf "Var %s and %s differ in bit length" x y))
+        (Invalid_argument
+            (sprintf "Var %s and %s have different bit lengths (%d and %d)"
+                x y x_sz y_sz))
     else
     if x_sz = 0
     then []
@@ -262,9 +264,9 @@ let rec to_sat bv_types aux_pool bv_frm =
               let len = (get_var_len x) in
               mk_eq_with_const x len ival 0
       | AND lst ->
-              And(List.rev_map (to_sat bv_types aux_pool) lst);
+              And(List.rev (List.rev_map (to_sat bv_types aux_pool) lst));
       | OR lst ->
-              Or(List.rev_map (to_sat bv_types aux_pool) lst);
+              Or(List.rev (List.rev_map (to_sat bv_types aux_pool) lst));
       | ANNOTATION(_, subform) ->
               to_sat bv_types aux_pool subform
 ;;

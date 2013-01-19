@@ -2,9 +2,9 @@
 (*                                                        *)
 (* Igor Konnov, 2011                                      *)
 
-open Map;;
-module StringMap = Map.Make(String);;
-open Format;;
+open Map
+module StringMap = Map.Make(String)
+open Format
 
 (* a SAT formula *)
 type form =
@@ -17,7 +17,6 @@ type form =
   | Or of form list
   | True
   | False
-;;
 
 type cnf_layer = { sat_form: form; first_id: int; num_aux_vars: int }
 
@@ -33,7 +32,6 @@ class fresh_pool(first_id) =
             let v = Aux(free_id) in
                 free_id <- free_id + 1; v
     end
-;;
 
 
 let format_sat_form ff form =
@@ -45,33 +43,74 @@ let format_sat_form ff form =
           | Aux i -> Format.fprintf ff "_%d" i
           | Not subform ->
                 Format.fprintf ff "~"; format_fold subform '~';
+
           | And(children) ->
             Format.fprintf ff "%s" (if parent != '&' then "(" else "");
             let first = ref true in
-            List.iter (fun subf ->
-                if not !first then 
-                    if parent != '&'
-                    then Format.fprintf ff ") @,& ("
-                    else Format.fprintf ff " @,& ";
-                first := false;
-                format_fold subf '&') children;
+            let print_child subf =
+                if subf <> True
+                then begin
+                    if not !first then Format.fprintf ff ") @,& (";
+                    first := false;
+                    format_fold subf '&'
+                end
+            in
+            List.iter print_child children;
             Format.fprintf ff "%s" (if parent != '&' then ")" else "");
-          | Or(children) ->
-            Format.fprintf ff "%s" (if parent != '|' then "(" else "");
-            let first = ref true in
-            List.iter (fun subf ->
-                if not !first then 
-                    if parent != '|'
-                    then Format.fprintf ff ") | ("
-                    else Format.fprintf ff " | ";
-                first := false;
-                format_fold subf '|') children;
-            Format.fprintf ff "%s" (if parent != '|' then ")" else "");
-    in
-    format_fold form '&'
-;;
 
-type shape = Literal | Clause | Cnf | Generic;;
+          | Or(children) ->
+            Format.fprintf ff "%s" "(";
+            let first = ref true in
+            let print_child subf =
+                if subf <> False
+                then begin
+                    if not !first then Format.fprintf ff ") | (";
+                    first := false;
+                    format_fold subf '|'
+                end
+            in
+            List.iter print_child children;
+            Format.fprintf ff "%s" ")";
+    in
+    format_fold form ' '
+
+
+(* same but in prefix notation *)
+let format_sat_form_polish ff form =
+    let rec format_fold = function
+        True -> Format.fprintf ff "1@,"
+      | False -> Format.fprintf ff "0@,"
+      | Var x -> Format.fprintf ff "%s@," x
+      | Aux i -> Format.fprintf ff "_%d@," i
+      | Not subform ->
+            Format.fprintf ff "@,(not ";
+            format_fold subform;
+            Format.fprintf ff ")@,";
+
+      | And(children) ->
+        Format.fprintf ff "@,(and";
+        let print_child subf =
+            Format.fprintf ff " ";
+            if subf <> True then format_fold subf
+        in
+        List.iter print_child children;
+        Format.fprintf ff ")@,";
+
+      | Or(children) ->
+        Format.fprintf ff "@,(or";
+        let print_child subf =
+            Format.fprintf ff " ";
+            if subf <> False then format_fold subf
+        in
+        List.iter print_child children;
+        Format.fprintf ff ")@,";
+    in
+    format_fold form;
+    Format.pp_print_flush ff ()
+
+
+type shape = Literal | Clause | Cnf | Generic
+
 
 let rec shape_of f =
   match f with
@@ -88,7 +127,7 @@ let rec shape_of f =
     | And children ->
       if (List.for_all (fun g -> (shape_of g) != Generic) children)
       then Cnf else Generic
-;;
+
 
 let is_literal f =
   match f with
@@ -97,9 +136,9 @@ let is_literal f =
     | Not (Var _) -> true
     | Not (Aux _) -> true
     | f -> false
-;;
 
-let isa_clause s = s == Literal || s == Clause;;    
+
+let isa_clause s = s == Literal || s == Clause
 
 let rec is_clause f =
   match f with
@@ -109,9 +148,9 @@ let rec is_clause f =
     | Not (Aux _) -> true
     | Or children -> (List.for_all is_clause children)
     | f -> false
-;;
 
-let isa_cnf s = s == Literal || s == Clause || s == Cnf;;
+
+let isa_cnf s = s == Literal || s == Clause || s == Cnf
 
 let rec string_of_form f =
   match f with
@@ -132,7 +171,7 @@ let rec string_of_form f =
             (fun s g -> (if s = "" then s else s ^ " | ") ^ (string_of_form g))
             "" children)
         ^ ")"
-;;
+
 
 let rec propagate_not negation g =
     match g with
@@ -148,23 +187,12 @@ let rec propagate_not negation g =
     | Or children ->
         let new_children = List.rev_map (propagate_not negation) children in
         if negation then And new_children else Or new_children
-;;
 
-type level = TOP_AND | TOP_OR | DEEP;;
+
+type level = TOP_AND | TOP_OR | DEEP
+
 
 let rec tseitin pool level f =
-    (*
-  let not_lit lit =
-      match lit with
-          Var x -> Not(lit)
-        | Aux i -> Not(lit)
-        | Not Var x -> Var x
-        | Not Aux i -> Aux i
-        | False -> True
-        | True -> False
-        | _ -> raise (Invalid_argument ("Not a literal"))
-  in
-    *)
   let absorb_clause lits clause =
     match clause with
       | False        -> lits
@@ -250,7 +278,7 @@ let rec tseitin pool level f =
         in
         (* create either a literal or a disjunction *)
         (f_cl, (or_or_lit f_or_lits))
-;;
+
 
 (* Transform a boolean formula to CNF using Tseitin algorithm *)
 let cnfify pool f =
@@ -259,7 +287,7 @@ let cnfify pool f =
     let (clauses, _) = (tseitin pool TOP_AND f) in
     And(clauses)
   else f (* the formula is already in CNF *)
-;;
+
 
 (* transform a formula in CNF form to a two-dimensional list of Clauses/Literals *)
 let rec cnf_to_lst f =
@@ -287,7 +315,6 @@ let rec cnf_to_lst f =
           []
           children
     | f -> [collect_single_clause f]
-;;
 
 
 (*
@@ -318,7 +345,7 @@ let rec replace_placeholders f src dst =
         Or (List.rev_map (fun f -> replace_placeholders f src dst) children)
     | And children  ->
         And (List.rev_map (fun f -> replace_placeholders f src dst) children)
-;;
+
 
 (*
     Inject a literal into every clause of CNF.
@@ -335,7 +362,6 @@ let rec inject_lit_into_cnf f new_lit =
     | Or lits  -> Or (new_lit :: lits)
     | And children  ->
         And (List.rev_map (fun f -> inject_lit_into_cnf f new_lit) children)
-;;
 
 
 let cnf_to_text cnf_f =
@@ -355,5 +381,4 @@ let cnf_to_text cnf_f =
    ^ (List.fold_left (fun x y -> (if x = "" then y else x ^ " + " ^ y)) ""
         (List.rev_map (fun l -> (fmt_lit l) ^ "") c)))
        "" clauses)
-;;
 

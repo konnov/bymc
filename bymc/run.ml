@@ -1,22 +1,24 @@
-open Printf;;
-open Str;;
+open Printf
+open Str
 open Map
 module StringMap = Map.Make(String)
 
-open Parse;;
-open Program;;
-open Abstract;;
-open Instantiation;;
-open Writer;;
-open Debug;;
+open Parse
+open Program
+open Abstract
+open Instantiation
+open Writer
+open Debug
 
-type action_option = OptAbstract | OptRefine | OptCheckInv | OptSubstitute | OptNone
+type action_option =
+    OptAbstract | OptRefine | OptCheckInv | OptSubstitute | OptNone
+    
 
 type options =
     {
         action: action_option; trail_name: string; filename: string;
         inv_name: string; param_assignments: int StringMap.t;
-        verbose: bool
+        bdd_pass: bool; verbose: bool
     }
 
 let parse_key_values str =
@@ -27,12 +29,12 @@ let parse_key_values str =
     in
     let pairs = split (regexp ",") str in
     List.fold_left parse_pair StringMap.empty pairs
-;;
+
 
 let parse_options =
     let opts = ref {
         action = OptNone; trail_name = ""; filename = ""; inv_name = "";
-        param_assignments = StringMap.empty;
+        param_assignments = StringMap.empty; bdd_pass = false;
         verbose = false
     } in
     (Arg.parse
@@ -49,11 +51,14 @@ let parse_options =
                 opts := {!opts with action = OptSubstitute;
                     param_assignments = parse_key_values s}),
              "Substitute parameters into the code and produce standard Promela.");
+            ("-d", Arg.String
+             (fun s -> opts := {!opts with bdd_pass = true;}),
+             "Make a BDD pass (experimental).");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "Produce lots of verbose output (you are warned).");
         ]
         (fun s -> if !opts.filename = "" then opts := {!opts with filename = s})
-        "Use: run [-a] [-i invariant] [-c spin_sim_out] [-e x=num,y=num] promela_file");
+        "Use: run [-a] [-i invariant] [-c spin_sim_out] [-s x=num,y=num] promela_file");
 
     !opts
 ;;
@@ -85,7 +90,7 @@ let _ =
         | OptAbstract ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
             check_all_invariants solver prog;
-            let _ = do_abstraction solver true prog in
+            let _ = do_abstraction solver true opts.bdd_pass prog in
             let _ = solver#stop in ()
         | OptRefine ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
