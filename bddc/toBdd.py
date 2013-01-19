@@ -7,6 +7,8 @@ from array import array
 from tokenize import *
 from StringIO import StringIO
 
+import token
+
 import pycudd
 
 LET = "let"
@@ -46,6 +48,7 @@ class Parser:
     def __init__(self):
         self.tok_iter = None
         self.tok = None
+        self.var_map = {}
 
     def parse_let(self):
         self.expect(OP, '(')
@@ -59,9 +62,17 @@ class Parser:
         tn, tv, (srow, scol), _, _ = self.get()
         if tn == NUMBER:
             return (NUM, int(tv))
+        elif tn == NAME:
+            try:
+                num = self.var_map[tv]
+            except KeyError:
+                num = len(self.var_map)
+                self.var_map[tv] = num
+            return (NUM, num)
         elif tn == OP and tv == '(':
             _, op, (srow, scol), _, _ = self.get()
-            if op not in [OR, AND, NOT, EXISTS]:
+            if op not in [OR, AND, NOT, EXISTS,
+                    token.AMPER, token.VBAR, token.TILDE]:
                 self.error(op, srow, scol)
             if op == EXISTS:
                 vs = self.parse_list()
@@ -69,6 +80,13 @@ class Parser:
                 self.expect(OP, ')')
                 return (EXISTS, vs, bound_expr)
             else:
+                if op == token.TILDE:
+                    op = NOT
+                elif op == token.VBAR:
+                    op = OR
+                elif op == token.AMPER:
+                    op = AND
+
                 tok = self.get()
                 tn, tv, (srow, scol), _, _ = tok
                 es = []
@@ -118,7 +136,7 @@ class Parser:
             return t
         else:
             tok = self.tok_iter.next()
-            while tok[1] == '\n':
+            while tok[0] == NL or tok[0] == COMMENT:
                 tok = self.tok_iter.next()
             return tok
 
