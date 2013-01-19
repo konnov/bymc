@@ -51,8 +51,8 @@ let parse_options =
                 opts := {!opts with action = OptSubstitute;
                     param_assignments = parse_key_values s}),
              "Substitute parameters into the code and produce standard Promela.");
-            ("-d", Arg.String
-             (fun s -> opts := {!opts with bdd_pass = true;}),
+            ("-d", Arg.Unit
+             (fun () -> opts := {!opts with bdd_pass = true;}),
              "Make a BDD pass (experimental).");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "Produce lots of verbose output (you are warned).");
