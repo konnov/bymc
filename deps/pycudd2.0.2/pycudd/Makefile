@@ -18,7 +18,7 @@ MOD = pycudd
 ##
 #######
 CUDD        := ../cudd-2.4.2/
-CUDDVER     = 0x020400
+CUDDVER     = 0x020402
 PYTHON_LOC  := /usr
 # Change the following to lib64 for 64-bit architectures
 LIB_DIR     := lib
