@@ -61,14 +61,9 @@ class Parser:
     def parse_expr(self):
         tn, tv, (srow, scol), _, _ = self.get()
         if tn == NUMBER:
-            return (NUM, int(tv))
+            return self.parse_var(tn, tv, srow, scol)
         elif tn == NAME:
-            try:
-                num = self.var_map[tv]
-            except KeyError:
-                num = len(self.var_map)
-                self.var_map[tv] = num
-            return (NUM, num)
+            return self.parse_var(tn, tv, srow, scol)
         elif tn == OP and tv == '(':
             _, op, (srow, scol), _, _ = self.get()
             if op not in [OR, AND, NOT, EXISTS,
@@ -107,14 +102,26 @@ class Parser:
         tn, tv, (srow, scol), _, _ = tok
         vs = []
         while tn != OP or tv != ']':
-            if tn != NUMBER:
-                self.error(tv, srow, scol)
+            (_, tv) = self.parse_var(tn, tv, srow, scol)
 
             vs.append(int(tv))
             tok = self.get()
             tn, tv, (srow, scol), _, _ = tok
 
         return vs
+
+    def parse_var(self, tn, tv, srow, scol):
+        if tn == NUMBER:
+            return (NUM, int(tv))
+        elif tn == NAME:
+            try:
+                num = self.var_map[tv]
+            except KeyError:
+                num = len(self.var_map)
+                self.var_map[tv] = num
+            return (NUM, num)
+        else:
+            self.error(tv, srow, scol)
 
     def expect(self, toknum, tokval):
         tn, tv, (srow, scol), _, _ = self.get()
@@ -193,10 +200,11 @@ class Bdder:
         elif typ == LET:
             name, snd = e[1]
             bdd = self.expr_as_bdd(snd)
+            self.mgr.GarbageCollect(1)
             print "bdd " + name
-            pycudd.set_iter_meth(0)
-            for cube in bdd:
-                print pycudd.cube_tuple_to_str(cube)
+            #pycudd.set_iter_meth(0)
+            #for cube in bdd:
+            #    print pycudd.cube_tuple_to_str(cube)
 
             return (name, bdd)
         else:
@@ -220,3 +228,4 @@ if __name__ == "__main__":
     mgr.SetDefault()
     (name, bdd) = Bdder(mgr).expr_as_bdd(expr)
     mgr.PrintStdOut()
+
