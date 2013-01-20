@@ -16,10 +16,11 @@ open Debug
      A -> (B, C); B -> D; C -> D; B -> C.
  To handle this case two copies of C must be introduced.
  *)
-let block_to_constraints (new_type_tab: data_type_tab)
+let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
         (bb: 't basic_block): (Spin.token mir_stmt list) =
     let at_var i =
         let nv = new_var (sprintf "at_%d" i) in 
+        nv#set_proc_name proc_name;
         new_type_tab#set_type nv (new data_type SpinTypes.TBIT);
         Var nv
     in
@@ -116,9 +117,10 @@ let block_to_constraints (new_type_tab: data_type_tab)
     let n_cons e es = if stmt_not_nop e then e :: es else es in
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 
-let cfg_to_constraints new_type_tab cfg =
+let cfg_to_constraints proc_name new_type_tab cfg =
     let cons_lists =
-        (List.map (block_to_constraints new_type_tab) cfg#block_list) in
+        (List.map (block_to_constraints proc_name new_type_tab)
+        cfg#block_list) in
     let cons = List.concat cons_lists in
     if may_log DEBUG
     then begin
