@@ -70,6 +70,8 @@ let do_abstraction solver is_first_run bdd_pass prog =
         log INFO "> Constructing BDDs...";
         let _ = SkelStruc.pass caches intabs_prog in
         let xducer_prog = SmtXducerPass.do_xducers caches intabs_prog in
+        write_to_file false "abs-xducers.prm"
+            (units_of_program xducer_prog) (get_type_tab xducer_prog);
         BddPass.transform_to_bdd solver caches xducer_prog;
         log INFO "[DONE]";
     end;

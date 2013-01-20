@@ -1,13 +1,19 @@
-(* Single static assignment form *)
+(* Single static assignment form.
+ *
+ * This module is written in Dubrovnik next to a beach.
+ * So it may have more bugs than the other modules!
+ *
+ * Igor Konnov, 2012.
+ *)
 
-open Printf;;
+open Printf
 
-open Cfg;;
-open Analysis;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open Debug;;
+open Cfg
+open Analysis
+open Spin
+open SpinIr
+open SpinIrImp
+open Debug
 
 let comp_dom_frontiers cfg =
     let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
@@ -36,7 +42,7 @@ let comp_dom_frontiers cfg =
     in
     bottom_up 0;
     df
-;;
+
 
 (* Ron Cytron et al. Efficientrly Computing Static Single Assignment Form and
    the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
@@ -56,11 +62,11 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
     let for_var v =
         let does_stmt_uses_var = function
             | Expr (_, BinEx (ASGN, Var ov, _)) ->
-                    ov#get_name = v#get_name
+                    ov#qual_name = v#qual_name
             | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var ov, _), _)) ->
-                    ov#get_name = v#get_name
+                    ov#qual_name = v#qual_name
             | Havoc (_, ov) ->
-                    ov#get_name = v#get_name
+                    ov#qual_name = v#qual_name
             | _ -> false in
         let does_blk_uses_var bb =
             List.exists does_stmt_uses_var bb#get_seq in
@@ -98,7 +104,7 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
     in
     List.iter for_var vars;
     cfg
-;;
+
 
 let map_rvalues map_fun ex =
     let rec sub = function
@@ -114,7 +120,7 @@ let map_rvalues map_fun ex =
     | _ as e -> e
     in
     sub ex
-;;
+
 
 (*
  It appears that the Cytron's algorithm can produce phi functions like
@@ -128,16 +134,16 @@ let optimize_ssa cfg =
         let on_stmt = function
             | Expr (id, Phi (lhs, rhs)) as s ->
                     let fst = List.hd rhs in
-                    if List.for_all (fun o -> o#get_name = fst#get_name) rhs
+                    if List.for_all (fun o -> o#qual_name = fst#qual_name) rhs
                     then begin
-                        Hashtbl.add sub_tbl lhs#get_name fst;
+                        Hashtbl.add sub_tbl lhs#qual_name fst;
                         changed := true;
                         Skip id 
                     end else s
             | Expr (id, e) ->
                     let sub v =
-                        if Hashtbl.mem sub_tbl v#get_name
-                        then Var (Hashtbl.find sub_tbl v#get_name)
+                        if Hashtbl.mem sub_tbl v#qual_name
+                        then Var (Hashtbl.find sub_tbl v#qual_name)
                         else Var v in
                     let ne = map_rvalues sub e in
                     Expr (id, ne)
@@ -150,7 +156,7 @@ let optimize_ssa cfg =
         List.iter collect_replace cfg#block_list;
     done;
     cfg
-;;
+
 
 (* Ron Cytron et al. Efficiently Computing Static Single Assignment Form and
    the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
@@ -168,7 +174,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
 
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
-    let nm v = v#get_name in
+    let nm v = v#qual_name in
     let s_push v i =
         Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
     let s_pop var_nm = 
@@ -176,12 +182,12 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
-            let new_v = v#copy (sprintf "%s_Y%d" (nm v) i) in
+            let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in
             s_push v i;
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
         with Not_found ->
-            raise (Failure ("Var not found: " ^ v#get_name))
+            raise (Failure ("Var not found: " ^ v#qual_name))
     in
     let s_top v =
         let stack =
@@ -201,7 +207,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
                undeclared variable can be used. *)
             (* Push a special variable on top of the empty. *)
             end else
-                let m = (sprintf "Use of %s before declaration?" v#get_name) in
+                let m = (sprintf "Use of %s before declaration?" v#qual_name) in
                 raise (Failure m)
     in
     (* initialize local variables: start with 1 as 0 is reserved for input *)
@@ -220,7 +226,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
         else 
             let i = s_top v in
             let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
-            v#copy (sprintf "%s_%s" (nm v) suf)
+            v#copy (sprintf "%s_%s" v#get_name suf) (* not a qualified name! *)
     in
     let sub_var_as_var v = Var (sub_var v) in
     let rec search x =
@@ -290,7 +296,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
             bb#set_seq (bb#get_seq @ out_assignments);
         end;
         (* pop the stack for each assignment *)
-        let pop_v v = s_pop v#get_name in
+        let pop_v v = s_pop v#qual_name in
         let pop_stmt = function
             | Decl (_, v, _) -> pop_v v
             | Expr (_, Phi (v, _)) -> pop_v v
@@ -304,5 +310,4 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
     in
     search 0;
     optimize_ssa cfg (* optimize it after all *)
-;;
 

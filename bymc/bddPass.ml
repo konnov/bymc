@@ -32,6 +32,9 @@ let proc_to_bdd prog proc =
     in
     let rec collect_expr_vars var_map = function
         | Var v ->
+            (*
+            Printf.printf "len(%s) == %d\n" v#qual_name (var_len v).Bits.len;
+            *)
             StringMap.add v#get_name (var_len v) var_map
         | BinEx (_, l, r) ->
             collect_expr_vars (collect_expr_vars var_map l) r
