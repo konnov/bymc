@@ -1,5 +1,13 @@
 In case you want to play with the tool, do the following:
 
+Prerequisites:
+
+ * ocaml
+ * ocamlbuild
+ * yices 1.x: http://yices.csl.sri.com/download.shtml
+ * spin: http://spinroot.com/spin/Man/README.html#S2
+ * gcc
+
 # building (you need ocaml and ocamlbuild)
 cd theta/tools/bymc
 ./make.sh
