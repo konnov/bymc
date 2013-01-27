@@ -8,9 +8,12 @@
 open Printf
 
 open Accums
+open Cfg
+open CfgSmt
 open Spin
 open SpinIr
 open SpinIrImp
+open Ssa
 
 exception Bdd_error of string
 
@@ -156,7 +159,33 @@ let enum_in_outs solver caches prog proc =
     solver#pop_ctx
 
 
+(* this code deviates in a few moments from smtXducerPass *)
+let to_xducer caches prog new_type_tab p =
+    let roles = caches#get_analysis#get_var_roles in
+    let is_visible v =
+        match roles#get_role v with
+        | VarRole.Scratch _ -> false
+        | _ -> true
+    in
+    let reg_tbl = caches#get_struc#get_regions p#get_name in
+    let loop_prefix = reg_tbl#get "loop_prefix" in
+    let loop_body = reg_tbl#get "loop_body" in
+    let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
+    let all_vars = (Program.get_shared prog)
+        @ (Program.get_instrumental prog) @(Program.get_all_locals prog) in
+    let vis_vs, hid_vs = List.partition is_visible all_vars in
+    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
+    let transd = cfg_to_constraints p#get_name new_type_tab cfg in
+    proc_replace_body p transd
+
+
 let transform_to_bdd solver caches prog =
-    List.iter (proc_to_bdd prog) (Program.get_procs prog);
+    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let new_procs =
+        List.map (to_xducer caches prog new_type_tab) (Program.get_procs prog)
+    in
+    let xprog = (Program.set_type_tab new_type_tab
+        (Program.set_procs new_procs prog)) in
+    List.iter (proc_to_bdd xprog) new_procs;
     (* List.iter (enum_in_outs solver caches prog) (Program.get_procs prog) *)
 

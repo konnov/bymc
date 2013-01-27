@@ -78,11 +78,11 @@ abstract.ml,339
 Abstract1,0
 let write_to_filewrite_to_file24,237
 let do_abstractiondo_abstraction45,1050
-let make_vass_xducersmake_vass_xducers89,2870
-let check_invariantcheck_invariant124,4346
-let check_all_invariantscheck_all_invariants155,5816
-let filter_good_fairnessfilter_good_fairness165,6171
-let do_refinementdo_refinement179,6730
+let make_vass_xducersmake_vass_xducers86,2680
+let check_invariantcheck_invariant121,4156
+let check_all_invariantscheck_all_invariants152,5626
+let filter_good_fairnessfilter_good_fairness162,5981
+let do_refinementdo_refinement176,6540
 
 accums.ml,1256
 Accums1,0
@@ -144,13 +144,14 @@ let transfer_rolestransfer_roles148,4020
 let transfer_var_usetransfer_var_use179,5026
 let find_copy_pairsfind_copy_pairs212,5880
 
-bddPass.ml,205
+bddPass.ml,238
 BddPass1,0
-exception Bdd_errorBdd_error15,196
-module StringMapStringMap17,227
-let proc_to_bddproc_to_bdd19,264
-let enum_in_outsenum_in_outs141,4849
-let transform_to_bddtransform_to_bdd159,5589
+exception Bdd_errorBdd_error17,214
+module StringMapStringMap19,245
+let proc_to_bddproc_to_bdd21,282
+let enum_in_outsenum_in_outs143,4867
+let to_xducerto_xducer162,5668
+let transform_to_bddtransform_to_bdd181,6447
 
 bits.ml,1303
 Bits1,0

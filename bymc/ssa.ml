@@ -164,8 +164,8 @@ let optimize_ssa cfg =
 
    Figure 12.
  *)
-let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
-    let vars = shared_vars @ local_vars in
+let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
+    let vars = extern_vars @ intern_vars in
     if may_log DEBUG then print_detailed_cfg "CFG before SSA" cfg;
     let cfg = place_phi vars cfg in
     if may_log DEBUG then print_detailed_cfg "CFG after place_phi" cfg;
@@ -211,14 +211,14 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
                 raise (Failure m)
     in
     (* initialize local variables: start with 1 as 0 is reserved for input *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 1) local_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) []) local_vars;
+    List.iter (fun v -> Hashtbl.add counters (nm v) 1) intern_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) []) intern_vars;
     (* global vars are different,
        each global variable x has a version x_0 referring
        to the variable on the input
      *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 1) shared_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) shared_vars;
+    List.iter (fun v -> Hashtbl.add counters (nm v) 1) extern_vars;
+    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) extern_vars;
 
     let sub_var v =
         if v#is_symbolic || v#proc_name = "spec" (* XXX: magic const *)
@@ -292,7 +292,7 @@ let mk_ssa tolerate_undeclared_vars shared_vars local_vars cfg =
             let bind_out v =
                 let out_v = v#copy (v#get_name ^ "_OUT") in
                 Expr (-1, BinEx (ASGN, Var out_v, sub_var_as_var v)) in
-            let out_assignments = List.map bind_out shared_vars in
+            let out_assignments = List.map bind_out extern_vars in
             bb#set_seq (bb#get_seq @ out_assignments);
         end;
         (* pop the stack for each assignment *)
