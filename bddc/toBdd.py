@@ -1,12 +1,14 @@
 #!/usr/bin/python
 #
-# Read a formula in a simple representation and construct a BDD
+# Read formulas in a simple representation and construct BDDs
 
-import sys
 from array import array
 from tokenize import *
 from StringIO import StringIO
+from time import gmtime, strftime
 
+import re
+import sys
 import token
 
 import pycudd
@@ -17,11 +19,14 @@ OR  = "or"
 NOT = "not"
 EXISTS = "exists"
 ID  = "id"
-NUM  = "num"
+VAR  = "var"
+
+def cur_time():
+    return strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
 def expr_s(e):
     typ = e[0]
-    if typ == NUM:
+    if typ == VAR:
         return str(e[1])
     elif typ == id:
         return e[1]
@@ -48,7 +53,7 @@ class Parser:
     def __init__(self):
         self.tok_iter = None
         self.tok = None
-        self.var_map = {}
+        self.var_set = set()
 
     def parse_let(self):
         self.expect(OP, '(')
@@ -104,7 +109,7 @@ class Parser:
         while tn != OP or tv != ']':
             (_, tv) = self.parse_var(tn, tv, srow, scol)
 
-            vs.append(int(tv))
+            vs.append(tv)
             tok = self.get()
             tn, tv, (srow, scol), _, _ = tok
 
@@ -112,14 +117,12 @@ class Parser:
 
     def parse_var(self, tn, tv, srow, scol):
         if tn == NUMBER:
-            return (NUM, int(tv))
+            name = "_x" + tv
+            self.var_set.add(name)
+            return (VAR, name)
         elif tn == NAME:
-            try:
-                num = self.var_map[tv]
-            except KeyError:
-                num = len(self.var_map)
-                self.var_map[tv] = num
-            return (NUM, num)
+            self.var_set.add(tv)
+            return (VAR, tv)
         else:
             self.error(tv, srow, scol)
 
@@ -165,14 +168,15 @@ class BddError(Exception):
 
 
 class Bdder:
-    def __init__(self, mgr):
+    def __init__(self, mgr, var_order):
         self.mgr = mgr
+        self.var_order = var_order
 
     def expr_as_bdd(self, e):
         sys.stdout.flush()
         typ = e[0]
-        if typ == NUM:
-            return mgr.IthVar(e[1])
+        if typ == VAR:
+            return mgr.IthVar(self.var_order[e[1]])
         elif typ == id:
             raise BddError("How to convert id?")
         elif typ == NOT:
@@ -194,14 +198,17 @@ class Bdder:
             bdd = self.expr_as_bdd(es)
             intarr = pycudd.IntArray(len(vs))
             for (i, v) in enumerate(vs):
-                intarr[i] = v
+                intarr[i] = self.var_order[v]
+
+            print "%s: cube of size %d... " % (cur_time(), len(vs))
             cube = self.mgr.IndicesToCube(intarr, len(vs))
+            print "%s: exists over %d vars..." % (cur_time(), len(vs))
             return bdd.ExistAbstract(cube)
         elif typ == LET:
             name, snd = e[1]
             bdd = self.expr_as_bdd(snd)
             self.mgr.GarbageCollect(1)
-            print "bdd " + name
+            print "%s: bdd %s" % (cur_time(), name)
             #pycudd.set_iter_meth(0)
             #for cube in bdd:
             #    print pycudd.cube_tuple_to_str(cube)
@@ -209,6 +216,28 @@ class Bdder:
             return (name, bdd)
         else:
             raise BddError("Unknown expr met: " + str(typ))
+
+NAME_RE = re.compile("(.+)_(.+)_([0-9]+)")
+
+def cmp_vars(v1, v2):
+    def parse_var(v):
+        m = NAME_RE.match(v)
+        if m:
+            return (m.group(1), m.group(2), int(m.group(3)))
+        else:
+            return (v, "", "")
+
+    (name1, ver1, bit1) = parse_var(v1)
+    (name2, ver2, bit2) = parse_var(v2)
+    if name1 != name2:
+        return cmp(name1, name2)
+    else:
+        if bit1 != bit2:
+            # group same bits of different copies
+            return cmp(bit1, bit2)
+        else:
+            return cmp(ver1, ver2)
+
 
 
 if __name__ == "__main__":
@@ -218,14 +247,24 @@ if __name__ == "__main__":
 
     filename = sys.argv[1]
     try:
-        expr = Parser().parse_form(filename)
-        print expr_s(expr)
+        print "%s: parsing..." % cur_time()
+        parser = Parser()    
+        expr = parser.parse_form(filename)
+        used_vars = list(parser.var_set)
+        #print expr_s(expr)
     except ParseError, e:
         print "%s:%s" % (filename, str(e))
         sys.exit(1)
 
+    used_vars.sort(cmp_vars)
+    var_order = {}
+    for i, v in enumerate(used_vars):
+        var_order[v] = i
+
     mgr = pycudd.DdManager()
     mgr.SetDefault()
-    (name, bdd) = Bdder(mgr).expr_as_bdd(expr)
+    print "%s: constructing BDDs..." % cur_time()
+    (name, bdd) = Bdder(mgr, var_order).expr_as_bdd(expr)
+    print "%s: finished" % cur_time()
     mgr.PrintStdOut()
 
