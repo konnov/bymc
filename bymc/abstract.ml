@@ -240,7 +240,7 @@ let do_refinement solver trail_filename prog =
     solver#set_need_evidence true;
     let refined = ref false in
     (* Try to detect spurious transitions and unfair paths
-       (discussed in the TACAS paper) *)
+       (discussed in the TACAS submission) *)
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
     let sp_st =
