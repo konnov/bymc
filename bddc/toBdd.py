@@ -256,6 +256,7 @@ if __name__ == "__main__":
         print "%s:%s" % (filename, str(e))
         sys.exit(1)
 
+    print "%s: ordering %d variables..." % (cur_time(), len(used_vars))
     used_vars.sort(cmp_vars)
     var_order = {}
     for i, v in enumerate(used_vars):
