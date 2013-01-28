@@ -229,7 +229,7 @@ type label = { node_num: int; low: int; on_stack: bool }
 
 (*
   A function to find strongly connected components by Tarjan's algorithm.
-  We ignore singleton sets.
+  Singleton sets are ignored.
 
   Imperative code like in the book by Aho et al.
  *)
@@ -417,4 +417,22 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
     List.iter write_bb_succ cfg#block_list;
     fprintf fo "}\n";
     close_out fo
+
+
+(*
+ Enumerate all possible finite paths in an acyclic graph.
+ We use a naive DFS algorithm, it works only on small graphs!
+ *)
+let enum_paths cfg =
+    let sccs = comp_sccs cfg#entry in
+    if sccs <> [] then raise (CfgError "CFG has a cycle!");
+    
+    let rec dfs bb =
+        let succ = bb#get_succ in
+        let paths = List.concat (List.map dfs succ) in
+        if paths = []
+        then [[bb]]
+        else List.map (fun p -> bb :: p) paths
+    in
+    dfs cfg#entry
 
