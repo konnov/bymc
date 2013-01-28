@@ -49,6 +49,11 @@ class ParseError(Exception):
         Exception.__init__(self, m)
 
 
+class EndOfFileError(Exception):
+    def __init__(self):
+        Exception.__init__(self, "end of file reached")
+
+
 class Parser:
     def __init__(self):
         self.tok_iter = None
@@ -140,24 +145,39 @@ class Parser:
         raise ParseError("%d,%d: unexpected '%s'" % (srow, scol, tokval))
 
     def get(self):
-        if self.tok:
+        def is_space(tok):
+            return tok[0] in [NL, NEWLINE, COMMENT]
+
+        if self.tok and not is_space(self.tok):
+            if self.tok[0] == 0:
+                raise EndOfFileError()
             t = self.tok
             self.tok = None
             return t
         else:
             tok = self.tok_iter.next()
-            while tok[0] == NL or tok[0] == COMMENT:
+            while is_space(tok):
                 tok = self.tok_iter.next()
+            if tok[0] == 0:
+                raise EndOfFileError()
             return tok
 
     def put(self, tok):
         self.tok = tok
 
-    def parse_form(self, filename):
+    def parse_forms(self, filename):
         f = open(filename, 'r')
         try:
             self.tok_iter = generate_tokens(f.readline)
-            return self.parse_let()
+            lets = []
+            while True:
+                try:
+                    tok = self.get()
+                    self.put(tok)
+                except EndOfFileError:
+                    return lets
+
+                lets.append(self.parse_let())
         finally:
             f.close()
 
@@ -171,12 +191,17 @@ class Bdder:
     def __init__(self, mgr, var_order):
         self.mgr = mgr
         self.var_order = var_order
+        self.bdd_map = {}
 
     def expr_as_bdd(self, e):
         sys.stdout.flush()
         typ = e[0]
         if typ == VAR:
-            return mgr.IthVar(self.var_order[e[1]])
+            name = e[1]
+            if self.bdd_map.has_key(name):
+                return self.bdd_map[name] # a pre-computed formula
+            else:
+                return mgr.IthVar(self.var_order[name])
         elif typ == id:
             raise BddError("How to convert id?")
         elif typ == NOT:
@@ -206,9 +231,8 @@ class Bdder:
             return bdd.ExistAbstract(cube)
         elif typ == LET:
             name, snd = e[1]
-            bdd = self.expr_as_bdd(snd)
-            self.mgr.GarbageCollect(1)
             print "%s: bdd %s" % (cur_time(), name)
+            bdd = self.expr_as_bdd(snd)
             #pycudd.set_iter_meth(0)
             #for cube in bdd:
             #    print pycudd.cube_tuple_to_str(cube)
@@ -216,6 +240,12 @@ class Bdder:
             return (name, bdd)
         else:
             raise BddError("Unknown expr met: " + str(typ))
+
+    def forms_to_bdd(self, forms):
+        for f in forms:
+            (name, bdd) = self.expr_as_bdd(f)
+            self.bdd_map[name] = bdd
+
 
 NAME_RE = re.compile("(.+)_(.+)_([0-9]+)")
 
@@ -249,7 +279,7 @@ if __name__ == "__main__":
     try:
         print "%s: parsing..." % cur_time()
         parser = Parser()    
-        expr = parser.parse_form(filename)
+        forms = parser.parse_forms(filename)
         used_vars = list(parser.var_set)
         #print expr_s(expr)
     except ParseError, e:
@@ -265,7 +295,10 @@ if __name__ == "__main__":
     mgr = pycudd.DdManager()
     mgr.SetDefault()
     print "%s: constructing BDDs..." % cur_time()
-    (name, bdd) = Bdder(mgr, var_order).expr_as_bdd(expr)
+    bdder = Bdder(mgr, var_order)
+    bdder.forms_to_bdd(forms)
+
     print "%s: finished" % cur_time()
+    mgr.GarbageCollect(1)
     mgr.PrintStdOut()
 
