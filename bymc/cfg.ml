@@ -1,15 +1,15 @@
-open Printf;;
+open Printf
 
-open SpinIr;;
-open SpinIrImp;;
-open Debug;;
+open SpinIr
+open SpinIrImp
+open Debug
 
-exception CfgError of string;;
+exception CfgError of string
 
 module IntSet = Set.Make (struct
  type t = int
  let compare a b = a - b
-end);;
+end)
 
 class ['t] basic_block =
     object(self)
@@ -55,9 +55,9 @@ class ['t] basic_block =
             (sprintf "Basic block %d [succs: %s]:\n" self#get_lead_lab exit_s) ^
             (List.fold_left (fun a s -> sprintf "%s%s\n" a (stmt_s s)) "" seq)
     end
-;;
 
-let bb_lab bb = bb#label;;
+
+let bb_lab bb = bb#label
 
 class ['t, 'attr] attr_basic_block a =
     object(self)
@@ -71,7 +71,7 @@ class ['t, 'attr] attr_basic_block a =
         
         method get_attr = attr
     end
-;;
+
 
 class ['t] control_flow_graph i_entry i_blocks =
     object(self)
@@ -85,7 +85,7 @@ class ['t] control_flow_graph i_entry i_blocks =
 
         method find lab = Hashtbl.find m_blocks lab
     end
-;;
+
 
 (* collect labels standing one next to each other *)
 let merge_neighb_labels stmts =
@@ -114,7 +114,7 @@ let merge_neighb_labels stmts =
                     If (id, (List.map sub_lab targs), (sub_lab exit))
             | _ -> s
         ) stmts
-;;
+
 
 let collect_jump_targets stmts =
     List.fold_left
@@ -126,7 +126,7 @@ let collect_jump_targets stmts =
         )
         IntSet.empty
         stmts
-;;
+
 
 (* split a list into a list of list each terminating with an element
    recognized by is_sep
@@ -146,7 +146,7 @@ let separate is_sep list_i =
                         else (hd :: hdl) :: tll
     in (* clean hanging empty sets *)
     List.filter (fun l -> l <> []) (sep_rec list_i)
-;;
+
 
 let mk_cfg stmts =
     let stmts_r = merge_neighb_labels stmts in
@@ -202,7 +202,7 @@ let mk_cfg stmts =
         blocks;
     (* return the hash table: heading_label: int -> basic_block *)
     new control_flow_graph entry blocks
-;;
+
 
 (* This is a very naive implementation. We do not expect it to be run
    on hundreds of basic blocks. If this happens, implement an algorithm
@@ -223,9 +223,9 @@ let find_dominator bbs =
     | [one_lab] -> List.find (fun bb -> bb#get_lead_lab = one_lab) bbs
     | [] -> raise (CfgError "No dominators found for a set of basic blocks")
     | _ -> raise (CfgError "Several dominators for a set of basic blocks")
-;;
 
-type label = { node_num: int; low: int; on_stack: bool };;
+
+type label = { node_num: int; low: int; on_stack: bool }
 
 (*
   A function to find strongly connected components by Tarjan's algorithm.
@@ -289,7 +289,7 @@ let comp_sccs first_bb =
     set_lab first_bb { node_num = fn; low = fn; on_stack = true };
     search first_bb;
     !sccs
-;;
+
 
 (*
 Compute dominators for a node. The algorithm is copied as it is.
@@ -321,7 +321,7 @@ let comp_doms cfg =
         IntSet.iter update all_but_0
     done;
     domin
-;;
+
 
 (*
 Compute immediate dominators for a node.
@@ -355,7 +355,7 @@ let comp_idoms cfg =
         Hashtbl.add idom n dom in
     Hashtbl.iter add_idom tmp;
     idom
-;;
+
 
 let comp_idom_tree idoms =
     let children = Hashtbl.create (Hashtbl.length idoms) in
@@ -365,7 +365,7 @@ let comp_idom_tree idoms =
         Hashtbl.replace children idom (n :: (Hashtbl.find children idom)) in
     Hashtbl.iter add idoms;
     children
-;;
+
 
 let print_detailed_cfg title cfg =
     printf "\n%s\n" title;
@@ -385,7 +385,7 @@ let print_detailed_cfg title cfg =
         node :: (List.concat (List.map bfs_list children))
     in
     List.iter print_blk (bfs_list 0)
-;;
+
 
 let write_dot (out_name: string) (cfg: 't control_flow_graph) =
     let fo = open_out out_name in
@@ -417,4 +417,4 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
     List.iter write_bb_succ cfg#block_list;
     fprintf fo "}\n";
     close_out fo
-;;
+

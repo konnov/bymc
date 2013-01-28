@@ -19,7 +19,26 @@ exception Bdd_error of string
 
 module StringMap = Map.Make(String)
 
-let proc_to_bdd prog proc =
+(* this code deviates in a few moments from smtXducerPass *)
+let blocks_to_smt caches prog new_type_tab p =
+    let roles = caches#get_analysis#get_var_roles in
+    let is_visible v =
+        match roles#get_role v with
+        | VarRole.Scratch _ -> false
+        | _ -> true
+    in
+    let reg_tbl = caches#get_struc#get_regions p#get_name in
+    let loop_prefix = reg_tbl#get "loop_prefix" in
+    let loop_body = reg_tbl#get "loop_body" in
+    let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
+    let all_vars = (Program.get_shared prog)
+        @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
+    let vis_vs, hid_vs = List.partition is_visible all_vars in
+    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
+    List.map (block_to_constraints p#get_name new_type_tab) cfg#block_list
+
+
+let proc_to_bdd prog smt_fun proc =
     let var_len v =
         let tp = Program.get_type prog v in
         match tp#basetype with
@@ -118,29 +137,42 @@ let proc_to_bdd prog proc =
         | _ as s -> 
             raise (Bdd_error ("Cannot convert to BDD: " ^ (mir_stmt_s s)))
     in
+    let block_seqs = smt_fun proc in 
+    let all_stmts = List.concat block_seqs in
     let var_map =
-        List.fold_left collect_stmt_vars StringMap.empty proc#get_stmts in
-    let bits = Bits.AND (List.map to_bits proc#get_stmts) in
-    let form = Bits.to_sat var_map (new Sat.fresh_pool 1) bits in
-    let inouts = List.filter is_inout (Sat.collect_vars form) in
+        List.fold_left collect_stmt_vars StringMap.empty all_stmts in
+    let var_pool = new Sat.fresh_pool 1 in
+    let block_bits =
+        List.map (fun b -> Bits.AND (List.map to_bits b)) block_seqs in
+    let block_forms = List.map (Bits.to_sat var_map var_pool) block_bits in
+    let inouts = List.filter is_inout (Sat.collect_vars block_forms) in
     let out = open_out (sprintf "%s.bits" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
-    Bits.format_bv_form ff bits;
+    List.iter (fun bbits -> Bits.format_bv_form ff bbits) block_bits;
     close_out out;
+
     let out = open_out (sprintf "%s.bdd" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
     Format.fprintf ff "%s" "# sat\n";
+    let out_f num form =
+        Format.fprintf ff "(let B%d @," num;
+        Sat.format_sat_form_polish ff form;
+        Format.fprintf ff ")"; Format.pp_print_newline ff ()
+    in
+    List.iter2 out_f (range 0 (List.length block_forms)) block_forms;
     Format.fprintf ff "(let R @,(exists [";
     List.iter (fun v -> Format.fprintf ff "%s @," v) inouts;
-    Format.fprintf ff "]@, ";
-    Sat.format_sat_form_polish ff form;
-    Format.fprintf ff "))";
+    Format.fprintf ff "]@, (and ";
+    List.iter
+        (fun num -> Format.fprintf ff "B%d " num)
+        (range 0 (List.length block_forms));
+    Format.fprintf ff ")))";
     Format.pp_print_flush ff ();
     close_out out
 
 
 (* Enumerate all possible combinations of inputs and outputs. It works only
-   after the counter abstraction. *)
+   after the counter abstraction. Not a good idea... *)
 let enum_in_outs solver caches prog proc =
     let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
     let abbrv = (ctr_ctx_tbl#get_ctx proc#get_name)#abbrev_name in
@@ -159,33 +191,10 @@ let enum_in_outs solver caches prog proc =
     solver#pop_ctx
 
 
-(* this code deviates in a few moments from smtXducerPass *)
-let to_xducer caches prog new_type_tab p =
-    let roles = caches#get_analysis#get_var_roles in
-    let is_visible v =
-        match roles#get_role v with
-        | VarRole.Scratch _ -> false
-        | _ -> true
-    in
-    let reg_tbl = caches#get_struc#get_regions p#get_name in
-    let loop_prefix = reg_tbl#get "loop_prefix" in
-    let loop_body = reg_tbl#get "loop_body" in
-    let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
-    let all_vars = (Program.get_shared prog)
-        @ (Program.get_instrumental prog) @(Program.get_all_locals prog) in
-    let vis_vs, hid_vs = List.partition is_visible all_vars in
-    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
-    let transd = cfg_to_constraints p#get_name new_type_tab cfg in
-    proc_replace_body p transd
-
-
 let transform_to_bdd solver caches prog =
     let new_type_tab = (Program.get_type_tab prog)#copy in
-    let new_procs =
-        List.map (to_xducer caches prog new_type_tab) (Program.get_procs prog)
-    in
-    let xprog = (Program.set_type_tab new_type_tab
-        (Program.set_procs new_procs prog)) in
-    List.iter (proc_to_bdd xprog) new_procs;
-    (* List.iter (enum_in_outs solver caches prog) (Program.get_procs prog) *)
+    let xprog = Program.set_type_tab new_type_tab prog in
+    List.iter
+        (proc_to_bdd xprog (blocks_to_smt caches xprog new_type_tab))
+        (Program.get_procs prog);
 

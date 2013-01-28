@@ -384,7 +384,7 @@ let cnf_to_text cnf_f =
        "" clauses)
 
 
-let collect_vars f =
+let collect_vars forms =
     let rec collect set = function
         | True -> set
         | False -> set
@@ -394,5 +394,5 @@ let collect_vars f =
         | Or gs -> List.fold_left collect set gs
         | And gs -> List.fold_left collect set gs
     in
-    StringSet.elements (collect StringSet.empty f)
+    StringSet.elements (List.fold_left collect StringSet.empty forms)
 

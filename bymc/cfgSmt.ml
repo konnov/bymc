@@ -117,6 +117,7 @@ let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
     let n_cons e es = if stmt_not_nop e then e :: es else es in
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 
+
 let cfg_to_constraints proc_name new_type_tab cfg =
     let cons_lists =
         (List.map (block_to_constraints proc_name new_type_tab)
