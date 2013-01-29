@@ -92,12 +92,12 @@ let proc_to_bdd prog smt_fun proc =
             List.map bit_name (range 0 (bits_to_fit len))
         with Not_found -> raise (Failure ("Not_found " ^ v#get_name))
     in
-    let is_inout v =
+    let is_hidden v =
         let isin =
             Str.string_match (Str.regexp ".*_IN_[0-9]+$") v 0 in
         let isout =
             Str.string_match (Str.regexp ".*_OUT_[0-9]+$") v 0 in
-        isin || isout
+        (not isin) && (not isout)
     in
     let collect_stmt_vars var_map = function
         | MExpr (_, e) -> collect_expr_vars var_map e
@@ -176,8 +176,8 @@ let proc_to_bdd prog smt_fun proc =
         IntMap.map (fun b -> Bits.AND (List.map to_bits b)) block_map in
     let block_forms_map =
         IntMap.map (Bits.to_sat var_map var_pool) block_bits_map in
-    let inouts =
-        List.filter is_inout (Sat.collect_vars (intmap_vals block_forms_map))
+    let hidden_vars =
+        List.filter is_hidden (Sat.collect_vars (intmap_vals block_forms_map))
     in
     let out = open_out (sprintf "%s.bits" proc#get_name) in
     let ff = Format.formatter_of_out_channel out in
@@ -196,7 +196,7 @@ let proc_to_bdd prog smt_fun proc =
     IntMap.iter out_f block_forms_map;
     let out_path num p =
         Format.fprintf ff "(let P%d @,(exists [" num;
-        List.iter (fun v -> Format.fprintf ff "%s @," v) inouts;
+        List.iter (fun v -> Format.fprintf ff "%s @," v) hidden_vars;
         Format.fprintf ff "]@, (and ";
         let n_closing = ref 0 in (* collecting closing parenthesis *)
         let out_block prev_bb bb =
@@ -231,7 +231,7 @@ let proc_to_bdd prog smt_fun proc =
     in
     List.iter2 out_path (range 0 (List.length paths)) paths;
     (* finally, add the relation *)
-    Format.fprintf ff "(let R @,(and ";
+    Format.fprintf ff "(let R @,(or ";
     List.iter
         (fun i -> Format.fprintf ff "P%d " i) (range 0 (List.length paths));
     Format.fprintf ff "))";
