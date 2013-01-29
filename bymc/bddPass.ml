@@ -44,7 +44,9 @@ let blocks_to_smt caches prog new_type_tab p =
     let all_vars = (Program.get_shared prog)
         @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
     let vis_vs, hid_vs = List.partition is_visible all_vars in
-    let cfg = move_phis_to_blocks (mk_ssa true vis_vs hid_vs (mk_cfg lirs)) in
+    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
+    Cfg.write_dot (sprintf "ssa-bdd-%s.dot" p#get_name) cfg;
+    let cfg = move_phis_to_blocks cfg in
     let paths = enum_paths cfg in
     Printf.printf "PATHS (%d)\n" (List.length paths);
     let mk_block_cons block_map block =
@@ -65,7 +67,8 @@ let proc_to_bdd prog smt_fun proc =
 
         | SpinTypes.TINT ->
             if tp#has_range
-            then { Bits.len = tp#range_len; Bits.hidden = false }
+            then { Bits.len = bits_to_fit (tp#range_len - 1);
+                   Bits.hidden = false }
             else raise (Bdd_error (sprintf "%s is unbounded" v#get_name))
 
         | _ -> raise (Bdd_error

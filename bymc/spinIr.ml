@@ -250,7 +250,7 @@ class data_type i_basetype =
 
         method has_range = let l, r = m_range in r > l
         method range = m_range
-        method range_len = let l, r = m_range in r - l
+        method range_len = let l, r = m_range in r - l + 1
         method set_range l r = m_range <- (l, r)
     end
 
