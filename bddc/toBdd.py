@@ -5,7 +5,7 @@
 from array import array
 from tokenize import *
 from StringIO import StringIO
-from time import gmtime, strftime
+from time import localtime, strftime
 
 import re
 import sys
@@ -23,7 +23,7 @@ ID  = "id"
 VAR  = "var"
 
 def cur_time():
-    return strftime("%Y-%m-%d %H:%M:%S", gmtime())
+    return strftime("%Y-%m-%d %H:%M:%S", localtime())
 
 def expr_s(e):
     typ = e[0]
@@ -258,12 +258,12 @@ class Bdder:
             print "%s: bdd %s" % (cur_time(), name)
             bdd = self.expr_as_bdd(snd)
 
-            if True: #name == "R":
+            if name == "R":
                 print "Enumerating the values..."
                 bdd.PrintMinterm()
-                pycudd.set_iter_meth(0)
-                for cube in bdd:
-                    print pycudd.cube_tuple_to_str(cube)
+#                pycudd.set_iter_meth(0)
+#                for cube in bdd:
+#                    print pycudd.cube_tuple_to_str(cube)
 
             return (name, bdd)
         else:
