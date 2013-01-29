@@ -226,7 +226,7 @@ class Bdder:
             return res
         elif typ == OR:
             bdds = [self.expr_as_bdd(s) for s in e[1]]
-            res = self.mgr.ReadOne()
+            res = self.mgr.ReadLogicZero()
             for bdd in bdds:
                 res |= bdd
             return res
@@ -257,9 +257,13 @@ class Bdder:
             name, snd = e[1]
             print "%s: bdd %s" % (cur_time(), name)
             bdd = self.expr_as_bdd(snd)
-            #pycudd.set_iter_meth(0)
-            #for cube in bdd:
-            #    print pycudd.cube_tuple_to_str(cube)
+
+            if True: #name == "R":
+                print "Enumerating the values..."
+                bdd.PrintMinterm()
+                pycudd.set_iter_meth(0)
+                for cube in bdd:
+                    print pycudd.cube_tuple_to_str(cube)
 
             return (name, bdd)
         else:
@@ -312,9 +316,13 @@ if __name__ == "__main__":
 
     print "%s: ordering %d variables..." % (cur_time(), len(used_vars))
     used_vars.sort(cmp_vars)
+    f = open('vars.ord', 'w+')
     var_order = {}
     for i, v in enumerate(used_vars):
         var_order[v] = i
+        f.write("%d -> %s\n" % (i, v))
+
+    f.close()
 
     mgr = pycudd.DdManager()
     mgr.SetDefault()
