@@ -17,6 +17,7 @@ LET = "let"
 AND = "and"
 OR  = "or"
 NOT = "not"
+SUB = "sub"
 EXISTS = "exists"
 ID  = "id"
 VAR  = "var"
@@ -36,6 +37,11 @@ def expr_s(e):
         vs, f = e[1], e[2]
         return "(%s [%s] %s)" \
                 % (typ, " ".join([str(v) for v in vs]), expr_s(f))
+    elif typ == SUB:
+        from_vs, to_vs, f = e[1], e[2]
+        return "(%s [%s] [%s] %s)" \
+                % (typ, " ".join([str(v) for v in from_vs]),
+                        " ".join([str(v) for v in to_vs]), expr_s(f))
     elif typ == LET:
         name, es = e[1]
         s = expr_s(es)
@@ -76,7 +82,7 @@ class Parser:
             return self.parse_var(tn, tv, srow, scol)
         elif tn == OP and tv == '(':
             _, op, (srow, scol), _, _ = self.get()
-            if op not in [OR, AND, NOT, EXISTS,
+            if op not in [OR, AND, NOT, EXISTS, SUB,
                     token.AMPER, token.VBAR, token.TILDE]:
                 self.error(op, srow, scol)
             if op == EXISTS:
@@ -84,6 +90,12 @@ class Parser:
                 bound_expr = self.parse_expr()
                 self.expect(OP, ')')
                 return (EXISTS, vs, bound_expr)
+            if op == SUB:
+                from_vs = self.parse_list()
+                to_vs = self.parse_list()
+                bound_expr = self.parse_expr()
+                self.expect(OP, ')')
+                return (SUB, from_vs, to_vs, bound_expr)
             else:
                 if op == token.TILDE:
                     op = NOT
@@ -208,14 +220,14 @@ class Bdder:
             return ~(self.expr_as_bdd(e[1][0]))
         elif typ == AND:
             bdds = [self.expr_as_bdd(s) for s in e[1]]
-            res = bdds[0]
-            for bdd in bdds[1:]:
+            res = self.mgr.ReadOne()
+            for bdd in bdds:
                 res &= bdd
             return res
         elif typ == OR:
             bdds = [self.expr_as_bdd(s) for s in e[1]]
-            res = bdds[0]
-            for bdd in bdds[1:]:
+            res = self.mgr.ReadOne()
+            for bdd in bdds:
                 res |= bdd
             return res
         elif typ == EXISTS:
@@ -225,10 +237,22 @@ class Bdder:
             for (i, v) in enumerate(vs):
                 intarr[i] = self.var_order[v]
 
-            print "%s: cube of size %d... " % (cur_time(), len(vs))
             cube = self.mgr.IndicesToCube(intarr, len(vs))
             print "%s: exists over %d vars..." % (cur_time(), len(vs))
+            sys.stdout.flush()
             return bdd.ExistAbstract(cube)
+        elif typ == SUB:
+            from_vs, to_vs, es = e[1], e[2], e[3]
+            bdd = self.expr_as_bdd(es)
+            assert len(from_vs) == len(to_vs)
+            from_arr = pycudd.DdArray(len(from_vs))
+            for (i, v) in enumerate(from_vs):
+                from_arr[i] = self.mgr.IthVar(self.var_order[v])
+            to_arr = pycudd.DdArray(len(to_vs))
+            for (i, v) in enumerate(to_vs):
+                to_arr[i] = self.mgr.IthVar(self.var_order[v])
+            # XXX: does swap really works in our case???
+            return bdd.SwapVariables(from_arr, to_arr, len(from_vs))
         elif typ == LET:
             name, snd = e[1]
             print "%s: bdd %s" % (cur_time(), name)
