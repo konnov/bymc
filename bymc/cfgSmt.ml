@@ -11,6 +11,9 @@ open Ssa
 open Smt
 open Debug
 
+let mke id e = MExpr (id, e) 
+let mkez e = MExpr (-1, e)
+
 (*
  XXX: this translation does not work with a control flow graph like this:
      A -> (B, C); B -> D; C -> D; B -> C.
@@ -24,8 +27,6 @@ let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
         new_type_tab#set_type nv (new data_type SpinTypes.TBIT);
         Var nv
     in
-    let mke id e = MExpr (id, e) in
-    let mkez e = MExpr (-1, e) in
     (* the entry block always gains control! *)
     let entry_starts =
         if bb#label <> 0 then mkez (Nop "") else mkez (at_var 0) in
@@ -116,6 +117,48 @@ let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
     in
     let n_cons e es = if stmt_not_nop e then e :: es else es in
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
+
+
+(* Translate block constraints without flow constraints between blocks
+   (intrablock constraints if you like).
+   It is useful when dealing with one path (see bddPass).
+ *)
+let block_intra_cons (proc_name: string) (new_type_tab: data_type_tab)
+        (bb: 't basic_block): (Spin.token mir_stmt list) =
+    let convert (s: Spin.token stmt) (tl: Spin.token mir_stmt list):
+            Spin.token mir_stmt list=
+        match s with
+        | Expr (_, (Phi (_, _))) ->
+            raise (CfgError "Unexpected phi func (use move_phi_to_blocks)")
+
+        | Expr (_, (BinEx (ASGN, _,
+            BinEx (ARR_UPDATE,
+                BinEx (ARR_ACCESS, _, _), _)))) ->
+            raise (CfgError "Unexpected array update")
+
+        | Expr (id, (BinEx (ASGN, lhs, rhs) as e)) ->
+            (mke id (Nop (expr_s e)))
+                :: (mkez (BinEx (EQ, lhs, rhs))) :: tl
+
+        | Expr (_, Nop _) ->
+            tl (* skip this *)
+        | Expr (id, e) ->
+            (* at_i -> e *)
+            (mke id (Nop (expr_s e))) :: (mkez e) :: tl
+
+        | Decl (id, v, e) ->
+            (mke id (Nop (sprintf "%s = %s" v#get_name (expr_s e))))
+            :: (mkez (BinEx (EQ, Var v, e))) :: tl
+        | Assume (id, e) ->
+            (mke id (Nop (sprintf "assume(%s)" (expr_s e))))
+            :: (mkez e) :: tl
+        | Assert (id, e) ->
+            (mke id (Nop (sprintf "assert(%s)" (expr_s e))))
+            :: (mkez e) :: tl
+        | Skip _ -> tl
+        | _ -> tl (* ignore all control flow constructs *)
+    in
+    List.fold_right convert bb#get_seq []
 
 
 let cfg_to_constraints proc_name new_type_tab cfg =

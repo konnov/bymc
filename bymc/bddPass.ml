@@ -29,7 +29,7 @@ let intmap_vals m =
     List.map (fun (k, v) -> v) (IntMap.bindings m)
 
 
-(* this code deviates in a few moments from smtXducerPass *)
+(* this code deviates a lot (!) from smtXducerPass *)
 let blocks_to_smt caches prog new_type_tab p =
     let roles = caches#get_analysis#get_var_roles in
     let is_visible v =
@@ -44,18 +44,19 @@ let blocks_to_smt caches prog new_type_tab p =
     let all_vars = (Program.get_shared prog)
         @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
     let vis_vs, hid_vs = List.partition is_visible all_vars in
-    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
+    let cfg = move_phis_to_blocks (mk_ssa true vis_vs hid_vs (mk_cfg lirs)) in
     let paths = enum_paths cfg in
     Printf.printf "PATHS (%d)\n" (List.length paths);
     let mk_block_cons block_map block =
-        let cons = block_to_constraints p#get_name new_type_tab block in
+        let cons = block_intra_cons p#get_name new_type_tab block in
         IntMap.add block#label cons block_map
     in
     let block_cons = List.fold_left mk_block_cons IntMap.empty cfg#block_list
     in
-    (block_cons, paths)
+    (cfg#block_list, block_cons, paths)
 
 
+(* XXX: REWRITE EVERYTHING WHEN IT WORKS! *)
 let proc_to_bdd prog smt_fun proc =
     let var_len v =
         let tp = Program.get_type prog v in
@@ -72,16 +73,24 @@ let proc_to_bdd prog smt_fun proc =
     in
     let rec collect_expr_vars var_map = function
         | Var v ->
-            (*
-            Printf.printf "len(%s) == %d\n" v#qual_name (var_len v).Bits.len;
-            *)
             StringMap.add v#get_name (var_len v) var_map
         | BinEx (_, l, r) ->
             collect_expr_vars (collect_expr_vars var_map l) r
         | UnEx (_, e) ->
             collect_expr_vars var_map e
+        | Phi (l, rs) ->
+            let addv var_map v =
+                StringMap.add v#get_name (var_len v) var_map in
+            List.fold_left addv (addv var_map l) rs
         | _ ->
             var_map
+    in
+    let to_bit_vars var_map v =
+        try
+            let len = (StringMap.find v#get_name var_map).Bits.len in
+            let bit_name i = sprintf "%s_%d" v#get_name (i + 1) in
+            List.map bit_name (range 0 (bits_to_fit len))
+        with Not_found -> raise (Failure ("Not_found " ^ v#get_name))
     in
     let is_inout v =
         let isin =
@@ -155,10 +164,13 @@ let proc_to_bdd prog smt_fun proc =
         | _ as s -> 
             raise (Bdd_error ("Cannot convert to BDD: " ^ (mir_stmt_s s)))
     in
-    let block_map, paths = smt_fun proc in 
+    let blocks, block_map, paths = smt_fun proc in 
     let all_stmts = List.concat (intmap_vals block_map) in
     let var_map =
         List.fold_left collect_stmt_vars StringMap.empty all_stmts in
+    let all_phis = 
+        List.concat (List.map (fun bb -> bb#get_phis) blocks) in
+    let var_map = List.fold_left collect_expr_vars var_map all_phis in
     let var_pool = new Sat.fresh_pool 1 in
     let block_bits_map =
         IntMap.map (fun b -> Bits.AND (List.map to_bits b)) block_map in
@@ -186,13 +198,44 @@ let proc_to_bdd prog smt_fun proc =
         Format.fprintf ff "(let P%d @,(exists [" num;
         List.iter (fun v -> Format.fprintf ff "%s @," v) inouts;
         Format.fprintf ff "]@, (and ";
-        let out_block bb =
-            Format.fprintf ff "B%d " bb#label in
-        List.iter out_block p;
-        Format.fprintf ff ")))";
-        Format.pp_print_flush ff ()
+        let n_closing = ref 0 in (* collecting closing parenthesis *)
+        let out_block prev_bb bb =
+            let phis = bb#get_phis in
+            if phis <> []
+            then begin
+                Format.fprintf ff "(sub@, [";
+                (* find the position of the predecessor in the list *)
+                let idx = bb#find_pred_idx prev_bb#label in
+                let phi_pair = function
+                | Phi (lhs, rhs) -> (lhs, (List.nth rhs idx))
+                | _ -> raise (Failure ("Non-phi in basic_block#get_phis"))
+                in
+                let unfold_bits v =
+                    List.iter
+                        (Format.fprintf ff "%s ")
+                        (to_bit_vars var_map v)
+                in
+                let pairs = List.map phi_pair phis in
+                List.iter (fun (l, _) -> unfold_bits l) pairs;
+                Format.fprintf ff "]@, [";
+                List.iter (fun (_, r) -> unfold_bits r) pairs;
+                Format.fprintf ff "]@, (and ";
+                n_closing := !n_closing + 2
+            end;
+            Format.fprintf ff "B%d " bb#label
+        in
+        let preds = (List.hd p) :: (List.rev (List.tl (List.rev p))) in
+        List.iter2 out_block preds p;
+        List.iter (fun _ -> Format.fprintf ff ")") (range 0 !n_closing);
+        Format.fprintf ff ")))"; Format.pp_print_newline ff ();
     in
     List.iter2 out_path (range 0 (List.length paths)) paths;
+    (* finally, add the relation *)
+    Format.fprintf ff "(let R @,(and ";
+    List.iter
+        (fun i -> Format.fprintf ff "P%d " i) (range 0 (List.length paths));
+    Format.fprintf ff "))";
+    Format.pp_print_flush ff ();
     close_out out
 
 

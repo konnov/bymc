@@ -1,5 +1,6 @@
 open Printf
 
+open Accums
 open SpinIr
 open SpinIrImp
 open Debug
@@ -16,6 +17,8 @@ class ['t] basic_block =
         val mutable seq: 't stmt list = []
         val mutable succ: 't basic_block list = []
         val mutable pred: 't basic_block list = []
+        (* phi functions incoming into the block (see SSA) *)
+        val mutable phis: 't expr list = []
         (* this flag can be used to traverse along basic blocks *)
         val mutable visit_flag = false
 
@@ -29,6 +32,13 @@ class ['t] basic_block =
         method set_pred p = pred <- p
         method get_pred = pred
         method pred_labs = List.map (fun bb -> bb#label) pred
+        method find_pred_idx lab =
+            let pairs = List.combine (range 0 (List.length pred)) pred in
+            let idx, _ = List.find (fun (i, bb) -> bb#label = lab) pairs in
+            idx
+
+        method set_phis s = phis <- s
+        method get_phis = phis
 
         method set_visit_flag f = visit_flag <- f
         method get_visit_flag = visit_flag

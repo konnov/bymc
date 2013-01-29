@@ -3,7 +3,7 @@
  * This module is written in Dubrovnik next to a beach.
  * So it may have more bugs than the other modules!
  *
- * Igor Konnov, 2012.
+ * Igor Konnov, July 2012.
  *)
 
 open Printf
@@ -310,4 +310,20 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
     in
     search 0;
     optimize_ssa cfg (* optimize it after all *)
+
+
+(* move explicit statements x_1 = phi(x_2, x_3) to basic blocks (see bddPass) *)
+let move_phis_to_blocks cfg =
+    let move_in_bb bb =
+        let on_stmt lst = function
+        | Expr (_, Phi (lhs, rhs)) ->
+                bb#set_phis ((Phi (lhs, rhs)) :: bb#get_phis);
+                lst
+        | _ as s ->
+                s :: lst
+        in
+        bb#set_seq (List.fold_left on_stmt [] (List.rev bb#get_seq))
+    in
+    List.iter move_in_bb cfg#block_list;
+    cfg
 
