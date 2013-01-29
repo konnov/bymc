@@ -258,12 +258,34 @@ class Bdder:
             print "%s: bdd %s" % (cur_time(), name)
             bdd = self.expr_as_bdd(snd)
 
-            if name == "R":
-                print "Enumerating the values..."
-                bdd.PrintMinterm()
-#                pycudd.set_iter_meth(0)
-#                for cube in bdd:
-#                    print pycudd.cube_tuple_to_str(cube)
+            if name == "R": # put just True if you want to debug
+                #print "Enumerating the values..."
+                #bdd.PrintMinterm()
+                bdd.PrintDebug(len(self.var_order), 1)
+
+                print "%s: saving %s" % (cur_time(), name)
+                rev_order = {}
+                for k, v in self.var_order.items():
+                    rev_order[v] = k
+
+                if name == "R":
+                    f = open('R.sat', 'w+')
+                else:
+                    f = sys.stdout
+
+                pycudd.set_iter_meth(0) # over the cubes
+                for cube in bdd:
+                    f.write("(and ")
+                    for i, val in enumerate(cube):
+                        if val == 1:
+                            f.write(rev_order[i] + " ")
+                        elif val == 0:
+                            f.write("!" + rev_order[i] + " ")
+
+                    f.write(")\n")
+
+                if f != sys.stdout:
+                    f.close()
 
             return (name, bdd)
         else:
