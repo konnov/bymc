@@ -237,7 +237,6 @@ let do_refinement solver trail_filename prog =
         end
     in
     let num_states = (List.length trail_asserts) in
-    solver#set_need_evidence true;
     let refined = ref false in
     (* Try to detect spurious transitions and unfair paths
        (discussed in the TACAS submission) *)
@@ -251,6 +250,7 @@ let do_refinement solver trail_filename prog =
         log INFO "(status trace-refined)";
         refined := true
     end else begin
+        solver#set_need_evidence true;
         let fairness =
             filter_good_fairness type_tab aprops (collect_fairness_forms ltl_forms) in
         let spur_loop =
