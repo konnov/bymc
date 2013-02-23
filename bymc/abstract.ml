@@ -242,17 +242,19 @@ let do_refinement solver trail_filename prog =
        (discussed in the TACAS submission) *)
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
+    solver#set_need_evidence true; (* needed for refinement! *)
     let sp_st =
         try List.find check_trans (range 0 (num_states - 1))
-        with Not_found -> -1 in
+        with Not_found -> -1
+    in
     if sp_st <> -1
     then begin
         log INFO "(status trace-refined)";
         refined := true
     end else begin
-        solver#set_need_evidence true;
         let fairness =
-            filter_good_fairness type_tab aprops (collect_fairness_forms ltl_forms) in
+            filter_good_fairness type_tab aprops
+                (collect_fairness_forms ltl_forms) in
         let spur_loop =
             check_loop_unfair solver xducers_prog ctr_ctx_tbl
                 rev_map fairness inv_forms loop_asserts in
@@ -267,8 +269,9 @@ let do_refinement solver trail_filename prog =
             log INFO "This counterexample does not have spurious transitions or states.";
             log INFO "If it does not show a real problem, provide me with an invariant.";
             log INFO "(status trace-no-refinement)";
-            (* this is an experimental feature! *)
+            (* this is an EXPERIMENTAL feature! Sometimes it hangs! *)
             (* then check its prefixes, from the shortest to the longest *)
+            (*
             if not (sim_prefix (num_states - 1))
             then begin
                 log INFO "The path is not spurious.";
@@ -280,6 +283,7 @@ let do_refinement solver trail_filename prog =
                     (sprintf "  The shortest spurious path is 0:%d" short_len);
                 flush stdout;
             end
+            *)
         end
     end;
     log INFO "  [DONE]";

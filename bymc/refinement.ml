@@ -414,6 +414,9 @@ let refine_spurious_step solver smt_rev_map src_state_no =
     let pre, post = retrieve_unsat_cores solver smt_rev_map src_state_no in
     let pred_no = intro_new_pred pred_reach in
 
+    if pre = [] && post = []
+    then raise (Failure "Cannot refine: unsat core is empty");
+
     let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
     let preex = if pre = [] then "1" else (String.concat " && " pre) in
     fprintf cout "bymc_p%d = (%s);\n" pred_no preex;

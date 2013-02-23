@@ -46,15 +46,15 @@ let normalize_form form =
         | BinEx(LE, l, r) as f -> if neg then BinEx(GT, l, r) else f
         | BinEx(EQ, l, r) as f -> if neg then BinEx(NE, l, r) else f
         | BinEx(NE, l, r) as f -> if neg then BinEx(EQ, l, r) else f
-        | BinEx(AND, l, r) as f ->
+        | BinEx(AND, l, r) ->
                 if neg
-                then BinEx(OR, (norm true l), (norm true r))
-                else (norm false f)
+                then BinEx(OR, (norm neg l), (norm neg r))
+                else BinEx(AND, (norm neg l), (norm neg r))
 
-        | BinEx(OR, l, r) as f ->
+        | BinEx(OR, l, r) ->
                 if neg
-                then BinEx(AND, (norm true l), (norm true r))
-                else (norm false f)
+                then BinEx(AND, (norm neg l), (norm neg r))
+                else BinEx(OR, (norm neg l), (norm neg r))
 
         | UnEx(NEG, a) as f -> if neg then (norm true a) else f
 
