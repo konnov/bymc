@@ -65,11 +65,13 @@ class Parser:
         self.tok_iter = None
         self.tok = None
         self.var_set = set()
+        self.let_set = set()
 
     def parse_let(self):
         self.expect(OP, '(')
         self.expect(NAME, LET)
         name = self.expect(NAME, None)
+        self.let_set.add(name)
         e = self.parse_expr()
         self.expect(OP, ')')
         return (LET, (name, e))
@@ -265,6 +267,7 @@ class Bdder:
 
                 print "%s: saving %s" % (cur_time(), name)
                 bdd.PrintMinterm()
+# this can be quite slow
 #                rev_order = {}
 #                for k, v in self.var_order.items():
 #                    rev_order[v] = k
@@ -296,6 +299,18 @@ class Bdder:
         for f in forms:
             (name, bdd) = self.expr_as_bdd(f)
             self.bdd_map[name] = bdd
+
+
+def write_smv_template(var_list):
+    f = open('main.smv', 'w+')
+    f.write('MODULE main\n')
+    f.write('VAR\n')
+    for v in var_list:
+        f.write('  %s: boolean;\n' % v)
+
+    f.write('\nINIT TRUE\n')
+    f.write('TRANS TRUE\n')
+    f.close()
 
 
 NAME_RE = re.compile("(.+)_(.+)_([0-9]+)")
@@ -331,7 +346,7 @@ if __name__ == "__main__":
         print "%s: parsing..." % cur_time()
         parser = Parser()    
         forms = parser.parse_forms(filename)
-        used_vars = list(parser.var_set)
+        used_vars = list(parser.var_set.difference(parser.let_set))
         #print expr_s(expr)
     except ParseError, e:
         print "%s:%s" % (filename, str(e))
@@ -346,6 +361,8 @@ if __name__ == "__main__":
         f.write("%d -> %s\n" % (i, v))
 
     f.close()
+
+    write_smv_template(used_vars)
 
     mgr = pycudd.DdManager()
     mgr.SetDefault()
