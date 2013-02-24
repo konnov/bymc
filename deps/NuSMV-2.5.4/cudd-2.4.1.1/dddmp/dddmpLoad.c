@@ -921,9 +921,14 @@ DddmpCuddDdArrayLoad (
             if (strcmp(buf, "0") == 0) {
               pnodes[i] = Cudd_ReadFalse (ddMgr);       
             } else {
+#if 0
+Igor Konnov /* dirty bugfix for incompatibility with NuSMV */
               addConstant = atof(buf);
               pnodes[i] = Cudd_addConst (ddMgr,
                 (CUDD_VALUE_TYPE) addConstant);
+#else
+              abort();
+#endif
             }
           }
 

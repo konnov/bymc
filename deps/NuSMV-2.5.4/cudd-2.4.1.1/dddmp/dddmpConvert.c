@@ -85,6 +85,12 @@ Dddmp_Text2Bin (
   int nRoots;            /* number of BDD roots */
   int retValue;
  
+  /* Igor Konnov: Cudd_Init is changed in NuSMV */
+#if 1
+  printf("Text2Bin is not supported in the NuSMV version of CUDD\n");
+  abort();
+#else
+
   ddMgr = Cudd_Init(0,0,CUDD_UNIQUE_SLOTS,CUDD_CACHE_SLOTS,0);
   if (ddMgr == NULL) {
     return (0);
@@ -110,6 +116,7 @@ Dddmp_Text2Bin (
     printf("error converting BDD format\n");
     Cudd_Quit(ddMgr);
     return (0);
+#endif
 }
 
 /**Function********************************************************************
@@ -135,6 +142,11 @@ Dddmp_Bin2Text (
   DdNode **roots;        /* array of BDD roots to be loaded */
   int nRoots;            /* number of BDD roots */
   int retValue;
+  /* Igor Konnov: Cudd_Init is changed in NuSMV */
+#if 1
+  printf("Text2Bin is not supported in the NuSMV version of CUDD\n");
+  abort();
+#else
 
   ddMgr = Cudd_Init(0,0,CUDD_UNIQUE_SLOTS,CUDD_CACHE_SLOTS,0);
   if (ddMgr == NULL) {
@@ -161,6 +173,7 @@ Dddmp_Bin2Text (
     printf("error converting BDD format\n");
     Cudd_Quit(ddMgr);
     return (0);
+#endif
 }
 
 /*---------------------------------------------------------------------------*/
