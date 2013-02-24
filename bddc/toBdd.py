@@ -7,6 +7,7 @@ from tokenize import *
 from StringIO import StringIO
 from time import localtime, strftime
 
+import os
 import re
 import sys
 import token
@@ -265,8 +266,9 @@ class Bdder:
                 #bdd.PrintMinterm()
                 bdd.PrintDebug(len(self.var_order), 1)
 
-                print "%s: saving %s" % (cur_time(), name)
-                bdd.PrintMinterm()
+# takes ages on mid-sized bdds
+                #print "%s: saving %s" % (cur_time(), name)
+                #bdd.PrintMinterm()
 # this can be quite slow
 #                rev_order = {}
 #                for k, v in self.var_order.items():
@@ -369,6 +371,21 @@ if __name__ == "__main__":
     print "%s: constructing BDDs..." % cur_time()
     bdder = Bdder(mgr, var_order)
     bdder.forms_to_bdd(forms)
+
+    print "%s: saving BDDs..." % cur_time()
+    # TODO: plumbing code, extract into a separate function
+    DDDMP_MODE_TEXT = ord('A') # undefined in pycudd
+    DDDMP_VAR_MATCHNAMES = 3   # undefined in pycudd
+    dds = pycudd.DdArray(1)
+    dds[0] = bdder.bdd_map["R"]
+    dd_names = pycudd.StringArray(1)
+    dd_names[0] = "TRANS"
+    var_names = pycudd.StringArray(len(used_vars))
+    dd_filename, _ = os.path.splitext(os.path.basename(filename))
+    for i, n in enumerate(used_vars):
+        var_names[i] = n
+    dds.ArrayStore(dd_filename, dd_names, var_names, None,
+            DDDMP_MODE_TEXT, DDDMP_VAR_MATCHNAMES, dd_filename + ".ddd", None)
 
     print "%s: finished" % cur_time()
     mgr.GarbageCollect(1)
