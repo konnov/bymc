@@ -435,8 +435,14 @@ if test "x$ac_have_cudd" = "xyes"; then
        AC_CHECK_LIB(cudd, Cudd_Ref,
          [ac_have_cudd=yes], \
 	 [ac_have_cudd=no], \
-	 [-L$srcdir/../$cuddname/lib -lst -lmtr -lcudd_util])
+	 [-L$srcdir/../$cuddname/lib -lst -lmtr -lcudd_util -ldddmp -lcudd])
 
+#       if test "x$ac_have_cudd" = "xyes"; then
+#         AC_CHECK_LIB(dddmp, Dddmp_cuddBddArrayLoad,
+#           [ac_have_cudd=yes], \
+#        	 [ac_have_cudd=no], \
+#	         [-L$srcdir/../$cuddname/lib -ldddmp -lcudd -lst -lmtr -lcudd_util])
+#       fi
      fi 
    fi 
 fi

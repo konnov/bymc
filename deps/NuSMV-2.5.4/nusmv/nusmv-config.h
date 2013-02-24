@@ -340,7 +340,7 @@
 
 /* Library build date */
 #ifndef NUSMV_LIBRARY_BUILD_DATE
-#define NUSMV_LIBRARY_BUILD_DATE "Sun Feb 24 11:38:19 UTC 2013"
+#define NUSMV_LIBRARY_BUILD_DATE "Sun Feb 24 22:12:41 UTC 2013"
 #endif
 
 /* Library Email */
@@ -390,7 +390,7 @@
 
 /* Build date */
 #ifndef NUSMV_PACKAGE_BUILD_DATE
-#define NUSMV_PACKAGE_BUILD_DATE "Sun Feb 24 11:38:19 UTC 2013"
+#define NUSMV_PACKAGE_BUILD_DATE "Sun Feb 24 22:12:41 UTC 2013"
 #endif
 
 /* Define to the full name of this package. */

@@ -18503,7 +18503,7 @@ if ${ac_cv_lib_cudd_Cudd_Ref+:} false; then :
 else
   ac_check_lib_save_LIBS=$LIBS
 LIBS="-lcudd \
-	 -L$srcdir/../$cuddname/lib -lst -lmtr -lcudd_util $LIBS"
+	 -L$srcdir/../$cuddname/lib -lst -lmtr -lcudd_util -ldddmp -lcudd $LIBS"
 cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -18541,6 +18541,12 @@ else
 fi
 
 
+#       if test "x$ac_have_cudd" = "xyes"; then
+#         AC_CHECK_LIB(dddmp, Dddmp_cuddBddArrayLoad,
+#           [ac_have_cudd=yes], \
+#        	 [ac_have_cudd=no], \
+#	         [-L$srcdir/../$cuddname/lib -ldddmp -lcudd -lst -lmtr -lcudd_util])
+#       fi
      fi
    fi
 fi

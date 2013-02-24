@@ -450,7 +450,7 @@ libnusmv_la_LIBADD = \
 	$(top_builddir)/src/parser/libsmvgrammar.la \
 	$(top_builddir)/src/librbcdag.la \
 	-L$(top_srcdir)/$(CUDD_DIR)/lib \
-	-lcudd -lcudd_util -lmtr -lst   \
+	-lcudd -lcudd_util -lmtr -lst -ldddmp  \
         $(readline_libs) $(zchaff_libs) $(minisat_libs) $(expat_libs) $(regex_libs)
 
 libnusmv_la_DEPENDENCIES = $(top_builddir)/src/libnusmvsrc.la	\
