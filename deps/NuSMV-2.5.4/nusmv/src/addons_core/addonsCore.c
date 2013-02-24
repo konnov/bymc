@@ -48,6 +48,10 @@
 #include "addons_core/compass/compass.h"
 #endif
 
+#if NUSMV_HAVE_IMPORT
+#include "addons_core/import/import.h"
+#endif
+
 #include "opt/opt.h"
 
 
@@ -111,6 +115,9 @@ void AddonsCore_Init(void)
 #if NUSMV_HAVE_COMPASS
    Compass_init();
 #endif
+#if NUSMV_HAVE_IMPORT
+   Import_init();
+#endif
 }
 
 /**Function********************************************************************
@@ -130,6 +137,9 @@ void AddonsCore_Reset(void)
   /*-------- DE-INITIALIZATION ------------ */
 #if NUSMV_HAVE_COMPASS
    Compass_reset();
+#endif
+#if NUSMV_HAVE_IMPORT
+   Import_reset();
 #endif
   /*-------- INITIALIZATION ------------ */
 }
@@ -153,6 +163,9 @@ void AddonsCore_Quit(void)
   }
 #if NUSMV_HAVE_COMPASS
    Compass_quit();
+#endif
+#if NUSMV_HAVE_IMPORT
+   Import_quit();
 #endif
 }
 
