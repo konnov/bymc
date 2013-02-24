@@ -49,7 +49,7 @@ extra_pkgs=
 
 
 # default addons
-def_addons=compass
+def_addons="compass import"
 AC_ARG_ENABLE(addons, 
   [  --enable-addons  Builds given addons. Enabled addon names must be colon-separated (:)],
   [ if test "x$enableval" = "xno"; then 
@@ -625,7 +625,7 @@ AC_SUBST(cudd_mkf)
 AC_MSG_CHECKING(for Addons)
 
 # The list of all available addons
-all_addons="compass"
+all_addons="compass import"
 
 # The list of addons that when required should be configured but
 # not built. This rules does not apply when the addon is required
@@ -646,6 +646,7 @@ meta_addons=""
 # ----------------------------------
 # Dependencies among addons:
 compass_deps=
+import_deps=
 # ----------------------------------
 
 
@@ -703,6 +704,7 @@ done
 for addon in $found_addons $dep_addons $alias_addons; do
   case $addon in
   compass) ;;
+  import) ;;
   *) 
     AC_MSG_ERROR("Addon $addon is not supported");;
   esac
@@ -750,6 +752,13 @@ for addon in $all_addons; do
     fi
     AC_DEFINE_UNQUOTED(HAVE_COMPASS, $_have_addon, Enables the named addon)
     AM_CONDITIONAL(HAVE_COMPASS, test $_have_addon = 1);;
+
+  import) 
+    if test $_have_addon == 1; then 
+       AC_CONFIG_FILES([src/addons_core/import/Makefile]) 
+    fi
+    AC_DEFINE_UNQUOTED(HAVE_IMPORT, $_have_addon, Enables the named addon)
+    AM_CONDITIONAL(HAVE_IMPORT, test $_have_addon = 1);;
 
   *) 
     AC_MSG_ERROR("Addon $addon is not supported");;

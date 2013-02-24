@@ -72,6 +72,11 @@
 #define NUSMV_HAVE_GETPID 1
 #endif
 
+/* Enables the named addon */
+#ifndef NUSMV_HAVE_IMPORT
+#define NUSMV_HAVE_IMPORT 1
+#endif
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #ifndef NUSMV_HAVE_INTTYPES_H
 #define NUSMV_HAVE_INTTYPES_H 1
@@ -94,7 +99,7 @@
 
 /* Uses the private readline */
 #ifndef NUSMV_HAVE_LIBREADLINE
-#define NUSMV_HAVE_LIBREADLINE 1
+#define NUSMV_HAVE_LIBREADLINE 0
 #endif
 
 /* Define to 1 if you have the <limits.h> header file. */
@@ -335,7 +340,7 @@
 
 /* Library build date */
 #ifndef NUSMV_LIBRARY_BUILD_DATE
-#define NUSMV_LIBRARY_BUILD_DATE "Fri Oct 28 13:53:51 UTC 2011"
+#define NUSMV_LIBRARY_BUILD_DATE "Sun Feb 24 11:38:19 UTC 2013"
 #endif
 
 /* Library Email */
@@ -360,7 +365,7 @@
 
 /* Names of linked addons */
 #ifndef NUSMV_LINKED_CORE_ADDONS
-#define NUSMV_LINKED_CORE_ADDONS "compass "
+#define NUSMV_LINKED_CORE_ADDONS "import compass "
 #endif
 
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
@@ -385,7 +390,7 @@
 
 /* Build date */
 #ifndef NUSMV_PACKAGE_BUILD_DATE
-#define NUSMV_PACKAGE_BUILD_DATE "Fri Oct 28 13:53:51 UTC 2011"
+#define NUSMV_PACKAGE_BUILD_DATE "Sun Feb 24 11:38:19 UTC 2013"
 #endif
 
 /* Define to the full name of this package. */
@@ -401,6 +406,11 @@
 /* Define to the one symbol short name of this package. */
 #ifndef NUSMV_PACKAGE_TARNAME
 #define NUSMV_PACKAGE_TARNAME "nusmv"
+#endif
+
+/* Define to the home page for this package. */
+#ifndef NUSMV_PACKAGE_URL
+#define NUSMV_PACKAGE_URL ""
 #endif
 
 /* Define to the version of this package. */
@@ -425,7 +435,7 @@
 
 /* The size of `long', as computed by sizeof. */
 #ifndef NUSMV_SIZEOF_LONG
-#define NUSMV_SIZEOF_LONG 8
+#define NUSMV_SIZEOF_LONG 4
 #endif
 
 /* The size of `long long', as computed by sizeof. */
@@ -435,7 +445,7 @@
 
 /* The size of `void *', as computed by sizeof. */
 #ifndef NUSMV_SIZEOF_VOID_P
-#define NUSMV_SIZEOF_VOID_P 8
+#define NUSMV_SIZEOF_VOID_P 4
 #endif
 
 /* Define to 1 if you have the ANSI C header files. */
