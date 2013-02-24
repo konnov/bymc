@@ -83,7 +83,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libimport_la_DEPENDENCIES =
-am__objects_1 = importCmd.lo importPkg.lo
+am__objects_1 = importCmd.lo importPkg.lo importImpl.lo
 am_libimport_la_OBJECTS = $(am__objects_1)
 libimport_la_OBJECTS = $(am_libimport_la_OBJECTS)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
@@ -339,7 +339,7 @@ SUBDIRS =
 CUDD_NAME = $(cuddname)
 CUDD_DIR = ../$(CUDD_NAME)
 INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/$(CUDD_DIR)/include
-PKG_SOURCES = import.h importCmd.c importPkg.c
+PKG_SOURCES = import.h importCmd.c importPkg.c importImpl.h importImpl.c
 importdir = $(includedir)/nusmv/addons_core/import
 import_HEADERS = import.h
 
@@ -400,6 +400,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/importCmd.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/importImpl.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/importPkg.Plo@am__quote@
 
 .c.o:

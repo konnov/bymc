@@ -43,7 +43,7 @@ CUDD_DIR = ../$(CUDD_NAME)
 
 INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/$(CUDD_DIR)/include
 
-PKG_SOURCES = import.h importCmd.c importPkg.c
+PKG_SOURCES = import.h importCmd.c importPkg.c importImpl.h importImpl.c
 
 importdir = $(includedir)/nusmv/addons_core/import
 import_HEADERS = import.h
