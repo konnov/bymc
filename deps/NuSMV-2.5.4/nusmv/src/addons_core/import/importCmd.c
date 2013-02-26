@@ -21,6 +21,7 @@
 
 #include "import.h"
 #include "importInt.h"
+#include "importImpl.h"
 
 #include "opt/opt.h"
 #include "cmd/cmd.h"
