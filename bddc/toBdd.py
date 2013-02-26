@@ -309,7 +309,9 @@ def write_smv_template(var_list, smv_vars):
     f.write('VAR\n')
     for v in var_list:
         if smv_vars.has_key(v):
-            f.write('  %s: boolean;\n' % smv_vars[v])
+            sv = smv_vars[v]
+            if not re.compile('next(.*)').match(sv):
+                f.write('  %s: boolean;\n' % sv)
 
     f.write('\nINIT TRUE\n')
     f.write('TRANS TRUE\n')
@@ -345,10 +347,10 @@ def mk_smv_vars(used_vars):
     for v in used_vars:
         m = p.match(v)
         if m:
-            smv_vars[v] = "A" + m.group(1) + m.group(2) # prev
+            smv_vars[v] = m.group(1) + m.group(2) # prev
         m = n.match(v)
         if m:
-            smv_vars[v] = "B" + m.group(1) + m.group(2) # next
+            smv_vars[v] = "next(%s%s)" % (m.group(1), m.group(2)) # next
 
     return smv_vars            
 
