@@ -303,12 +303,13 @@ class Bdder:
             self.bdd_map[name] = bdd
 
 
-def write_smv_template(var_list):
+def write_smv_template(var_list, smv_vars):
     f = open('main.smv', 'w+')
     f.write('MODULE main\n')
     f.write('VAR\n')
     for v in var_list:
-        f.write('  %s: boolean;\n' % v)
+        if smv_vars.has_key(v):
+            f.write('  %s: boolean;\n' % smv_vars[v])
 
     f.write('\nINIT TRUE\n')
     f.write('TRANS TRUE\n')
@@ -337,6 +338,20 @@ def cmp_vars(v1, v2):
             return cmp(ver1, ver2)
 
 
+def mk_smv_vars(used_vars):
+    smv_vars = {}
+    p = re.compile("(.*)_IN(_[0-9]*)")
+    n = re.compile("(.*)_OUT(_[0-9]*)")
+    for v in used_vars:
+        m = p.match(v)
+        if m:
+            smv_vars[v] = "A" + m.group(1) + m.group(2) # prev
+        m = n.match(v)
+        if m:
+            smv_vars[v] = "B" + m.group(1) + m.group(2) # next
+
+    return smv_vars            
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 1:
@@ -364,7 +379,8 @@ if __name__ == "__main__":
 
     f.close()
 
-    write_smv_template(used_vars)
+    smv_vars = mk_smv_vars(used_vars)
+    write_smv_template(used_vars, smv_vars)
 
     mgr = pycudd.DdManager()
     mgr.SetDefault()
@@ -374,6 +390,7 @@ if __name__ == "__main__":
 
     print "%s: saving BDDs..." % cur_time()
     # TODO: plumbing code, extract into a separate function
+
     DDDMP_MODE_TEXT = ord('A') # undefined in pycudd
     DDDMP_VAR_MATCHNAMES = 3   # undefined in pycudd
     dds = pycudd.DdArray(1)
@@ -383,7 +400,11 @@ if __name__ == "__main__":
     var_names = pycudd.StringArray(len(used_vars))
     dd_filename, _ = os.path.splitext(os.path.basename(filename))
     for i, n in enumerate(used_vars):
-        var_names[i] = n
+        if smv_vars.has_key(n):
+            var_names[i] = smv_vars[n]
+        else:
+            var_names[i] = None
+
     dds.ArrayStore(dd_filename, dd_names, var_names, None,
             DDDMP_MODE_TEXT, DDDMP_VAR_MATCHNAMES, dd_filename + ".ddd", None)
 
