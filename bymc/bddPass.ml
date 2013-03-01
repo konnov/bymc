@@ -29,23 +29,32 @@ let intmap_vals m =
     List.map (fun (k, v) -> v) (IntMap.bindings m)
 
 
+let get_main_body caches proc =
+    let reg_tbl = caches#get_struc#get_regions proc#get_name in
+    let loop_prefix = reg_tbl#get "loop_prefix" in
+    let loop_body = reg_tbl#get "loop_body" in
+    loop_body @ loop_prefix
+
+
+let get_init_body caches proc =
+    let reg_tbl = caches#get_struc#get_regions proc#get_name in
+    (reg_tbl#get "decl") @ (reg_tbl#get "init")
+
+
 (* this code deviates a lot (!) from smtXducerPass *)
-let blocks_to_smt caches prog new_type_tab p =
+let blocks_to_smt caches prog new_type_tab get_mirs_fun filename p =
     let roles = caches#get_analysis#get_var_roles in
     let is_visible v =
         match roles#get_role v with
         | VarRole.Scratch _ -> false
         | _ -> true
     in
-    let reg_tbl = caches#get_struc#get_regions p#get_name in
-    let loop_prefix = reg_tbl#get "loop_prefix" in
-    let loop_body = reg_tbl#get "loop_body" in
-    let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
+    let lirs = (mir_to_lir (get_mirs_fun caches p)) in
     let all_vars = (Program.get_shared prog)
         @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
     let vis_vs, hid_vs = List.partition is_visible all_vars in
     let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
-    Cfg.write_dot (sprintf "ssa-bdd-%s.dot" p#get_name) cfg;
+    Cfg.write_dot (sprintf "%s.dot" filename) cfg;
     let cfg = move_phis_to_blocks cfg in
     let paths = enum_paths cfg in
     Printf.printf "PATHS (%d)\n" (List.length paths);
@@ -59,7 +68,7 @@ let blocks_to_smt caches prog new_type_tab p =
 
 
 (* XXX: REWRITE EVERYTHING WHEN IT WORKS! *)
-let proc_to_bdd prog smt_fun proc =
+let proc_to_bdd prog smt_fun proc filename =
     let var_len v =
         let tp = Program.get_type prog v in
         match tp#basetype with
@@ -182,13 +191,13 @@ let proc_to_bdd prog smt_fun proc =
     let hidden_vars =
         List.filter is_hidden (Sat.collect_vars (intmap_vals block_forms_map))
     in
-    let out = open_out (sprintf "%s.bits" proc#get_name) in
+    let out = open_out (sprintf "%s.bits" filename) in
     let ff = Format.formatter_of_out_channel out in
     List.iter (fun bbits -> Bits.format_bv_form ff bbits)
         (intmap_vals block_bits_map);
     close_out out;
 
-    let out = open_out (sprintf "%s.bdd" proc#get_name) in
+    let out = open_out (sprintf "%s.bdd" filename) in
     let ff = Format.formatter_of_out_channel out in
     Format.fprintf ff "%s" "# sat\n";
     let out_f id form =
@@ -242,30 +251,18 @@ let proc_to_bdd prog smt_fun proc =
     close_out out
 
 
-(* Enumerate all possible combinations of inputs and outputs. It works only
-   after the counter abstraction. Not a good idea... *)
-let enum_in_outs solver caches prog proc =
-    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
-    let abbrv = (ctr_ctx_tbl#get_ctx proc#get_name)#abbrev_name in
-    solver#push_ctx;
-    solver#set_need_evidence true;
-    solver#comment "enumerating inputs/outputs";
-    let res, _ = Refinement.simulate_in_smt solver prog
-        ctr_ctx_tbl [(abbrv, [(Expr (-1, Nop ""))]);
-            (abbrv, [(Expr (-1, Nop ""))])] (Hashtbl.create 1) 1 in
-    if res then begin
-        printf "One value to take...\n";
-        let vals = Refinement.parse_smt_evidence prog solver in
-        Refinement.pretty_print_exprs (Hashtbl.find vals 0);
-        (*Refinement.pretty_print_exprs (Hashtbl.find vals 1);*)
-    end;
-    solver#pop_ctx
-
-
 let transform_to_bdd solver caches prog =
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let xprog = Program.set_type_tab new_type_tab prog in
-    List.iter
-        (proc_to_bdd xprog (blocks_to_smt caches xprog new_type_tab))
-        (Program.get_procs prog);
+    let convert_proc proc =
+        let fname = proc#get_name ^ "-R" in
+        (proc_to_bdd xprog
+            (blocks_to_smt caches xprog new_type_tab get_main_body fname)
+            proc fname);
+        let fname = proc#get_name ^ "-I" in
+        (proc_to_bdd xprog
+            (blocks_to_smt caches xprog new_type_tab get_init_body fname)
+            proc fname)
+    in
+    List.iter convert_proc (Program.get_procs prog)
 
