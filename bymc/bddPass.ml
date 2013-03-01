@@ -14,6 +14,7 @@ open Spin
 open SpinIr
 open SpinIrImp
 open Ssa
+open VarRole
 
 exception Bdd_error of string
 
@@ -42,12 +43,15 @@ let get_init_body caches proc =
 
 
 (* this code deviates a lot (!) from smtXducerPass *)
-let blocks_to_smt caches prog new_type_tab get_mirs_fun filename p =
+let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     let roles = caches#get_analysis#get_var_roles in
     let is_visible v =
-        match roles#get_role v with
-        | VarRole.Scratch _ -> false
-        | _ -> true
+        try begin
+            match roles#get_role v with
+            | VarRole.Scratch _ -> false
+            | _ -> true
+        end with VarRole.Var_not_found _ ->
+            true
     in
     let lirs = (mir_to_lir (get_mirs_fun caches p)) in
     let all_vars = (Program.get_shared prog)
@@ -59,7 +63,7 @@ let blocks_to_smt caches prog new_type_tab get_mirs_fun filename p =
     let paths = enum_paths cfg in
     Printf.printf "PATHS (%d)\n" (List.length paths);
     let mk_block_cons block_map block =
-        let cons = block_intra_cons p#get_name new_type_tab block in
+        let cons = block_intra_cons p#get_name type_tab new_type_tab block in
         IntMap.add block#label cons block_map
     in
     let block_cons = List.fold_left mk_block_cons IntMap.empty cfg#block_list
@@ -252,16 +256,17 @@ let proc_to_bdd prog smt_fun proc filename =
 
 
 let transform_to_bdd solver caches prog =
-    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let type_tab = Program.get_type_tab prog in
+    let new_type_tab = type_tab#copy in
     let xprog = Program.set_type_tab new_type_tab prog in
     let convert_proc proc =
         let fname = proc#get_name ^ "-R" in
         (proc_to_bdd xprog
-            (blocks_to_smt caches xprog new_type_tab get_main_body fname)
+            (blocks_to_smt caches xprog type_tab new_type_tab get_main_body fname)
             proc fname);
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog
-            (blocks_to_smt caches xprog new_type_tab get_init_body fname)
+            (blocks_to_smt caches xprog type_tab new_type_tab get_init_body fname)
             proc fname)
     in
     List.iter convert_proc (Program.get_procs prog)

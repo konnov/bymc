@@ -17,6 +17,17 @@ let rec mk_product lst n =
                 (mk_product lst (n - 1)))
 
 
+(* make a cartesian product of several lists *)
+let rec mk_product_of_lists range_lists =
+    match range_lists with
+    | [] -> raise (Failure "mk_product_of_lists: range_lists is empty")
+    | [lst] -> List.map (fun e -> [e]) lst
+    | lst :: tail ->
+        let cons tuple e = e :: tuple in
+        let mult tuple = List.map (cons tuple) lst in
+        List.concat (List.map mult (mk_product_of_lists tail))
+
+
 (* like String.join in python *)
 let str_join sep list_of_strings =
     List.fold_left

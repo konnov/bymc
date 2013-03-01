@@ -19,7 +19,8 @@ let mkez e = MExpr (-1, e)
      A -> (B, C); B -> D; C -> D; B -> C.
  To handle this case two copies of C must be introduced.
  *)
-let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
+let block_to_constraints (proc_name: string)
+        (new_type_tab: data_type_tab)
         (bb: 't basic_block): (Spin.token mir_stmt list) =
     let at_var i =
         let nv = new_var (sprintf "at_%d" i) in 
@@ -119,11 +120,28 @@ let block_to_constraints (proc_name: string) (new_type_tab: data_type_tab)
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 
 
+let unfold_arr_idx_expr type_tab arr idx_expr =
+    let used_vars = expr_used_vars idx_expr in
+    let get_var_range v =
+        let tp = type_tab#get_type v in
+        if tp#is_array
+        then raise (CfgError
+            (sprintf "Array %s is indexed by the array %s"
+                arr#get_name tp#get_name))
+        else let l, r = tp#range in
+            range l r
+    in
+    let var_ranges = List.map get_var_range used_vars in
+    let all_tuples = mk_product_of_lists var_ranges in
+    ()
+
+
 (* Translate block constraints without flow constraints between blocks
    (intrablock constraints if you like).
    It is useful when dealing with one path (see bddPass).
  *)
-let block_intra_cons (proc_name: string) (new_type_tab: data_type_tab)
+let block_intra_cons (proc_name: string)
+        (type_tab: data_type_tab) (new_type_tab: data_type_tab)
         (bb: 't basic_block): (Spin.token mir_stmt list) =
     let convert (s: Spin.token stmt) (tl: Spin.token mir_stmt list):
             Spin.token mir_stmt list=
@@ -134,7 +152,7 @@ let block_intra_cons (proc_name: string) (new_type_tab: data_type_tab)
         | Expr (_, (BinEx (ASGN, _,
             BinEx (ARR_UPDATE,
                 BinEx (ARR_ACCESS, _, _), _)))) ->
-            raise (CfgError "Unexpected array update")
+            raise (CfgError ("Unexpected array update: " ^ (stmt_s s)))
 
         | Expr (id, (BinEx (ASGN, lhs, rhs) as e)) ->
             (mke id (Nop (expr_s e)))
