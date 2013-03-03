@@ -10,6 +10,7 @@ open PiaDataCtx
 open PiaCtrCtx
 open Program
 open Refinement
+open Simplif
 open Smt
 open Spin
 open SpinIr
@@ -75,9 +76,12 @@ let do_abstraction solver is_first_run bdd_pass prog =
     log INFO "[DONE]";
     if bdd_pass then begin
         log INFO "> Constructing BDDs...";
+        let simp_prog = simplify_prog caches ctrabs_prog in
+        write_to_file true "abs-counter-simp.prm"
+            (units_of_program simp_prog) (get_type_tab simp_prog);
         (* counter abstraction builds its own skeleton...
         let _ = SkelStruc.pass caches ctrabs_prog in*)
-        BddPass.transform_to_bdd solver caches ctrabs_prog;
+        BddPass.transform_to_bdd solver caches simp_prog;
         log INFO "[DONE]";
     end;
     solver#pop_ctx;

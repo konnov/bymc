@@ -120,22 +120,6 @@ let block_to_constraints (proc_name: string)
     n_cons entry_starts (n_cons flow_succ (n_cons loc_mux smt_es))
 
 
-let unfold_arr_idx_expr type_tab arr idx_expr =
-    let used_vars = expr_used_vars idx_expr in
-    let get_var_range v =
-        let tp = type_tab#get_type v in
-        if tp#is_array
-        then raise (CfgError
-            (sprintf "Array %s is indexed by the array %s"
-                arr#get_name tp#get_name))
-        else let l, r = tp#range in
-            range l r
-    in
-    let var_ranges = List.map get_var_range used_vars in
-    let all_tuples = mk_product_of_lists var_ranges in
-    ()
-
-
 (* Translate block constraints without flow constraints between blocks
    (intrablock constraints if you like).
    It is useful when dealing with one path (see bddPass).

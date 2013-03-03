@@ -10,6 +10,7 @@ open Printf
 open Accums
 open Cfg
 open CfgSmt
+open Simplif
 open Spin
 open SpinIr
 open SpinIrImp

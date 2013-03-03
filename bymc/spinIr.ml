@@ -425,10 +425,12 @@ let replace_stmt_id new_id = function
    Each statement has an identifier attached.
  *)
 type 't mir_stmt =
-      MSkip of int | MExpr of int * 't expr
+    | MSkip of int
+    | MExpr of int * 't expr
     | MDecl of int * var * 't expr
     | MLabel of int * int
-    | MAtomic of int * 't mir_stmt list | MD_step of int * 't mir_stmt list
+    | MAtomic of int * 't mir_stmt list
+    | MD_step of int * 't mir_stmt list
     | MGoto of int * int
     | MIf of int * 't mir_option list
     | MAssert of int * 't expr
@@ -438,18 +440,18 @@ type 't mir_stmt =
     | MUnsafe of int * string (* a statement never interpreted but copied*)
     | MDeclProp of int * var * 't atomic_expr
 and 't atomic_expr =
-      PropAll of 't expr
+    | PropAll of 't expr
     | PropSome of 't expr
     | PropGlob of 't expr (* refers to global variables only *)
     | PropAnd of 't atomic_expr * 't atomic_expr
     | PropOr of 't atomic_expr * 't atomic_expr
 and 't mir_option =
-      MOptGuarded of 't mir_stmt list
+    | MOptGuarded of 't mir_stmt list
     | MOptElse of 't mir_stmt list
 
 
 let m_stmt_id = function
-      MSkip id -> id
+    | MSkip id -> id
     | MExpr (id, _) -> id
     | MDecl (id, _, _) -> id
     | MLabel (id, _) -> id
