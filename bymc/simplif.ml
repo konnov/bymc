@@ -87,7 +87,7 @@ let prop_const exp binding =
 (* replace array accesses like  a[x+y] == i by a conjunction:
     (x == 0 && y == 0 && a[0] == i) || ... || (x == m && y == n && a[m+n] == i)
  *)
-let expand_arrays type_tab expr =
+let expand_arrays type_tab stmt =
     let is_arr_access = function
     | BinEx (ARR_ACCESS, _, _) -> true
     | _ -> false
@@ -97,33 +97,55 @@ let expand_arrays type_tab expr =
         List.map eq (VarMap.bindings binding)
     in
     let rec expand = function
-    | BinEx (EQ, _, _) 
-    | BinEx (NE, _, _)
-    | BinEx (GT, _, _) 
-    | BinEx (GE, _, _)
-    | BinEx (LT, _, _) 
-    | BinEx (LE, _, _) as e ->
+    | MExpr (id, BinEx (EQ, _, _))
+    | MExpr (id, BinEx (NE, _, _))
+    | MExpr (id, BinEx (GT, _, _))
+    | MExpr (id, BinEx (GE, _, _))
+    | MExpr (id, BinEx (LT, _, _))
+    | MExpr (id, BinEx (LE, _, _)) as s ->
         let prop e binding =
             list_to_binex AND ((prop_const e binding) :: binding_to_eqs binding)
         in
+        let e = expr_of_m_stmt s in
         if expr_exists is_arr_access e
         then
             let bindings = mk_expr_bindings type_tab e in
             let instances = List.map (prop e) bindings in
-            list_to_binex OR instances
-        else e
+            MExpr (id, list_to_binex OR instances)
+        else s
+
+    | MExpr (id, BinEx (ASGN, _, _)) as s ->
+        let mk_opt e binding =
+            let guard =
+                MExpr(-1, (list_to_binex AND (binding_to_eqs binding))) in
+            MOptGuarded [guard; MExpr(-1, (prop_const e binding))]
+        in
+        let e = expr_of_m_stmt s in
+        if expr_exists is_arr_access e
+        then
+            let bindings = mk_expr_bindings type_tab e in
+            if bindings <> []
+            then let options = List.map (mk_opt e) bindings in
+                MIf (id, options)
+            else s (* constant indices *)
+        else s
             
-    | UnEx (t, e) -> UnEx (t, (expand e))
-    | BinEx (t, l, r) -> BinEx (t, (expand l), (expand r))
-    | _ as e -> e
+    | MExpr (id, UnEx (t, e)) ->
+        let sube = expr_of_m_stmt (expand (MExpr (-1, e))) in
+        MExpr (id, UnEx (t, sube))
+    | MExpr (id, BinEx (t, l, r)) ->
+        let le = expr_of_m_stmt (expand (MExpr (-1, l))) in
+        let re = expr_of_m_stmt (expand (MExpr (-1, r))) in
+        MExpr (id, BinEx (t, le, re))
+    | _ as s -> s
     in
-    expand expr
+    expand stmt
 
 
 let simplify type_tab mir_stmt =
     let rec simp = function
-    | MExpr (id, e) ->
-        MExpr (id, expand_arrays type_tab e)
+    | MExpr (_, _) as s ->
+        expand_arrays type_tab s
     | MIf (id, opts) ->
         MIf (id, (List.map simp_opt opts))
     | MAtomic (id, body) ->
