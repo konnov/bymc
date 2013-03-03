@@ -46,6 +46,44 @@ let mk_expr_bindings type_tab exp =
         List.map mk_var_map all_tuples
 
 
+(* propagate constants *)
+let prop_const exp binding =
+    let compute tok le re =
+        match tok, le, re with
+        | PLUS, Const l, Const r -> Const (l + r)
+        | MINUS, Const l, Const r -> Const (l - r)
+        | MULT, Const l, Const r -> Const (l * r)
+        | DIV, Const l, Const r -> Const (l / r)
+        | _ -> BinEx (tok ,le, re)
+    in
+    let rec prop_rec = function
+    | Var v ->
+        if VarMap.mem v binding
+        then Const (VarMap.find v binding)
+        else Var v
+
+    | BinEx (PLUS, l, r) ->
+        compute PLUS (prop_rec l) (prop_rec r)
+
+    | BinEx (MINUS, l, r) ->
+        compute MINUS (prop_rec l) (prop_rec r)
+
+    | BinEx (MULT, l, r) ->
+        compute MULT (prop_rec l) (prop_rec r)
+
+    | BinEx (DIV, l, r) ->
+        compute DIV (prop_rec l) (prop_rec r)
+
+    | UnEx (tok, e) ->
+        UnEx (tok, (prop_rec e))
+
+    | BinEx (tok, l, r) ->
+        BinEx (tok, (prop_rec l), (prop_rec r))
+    | _ as e -> e
+    in
+    prop_rec exp
+
+
 (* replace array accesses like  a[x+y] == i by a conjunction:
     (x == 0 && y == 0 && a[0] == i) || ... || (x == m && y == n && a[m+n] == i)
  *)
@@ -53,20 +91,6 @@ let expand_arrays type_tab expr =
     let is_arr_access = function
     | BinEx (ARR_ACCESS, _, _) -> true
     | _ -> false
-    in
-    (* TODO: compute constant expressions *)
-    let prop_const exp binding =
-        let rec prop_rec = function
-        | Var v ->
-            if VarMap.mem v binding
-            then Const (VarMap.find v binding)
-            else Var v
-
-        | UnEx (tok, e) -> UnEx (tok, (prop_rec e))
-        | BinEx (tok, l, r) -> BinEx (tok, (prop_rec l), (prop_rec r))
-        | _ as e -> e
-        in
-        prop_rec exp
     in
     let binding_to_eqs binding =
         let eq (var, value) = BinEx (EQ, Var var, Const value) in
