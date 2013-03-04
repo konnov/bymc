@@ -410,7 +410,7 @@ let prog_unit_s u =
 
     | Ltl (name, exp) -> sprintf "ltl %s { %s }" name (expr_s exp)
 
-    | None -> Printf.sprintf "skip\n"
+    | EmptyUnit -> Printf.sprintf "skip\n"
 
 
 (* return a symmetric version of an arithmetic relation *)

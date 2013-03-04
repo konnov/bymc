@@ -627,11 +627,11 @@ let do_counter_abstraction funcs solver caches prog =
         let main_lab = mk_uniq_label () in
         let new_init =
             funcs#mk_init c_ctx p#get_active_expr
-            (reg_tab#get "decl") (reg_tab#get "init") in
+            (reg_tab#get "decl" body) (reg_tab#get "init" body) in
         let new_update =
             replace_update c_ctx p#get_active_expr
-            (reg_tab#get "update") atomics body in
-        let new_comp = replace_comp atomics (reg_tab#get "comp") in
+            (reg_tab#get "update" body) atomics body in
+        let new_comp = replace_comp atomics (reg_tab#get "comp" body) in
         let new_comp_upd =
             MAtomic (fresh_id (), new_comp @ new_update @ invs) in
         let new_loop_body =
@@ -642,15 +642,16 @@ let do_counter_abstraction funcs solver caches prog =
             @ [MIf (fresh_id (), [MOptGuarded ([new_comp_upd])]);
                MGoto (fresh_id (), main_lab)] in
         let new_prefix =
-            (MLabel (fresh_id (), main_lab)) :: (reg_tab#get "loop_prefix") in
+            (MLabel (fresh_id (), main_lab)) ::
+                (reg_tab#get "loop_prefix" body) in
         let new_body = 
-            (reg_tab#get "decl")
+            (reg_tab#get "decl" body)
             @ new_init
             @ new_prefix
             @ new_loop_body
         in
         let new_reg_tbl = new region_tbl in
-        new_reg_tbl#add "decl" (reg_tab#get "decl");
+        new_reg_tbl#add "decl" (reg_tab#get "decl" body);
         new_reg_tbl#add "init" new_init;
         new_reg_tbl#add "loop_prefix" new_prefix;
         new_reg_tbl#add "comp" new_comp;

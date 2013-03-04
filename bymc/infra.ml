@@ -67,14 +67,15 @@ class analysis_cache =
 
 class proc_struc_cache =
     object(self)
-        val mutable m_reg_tbl: (string, region_tbl) Hashtbl.t = Hashtbl.create 1
+        val mutable m_reg_tbl:
+            (string, region_tbl) Hashtbl.t = Hashtbl.create 1
 
-        method get_regions proc_name =
+        method get_regions (proc_name: string): region_tbl =
             try Hashtbl.find m_reg_tbl proc_name
             with Not_found ->
                 raise (CacheStateError "regions is not set")
 
-        method set_regions proc_name proc_regs =
+        method set_regions (proc_name: string) (proc_regs: region_tbl) =
             Hashtbl.replace m_reg_tbl proc_name proc_regs
     end
 

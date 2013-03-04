@@ -146,7 +146,7 @@ let program_of_units type_tab units =
     | Ltl (name, ltl_form) ->
             let new_fs = (StringMap.add name ltl_form prog.f_ltl_forms) in
             { prog with f_ltl_forms = new_fs }
-    | None ->
+    | EmptyUnit ->
             prog
     in
     let prog = List.fold_left fold_u empty (List.rev units) in

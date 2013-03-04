@@ -5,6 +5,8 @@
    Igor Konnov, 2011
 *)
 
+exception Not_found_msg of string
+
 (* make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =
     if n <= 0
@@ -68,8 +70,9 @@ let list_cut_ignore match_fun lst = list_cut_general true match_fun lst
  *)
 let rec list_nth_slice lst n =
     if lst = []
-    then raise (Failure (Printf.sprintf "list_nth_split: lst = [], n = %d" n));
-    if n < 0 then raise (Failure "list_nth_split: n < 0");
+    then raise (Not_found_msg
+        (Printf.sprintf "list_nth_split: lst = [], n = %d" n));
+    if n < 0 then raise (Not_found_msg "list_nth_split: n < 0");
     match n with
     | 0 -> ([], List.hd lst, List.tl lst)
     | _ ->
@@ -77,11 +80,16 @@ let rec list_nth_slice lst n =
         ((List.hd lst) :: h, e, t)
 
 
-let rec list_sub lst start len =
+let rec list_sub ilst istart ilen =
+    let rec search lst start len =
     match lst with
     | [] ->
         if start <> 0 || len <> 0
-        then raise (Failure "list_sub: invalid start or len")
+        then let m =
+            Printf.sprintf
+                "list_sub: len(lst) = %d while start = %d and len = %d"
+                (List.length ilst) istart ilen in
+            raise (Failure m)
         else []
     | hd :: tl ->
         if start > 0
@@ -89,6 +97,8 @@ let rec list_sub lst start len =
         else if len > 0
         then hd :: (list_sub tl 0 (len - 1))
         else []
+    in
+    search ilst istart ilen
 
 
 (* sort and remove duplicates, one could have used BatList.sort_unique *)
@@ -223,6 +233,18 @@ let rec str_shorten tbl s =
         else if (l >= sz) then append_num 0 else gen (l + 1) sz
     in
     gen 1 (String.length s)
+
+
+let is_none (o: 'a option): bool =
+    match o with
+    | None -> true
+    | Some _ -> false
+
+
+let get_some (o: 'a option): 'a =
+    match o with
+    | Some x -> x
+    | None -> raise (Failure "The argument is None, expected Some _")
 
 
 (* stop watch class to measure time *)

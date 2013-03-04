@@ -80,8 +80,9 @@ let identify_var_roles prog =
             join_all_locs (join lub_var_use) (mk_bottom_val ()) var_uses in
         let reg_tab = extract_skel proc#get_stmts in
         let fst_id = (* TODO: remove as we are using not -1, but fresh_id () *)
-            let is_norm s = (m_stmt_id s) <> -1 in
-            (m_stmt_id (List.find is_norm (reg_tab#get "comp"))) in
+            let reg = reg_tab#get "comp" proc#get_stmts in
+            let is_analyzed s = Hashtbl.mem int_roles (m_stmt_id s) in
+            m_stmt_id (List.find is_analyzed reg) in
         let loc_roles =
             try Hashtbl.find int_roles fst_id
             with Not_found ->

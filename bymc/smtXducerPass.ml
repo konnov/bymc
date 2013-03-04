@@ -34,8 +34,8 @@ let write_exprs name stmts =
 
 let to_xducer caches prog new_type_tab p =
     let reg_tbl = caches#get_struc#get_regions p#get_name in
-    let loop_prefix = reg_tbl#get "loop_prefix" in
-    let loop_body = reg_tbl#get "loop_body" in
+    let loop_prefix = reg_tbl#get "loop_prefix" p#get_stmts in
+    let loop_body = reg_tbl#get "loop_body" p#get_stmts in
     let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
     let globals =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in

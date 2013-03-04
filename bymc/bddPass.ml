@@ -33,14 +33,15 @@ let intmap_vals m =
 
 let get_main_body caches proc =
     let reg_tbl = caches#get_struc#get_regions proc#get_name in
-    let loop_prefix = reg_tbl#get "loop_prefix" in
-    let loop_body = reg_tbl#get "loop_body" in
+    let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
+    let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
     loop_body @ loop_prefix
 
 
 let get_init_body caches proc =
     let reg_tbl = caches#get_struc#get_regions proc#get_name in
-    (reg_tbl#get "decl") @ (reg_tbl#get "init")
+    (reg_tbl#get "decl" proc#get_stmts)
+        @ (reg_tbl#get "init" proc#get_stmts)
 
 
 (* this code deviates a lot (!) from smtXducerPass *)

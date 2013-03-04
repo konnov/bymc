@@ -312,8 +312,8 @@ let is_var = function
 let cmp_vars vx vy =
     String.compare vx#get_name vy#get_name
 
-(* Sort the variables such that an unqualified name goes before a qualified one.
-   Variables inside of their categories are sorted normally
+(* Sort the variables such that an unqualified name goes before a qualified
+   one. Variables inside of their categories are sorted normally
  *)
 let cmp_qual_vars vx vy =
     match (vx#qual_name == vx#get_name), (vy#qual_name == vy#get_name) with
@@ -367,10 +367,9 @@ let is_symbolic = function
 let rec expr_forall func e = not (expr_exists (fun f -> not (func f)) e) 
 
 (*
- A low-level statement, no block structure preserved.
+ A low-level statement, no block structure preserved (though gotos jump to
+ valid labels corresponding to the blocks).
  The first field is always the identifier of a statement.
- Negative identifiers label auxillary statements added during the translation
- from MIR to LIR.
  *)
 type 't stmt =
       Skip of int
@@ -571,7 +570,7 @@ let map_vars map_fun ex =
 
 
 type 't prog_unit = Proc of 't proc | Stmt of 't mir_stmt
-    | Ltl of string * 't expr | None
+    | Ltl of string * 't expr | EmptyUnit
 
 
 let proc_of_unit = function

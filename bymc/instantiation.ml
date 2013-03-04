@@ -155,7 +155,7 @@ let concretize_proc pa pmap p =
 ;;
 
 let concretize_unit param_vals pmap lmap = function
-    | None -> None
+    | EmptyUnit -> EmptyUnit
     | Ltl (name, form) ->
             let fairness = StringMap.find "fairness" lmap in
             let embedded = BinEx (IMPLIES, fairness, form) in
@@ -165,7 +165,7 @@ let concretize_unit param_vals pmap lmap = function
                 fprintf out "%s\n" (expr_s embedded);
                 close_out out
             end;
-            None
+            EmptyUnit
     | Stmt s ->
             Stmt (concretize_stmt param_vals pmap s)
     | Proc p ->
