@@ -110,8 +110,10 @@ let expand_arrays type_tab stmt =
         if expr_exists is_arr_access e
         then
             let bindings = mk_expr_bindings type_tab e in
-            let instances = List.map (prop e) bindings in
-            MExpr (id, list_to_binex OR instances)
+            if bindings <> []
+            then let instances = List.map (prop e) bindings in
+                MExpr (id, list_to_binex OR instances)
+            else s
         else s
 
     | MExpr (id, BinEx (ASGN, _, _)) as s ->
@@ -126,23 +128,45 @@ let expand_arrays type_tab stmt =
             let bindings = mk_expr_bindings type_tab e in
             if bindings <> []
             then let options = List.map (mk_opt e) bindings in
-                MIf (id, options)
+                MIf (id, options) (* many options *)
             else s (* constant indices *)
         else s
             
     | MExpr (id, UnEx (t, e)) ->
         let sube = expr_of_m_stmt (expand (MExpr (-1, e))) in
         MExpr (id, UnEx (t, sube))
+
     | MExpr (id, BinEx (t, l, r)) ->
         let le = expr_of_m_stmt (expand (MExpr (-1, l))) in
         let re = expr_of_m_stmt (expand (MExpr (-1, r))) in
         MExpr (id, BinEx (t, le, re))
+
     | _ as s -> s
     in
     expand stmt
 
 
-let simplify type_tab mir_stmt =
+let flatten_arrays type_tab new_type_tab stmts =
+    let flatten_rev collected = function
+    | MDecl (id, v, _) as s ->
+        let tp = type_tab#get_type v in
+        let mk_var i =
+            let nv = v#fresh_copy (sprintf "%s_%d" v#get_name i) in
+            let nt = tp#copy in
+            nt#set_nelems 1;
+            new_type_tab#set_type nv nt;
+            MDecl (-1, nv, Nop "")
+        in
+        if tp#is_array
+        then (List.map mk_var (range 0 tp#nelems)) @ collected
+        else s :: collected
+
+    | _ as s -> s :: collected
+    in
+    List.rev (List.fold_left flatten_rev [] stmts)
+
+
+let simplify type_tab new_type_tab mir_stmt =
     let rec simp = function
     | MExpr (_, _) as s ->
         expand_arrays type_tab s
@@ -162,10 +186,16 @@ let simplify type_tab mir_stmt =
     in
     simp mir_stmt
 
+
 let simplify_prog caches prog =
     let type_tab = Program.get_type_tab prog in
+    let new_type_tab = type_tab#copy in
     let simp_proc p =
-        proc_replace_body p (List.map (simplify type_tab) p#get_stmts)
+        let new_stmts = List.map (simplify type_tab new_type_tab) p#get_stmts in
+        let new_stmts = flatten_arrays type_tab new_type_tab new_stmts in
+        proc_replace_body p new_stmts
     in
-    Program.set_procs (List.map simp_proc (Program.get_procs prog)) prog
+    let new_procs = (List.map simp_proc (Program.get_procs prog)) in
+    Program.set_type_tab new_type_tab
+        (Program.set_procs new_procs prog)
         
