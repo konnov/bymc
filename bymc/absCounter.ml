@@ -270,7 +270,8 @@ class virtual ctr_funcs =
             -> token mir_stmt list
 
         method virtual mk_counter_update:
-            ctr_abs_ctx -> token expr -> token expr -> token mir_stmt list
+            ctr_abs_ctx -> (var * var) list ->
+            token expr -> token expr -> token mir_stmt list
 
         method deref_ctr (c_ctx: ctr_abs_ctx) (e: token expr): token expr =
             BinEx (ARR_ACCESS, Var c_ctx#get_ctr, e)
@@ -333,7 +334,7 @@ class abs_ctr_funcs dom prog solver =
             (mk_nondet_choice option_list)
                 @ self#mk_post_asserts c_ctx active_expr (Const (-1)) (Const 0)
 
-        method mk_counter_update c_ctx prev_idx next_idx =
+        method mk_counter_update c_ctx prev_next_list prev_idx next_idx =
             let mk_one tok idx_ex = 
                 let ktr_i = self#deref_ctr c_ctx idx_ex in
                 let is_deref = function
@@ -345,7 +346,10 @@ class abs_ctr_funcs dom prog solver =
                         (BinEx (tok, ktr_i, Const 1)) in
                 mk_assign_unfolding ktr_i expr_abs_vals
             in
-            let guard = MExpr(-1, BinEx (NE, prev_idx, next_idx)) in
+            let mk_ne (prev, next) = BinEx (NE, Var prev, Var next) in
+            let gexpr = list_to_binex OR (List.map mk_ne prev_next_list)
+            in
+            let guard = MExpr(-1, gexpr) in
             let seq = [guard; mk_one MINUS prev_idx; mk_one PLUS next_idx] in
             let comment = "processes stay at the same local state" in
             [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
@@ -427,7 +431,7 @@ class vass_funcs dom prog solver =
             @ sum_eq_n :: other0
                 @ (self#mk_post_asserts c_ctx active_expr (Const 0) (Const 0))
 
-        method mk_counter_update c_ctx prev_idx next_idx =
+        method mk_counter_update c_ctx prev_next_list prev_idx next_idx =
             (* XXX: use a havoc-like operator here *)
             (* it is very important that we add delta instead of 1 here,
                as it describes a summary of several processes doing the same
@@ -436,8 +440,10 @@ class vass_funcs dom prog solver =
                 let ktr_i = self#deref_ctr c_ctx idx_ex in
                 MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
             in
-
-            let guard = MExpr(-1, BinEx (NE, prev_idx, next_idx)) in
+            let mk_ne (prev, next) = BinEx (NE, Var prev, Var next) in
+            let gexpr = list_to_binex OR (List.map mk_ne prev_next_list)
+            in
+            let guard = MExpr(-1, gexpr) in
             let nonneg = MAssume (-1,
                 BinEx (GE, self#deref_ctr c_ctx prev_idx, Var delta)) in
             let seq = [guard; nonneg;
@@ -557,18 +563,23 @@ let do_counter_abstraction funcs solver caches prog =
         let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
         let prev_idx_ex = c_ctx#pack_index_expr in
         let next_idx_ex =
-            map_vars
-                (fun v ->
-                    try Var (Hashtbl.find prev_next_pairs v)
-                    with Not_found -> Var v
-                ) prev_idx_ex in
+            let map_one_var v =
+                try Var (Hashtbl.find prev_next_pairs v)
+                with Not_found -> Var v
+            in
+            map_vars map_one_var prev_idx_ex
+        in
         let pre_asserts =
-            funcs#mk_pre_asserts c_ctx active_expr prev_idx_ex next_idx_ex in
+            funcs#mk_pre_asserts c_ctx active_expr prev_idx_ex next_idx_ex
+        in
         let post_asserts =
-            funcs#mk_post_asserts c_ctx active_expr prev_idx_ex next_idx_ex in
-
+            funcs#mk_post_asserts c_ctx active_expr prev_idx_ex next_idx_ex
+        in
+        let ctr_update = funcs#mk_counter_update c_ctx
+            (hashtbl_as_list prev_next_pairs) prev_idx_ex next_idx_ex
+        in
         pre_asserts
-        @ (funcs#mk_counter_update c_ctx prev_idx_ex next_idx_ex)
+        @ ctr_update
         @ [MUnsafe (-1, "#include \"cegar_post.inc\"")]
         @ post_asserts
         @ new_update

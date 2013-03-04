@@ -1,6 +1,10 @@
 (*
- * Simplify MIR statements:
- *   * convert array access to a variable access.
+ * Simplify MIR statements, i.e. convert array access to a variable access.
+ * I would call it 'stupidify' as in many cases this transformation makes
+ * the program more complicated. Usually, one needs such a transformation
+ * to do a SAT/BDD encoding.
+ *
+ * Igor Konnov, 2013
  *)
 
 open Printf
@@ -18,7 +22,9 @@ end)
 
 exception Simplif_error of string
 
-(* find bindings for all variables used in an expression *)
+(* Find all possible bindings for all variables used in an expression.
+ * Yes, it blows up for large ranges as well as many variables.
+ *)
 let mk_expr_bindings type_tab exp =
     let not_array v = not (type_tab#get_type v)#is_array in
     let used_vars = List.filter not_array (expr_used_vars exp) in
@@ -87,7 +93,7 @@ let prop_const exp binding =
 (* replace array accesses like  a[x+y] == i by a conjunction:
     (x == 0 && y == 0 && a[0] == i) || ... || (x == m && y == n && a[m+n] == i)
  *)
-let expand_arrays type_tab stmt =
+let expand_array_access type_tab stmt =
     let is_arr_access = function
     | BinEx (ARR_ACCESS, _, _) -> true
     | _ -> false
@@ -104,7 +110,8 @@ let expand_arrays type_tab stmt =
     | MExpr (id, BinEx (LT, _, _))
     | MExpr (id, BinEx (LE, _, _)) as s ->
         let prop e binding =
-            list_to_binex AND ((prop_const e binding) :: binding_to_eqs binding)
+            list_to_binex
+                AND ((prop_const e binding) :: binding_to_eqs binding)
         in
         let e = expr_of_m_stmt s in
         if expr_exists is_arr_access e
@@ -146,56 +153,125 @@ let expand_arrays type_tab stmt =
     expand stmt
 
 
-let flatten_arrays type_tab new_type_tab stmts =
-    let flatten_rev collected = function
-    | MDecl (id, v, _) as s ->
+(* replace arr[c] by arr_c for a constant c *)
+let replace_arr_elem_with_var sym_tab exp =
+    let rec embed_rec = function
+    | BinEx (ARR_ACCESS, Var arr, Const i) ->
+        let new_name = sprintf "%s_%d" arr#get_name i in
+        let sym = sym_tab#lookup new_name in
+        let v = sym#as_var in
+        Var v
+
+    | BinEx (tok, l, r) ->
+        BinEx (tok, embed_rec l, embed_rec r)
+
+    | UnEx (tok, e) ->
+        UnEx (tok, embed_rec e)
+
+    | _ as e -> e
+    in
+    embed_rec exp
+
+
+let replace_arr_elem_with_var_in_stmt sym_tab m_stmt =
+    let sub_var = function
+    | MExpr (id, e) ->
+        MExpr (id, replace_arr_elem_with_var sym_tab e)
+
+    | MAssert (id, e) ->
+        MAssert (id, replace_arr_elem_with_var sym_tab e)
+
+    | MAssume (id, e) ->
+        MAssume (id, replace_arr_elem_with_var sym_tab e)
+
+    | MPrint (id, s, es) ->
+        MPrint (id, s, List.map (replace_arr_elem_with_var sym_tab) es)
+
+    | _ as s -> s
+    in
+    replace_basic_stmts sub_var m_stmt
+
+
+let flatten_array_decl type_tab new_type_tab stmts =
+    let redecl_arr_var v =
         let tp = type_tab#get_type v in
-        let mk_var i =
+        let mk_elem_var i =
             let nv = v#fresh_copy (sprintf "%s_%d" v#get_name i) in
             let nt = tp#copy in
             nt#set_nelems 1;
             new_type_tab#set_type nv nt;
-            MDecl (-1, nv, Nop "")
+            nv
         in
         if tp#is_array
-        then (List.map mk_var (range 0 tp#nelems)) @ collected
-        else s :: collected
+        then List.map mk_elem_var (range 0 tp#nelems)
+        else begin
+            new_type_tab#set_type v (type_tab#get_type v);
+            [v]
+        end
+    in
+    let flatten_rev collected = function
+    | MDecl (id, v, _) ->
+        let to_decl v =
+            if (new_type_tab#get_type v)#is_array
+            then MDecl (-1, v, Nop "")
+            else MDecl (id, v, Nop "") (* no expansion, keep the id *)
+        in
+        (List.map to_decl (redecl_arr_var v)) @ collected
 
     | _ as s -> s :: collected
     in
     List.rev (List.fold_left flatten_rev [] stmts)
 
 
-let simplify type_tab new_type_tab mir_stmt =
-    let rec simp = function
-    | MExpr (_, _) as s ->
-        expand_arrays type_tab s
-    | MIf (id, opts) ->
-        MIf (id, (List.map simp_opt opts))
-    | MAtomic (id, body) ->
-        MAtomic (id, List.map simp body)
-    | MD_step (id, body) ->
-        MD_step (id, List.map simp body)
-    | _ as s -> s
-
-    and simp_opt = function
-    | MOptGuarded body ->
-        MOptGuarded (List.map simp body)
-    | MOptElse body ->
-        MOptElse (List.map simp body)
+let eliminate_arrays prog =
+    let repl_glob_expr =
+        replace_arr_elem_with_var (Program.get_sym_tab prog) in
+    let rec sub_atomic = function
+    | PropAll e -> PropAll (repl_glob_expr e)
+    | PropSome e -> PropSome (repl_glob_expr e)
+    | PropGlob e -> PropGlob (repl_glob_expr e)
+    | PropAnd (l, r) -> PropAnd ((sub_atomic l), (sub_atomic r))
+    | PropOr (l, r) -> PropOr ((sub_atomic l), (sub_atomic r))
     in
-    simp mir_stmt
+    let elim_in_unit = function
+    | Proc p ->
+        let repl_stmt = replace_arr_elem_with_var_in_stmt (p :> symb_tab) in
+        Proc (proc_replace_body p (List.map repl_stmt p#get_stmts))
+        
+    | Stmt (MDeclProp (id, v, ae)) ->
+        Stmt (MDeclProp (id, v, sub_atomic ae))
+
+    | _ as u -> u
+    in
+    Program.program_of_units
+        (Program.get_type_tab prog)
+        (List.map elim_in_unit (Program.units_of_program prog))
 
 
 let simplify_prog caches prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
-    let simp_proc p =
-        let new_stmts = List.map (simplify type_tab new_type_tab) p#get_stmts in
-        let new_stmts = flatten_arrays type_tab new_type_tab new_stmts in
-        proc_replace_body p new_stmts
+    let simp_unit_rev collected = function
+    | Proc p ->
+        let flat_decls = flatten_array_decl type_tab new_type_tab p#get_stmts
+        in
+        let simple_stmts = List.map
+            (replace_basic_stmts (expand_array_access type_tab))
+            flat_decls in
+        (Proc (proc_replace_body p simple_stmts)) :: collected
+
+    | Stmt (MDecl (_, _, _) as d) ->
+        let new_decls = flatten_array_decl type_tab new_type_tab [d] in
+        (List.map (fun d -> Stmt d) new_decls) @ collected
+    (* TODO: replace array accesses in LTL formulas *)
+    | _ as u ->
+        u :: collected
     in
-    let new_procs = (List.map simp_proc (Program.get_procs prog)) in
-    Program.set_type_tab new_type_tab
-        (Program.set_procs new_procs prog)
-        
+    let new_units = List.rev
+        (List.fold_left simp_unit_rev [] (Program.units_of_program prog))
+    in
+    (* update variable sets (shared, params, etc.) from units *)
+    let new_prog = Program.program_of_units new_type_tab new_units in
+    (* now, array variables were redefined, replace arrays with variables *)
+    eliminate_arrays new_prog
+

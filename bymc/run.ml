@@ -115,9 +115,9 @@ let _ =
     with e ->
         if Printexc.backtrace_status ()
         then begin
-            fprintf stdout "Exception: %s\n" (Printexc.to_string e);
+            fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
             Printexc.print_backtrace stdout
         end else begin
-            fprintf stdout "Exception: %s\n" (Printexc.to_string e);
+            fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
             fprintf stdout "(Trace is not available. Compile with -g?\n"
         end

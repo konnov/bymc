@@ -15,7 +15,7 @@ type program
 
 type expr_t = Spin.token expr
 
-val program_of_units: Spin.token prog_unit list -> program
+val program_of_units: data_type_tab -> Spin.token prog_unit list -> program
 val units_of_program: program -> Spin.token prog_unit list
 val empty: program
 
@@ -35,6 +35,9 @@ val get_type: program -> var -> data_type
 (* get/set data type table *)
 val get_type_tab: program -> data_type_tab
 val set_type_tab: data_type_tab -> program -> program
+
+(* get the main symbols table *)
+val get_sym_tab: program -> symb_tab
 
 (* global instrumental variables added by the abstractions,
    not part of the original problem *)

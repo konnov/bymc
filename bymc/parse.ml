@@ -142,5 +142,5 @@ let parse_promela filename basename dirname =
             List.iter p units;
         end
     end;
-    (Program.set_type_tab type_tab (Program.program_of_units units))
+    (Program.program_of_units type_tab units)
 

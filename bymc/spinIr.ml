@@ -188,13 +188,16 @@ exception Symbol_not_found of string
 (* a symbol table *)
 class symb_tab i_tab_name =
     object(self)
-        val tab: (string, symb) Hashtbl.t = Hashtbl.create 10
+        val mutable tab: (string, symb) Hashtbl.t = Hashtbl.create 10
         val mutable parent: symb_tab option = None
 
         method tab_name = i_tab_name
 
         method add_symb name symb = Hashtbl.add tab name symb
         method add_all_symb symb_list =
+            List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
+        method set_syms symb_list =
+            tab <- Hashtbl.create (List.length symb_list);
             List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
 
         method lookup name =
@@ -283,6 +286,7 @@ class data_type_tab =
             new_t#set_all_types (Hashtbl.copy m_tab);
             new_t
     end
+
 
 type 't expr = Nop of string (* a comment *) | Const of int | Var of var
     | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
@@ -501,36 +505,39 @@ let is_mdecl = function
 class ['t] proc name_i active_expr_i =
     object(self)
         inherit symb name_i
-        inherit symb_tab name_i
+        inherit symb_tab name_i as parent
 
-        val mutable args: var list = []
-        val mutable stmts: 't mir_stmt list = []
+        val mutable m_args: var list = []
+        val mutable m_stmts: 't mir_stmt list = []
         (* a symbolic expression *)
-        val mutable active_expr: 't expr = active_expr_i
+        val mutable m_active_expr: 't expr = active_expr_i
         (* a provided clause if any *)
-        val mutable provided_expr: 't expr = Nop ""
+        val mutable m_provided_expr: 't expr = Nop ""
 
-        method set_args a = args <- a
-        method get_args = args
 
-        method set_stmts s = stmts <- s
-        method get_stmts = stmts
+        method set_args a = m_args <- a
+        method get_args = m_args
 
-        method set_active_expr e = active_expr <- e
-        method get_active_expr = active_expr
+        method set_stmts stmts =
+            m_stmts <- stmts;
+            let to_symb v = (v :> symb) in
+            parent#set_syms (List.map to_symb self#get_locals)
 
-        method set_provided e = provided_expr <- e
-        method get_provided = provided_expr
+        method get_stmts = m_stmts
+
+        method set_active_expr e = m_active_expr <- e
+        method get_active_expr = m_active_expr
+
+        method set_provided e = m_provided_expr <- e
+        method get_provided = m_provided_expr
 
         method labels_as_hash =
             let symbs = List.filter
                 (fun (_, s) -> SymLab = s#get_sym_type)
                 self#get_symbs in
             let tbl = Hashtbl.create (List.length symbs) in
-            List.iter
-                (fun (_, s) ->
-                    Hashtbl.add tbl s#get_name s#as_label)
-                symbs;
+            let add_label (_, s) = Hashtbl.add tbl s#get_name s#as_label in
+            List.iter add_label symbs;
             tbl
 
         method get_locals =
@@ -538,7 +545,7 @@ class ['t] proc name_i active_expr_i =
                 | MDecl (_, v, _) -> v :: l
                 | _ -> l
             in
-            List.fold_left add_decl [] stmts
+            List.fold_left add_decl [] m_stmts
     end
 
 
@@ -594,4 +601,24 @@ let list_to_binex tok lst =
     in
     List.fold_left join_e (Nop "") lst
 
+
+let replace_basic_stmts
+        (trav_fun: 'a mir_stmt -> 'a mir_stmt) (m_stmt: 'a mir_stmt)
+        : 'a mir_stmt =
+    let rec trav = function
+    | MIf (id, opts) ->
+        MIf (id, (List.map trav_opt opts))
+    | MAtomic (id, body) ->
+        MAtomic (id, List.map trav body)
+    | MD_step (id, body) ->
+        MD_step (id, List.map trav body)
+    | _ as s -> trav_fun s
+
+    and trav_opt = function
+    | MOptGuarded body ->
+        MOptGuarded (List.map trav body)
+    | MOptElse body ->
+        MOptElse (List.map trav body)
+    in
+    trav m_stmt
 
