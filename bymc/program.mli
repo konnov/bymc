@@ -22,7 +22,7 @@ val empty: program
 val get_params: program -> var list
 val set_params: var list -> program -> program
 
-(* shared variables *)
+(* shared (global) variables *)
 val get_shared: program -> var list
 val set_shared: var list -> program -> program
 
@@ -36,7 +36,7 @@ val get_type: program -> var -> data_type
 val get_type_tab: program -> data_type_tab
 val set_type_tab: data_type_tab -> program -> program
 
-(* instrumental variables added by the abstractions,
+(* global instrumental variables added by the abstractions,
    not part of the original problem *)
 val get_instrumental: program -> var list
 val set_instrumental: var list -> program -> program

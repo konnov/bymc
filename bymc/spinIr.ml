@@ -26,7 +26,7 @@ type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
            (* our extensions *)
-           | HSymbolic 
+           | HSymbolic | HInstrumental
 
 let hflag_s f =
     match f with
@@ -39,6 +39,7 @@ let hflag_s f =
     | HTreatLocal -> ":local:"
     | HReadOnce -> ":readonce:"
     | HSymbolic -> ":symbolic:"
+    | HInstrumental -> ":instrumental:"
     | HNone -> ""
 
 exception Invalid_type of string
@@ -113,6 +114,9 @@ var name_i var_id =
 
         method is_symbolic = self#has_flag HSymbolic
         method set_symbolic = self#add_flag HSymbolic
+
+        method is_instrumental = self#has_flag HInstrumental
+        method set_instrumental = self#add_flag HInstrumental
 
         method proc_name = m_proc_name
         method set_proc_name r = m_proc_name <- r

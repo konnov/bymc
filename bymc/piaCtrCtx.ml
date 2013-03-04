@@ -21,6 +21,7 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         val mutable ctr_dim: int = -1
         
         initializer
+            ctr_var#set_instrumental;
             let collect_locals filter_fun =
                 let rec collect lst = function
                 | MDecl (_, v, _) ->
@@ -108,6 +109,7 @@ class ctr_abs_ctx_tbl dom role_tbl prog =
         val spur_var = new_var "bymc_spur"
         
         initializer
+            spur_var#set_instrumental;
             let mk p =
                 let pname = p#get_name in
                 let abbrev = str_shorten tbl pname in

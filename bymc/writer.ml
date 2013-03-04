@@ -61,12 +61,13 @@ let hflag_promela f =
     | HHide -> "hide"
     | HShow -> "show"
     | HBitEquiv -> ""
-    | HByteEquiv -> ":"
+    | HByteEquiv -> ""
     | HFormalPar -> ""
     | HInlinePar -> ""
     | HTreatLocal -> "local"
     | HReadOnce -> ""
     | HSymbolic -> "symbolic"
+    | HInstrumental -> "/* instrumental */"
     | HNone -> ""
 
 
