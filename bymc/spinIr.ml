@@ -261,7 +261,7 @@ class data_type i_basetype =
             let c = new data_type(m_basetype) in
             c#set_nelems m_nelems;
             c#set_nbits m_nbits;
-            let l, r = c#range in
+            let l, r = m_range in
             c#set_range l r;
             c
     end

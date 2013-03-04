@@ -10,6 +10,7 @@ open Printf
 open Accums
 open Cfg
 open CfgSmt
+open Debug
 open Simplif
 open Spin
 open SpinIr
@@ -46,6 +47,7 @@ let get_init_body caches proc =
 
 (* this code deviates a lot (!) from smtXducerPass *)
 let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
+    log INFO (sprintf "  blocks_to_smt %s..." filename);
     let roles = caches#get_analysis#get_var_roles in
     let is_visible v =
         try begin
@@ -70,6 +72,7 @@ let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     in
     let block_cons = List.fold_left mk_block_cons IntMap.empty cfg#block_list
     in
+    log INFO "DONE";
     (cfg#block_list, block_cons, paths)
 
 
@@ -262,13 +265,13 @@ let transform_to_bdd solver caches prog =
     let new_type_tab = type_tab#copy in
     let xprog = Program.set_type_tab new_type_tab prog in
     let convert_proc proc =
-        let fname = proc#get_name ^ "-R" in
-        (proc_to_bdd xprog
-            (blocks_to_smt caches xprog type_tab new_type_tab get_main_body fname)
-            proc fname);
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog
             (blocks_to_smt caches xprog type_tab new_type_tab get_init_body fname)
+            proc fname);
+        let fname = proc#get_name ^ "-R" in
+        (proc_to_bdd xprog
+            (blocks_to_smt caches xprog type_tab new_type_tab get_main_body fname)
             proc fname)
     in
     List.iter convert_proc (Program.get_procs prog)
