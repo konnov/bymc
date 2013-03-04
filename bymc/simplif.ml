@@ -126,8 +126,9 @@ let expand_array_access type_tab stmt =
     | MExpr (id, BinEx (ASGN, _, _)) as s ->
         let mk_opt e binding =
             let guard =
-                MExpr(-1, (list_to_binex AND (binding_to_eqs binding))) in
-            MOptGuarded [guard; MExpr(-1, (prop_const e binding))]
+                MExpr(fresh_id (),
+                      (list_to_binex AND (binding_to_eqs binding))) in
+            MOptGuarded [guard; MExpr(fresh_id (), (prop_const e binding))]
         in
         let e = expr_of_m_stmt s in
         if expr_exists is_arr_access e
@@ -140,12 +141,12 @@ let expand_array_access type_tab stmt =
         else s
             
     | MExpr (id, UnEx (t, e)) ->
-        let sube = expr_of_m_stmt (expand (MExpr (-1, e))) in
+        let sube = expr_of_m_stmt (expand (MExpr (fresh_id (), e))) in
         MExpr (id, UnEx (t, sube))
 
     | MExpr (id, BinEx (t, l, r)) ->
-        let le = expr_of_m_stmt (expand (MExpr (-1, l))) in
-        let re = expr_of_m_stmt (expand (MExpr (-1, r))) in
+        let le = expr_of_m_stmt (expand (MExpr (fresh_id (), l))) in
+        let re = expr_of_m_stmt (expand (MExpr (fresh_id (), r))) in
         MExpr (id, BinEx (t, le, re))
 
     | _ as s -> s
@@ -213,7 +214,7 @@ let flatten_array_decl type_tab new_type_tab stmts =
     | MDecl (id, v, _) ->
         let to_decl v =
             if (new_type_tab#get_type v)#is_array
-            then MDecl (-1, v, Nop "")
+            then MDecl (fresh_id (), v, Nop "")
             else MDecl (id, v, Nop "") (* no expansion, keep the id *)
         in
         (List.map to_decl (redecl_arr_var v)) @ collected

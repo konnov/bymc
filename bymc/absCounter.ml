@@ -39,7 +39,7 @@ fi
 *)
     | [] -> raise (Abstraction_error "An alternative in the empty list")
     | [seq] -> seq
-    | seqs -> [MIf (-1, List.map (fun seq -> MOptGuarded seq) seqs)]
+    | seqs -> [MIf (fresh_id (), List.map (fun seq -> MOptGuarded seq) seqs)]
 
 
 let rec remove_bad_statements stmts =
@@ -309,7 +309,7 @@ class abs_ctr_funcs dom prog solver =
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) (Program.get_shared prog)) in
             
-            [ MPrint (-1, str, prev_idx :: next_idx :: es)]
+            [ MPrint (fresh_id (), str, prev_idx :: next_idx :: es)]
 
         method mk_init c_ctx active_expr decls init_stmts =
             let init_locals = find_init_local_vals c_ctx decls init_stmts in
@@ -322,7 +322,7 @@ class abs_ctr_funcs dom prog solver =
                 List.iter add_var local_vals;
                 let idx = c_ctx#pack_to_const valuation in
                 let lhs = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx) in
-                MExpr (-1, BinEx (ASGN, lhs, Const abs_size))
+                MExpr (fresh_id (), BinEx (ASGN, lhs, Const abs_size))
             in
             let option_list =
                 List.map
@@ -349,10 +349,13 @@ class abs_ctr_funcs dom prog solver =
             let mk_ne (prev, next) = BinEx (NE, Var prev, Var next) in
             let gexpr = list_to_binex OR (List.map mk_ne prev_next_list)
             in
-            let guard = MExpr(-1, gexpr) in
+            let guard = MExpr(fresh_id (), gexpr) in
             let seq = [guard; mk_one MINUS prev_idx; mk_one PLUS next_idx] in
             let comment = "processes stay at the same local state" in
-            [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
+            [MIf (fresh_id (),
+                  [MOptGuarded seq;
+                   MOptElse [MExpr(fresh_id (), Nop comment)]])
+            ]
 
         method keep_assume e = false
         
@@ -385,8 +388,8 @@ class vass_funcs dom prog solver =
         method introduced_vars = [delta]
 
         method mk_pre_loop c_ctx active_expr =
-            [MHavoc (-1, delta);
-             MAssume (-1, BinEx (GT, Var delta, Const 0));]
+            [MHavoc (fresh_id (), delta);
+             MAssume (fresh_id (), BinEx (GT, Var delta, Const 0));]
 
         method mk_pre_asserts c_ctx active_expr prev_idx next_idx =
             let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
@@ -394,12 +397,13 @@ class vass_funcs dom prog solver =
             in
             (* counter are non-negative, non-obvious for an SMT solver! *)
             let all_indices = (range 0 c_ctx#get_ctr_dim) in
-            let mk_non_neg i = MAssume (-1, BinEx (GE, acc i, Const 0)) in
+            let mk_non_neg i =
+                MAssume (fresh_id (), BinEx (GE, acc i, Const 0)) in
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
             let sum =
                 List.fold_left add (Const 0) (range 0 c_ctx#get_ctr_dim) in
-            MAssume (-1, BinEx (EQ, active_expr, sum));
+            MAssume (fresh_id (), BinEx (EQ, active_expr, sum));
             :: (List.map mk_non_neg all_indices)
 
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
@@ -420,11 +424,13 @@ class vass_funcs dom prog solver =
                 if is_nop e then ctr_ex else BinEx (PLUS, e, ctr_ex)
             in
             let sum_ex = List.fold_left sum_fun (Nop "") indices in
-            let sum_eq_n = MAssume (-1, BinEx (EQ, active_expr, sum_ex)) in
+            let sum_eq_n =
+                MAssume (fresh_id (), BinEx (EQ, active_expr, sum_ex)) in
             let other_indices =
                 List.filter (fun i -> not (List.mem i indices))
                     (range 0 c_ctx#get_ctr_dim) in
-            let mk_oth i = MAssume (-1, BinEx (EQ, Const 0, sum_fun (Nop "") i))
+            let mk_oth i =
+                MAssume (fresh_id (), BinEx (EQ, Const 0, sum_fun (Nop "") i))
             in
             let other0 = List.map mk_oth other_indices in
             (omit_local_assignments prog init_stmts)
@@ -438,18 +444,21 @@ class vass_funcs dom prog solver =
                step *)
             let mk_one tok idx_ex =
                 let ktr_i = self#deref_ctr c_ctx idx_ex in
-                MExpr (-1, BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
+                MExpr (fresh_id (),
+                       BinEx (ASGN, ktr_i, BinEx (tok, ktr_i, Var delta)))
             in
             let mk_ne (prev, next) = BinEx (NE, Var prev, Var next) in
             let gexpr = list_to_binex OR (List.map mk_ne prev_next_list)
             in
-            let guard = MExpr(-1, gexpr) in
-            let nonneg = MAssume (-1,
+            let guard = MExpr(fresh_id (), gexpr) in
+            let nonneg = MAssume (fresh_id (),
                 BinEx (GE, self#deref_ctr c_ctx prev_idx, Var delta)) in
             let seq = [guard; nonneg;
                 mk_one MINUS prev_idx; mk_one PLUS next_idx] in
             let comment = "processes stay at the same local state" in
-            [MIf (-1, [MOptGuarded seq; MOptElse [MExpr(-1, Nop comment)]])]
+            [MIf (fresh_id (),
+                  [MOptGuarded seq;
+                   MOptElse [MExpr(fresh_id (), Nop comment)]])]
 
         method keep_assume e = true
         
@@ -539,10 +548,11 @@ let do_counter_abstraction funcs solver caches prog =
                     BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx),
                     Const 0))
             in
-            MExpr (-1, guard) :: (* and then assignments *)
+            MExpr (fresh_id (), guard) :: (* and then assignments *)
                 (Hashtbl.fold
                     (fun var value lst -> 
-                        MExpr (-1, BinEx (ASGN, Var var, Const value)) :: lst)
+                        MExpr (fresh_id (),
+                               BinEx (ASGN, Var var, Const value)) :: lst)
                     (c_ctx#unpack_from_const idx) [])
         in
         let indices = range 0 c_ctx#get_ctr_dim in
@@ -580,7 +590,7 @@ let do_counter_abstraction funcs solver caches prog =
         in
         pre_asserts
         @ ctr_update
-        @ [MUnsafe (-1, "#include \"cegar_post.inc\"")]
+        @ [MUnsafe (fresh_id (), "#include \"cegar_post.inc\"")]
         @ post_asserts
         @ new_update
     in
@@ -604,7 +614,7 @@ let do_counter_abstraction funcs solver caches prog =
         in
         List.map hack_nsnt (List.map (replace_assume atomics) stmts)
     in
-    let mk_assume e = MAssume (-1, e) in
+    let mk_assume e = MAssume (fresh_id (), e) in
     let abstract_proc atomics p =
         let c_ctx = ctr_ctx_tbl#get_ctx p#get_name in
         let invs = if funcs#embed_inv
@@ -622,16 +632,17 @@ let do_counter_abstraction funcs solver caches prog =
             replace_update c_ctx p#get_active_expr
             (reg_tab#get "update") atomics body in
         let new_comp = replace_comp atomics (reg_tab#get "comp") in
-        let new_comp_upd = MAtomic (-1, new_comp @ new_update @ invs) in
+        let new_comp_upd =
+            MAtomic (fresh_id (), new_comp @ new_update @ invs) in
         let new_loop_body =
-            [MUnsafe (-1, "#include \"cegar_pre.inc\"")]
+            [MUnsafe (fresh_id (), "#include \"cegar_pre.inc\"")]
             @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
             @ invs
             @ counter_guard c_ctx
-            @ [MIf (-1, [MOptGuarded ([new_comp_upd])]);
-               MGoto (-1, main_lab)] in
+            @ [MIf (fresh_id (), [MOptGuarded ([new_comp_upd])]);
+               MGoto (fresh_id (), main_lab)] in
         let new_prefix =
-            (MLabel (-1, main_lab)) :: (reg_tab#get "loop_prefix") in
+            (MLabel (fresh_id (), main_lab)) :: (reg_tab#get "loop_prefix") in
         let new_body = 
             (reg_tab#get "decl")
             @ new_init

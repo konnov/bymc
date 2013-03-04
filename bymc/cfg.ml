@@ -172,7 +172,7 @@ let mk_cfg stmts =
                     | Label (_, i) -> IntSet.mem i seq_heads
                     | _ -> false)
             (* add 0 in front to denote the entry label *)
-            (Label (-1, 0) :: cleaned) in
+            (Label (fresh_id (), 0) :: cleaned) in
     let blocks = Hashtbl.create (List.length seq_list) in
     (* create basic blocks *)
     let exit_label = 999999 in
@@ -190,7 +190,7 @@ let mk_cfg stmts =
         let entry_lab = (get_entry_lab seq) in
         let body =
             if not has_terminator && (get_entry_lab next_seq) <> exit_label
-        then seq @ [Goto (-1, (get_entry_lab next_seq))]
+        then seq @ [Goto (fresh_id (), (get_entry_lab next_seq))]
         else seq in
         let bb = new basic_block in
         bb#set_seq body;
@@ -198,7 +198,7 @@ let mk_cfg stmts =
         bb
     in
     let bbs = List.map2 mk_bb
-        seq_list ((List.tl seq_list) @ [[Label (-1, exit_label)]]) in
+        seq_list ((List.tl seq_list) @ [[Label (fresh_id (), exit_label)]]) in
     let entry = List.hd bbs in
     (* set successors *)
     Hashtbl.iter

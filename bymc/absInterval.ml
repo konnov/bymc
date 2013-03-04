@@ -86,14 +86,15 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
             let assigns = List.fold_left
                 (fun seq (ex, abs_val) ->
                     if is_out_var ex
-                    then MExpr (-1, BinEx (ASGN, lhs, Const abs_val)) :: seq
+                    then MExpr (fresh_id (),
+                                BinEx (ASGN, lhs, Const abs_val)) :: seq
                     else seq (* skip condition variables *) )
                 [] abs_tuple
             in
-            MOptGuarded (MExpr (-1, guard) :: assigns)
+            MOptGuarded (MExpr (fresh_id (), guard) :: assigns)
         ) labs expr_abs_vals
     in
-    MIf (-1, guarded_actions)
+    MIf (fresh_id (), guarded_actions)
 
 
 let over_dom (roles: var_role_tbl) = function
@@ -324,7 +325,7 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
                 (* all guards are evaluated to false *)
                 let guards = List.fold_left get_guard [] opts in
                 let noguard = UnEx(NEG, list_to_binex OR guards) in
-                MOptGuarded (abs_seq (MExpr (-1, noguard) :: seq))
+                MOptGuarded (abs_seq (MExpr (fresh_id (), noguard) :: seq))
         in
         MIf (id, List.map abs_opt opts)
 

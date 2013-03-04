@@ -155,13 +155,13 @@ let program_of_units type_tab units =
 
 let units_of_program program =
     let var_to_decl v =
-        Stmt (MDecl (-1, v, (Nop ""))) in
+        Stmt (MDecl (fresh_id (), v, (Nop ""))) in
     let atomic_to_decl name expr accum =
-        (Stmt (MDeclProp(-1, new_var name, expr))) :: accum in
+        (Stmt (MDeclProp(fresh_id (), new_var name, expr))) :: accum in
     let form_to_ltl name expr accum =
         (Ltl(name, expr)) :: accum in
-    let to_assume e = Stmt (MAssume(-1, e)) in
-    let to_unsafe e = Stmt (MUnsafe(-1, e)) in
+    let to_assume e = Stmt (MAssume(fresh_id (), e)) in
+    let to_unsafe e = Stmt (MUnsafe(fresh_id (), e)) in
     let to_proc p = Proc p in
     (List.concat
         [(List.map var_to_decl program.f_params);

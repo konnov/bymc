@@ -47,13 +47,16 @@ exception Invalid_type of string
 type sym_type = SymGen | SymVar | SymLab
 
 
-(* the next var identifier *)
-let var_id_next = ref 0
+(* the next identifier (used for vars, statements, etc.) *)
+let uniq_id_next = ref 0
 
-let fresh_var_id () =
-    let id = !var_id_next in
-    var_id_next := id + 1;
-    id
+(* get a new unique id *)
+let fresh_id () =
+    let id = !uniq_id_next in
+    uniq_id_next := !uniq_id_next + 1;
+    if !uniq_id_next >= 0
+    then id
+    else raise (Failure "fresh_id: ran out of unique identifiers")
 
 
 (* a symbol of any origin *)
@@ -148,7 +151,7 @@ var name_i var_id =
 
         (* Make a copy of the variable and assign a fresh id. *)
         method fresh_copy new_name =
-            let new_var = new var new_name (fresh_var_id ()) in
+            let new_var = new var new_name (fresh_id ()) in
             new_var#set_ini ini;
             if self#is_symbolic then new_var#set_symbolic;
             if self#is_instrumental then new_var#set_instrumental;
@@ -172,7 +175,7 @@ label name_i num_i =
     end
 
 
-let new_var name = new var name (fresh_var_id ())    
+let new_var name = new var name (fresh_id ())    
 
 module VarType =
     struct

@@ -303,7 +303,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MOptElse _ -> e
         | _ -> raise (Failure ("If option is not protected by a guard"))
         in
-        MExpr (-1, List.fold_left get_guard (Nop "") options)
+        MExpr (fresh_id (), List.fold_left get_guard (Nop "") options)
     in
     let rec make_one s tl =
         match s with
@@ -312,13 +312,13 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
             let labs_seqs = List.map (make_option options exit_lab) options in
             let opt_labs, opt_seqs = List.split labs_seqs in
             If (id, opt_labs, exit_lab)
-                :: ((List.concat opt_seqs) @ (Label (-1, exit_lab) :: tl))
+                :: ((List.concat opt_seqs) @ (Label (fresh_id (), exit_lab) :: tl))
         | MAtomic (id, seq) ->
             let new_seq = List.fold_right make_one seq [] in
-            Atomic_beg id :: new_seq @ Atomic_end (-1) :: tl
+            Atomic_beg id :: new_seq @ Atomic_end (fresh_id ()) :: tl
         | MD_step (id, seq) ->
             let new_seq = List.fold_right make_one seq [] in
-            D_step_beg id :: new_seq @ D_step_end (-1) :: tl
+            D_step_beg id :: new_seq @ D_step_end (fresh_id ()) :: tl
         | MGoto (id, i) -> Goto (id, i) :: tl
         | MLabel (id, i) -> Label (id, i) :: tl
         | MDecl (id, v, i) -> Decl (id, v, i) :: tl
@@ -338,20 +338,12 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         in
         let opt_lab = mk_uniq_label () in
         let body = List.fold_right make_one seq [] in
-        let new_seq = ((Label (-1, opt_lab) :: body) @ [Goto (-1, exit_lab)]) in
+        let new_seq =
+            ((Label (fresh_id (), opt_lab) :: body)
+             @ [Goto (fresh_id (), exit_lab)]) in
         (opt_lab, new_seq)
     in
-    let lstmts = List.fold_right make_one stmts [] in
-    (* assign unique negative ids instead of just -1's *)
-    let _, res = List.fold_right
-        (fun s (min_id, tl) ->
-            let s_id = stmt_id s in
-            if s_id = -1
-            then (min_id - 1, (replace_stmt_id min_id s) :: tl)
-            else (min_id, s :: tl)
-        ) lstmts (-1, []) 
-    in
-    res
+    List.fold_right make_one stmts []
 
 
 let rec atomic_expr_s = function

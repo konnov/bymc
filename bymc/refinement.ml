@@ -455,7 +455,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl rev_map fairness
        kept in state_asserts. State 1 is anything we can go to via
        the transducer. *)
     let step_asserts =
-        [(proc_abbrev, state_asserts @ [Expr(-1, fairness)]);
+        [(proc_abbrev, state_asserts @ [Expr(fresh_id (), fairness)]);
             (proc_abbrev, [])] in
 
     (* simulate one step *)

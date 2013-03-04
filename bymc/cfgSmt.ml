@@ -12,7 +12,7 @@ open Smt
 open Debug
 
 let mke id e = MExpr (id, e) 
-let mkez e = MExpr (-1, e)
+let mkez e = MExpr (fresh_id (), e)
 
 (*
  XXX: this translation does not work with a control flow graph like this:

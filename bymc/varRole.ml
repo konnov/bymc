@@ -79,7 +79,7 @@ let identify_var_roles prog =
         let use_body_sum =
             join_all_locs (join lub_var_use) (mk_bottom_val ()) var_uses in
         let reg_tab = extract_skel proc#get_stmts in
-        let fst_id =
+        let fst_id = (* TODO: remove as we are using not -1, but fresh_id () *)
             let is_norm s = (m_stmt_id s) <> -1 in
             (m_stmt_id (List.find is_norm (reg_tab#get "comp"))) in
         let loc_roles =

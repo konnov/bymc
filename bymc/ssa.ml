@@ -15,6 +15,8 @@ open SpinIr
 open SpinIrImp
 open Debug
 
+exception Var_not_found of string
+
 let comp_dom_frontiers cfg =
     let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
     let idom_tbl = comp_idoms cfg in
@@ -81,7 +83,9 @@ let place_phi (vars: var list) (cfg: 't control_flow_graph) =
                 then begin
                     let bb = cfg#find y in
                     let num_preds = (List.length bb#get_pred) in
-                    let phi = Expr (-1, Phi (v, Accums.n_copies num_preds v)) in
+                    let phi = Expr (fresh_id (),
+                                    Phi (v, Accums.n_copies num_preds v))
+                    in
                     let seq = bb#get_seq in
                     bb#set_seq ((List.hd seq) :: phi :: (List.tl seq));
                     Hashtbl.replace has_already y !iter_cnt;
@@ -187,14 +191,14 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
         with Not_found ->
-            raise (Failure ("Var not found: " ^ v#qual_name))
+            raise (Var_not_found ("Var not found: " ^ v#qual_name))
     in
     let s_top v =
         let stack =
             try
                 Hashtbl.find stacks (nm v)
             with Not_found ->
-                raise (Failure ("No stack for " ^ (nm v)))
+                raise (Var_not_found ("No stack for " ^ (nm v)))
         in
         if stack <> []
         then List.hd stack
@@ -228,28 +232,36 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
             let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
             v#copy (sprintf "%s_%s" v#get_name suf) (* not a qualified name! *)
     in
-    let sub_var_as_var v = Var (sub_var v) in
+    let sub_var_as_var e v =
+        try Var (sub_var v)
+        with Var_not_found m ->
+            raise (Var_not_found (m ^ " in " ^ (expr_s e)))
+    in
     let rec search x =
         let bb = cfg#find x in
         let bb_old_seq = bb#get_seq in
         let replace_rhs = function
             | Decl (id, v, e) ->
-                    Decl (id, v, map_rvalues sub_var_as_var e)
+                    Decl (id, v, map_rvalues (sub_var_as_var e) e)
             | Expr (id, e) ->
-                    Expr (id, map_rvalues sub_var_as_var e)
+                    Expr (id, map_rvalues (sub_var_as_var e) e)
             | Assume (id, e) ->
-                    Assume (id, map_rvalues sub_var_as_var e)
+                    Assume (id, map_rvalues (sub_var_as_var e) e)
             | Assert (id, e) ->
-                    Assert (id, map_rvalues sub_var_as_var e)
+                    Assert (id, map_rvalues (sub_var_as_var e) e)
             | _ as s -> s
         in
         let replace_lhs = function
             | Decl (id, v, e) -> Decl (id, (intro_var v), e)
             | Expr (id, BinEx (ASGN, Var v, rhs)) ->
                     Expr (id, BinEx (ASGN, Var (intro_var v), rhs))
-            | Expr (id, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, idx), rhs)) ->
+            | Expr (id, (BinEx (ASGN, BinEx (ARR_ACCESS, Var v, idx), rhs) as e)) ->
                     (* A_i <- Update(A_j, k, e) *)
-                    let old_arr = Var (sub_var v) in
+                    let old_arr =
+                        try Var (sub_var v)
+                        with Var_not_found m ->
+                            raise (Var_not_found (m ^ " in " ^ (expr_s e)))
+                    in
                     let upd = BinEx (ARR_UPDATE,
                         BinEx (ARR_ACCESS, old_arr, idx), rhs) in
                     Expr (id, BinEx (ASGN, Var (intro_var v), upd))
@@ -272,10 +284,10 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
                 let (before, e, after) = Accums.list_nth_slice rhs j in
                 let new_e =
                     try sub_var e
-                    with Failure s ->
+                    with Var_not_found s ->
                         let m =
                             (sprintf "sub_phi_arg(x = %d, y = %d): %s" x y s) in
-                        raise (Failure m)
+                        raise (Var_not_found m)
                 in
                 Expr (id, Phi (v, before @ (new_e :: after)))
             | _ as s -> s
@@ -291,7 +303,8 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         then begin
             let bind_out v =
                 let out_v = v#copy (v#get_name ^ "_OUT") in
-                Expr (-1, BinEx (ASGN, Var out_v, sub_var_as_var v)) in
+                Expr (fresh_id (), BinEx (ASGN, Var out_v,
+                    sub_var_as_var (Nop "bind_out") v)) in
             let out_assignments = List.map bind_out extern_vars in
             bb#set_seq (bb#get_seq @ out_assignments);
         end;

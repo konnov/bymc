@@ -19,8 +19,6 @@ let write_exprs name stmts =
     (* assign new ids to expression in a way that keeps the order between
        old ids and blocks of statements between them *)
     let num_stmt (num, lst) = function
-        | MExpr (-1, e) ->
-                (num + 1, (MExpr (num, e)) :: lst)
         | MExpr (id, e) ->
                 ((id + 1) * mul + 1, (MExpr ((id + 1) * mul, e)) :: lst)
         | _ ->

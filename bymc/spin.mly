@@ -69,7 +69,6 @@ exception Parse_error of string;;
 
 (* we have to declare global objects, think of resetting them afterwards! *)
 let err_cnt = ref 0;;
-let stmt_cnt = ref 0;;
 let met_else = ref false;;
 let fwd_labels = Hashtbl.create 10;;
 let lab_stack = ref [];;
@@ -77,12 +76,6 @@ let global_scope = new symb_tab "";;
 let spec_scope = new symb_tab "spec";;
 let current_scope = ref global_scope;;
 let type_tab = new data_type_tab;;
-
-let new_id () =
-    let id = !stmt_cnt in
-    stmt_cnt := !stmt_cnt + 1;
-    id
-;;
 
 let push_new_labs () =
     let e = mk_uniq_label () in (* one label for entry to do *)
@@ -213,7 +206,7 @@ unit	: proc	/* proctype        */    { [Proc $1] }
     | prop_decl /* atomic propositions */ { [Stmt $1] }
 	| ASSUME full_expr /* assumptions */
         {
-            [Stmt (MAssume (new_id (), $2))]
+            [Stmt (MAssume (fresh_id (), $2))]
         }
 	| error { fatal "Unexpected top-level statement" ""}
 	;
@@ -489,7 +482,7 @@ one_decl: vis TYPE var_list	{
             v#add_flag fl;
             type_tab#set_type v tp;
             !current_scope#add_symb v#get_name (v :> symb);
-            MDecl(new_id (), v, init)
+            MDecl(fresh_id (), v, init)
         in
         List.map add_decl $3
     }
@@ -679,7 +672,7 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
     | if_begin options FI	{
                 pop_labs ();                
                 met_else := false;
-                [ MIf (new_id (), $2) ]
+                [ MIf (fresh_id (), $2) ]
           }
     | do_begin 		/* one more rule as ocamlyacc does not support multiple
                        actions like this: { (* pushbreak(); *) } */
@@ -692,10 +685,10 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                     and opts = $2 in
                 met_else := false;
                 let do_s =
-                    [MLabel (new_id (), entry_lab);
-                     MIf (new_id (), opts);
-                     MGoto (new_id (), entry_lab);
-                     MLabel (new_id (), break_lab)]
+                    [MLabel (fresh_id (), entry_lab);
+                     MIf (fresh_id (), opts);
+                     MGoto (fresh_id (), entry_lab);
+                     MLabel (fresh_id (), break_lab)]
                 in
                 pop_labs ();                
                 do_s
@@ -706,18 +699,18 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
                 }
     | BREAK     {
                 let (_, blab) = top_labs () in
-                [MGoto (new_id (), blab)]
+                [MGoto (fresh_id (), blab)]
                 (* $$ = nn(ZN, GOTO, ZN, ZN);
                   $$->sym = break_dest(); *)
                 }
     | GOTO NAME		{
         try
             let l = !current_scope#lookup $2 in
-            [MGoto (new_id (), l#as_label#get_num)]
+            [MGoto (fresh_id (), l#as_label#get_num)]
         with Symbol_not_found _ ->
             let label_no = mk_uniq_label () in
             Hashtbl.add fwd_labels $2 label_no;
-            [MGoto (new_id (), label_no)] (* resolve it later *)
+            [MGoto (fresh_id (), label_no)] (* resolve it later *)
      (* $$ = nn($2, GOTO, ZN, ZN);
       if ($2->sym->type != 0
       &&  $2->sym->type != LABEL) {
@@ -738,12 +731,12 @@ Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
     in
     !current_scope#add_symb
         $1 ((new label $1 label_no) :> symb);
-    MLabel (new_id (), label_no) :: $3
+    MLabel (fresh_id (), label_no) :: $3
     }
 ;
 
 Stmnt	: varref ASGN full_expr	{
-                    [MExpr (new_id(), BinEx(ASGN, Var $1, $3))]
+                    [MExpr (fresh_id (), BinEx(ASGN, Var $1, $3))]
                  (* $$ = nn($1, ASGN, $1, $3);
 				  trackvar($1, $3);
 				  nochan_manip($1, $3, 0);
@@ -751,7 +744,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref INCR		{
                     let v = Var $1 in
-                    [MExpr (new_id(), BinEx(ASGN, v, BinEx(PLUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, Const 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '+', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -762,7 +755,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref DECR	{
                     let v = Var $1 in
-                    [MExpr (new_id(), BinEx(ASGN, v, BinEx(MINUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, Const 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '-', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -773,7 +766,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| PRINT	LPAREN STRING	/* { (* realread = 0; *) } */
 	  prargs RPAREN	{
-                    [MPrint (new_id(), $3, $4)]
+                    [MPrint (fresh_id (), $3, $4)]
                     (* $$ = nn($3, PRINT, $5, ZN); realread = 1; *) }
 	| PRINTM LPAREN varref RPAREN	{
                     (* do we actually need it? *)
@@ -787,10 +780,10 @@ Stmnt	: varref ASGN full_expr	{
 	| ASSUME full_expr    	{
                     if is_expr_symbolic $2
                     then fatal "active [..] must be constant or symbolic" ""
-                    else [MAssume (new_id(), $2)] (* FORSYTE ext. *)
+                    else [MAssume (fresh_id (), $2)] (* FORSYTE ext. *)
                 }
 	| ASSERT full_expr    	{
-                    [MAssert (new_id(), $2)]
+                    [MAssert (fresh_id (), $2)]
                 (* $$ = nn(ZN, ASSERT, $2, ZN); AST_track($2, 0); *) }
 	| ccode			{ raise (Not_implemented "ccode") (* $$ = $1; *) }
 	| varref R_RCV		/* { (* Expand_Ok++; *) } */
@@ -823,15 +816,15 @@ Stmnt	: varref ASGN full_expr	{
 				  trackchanuse($4, ZN, 'S');
 				  any_runs($4); *)
 				}
-	| full_expr		{ [MExpr (new_id(), $1)]
+	| full_expr		{ [MExpr (fresh_id (), $1)]
                      (* $$ = nn(ZN, 'c', $1, ZN); count_runs($$); *) }
     | ELSE  		{ met_else := true; [] (* $$ = nn(ZN,ELSE,ZN,ZN); *)
 				}
 	| ATOMIC   LCURLY sequence OS RCURLY {
-              [ MAtomic (new_id (), $3) ]
+              [ MAtomic (fresh_id (), $3) ]
 		  }
 	| D_STEP LCURLY sequence OS RCURLY {
-              [ MD_step (new_id (), $3) ]
+              [ MD_step (fresh_id (), $3) ]
 		  }
 	| LCURLY sequence OS RCURLY	{
               $2
@@ -988,7 +981,7 @@ prop_decl:
         v#set_proc_name spec_scope#tab_name;
         type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
         spec_scope#add_symb v#get_name (v :> symb);
-        MDeclProp (new_id (), v, $4)
+        MDeclProp (fresh_id (), v, $4)
     }
     ;
 
