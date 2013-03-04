@@ -141,6 +141,7 @@ var name_i var_id =
             let new_var = new var new_name self#id in
             new_var#set_ini ini;
             if self#is_symbolic then new_var#set_symbolic;
+            if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
             new_var#set_proc_index m_proc_index;
             new_var
@@ -150,6 +151,7 @@ var name_i var_id =
             let new_var = new var new_name (fresh_var_id ()) in
             new_var#set_ini ini;
             if self#is_symbolic then new_var#set_symbolic;
+            if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
             new_var#set_proc_index m_proc_index;
             new_var
