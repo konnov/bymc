@@ -61,15 +61,15 @@ let parse_options =
         "Use: run [-a] [-i invariant] [-c spin_sim_out] [-s x=num,y=num] promela_file");
 
     !opts
-;;
+
 
 let write_to_file name units type_tab =
     let fo = open_out name in
     List.iter (write_unit type_tab fo 0) units;
     close_out fo
-;;
 
-let _ =
+
+let main () =
     try
         let opts = parse_options in
         current_verbosity_level := if opts.verbose then DEBUG else INFO;
@@ -106,3 +106,18 @@ let _ =
         log ERROR "Premature end of file";
         exit 1
 
+
+let _ =
+    try
+        (* pay the price of easier debugging *)
+        Printexc.record_backtrace true;
+        main ()
+    with e ->
+        if Printexc.backtrace_status ()
+        then begin
+            fprintf stdout "Exception: %s\n" (Printexc.to_string e);
+            Printexc.print_backtrace stdout
+        end else begin
+            fprintf stdout "Exception: %s\n" (Printexc.to_string e);
+            fprintf stdout "(Trace is not available. Compile with -g?\n"
+        end
