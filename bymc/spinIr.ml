@@ -95,14 +95,6 @@ and
 var name_i var_id =
     object(self)
         inherit symb name_i
-        
-        (* TODO: get rid of it *)
-        val mutable vtype = TINT
-        val mutable m_isarray: bool = false (* set if decl specifies array bound *)
-        val mutable nbits: int = 0        (* optional width specifier *)
-        (* optional value range, left inclusive, right exclusive *)
-        val mutable m_range: int * int = (0, 0)
-        val mutable nel: int = 1          (* 1 if scalar, >1 if array *)
         val mutable ini: int = 0          (* initial value, or chan-def *)
 
         (* the name of the owning process type (if there is one) *)
