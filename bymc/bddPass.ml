@@ -61,19 +61,19 @@ let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     let all_vars = (Program.get_shared prog)
         @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
     let vis_vs, hid_vs = List.partition is_visible all_vars in
+    log INFO (sprintf "  mk_ssa...");
     let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
     Cfg.write_dot (sprintf "%s.dot" filename) cfg;
+    log INFO (sprintf "  move_phis_to_blocks...");
     let cfg = move_phis_to_blocks cfg in
-    let paths = enum_paths cfg in
-    Printf.printf "PATHS (%d)\n" (List.length paths);
     let mk_block_cons block_map block =
         let cons = block_intra_cons p#get_name type_tab new_type_tab block in
         IntMap.add block#label cons block_map
     in
-    let block_cons = List.fold_left mk_block_cons IntMap.empty cfg#block_list
-    in
+    let block_cons =
+        List.fold_left mk_block_cons IntMap.empty cfg#block_list in
     log INFO "DONE";
-    (cfg#block_list, block_cons, paths)
+    (cfg#block_list, block_cons, (enum_paths cfg))
 
 
 (* XXX: REWRITE EVERYTHING WHEN IT WORKS! *)
@@ -185,7 +185,7 @@ let proc_to_bdd prog smt_fun proc filename =
         | _ as s -> 
             raise (Bdd_error ("Cannot convert to BDD: " ^ (mir_stmt_s s)))
     in
-    let blocks, block_map, paths = smt_fun proc in 
+    let blocks, block_map, path_enum_fun = smt_fun proc in 
     let all_stmts = List.concat (intmap_vals block_map) in
     let var_map =
         List.fold_left collect_stmt_vars StringMap.empty all_stmts in
@@ -215,12 +215,15 @@ let proc_to_bdd prog smt_fun proc filename =
         Format.fprintf ff ")"; Format.pp_print_newline ff ()
     in
     IntMap.iter out_f block_forms_map;
-    let out_path num p =
-        Format.fprintf ff "(let P%d @,(exists [" num;
+    let path_no = ref 0 in
+    let out_path path = 
+        Format.fprintf ff "(let P%d @,(exists [" !path_no;
+        path_no := !path_no + 1;
         List.iter (fun v -> Format.fprintf ff "%s @," v) hidden_vars;
         Format.fprintf ff "]@, (and ";
         let n_closing = ref 0 in (* collecting closing parenthesis *)
         let out_block prev_bb bb =
+            (* merge basic blocks using phi functions *)
             let phis = bb#get_phis in
             if phis <> []
             then begin
@@ -245,16 +248,18 @@ let proc_to_bdd prog smt_fun proc filename =
             end;
             Format.fprintf ff "B%d " bb#label
         in
-        let preds = (List.hd p) :: (List.rev (List.tl (List.rev p))) in
-        List.iter2 out_block preds p;
+        let preds = (List.hd path) :: (List.rev (List.tl (List.rev path)))
+        in
+        List.iter2 out_block preds path;
         List.iter (fun _ -> Format.fprintf ff ")") (range 0 !n_closing);
         Format.fprintf ff ")))"; Format.pp_print_newline ff ();
     in
-    List.iter2 out_path (range 0 (List.length paths)) paths;
+    log INFO (sprintf "  constructing symbolic paths...");
+    let num_paths = path_enum_fun out_path in
+    Printf.printf "    constructed %d paths\n" num_paths;
     (* finally, add the relation *)
     Format.fprintf ff "(let R @,(or ";
-    List.iter
-        (fun i -> Format.fprintf ff "P%d " i) (range 0 (List.length paths));
+    List.iter (fun i -> Format.fprintf ff "P%d " i) (range 0 num_paths);
     Format.fprintf ff "))";
     Format.pp_print_flush ff ();
     close_out out

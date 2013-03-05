@@ -433,16 +433,30 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
  Enumerate all possible finite paths in an acyclic graph.
  We use a naive DFS algorithm, it works only on small graphs!
  *)
-let enum_paths cfg =
+let enum_paths (cfg: 't control_flow_graph)
+        (path_fun: 't basic_block list -> unit): int =
+    (*
     let sccs = comp_sccs cfg#entry in
     if sccs <> [] then raise (CfgError "CFG has a cycle!");
+    *)
     
-    let rec dfs bb =
-        let succ = bb#get_succ in
-        let paths = List.concat (List.map dfs succ) in
-        if paths = []
-        then [[bb]]
-        else List.map (fun p -> bb :: p) paths
+    let rec dfs path bb =
+        if bb#get_visit_flag
+        then raise (CfgError
+            (sprintf "Graph is cyclic: %d -> .. -> %d" bb#label bb#label))
+        else bb#set_visit_flag true;
+        let new_path = bb :: path in
+        let num = if bb#get_succ = [] (* the final state is reached *)
+        then begin
+            path_fun (List.rev new_path);
+            1 (* one path enumerated *)
+        end else List.fold_left (+) 0
+            (List.map (dfs new_path) bb#get_succ) (* many paths *)
+        in
+        bb#set_visit_flag false;
+        num
     in
-    dfs cfg#entry
+    let num_paths = dfs [] cfg#entry in
+    List.iter (fun bb -> bb#set_visit_flag false) cfg#block_list;
+    num_paths
 
