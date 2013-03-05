@@ -255,7 +255,8 @@ let proc_to_bdd prog smt_fun proc filename =
         Format.fprintf ff ")))"; Format.pp_print_newline ff ();
     in
     log INFO (sprintf "  constructing symbolic paths...");
-    (*let num_paths = path_enum_fun (fun _ -> ()) in*)
+    let num_paths = path_enum_fun (fun _ -> ()) in
+    Printf.printf "    %d paths to construct...\n" num_paths;
     let num_paths = path_enum_fun out_path in
     Printf.printf "    constructed %d paths\n" num_paths;
     (* finally, add the relation *)
