@@ -1,0 +1,68 @@
+#!/usr/bin/python
+#
+# Translate OCaml error messages into readable form
+
+import re
+import sys
+
+def find_line(filename, lineno):
+    # try to open the file
+    try:
+        errf = open(filename, "r")
+        for i, l in enumerate(errf):
+            if i + 1 == lineno:
+                return l #[col_beg - 1: col_end - 1]
+    except IOError:
+        # ignore
+        pass
+    finally:
+        if errf:
+            errf.close()
+
+    return None            
+
+def translate_error(inf, filename, lineno, col_beg, col_end):
+    print 'Error: %s, line %d, columns %d-%d' \
+            % (filename, lineno, col_beg, col_end)
+
+    line = find_line(filename, lineno)
+    if line:
+        sys.stdout.write(line)
+        msg = ((col_beg - 1) * " ") + ((col_end - col_beg + 1) * "~")
+        print msg
+
+    RE_ACT = re.compile('Error: This expression has type (.*)')
+    RE_EXP = re.compile('\s+but an expression was expected of type (.*)')
+    # try to parse what follows
+    line = inf.readline()
+    m = RE_ACT.match(line)
+    if m:
+        actual_type = m.group(1)
+        line = inf.readline()
+        m = RE_EXP.match(line)
+        if m:
+            expected_type = m.group(1)
+            print "EXPECTED TYPE: %s" % expected_type
+            print "INFERRED TYPE: %s" % actual_type
+            line = inf.readline()
+        else:
+            print "INFERRED TYPE: %s" % actual_type
+            # the next line will be given back
+
+    return line
+
+
+# read the whole text line by line
+RE_SRC = re.compile('File "(.*)", line ([0-9]+), characters ([0-9]+)-([0-9]+):')
+inf = sys.stdin
+
+line = inf.readline()
+while line:
+    m = RE_SRC.match(line)
+    if m:
+        line = translate_error(inf, m.group(1), int(m.group(2)),
+                int(m.group(3)), int(m.group(4)))
+    else:
+        sys.stdout.write(line)
+        line = inf.readline()
+
