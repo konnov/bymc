@@ -62,7 +62,8 @@ class EndOfFileError(Exception):
 
 
 class Parser:
-    def __init__(self):
+    def __init__(self, on_let):
+        self.on_let = on_let
         self.tok_iter = None
         self.tok = None
         self.var_set = set()
@@ -192,7 +193,7 @@ class Parser:
                 except EndOfFileError:
                     return lets
 
-                lets.append(self.parse_let())
+                self.on_let(self.parse_let())
         finally:
             f.close()
 
@@ -297,6 +298,10 @@ class Bdder:
         else:
             raise BddError("Unknown expr met: " + str(typ))
 
+    def let_to_bdd(self, form):
+        (name, bdd) = self.expr_as_bdd(form)
+        self.bdd_map[name] = bdd
+
     def forms_to_bdd(self, forms):
         for f in forms:
             (name, bdd) = self.expr_as_bdd(f)
@@ -363,8 +368,8 @@ if __name__ == "__main__":
     filename = sys.argv[1]
     try:
         print "%s: parsing..." % cur_time()
-        parser = Parser()    
-        forms = parser.parse_forms(filename)
+        parser = Parser(lambda _: None)
+        parser.parse_forms(filename)
         used_vars = list(parser.var_set.difference(parser.let_set))
         #print expr_s(expr)
     except ParseError, e:
@@ -386,9 +391,10 @@ if __name__ == "__main__":
 
     mgr = pycudd.DdManager()
     mgr.SetDefault()
-    print "%s: constructing BDDs..." % cur_time()
+    print "%s: parsing again + constructing BDDs..." % cur_time()
     bdder = Bdder(mgr, var_order)
-    bdder.forms_to_bdd(forms)
+    parser = Parser(bdder.let_to_bdd)
+    parser.parse_forms(filename)
 
     print "%s: saving BDDs..." % cur_time()
     # TODO: plumbing code, extract into a separate function
