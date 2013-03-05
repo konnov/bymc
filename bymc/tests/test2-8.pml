@@ -50,7 +50,9 @@ end: /* at some point there will be nothing to do */
                 :: pc == 2 -> next_pc = 3;
                 :: pc == 3 -> next_pc = 4;
                 :: pc == 4 -> next_pc = 5;
-                :: pc == 5 -> next_pc = pc;
+                :: pc == 5 -> next_pc = 6;
+                :: pc == 6 -> next_pc = 7;
+                :: pc == 7 -> next_pc = pc;
             fi;
             nsnt = next_nrcvd;
             pc = next_pc;
