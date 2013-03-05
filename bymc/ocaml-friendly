@@ -22,17 +22,19 @@ def find_line(filename, lineno):
     return None            
 
 def translate_error(inf, filename, lineno, col_beg, col_end):
-    print 'Error: %s, line %d, columns %d-%d' \
-            % (filename, lineno, col_beg, col_end)
+    def print_expr(msg_type):
+        print '%s: %s, line %d, columns %d-%d' \
+                % (msg_type, filename, lineno, col_beg, col_end)
 
-    line = find_line(filename, lineno)
-    if line:
-        sys.stdout.write(line)
-        msg = ((col_beg - 1) * " ") + ((col_end - col_beg + 1) * "#")
-        print msg
+        line = find_line(filename, lineno)
+        if line:
+            sys.stdout.write(line)
+            msg = ((col_beg - 1) * " ") + ((col_end - col_beg + 1) * "#")
+            print msg
 
     RE_ACT = re.compile('Error: This expression has type (.*)')
     RE_EXP = re.compile('\s+but an expression was expected of type (.*)')
+    RE_WARN = re.compile('(Warning[^:]*): (.*)')
     # try to parse what follows
     line = inf.readline()
     m = RE_ACT.match(line)
@@ -41,13 +43,23 @@ def translate_error(inf, filename, lineno, col_beg, col_end):
         line = inf.readline()
         m = RE_EXP.match(line)
         if m:
+            print_expr("Error")
             expected_type = m.group(1)
-            print "EXPECTED TYPE: %s" % expected_type
-            print "INFERRED TYPE: %s" % actual_type
+            print "Expected type: %s" % expected_type
+            print "Inferred type: %s" % actual_type
             line = inf.readline()
         else:
+            print_expr("Error")
             print "INFERRED TYPE: %s" % actual_type
             # the next line will be given back
+    else:
+        m = RE_WARN.match(line)
+        if m:
+            print_expr(m.group(1))
+            print(m.group(2))
+            line = inf.readline()
+        else:
+            print_expr("In")
 
     return line
 
