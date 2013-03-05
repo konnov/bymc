@@ -28,7 +28,7 @@ def translate_error(inf, filename, lineno, col_beg, col_end):
     line = find_line(filename, lineno)
     if line:
         sys.stdout.write(line)
-        msg = ((col_beg - 1) * " ") + ((col_end - col_beg + 1) * "~")
+        msg = ((col_beg - 1) * " ") + ((col_end - col_beg + 1) * "#")
         print msg
 
     RE_ACT = re.compile('Error: This expression has type (.*)')

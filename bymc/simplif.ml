@@ -20,6 +20,8 @@ module VarMap = Map.Make (struct
  let compare a b = a#id - b#id
 end)
 
+module StringSet = Set.Make(String)
+
 exception Simplif_error of string
 
 (* Find all possible bindings for all variables used in an expression.
@@ -90,6 +92,20 @@ let prop_const exp binding =
     prop_rec exp
 
 
+let prop_const_in_stmt stmt binding =
+    let propagate = function
+    | MExpr (id, e) ->
+        MExpr (id, prop_const e binding)
+    | _ as s -> s
+    in
+    replace_basic_stmts propagate stmt
+
+
+let binding_to_eqs binding =
+    let eq (var, value) = BinEx (EQ, Var var, Const value) in
+    List.map eq (VarMap.bindings binding)
+
+
 (* replace array accesses like  a[x+y] == i by a conjunction:
     (x == 0 && y == 0 && a[0] == i) || ... || (x == m && y == n && a[m+n] == i)
  *)
@@ -97,10 +113,6 @@ let expand_array_access type_tab stmt =
     let is_arr_access = function
     | BinEx (ARR_ACCESS, _, _) -> true
     | _ -> false
-    in
-    let binding_to_eqs binding =
-        let eq (var, value) = BinEx (EQ, Var var, Const value) in
-        List.map eq (VarMap.bindings binding)
     in
     let rec expand = function
     | MExpr (id, BinEx (EQ, _, _))
@@ -150,6 +162,103 @@ let expand_array_access type_tab stmt =
         MExpr (id, BinEx (t, le, re))
 
     | _ as s -> s
+    in
+    expand stmt
+
+
+(* Function expand_array_access usually causes blow up when used with multiple
+   non-deterministic choices that are using array accesses inside.
+   To workaround this we choose a cut point before branching. This must be a
+   good heuristic.
+ *)
+let expand_array_access_struc type_tab stmt =
+    let cache = Hashtbl.create 10 in
+    let points = ref [] in
+
+    let rec gather_idx_exprs set = function
+    | BinEx (ARR_ACCESS, _, Const _) ->
+        set
+    | BinEx (ARR_ACCESS, _, e) ->
+        let e_s = expr_s e in
+        Hashtbl.add cache e_s e;
+        StringSet.add e_s set
+    | BinEx (_, l, r) ->
+        gather_idx_exprs (gather_idx_exprs set l) r
+    | UnEx (_, e) ->
+        gather_idx_exprs set e
+    | _ -> set
+    in
+    let rec find_expansion_points set = function
+    | MExpr (_, e) ->
+        gather_idx_exprs set e
+    | MAtomic (_, seq)
+    | MD_step (_, seq) ->
+        List.fold_left find_expansion_points set seq
+    | MIf (id, opts) ->
+        let first = find_in_option (List.hd opts) in
+        let common = List.fold_left StringSet.inter first
+            (List.map find_in_option (List.tl opts)) in
+        let united = List.fold_left StringSet.union set
+            (List.map find_in_option opts) in
+        if not (StringSet.is_empty common)
+        then begin
+            let decode_exp exp_str lst =
+                (Hashtbl.find cache exp_str) :: lst in
+            let idx_exprs = StringSet.fold decode_exp common [] in
+            points := (id, idx_exprs) :: !points
+        end;
+        united
+    | _ -> set
+    and find_in_option = function
+    | MOptGuarded seq
+    | MOptElse seq ->
+        List.fold_left find_expansion_points StringSet.empty seq
+    in
+    (* find good expansion sets *)
+    let _ = find_expansion_points StringSet.empty in
+    (* expand arrays in expansion points, or fall back to the naive version *)
+    let rec expand = function
+    | MExpr (_, _) as s ->
+        s (* TODO: expand arrays for individual expressions *)
+    | MAtomic (id, seq) ->
+        MAtomic (id, List.map expand seq)
+    | MD_step (id, seq) ->
+        MD_step (id, List.map expand seq)
+    | MIf (id, opts) as s ->
+        let guard_opt opt binding =
+            let guard =
+                MExpr(fresh_id (),
+                      (list_to_binex AND (binding_to_eqs binding))) in
+            match opt with
+            | MOptGuarded seq ->
+                let ps = List.map (fun s -> prop_const_in_stmt s binding) seq in
+                MOptGuarded (guard :: ps)
+            | MOptElse _ ->
+                raise (Simplif_error "MOptElse is not supported")
+        in
+        let is_point (pid, exp) = (pid = id) in
+        begin
+            try
+                let _, idx_exp = List.find is_point !points in
+                let bindings = mk_expr_bindings type_tab idx_exp in
+                if bindings <> []
+                then
+                    let transform lst b =
+                        List.fold_left
+                            (fun l o -> (guard_opt o b) :: l) lst opts
+                    in
+                    let options = List.fold_left transform [] bindings in
+                    MIf (id, options) (* many options *)
+                else s (* constant indices *)
+            with Not_found ->
+                MIf (id, List.map expand_opt opts)
+        end
+
+    | _ as s -> s
+    
+    and expand_opt = function
+    | MOptGuarded seq -> MOptGuarded (List.map expand seq)
+    | MOptElse seq -> MOptElse (List.map expand seq)
     in
     expand stmt
 
@@ -256,9 +365,8 @@ let simplify_prog caches prog =
     | Proc p ->
         let flat_decls = flatten_array_decl type_tab new_type_tab p#get_stmts
         in
-        let simple_stmts = List.map
-            (replace_basic_stmts (expand_array_access type_tab))
-            flat_decls in
+        let simple_stmts =
+            List.map (expand_array_access_struc type_tab) flat_decls in
         (Proc (proc_replace_body p simple_stmts)) :: collected
 
     | Stmt (MDecl (_, _, _) as d) ->
