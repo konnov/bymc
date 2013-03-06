@@ -1,0 +1,7 @@
+
+1. Custom Operation n-aire 
+2. Bdd.vectorcompose avec cache controllable par l'utilisateur
+   idem pour les fonctions permute 
+3. variante des fonctions varmap, permute, substitute de plus haut niveau
+   (prenant des paires, pas besoin de remplir pour tous les indices)
+4. Inliner fonctions c2ml et ml2c quand elles sont simples

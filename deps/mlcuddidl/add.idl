@@ -1,0 +1,952 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+")
+
+import "man.idl";
+import "bdd.idl";
+
+/* ====================================================================== */
+/* Management of abstract datatypes */
+/* ====================================================================== */
+
+/* For nodes that need Garbage collection */
+typedef [abstract,c2ml(camlidl_cudd_node_c2ml),ml2c(camlidl_cudd_node_ml2c)] struct node__t add__t;
+
+quote(MLMLI,"\
+(** Public type for exploring the abstract type [t] *)
+type add =
+| Leaf of float      (** Terminal value *)
+| Ite of int * t * t (** Decision on CUDD variable *)
+
+")
+
+/* ====================================================================== */
+/* Internal use */
+/* ====================================================================== */
+quote(ML,"")
+quote(ML,"(*  ====================================================== *)")
+quote(ML,"(** {3 For internal use} *)")
+quote(ML,"(*  ====================================================== *)")
+
+quote(ML,"
+
+")
+
+/* ====================================================================== */
+/* Extractors */
+/* ====================================================================== */
+quote(MLMLI,"")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Extractors} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** Returns the manager associated to the ADD *)
+external manager : t -> Man.dt = \"camlidl_bdd_manager\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_IsConstant}[Cudd_IsConstant]}. Is the ADD constant ? *)
+external is_cst : t -> bool = \"camlidl_bdd_is_cst\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_NodeReadIndex}[Cudd_NodeReadIndex]}. Returns the index of the ADD (65535 for a constant ADD) *)external topvar : t -> int = \"camlidl_bdd_topvar\"
+")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_T}[Cudd_T]}. Returns the positive subnode of the ADD *)")
+add__t dthen(add__t no) quote(call, "
+if (cuddIsConstant(no.node))
+  caml_invalid_argument (\"Add.dthen: constant ADD\")
+;
+_res.man = no.man;
+_res.node = cuddT(no.node);
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_E}[Cudd_E]}. Returns the negative subnode of the ADD *)")
+add__t delse(add__t no) quote(call, "
+if (cuddIsConstant(no.node))
+  caml_invalid_argument (\"Add.delse: constant ADD\")
+;
+_res.man = no.man;
+_res.node = cuddE(no.node);
+");
+
+quote(MLMLI,"
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_V}[Cudd_V]}. Returns the value of the assumed constant ADD *)
+external dval : t -> float = \"camlidl_cudd_avdd_dval\"
+")
+
+quote(MLMLI,"
+(** Returns the positive and negative cofactor of the ADD wrt the variable *)
+external cofactors : int -> t -> t*t = \"camlidl_cudd_add_cofactors\"
+")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Cofactor}[Cudd_Cofactor]}. [cofactor add cube] evaluates [add] on the cube [cube] *)")
+add__t cofactor(add__t no1, bdd__dt no2) NO_OF_MAN_NO12(Cudd_Cofactor);
+
+quote(MLMLI,"
+(** Decomposes the top node of the ADD *)
+external inspect: t -> add = \"camlidl_cudd_avdd_inspect\"
+")
+
+/* ====================================================================== */
+/* Supports */
+/* ====================================================================== */
+quote(MLMLI,"")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Supports} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Support}[Cudd_Support]}. Returns the support (positive cube) of the ADD *)
+external support : t -> Bdd.dt = \"camlidl_bdd_support\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SupportSize}[Cudd_SupportSize]}. Returns the size of the support of the ADD *)
+external supportsize : t -> int = \"camlidl_bdd_supportsize\"
+
+(** [Cuddaux_IsVarIn]. Does the given variable belong to the support of the ADD ? *)
+external is_var_in : int -> t -> bool = \"camlidl_bdd_is_var_in\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_VectorSupport}[Cudd_VectorSupport]}. Returns the support of the array of ADDs.
+
+Raises a [Failure] exception in case where the array is of size 0 (in such
+case, the manager is unknown, and we cannot return an empty support). *)
+external vectorsupport : t array -> Bdd.dt = \"camlidl_bdd_vectorsupport\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_VectorSupport}[Cudd_VectorSupport]}. Returns the support of the BDDs and ADDs arrays.
+
+Raises a [Failure] exception when both arrays are of size 0 (in such
+case, the manager is unknown, and we cannot return an empty support). *)
+external vectorsupport2 : Bdd.dt array -> t array -> Bdd.dt = \"camlidl_add_vectorsupport2\"
+")
+
+/* ====================================================================== */
+/* Classical operations */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Classical operations} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLMLI,"
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addConst}[Cudd_addConst]}. Return a constant ADD with the given value. *)
+external cst : Man.dt -> float -> t = \"camlidl_cudd_avdd_cst\"
+")
+
+quote(MLI,"val background : Man.dt -> t")
+quote(ML,"
+let background man = cst man (Man.get_background man)
+")
+
+quote(MLI,"(** [Cuddaux_addIte]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addIte}[Cudd_addIte]}. If-then-else operation, with the condition being a BDD. *)")
+add__t ite(bdd__dt no1, add__t no2, add__t no3) NO_OF_MAN_NO123(Cuddaux_addIte);
+
+quote(MLI,"(** [Cuddaux_addIteConstant]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addIteConstant}[Cudd_addIteConstant]}. If-then-else operation, which succeeds only if the resulting node belongs to one of the two ADD. *)")
+[unique] add__t* ite_cst(bdd__dt no1, add__t no2, add__t no3)
+quote(call,
+"  {
+     static add__t res;
+     DdNode* node;
+     CHECK_MAN3;
+     node = Cuddaux_addIteConstant(no1.man->man,no1.node,no2.node,no3.node);
+     if (node==DD_NON_CONSTANT)
+       _res = NULL;
+     else {
+       res.man = no1.man;
+       res.node = node;
+       _res = &res;
+     }
+   }
+");
+
+quote(MLI,"(** [Cuddaux_addEvalConst]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addEvalConst}[Cudd_addEvalConst]}. *)")
+[unique] add__t * eval_cst(add__t no1, bdd__dt no2)
+quote(call,
+"  {
+     static add__t res;
+     DdNode* node;
+
+     CHECK_MAN2;
+     node = Cuddaux_addEvalConst(no1.man->man,no2.node,no1.node);
+     if (node==DD_NON_CONSTANT)
+       _res = 0;
+     else {
+       res.man = no1.man;
+       res.node = node;
+       _res = &res;
+     }
+   }
+");
+
+quote(MLI,"(** [Cuddaux_addCompose]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addCompose}[Cudd_addCompose]}. Substitutes the variable with the BDD in the ADD. *)")
+add__t compose(int var, bdd__dt no1, add__t no2)
+     quote(call,"
+CHECK_MAN2;
+Begin_roots2(_v_no1,_v_no2);
+_res.man = no1.man;
+_res.node = Cuddaux_addCompose(no1.man->man, no2.node, no1.node, var);
+End_roots();
+");
+
+quote(MLI,"
+(** [Cuddaux_addVectorCompose]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addVectorCompose}[Cudd_addVectorCompose]}.
+Parallel substitution of every variable [var] present in the manager by the
+BDD [table.(var)] in the ADD. You can optionnally control the memoization
+policy, see {!Memo}. *)
+val vectorcompose : ?memo:Memo.t -> Bdd.dt array -> t -> t
+")
+quote(ML,"
+external _vectorcompose : Bdd.dt array -> t -> t = \"camlidl_add_vectorcompose\"
+external _vectorcompose_memo : Memo.t -> Bdd.dt array -> t -> t = \"camlidl_add_vectorcompose_memo\"
+let vectorcompose ?memo tbdd add =
+  match memo with
+  | Some(memo) ->
+      let arity = match memo with
+	| Memo.Global -> 1
+	| Memo.Cache x -> Cache.arity x
+	| Memo.Hash x -> Hash.arity x
+      in
+      if arity<>1 then
+	raise (Invalid_argument \"Cudd.Add.vectorcompose_memo: memo.arity<>1\")
+      ;
+      _vectorcompose_memo memo tbdd add
+  | None ->
+      _vectorcompose tbdd add
+")
+
+
+
+/* ====================================================================== */
+/* Variable Mapping */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Variable mapping} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** [Cuddaux_addVarMap]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_bddVarMap}[Cudd_bddVarMap]}. Permutes the variables as it has been specified with {!Man.set_varmap}. *)")
+add__t varmap(add__t no)
+     quote(call, "
+if (no.man->man->map == NULL){
+  caml_failwith(\"Add.varmap: empty table, Man.set_varmap has not been called !\");
+}
+Begin_roots1(_v_no);
+_res.man = no.man;
+_res.node = Cuddaux_addVarMap(no.man->man,no.node);
+End_roots();
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addPermute}[Cudd_addPermute]}.
+Permutes the variables as it is specified by [permut] (same format as in
+{!Man.set_varmap}). You can optionnally control the memoization policy, see
+{!Memo}. *)
+val permute : ?memo:Memo.t -> t -> int array -> t
+")
+quote(ML,"
+external _permute : t -> int array -> t = \"camlidl_add_permute\"
+external _permute_memo : Memo.t -> t -> int array -> t = \"camlidl_add_permute_memo\"
+let permute ?memo add permut =
+  match memo with
+  | Some memo ->
+      let arity = match memo with
+	| Memo.Global -> 1
+	| Memo.Cache x -> Cache.arity x
+	| Memo.Hash x -> Hash.arity x
+      in
+      if arity<>1 then
+	raise (Invalid_argument \"Cudd.Add.permute: memo.arity<>1\")
+      ;
+      _permute_memo memo add permut
+  | None ->
+      _permute add permut
+")
+
+/* ====================================================================== */
+/* Logical tests */
+/* ====================================================================== */
+quote(MLMLI,"")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Logical tests} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** Equality test *)
+external is_equal: t -> t -> bool = \"camlidl_bdd_is_equal\"
+(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_EquivDC}[Cudd_EquivDC]}. Are the two ADDs equal when the BDD (careset) is true ? *)
+external is_equal_when: t -> t -> Bdd.dt -> bool = \"camlidl_bdd_is_equal_when\"
+")
+
+quote(MLMLI,"
+(** Variation of [Cuddaux_addEvalConst]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addEvalConst}[Cudd_addEvalConst]}. Is the ADD constant when the BDD (careset) is true, and in this case what is its value ? *)
+external is_eval_cst : t -> Bdd.dt -> float option = \"camlidl_cudd_avdd_is_eval_cst\"
+
+(** Is the result of [ite] constant, and if it is the case, what is its value ? *)
+external is_ite_cst : Bdd.dt -> t -> t -> float option = \"camlidl_cudd_avdd_is_ite_cst\"
+")
+
+/* ====================================================================== */
+/* Structural information */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Structural information} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_DagSize}[Cudd_DagSize]}. Size if the ADD as a graph (the number of nodes). *)
+external size :  t -> int = \"camlidl_bdd_size\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CountPath}[Cudd_CountPath]}. Number of paths in the ADD from the root to the leafs. *)
+external nbpaths : t -> float = \"camlidl_bdd_nbpaths\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CountPathsToNonZero}[Cudd_CountPathsToNonZero]}. Number of paths in the ADD from the root to non-zero leaves. *)
+external nbnonzeropaths : t -> float = \"camlidl_bdd_nbtruepaths\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CountMinterm}[Cudd_CountMinterm]}. Number of minterms  of the ADD knowing that it depends on the given number of variables. *)
+external nbminterms : int -> t -> float = \"camlidl_bdd_nbminterms\"
+
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Density}[Cudd_Density]}. Density of the ADD, which is the ratio of the number of minterms to the number of nodes. The ADD is assumed to depend on [nvars] variables. *)
+external density : int -> t -> float = \"camlidl_bdd_density\"
+")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CountLeaves}[Cudd_CountLeaves]}. Number of leaves. *)")
+int nbleaves(add__t no)
+quote(call,
+"_res = Cudd_CountLeaves(no.node); \
+if (_res==CUDD_OUT_OF_MEM){ \
+  caml_failwith (\"Add.nbleaves returned CUDD_OUT_OF_MEM\"); \
+}");
+
+/* ====================================================================== */
+/* Iterators */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Iterators} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** Similar to {!Bdd.iter_cube} *)
+external iter_cube: (Man.tbool array -> float -> unit) -> t -> unit = \"camlidl_cudd_avdd_iter_cube\"
+")
+
+quote(MLMLI,"
+(** Similar to {!Bdd.iter_node} *)
+external iter_node: (t -> unit) -> t -> unit = \"camlidl_cudd_iter_node\"
+")
+
+/* ====================================================================== */
+/* Leaves and guards */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Leaves and guards} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** [Cuddaux_addGuardOfNode]. [guard_of_node f node] returns the sum of the paths leading from the root node [f] to the node [node] of [f]. *)")
+bdd__dt guard_of_node(add__t no1, add__t no2) NO_OF_MAN_NO12(Cuddaux_addGuardOfNode);
+quote(MLI,"(** Guard of non background leaves *)")
+bdd__dt guard_of_nonbackground(add__t no)
+     quote(call,"
+Begin_roots1(_v_no);
+{
+  DdNode* add = Cudd_ReadBackground(no.man->man);
+  cuddRef(add);
+  _res.man = no.man;
+  _res.node = Cuddaux_addGuardOfNode(no.man->man,no.node,add);
+  _res.node = Cudd_Not(_res.node);
+  cuddDeref(add);
+}
+End_roots();
+");
+
+
+quote(MLMLI,"
+(** [Cuddaux_NodesBelowLevel]. [nodes_below_level f olevel max] returns all (if [max<=0]), otherwise at most [max] nodes pointed by the ADD, indexed by a variable of level greater or equal than [level], and encountered first in the top-down exploration (i.e., whenever a node is collected, its sons are not collected). If [olevel=None], then only constant nodes are collected. The background node may be in the result. *)
+external nodes_below_level: t -> int option -> int -> t array = \"camlidl_cudd_avdd_nodes_below_level\"
+
+(** Guard of the given leaf *)
+external guard_of_leaf : t -> float -> Bdd.dt = \"camlidl_cudd_avdd_guard_of_leaf\"
+
+(** Returns the set of leaf values (excluding the background value) *)
+external leaves: t -> float array = \"camlidl_cudd_avdd_leaves\"
+
+(** Picks (but not randomly) a non background leaf. Return [None] if the only leaf is the background leaf. *)
+external pick_leaf : t -> float = \"camlidl_cudd_avdd_pick_leaf\"
+")
+quote(MLI,"
+(** Returns the set of leaf values together with their guard in the ADD *)
+val guardleafs : t -> (Bdd.dt * float) array
+")
+quote(ML,"
+let guardleafs add =
+  let tab = leaves add in
+  Array.map (fun leaf -> (guard_of_leaf add leaf,leaf)) tab
+")
+
+/* ====================================================================== */
+/* Minimizations */
+/* ====================================================================== */
+quote(MLMLI,"")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Minimizations} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** See {!Bdd.constrain}, {!Bdd.tdconstrain}, {!Bdd.restrict}, {!Bdd.tdrestrict} *)\n")
+
+add__t constrain(add__t no1, bdd__dt no2) NO_OF_MAN_NO12(Cuddaux_addConstrain);
+add__t tdconstrain(add__t no1, bdd__dt no2) NO_OF_MAN_NO12(Cuddaux_addTDConstrain);
+add__t restrict(add__t no1, bdd__dt no2) NO_OF_MAN_NO12(Cuddaux_addRestrict);
+add__t tdrestrict(add__t no1, bdd__dt no2) NO_OF_MAN_NO12(Cuddaux_addTDRestrict);
+
+/* ====================================================================== */
+/* Conversions */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Conversions} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_BddToAdd}[Cudd_BddToAdd]}. Conversion from BDD to 0-1 ADD *)")
+add__t of_bdd(bdd__dt no) NO_OF_MAN_NO(Cudd_BddToAdd);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addBddPattern}[Cudd_addBddPattern]}. Conversion from ADD to BDD by replacing all leaves different from 0  by true. *)")
+bdd__dt to_bdd(add__t no) NO_OF_MAN_NO(Cudd_addBddPattern);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addBddThreshold}[Cudd_addBddThreshold]}. Conversion from ADD to BDD by replacing all leaves greater than or equal to the threshold by true. *)")
+add__t to_bdd_threshold(double val, add__t no)
+     quote(call,"
+Begin_roots1(_v_no);
+_res.man = no.man;
+_res.node = Cudd_addBddThreshold(no.man->man,no.node,val);
+End_roots();
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addBddStrictThreshold}[Cudd_addBddStrictThreshold]}. Conversion from ADD to BDD by replacing all leaves strictly greater than the threshold by true.*)")
+add__t to_bdd_strictthreshold(double val, add__t no)
+     quote(call,"
+Begin_roots1(_v_no);
+_res.man = no.man;
+_res.node = Cudd_addBddStrictThreshold(no.man->man,no.node,val);
+End_roots();
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addBddInterval}[Cudd_addBddInterval]}. Conversion from ADD to BDD  by replacing all leaves in the interval by true. *)")
+add__t to_bdd_interval(double lower, double upper, add__t no)
+     quote(call,"
+Begin_roots1(_v_no);
+_res.man = no.man;
+_res.node = Cudd_addBddInterval(no.man->man,no.node,lower,upper);
+End_roots();
+");
+
+/* ====================================================================== */
+/* Quantifications */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Quantifications} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addExistAbstract}[Cudd_addExistAbstract]}. Abstracts all the variables in the cube from the ADD by summing over all possible values taken by those variables. *)")
+add__t exist(bdd__dt no1, add__t no2)
+     quote(call,"
+CHECK_MAN2();
+Begin_roots2(_v_no1,_v_no2);
+{
+   DdNode* add1 = Cudd_BddToAdd(no1.man->man,no1.node);
+  cuddRef(add1);
+  _res.man = no1.man;
+  _res.node = Cudd_addExistAbstract(no1.man->man,no2.node,add1);
+  cuddRef(_res.node);
+  Cudd_RecursiveDeref(no1.man->man,add1);
+  cuddDeref(_res.node);
+}
+End_roots();
+");
+
+quote(MLI,"(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addUnivAbstract}[Cudd_addUnivAbstract]}. Abstracts all the variables in the cube from the ADD by taking the product over all possible values taken by those variables. *)")
+add__t forall(bdd__dt no1, add__t no2)
+     quote(call,"
+CHECK_MAN2();
+Begin_roots2(_v_no1,_v_no2);
+{
+  DdNode* add1 = Cudd_BddToAdd(no1.man->man,no1.node);
+  cuddRef(add1);
+  _res.man = no1.man;
+  _res.node = Cudd_addUnivAbstract(no1.man->man,no2.node,add1);
+  cuddRef(_res.node);
+  Cudd_RecursiveDeref(no1.man->man,add1);
+  cuddDeref(_res.node);
+}
+End_roots();
+");
+
+/*
+add__t exist(bdd__t no1, add__t no2)
+     NO_OF_MAN_NO21(Cudd_addExistAbstract);
+add__t forall(bdd__t no1, add__t no2)
+     NO_OF_MAN_NO21(Cudd_addUnivAbstract);
+*/
+
+/* ====================================================================== */
+/* Algebraic operations */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Algebraic operations} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html# Cudd_addLeq}[ Cudd_addLeq]}. *)")
+boolean is_leq(add__t no1, add__t no2)
+  quote(call, "CHECK_MAN2; _res = Cudd_addLeq(no1.man->man,no1.node,no2.node);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addPlus}[Cudd_addPlus]}. *)")
+add__t add(add__t no1, add__t no2) APPLYBINOP(Cudd_addPlus);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addMinus}[Cudd_addMinus]}. *)")
+add__t sub(add__t no1, add__t no2) APPLYBINOP(Cudd_addMinus);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addTimes}[Cudd_addTimes]}. *)")
+add__t mul(add__t no1, add__t no2) APPLYBINOP(Cudd_addTimes);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addDivide}[Cudd_addDivide]}. *)")
+add__t div(add__t no1, add__t no2) APPLYBINOP(Cudd_addDivide);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addMinimum}[Cudd_addMinimum]}. *)")
+add__t min(add__t no1, add__t no2) APPLYBINOP(Cudd_addMinimum);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addMaximum}[Cudd_addMaximum]}. *)")
+add__t max(add__t no1, add__t no2) APPLYBINOP(Cudd_addMaximum);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addAgreement}[Cudd_addAgreement]}. *)")
+add__t agreement(add__t no1, add__t no2) APPLYBINOP(Cudd_addAgreement);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addDiff}[Cudd_addDiff]}. *)")
+add__t diff(add__t no1, add__t no2) APPLYBINOP(Cudd_addDiff);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addThreshold}[Cudd_addThreshold]}. *)")
+add__t threshold(add__t no1, add__t no2) APPLYBINOP(Cudd_addThreshold);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addSetNZ}[Cudd_addSetNZ]}. *)")
+add__t setNZ(add__t no1, add__t no2) APPLYBINOP(Cudd_addSetNZ);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addLog}[Cudd_addLog]}. *)")
+add__t log(add__t no) APPLYUNOP(Cudd_addLog);
+
+/* ====================================================================== */
+/* Matrix Operations */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Matrix operations} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"
+(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addMatrixMultiply}[Cudd_addMatrixMultiply]}.
+
+[matrix_multiply z A B] performs matrix multiplication of [A] and [B], with [z]
+being the summation variables, which means that they are used to refer columns
+of [A] and to rows of [B]. *)
+external matrix_multiply : int array -> t -> t -> t = \"camlidl_add_matrix_multiply\"
+
+(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addTimesPlus}[Cudd_addTimesPlus]}. *)
+external times_plus : int array -> t -> t -> t = \"camlidl_add_times_plus\"
+
+(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_addTriangle}[Cudd_addTriangle]}. *)
+external triangle : int array -> t -> t -> t = \"camlidl_add_triangle\"
+")
+quote(C,"
+MATMUL(camlidl_add_matrix_multiply,Cudd_addMatrixMultiply)
+MATMUL(camlidl_add_times_plus,Cudd_addTimesPlus)
+MATMUL(camlidl_add_triangle,Cudd_addTriangle)
+")
+
+/* ====================================================================== */
+/* User Operations */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 User operations} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+
+quote(MLMLI,"(* ====================================================== *)")
+quote(MLMLI,"(** {4 By decomposition into guards and leaves} *)")
+quote(MLMLI,"(* ====================================================== *)")
+
+quote(MLI,"
+val mapleaf1 : default:t -> (Bdd.dt -> float -> float) -> t -> t
+val mapleaf2 : default:t -> (Bdd.dt -> float -> float -> float) -> t -> t -> t
+")
+quote(ML,"
+let mapleaf1
+  ~(default:t)
+  (f:Bdd.dt -> float -> float)
+  (add:t)
+  :
+  t
+  =
+  let manager = manager add in
+  let leaves = leaves add in
+  let res = ref default in
+  for i=0 to pred (Array.length leaves) do
+    let leaf = leaves.(i) in
+    let guard = guard_of_leaf add leaves.(i) in
+    let nleaf = f guard leaf in
+    res := ite guard (cst manager nleaf) !res
+  done;
+  !res
+
+let mapleaf2
+  ~(default:t)
+  (f:Bdd.dt -> float -> float -> float)
+  (add1:t)
+  (add2:t)
+  :
+  t
+  =
+  let manager = manager add1 in
+  let leaves1 = leaves add1 in
+  let res = ref default in
+  for i1=0 to pred (Array.length leaves1) do
+    let leaf1 = leaves1.(i1) in
+    let guard1 = guard_of_leaf add1 leaf1 in
+    let add2 = ite guard1 add2 default in
+    let leaves2 = leaves add2 in
+    for i2=0 to pred (Array.length leaves2) do
+      let leaf2 = leaves2.(i2) in
+      let guard2 = guard_of_leaf add2 leaf2 in
+      let nleaf = f guard2 leaf1 leaf2 in
+      res := ite guard2 (cst manager nleaf) !res
+    done
+  done;
+  !res
+")
+
+quote(MLMLI,"(* ====================================================== *)")
+quote(MLMLI,"(** {4 By using CUDD cache} *)")
+quote(MLMLI,"(* ====================================================== *)")
+
+quote(MLMLI,"
+(** Consult {!User} for explanations. *)
+
+open Custom
+")
+
+quote(MLMLI,"
+(** {5 Type of operations} *)
+
+type op1 = (float, float) Custom.op1
+type op2 = (float, float, float) Custom.op2
+type op3 = (float, float, float, float) Custom.op3
+type opN = {
+  commonN: Custom.common;
+  closureN: Bdd.dt array -> t array -> t option;
+  arityNbdd: int;
+}
+type opG = {
+  commonG: Custom.common;
+  arityGbdd: int;
+  closureG: Bdd.dt array -> t array -> t option;
+  oclosureBeforeRec: (int*bool -> Bdd.dt array -> t array -> (Bdd.dt array * t array)) option;
+  oclosureIte: (int -> t -> t -> t) option;
+}
+type test2 = (float, float) Custom.test2
+type exist = float Custom.exist
+type existand = float Custom.existand
+type existop1 = (float,float) Custom.existop1
+type existandop1 = (float,float) Custom.existandop1
+")
+
+quote(MLI,"
+(** {5 Making operations} *)
+val make_op1 : ?memo:Memo.t -> (float -> float) -> op1
+val make_op2 :
+  ?memo:Memo.t ->
+  ?commutative:bool -> ?idempotent:bool ->
+  ?special:(t -> t -> t option) ->
+  (float -> float -> float) -> op2
+val make_op3 :
+  ?memo:Memo.t ->
+  ?special:(t -> t -> t -> t option) ->
+  (float -> float -> float -> float) -> op3
+val make_opN :
+  ?memo:Memo.t ->
+  int -> int ->
+  (Bdd.dt array -> t array -> t option) ->
+  opN
+val make_opG :
+  ?memo:Memo.t ->
+  ?beforeRec:(int*bool -> Bdd.dt array -> t array -> (Bdd.dt array * t array)) ->
+  ?ite:(int -> t -> t -> t) ->
+  int -> int ->
+  (Bdd.dt array -> t array -> t option) ->
+  opG
+val make_test2 :
+  ?memo:Memo.t ->
+  ?symetric:bool -> ?reflexive:bool ->
+  ?special:(t -> t -> bool option) ->
+  (float -> float -> bool) -> test2
+val make_exist : ?memo:Memo.t -> op2 -> exist
+val make_existand : ?memo:Memo.t -> bottom:float -> op2 -> existand
+val make_existop1 : ?memo:Memo.t -> op1:op1 -> op2 -> existop1
+val make_existandop1 :
+  ?memo:Memo.t -> op1:op1 -> bottom:float -> op2 -> existandop1
+
+(** {5 Clearing memoization tables} *)
+
+val clear_op1 : op1 -> unit
+val clear_op2 : op2 -> unit
+val clear_op3 : op3 -> unit
+val clear_opN : opN -> unit
+val clear_opG : opG -> unit
+val clear_test2 : test2 -> unit
+val clear_exist : exist -> unit
+val clear_existand : existand -> unit
+val clear_existop1 : existop1 -> unit
+val clear_existandop1 : existandop1 -> unit
+
+(** {5 Applying operations} *)
+
+val apply_op1 : op1 -> t -> t
+val apply_op2 : op2 -> t -> t -> t
+val apply_op3 : op3 -> t -> t -> t
+val apply_opN : opN -> Bdd.dt array -> t array -> t
+val apply_opG : opG -> Bdd.dt array -> t array -> t
+val apply_test2 : test2 -> t -> t -> bool
+val apply_exist : exist -> supp:Bdd.dt -> t -> t
+val apply_existand : existand -> supp:Bdd.dt -> Bdd.dt -> t -> t
+val apply_existop1 : existop1 -> supp:Bdd.dt -> t -> t
+val apply_existandop1 : existandop1 -> supp:Bdd.dt -> Bdd.dt -> t -> t
+
+(** {5 Map functions} *)
+
+val map_op1 : ?memo:Memo.t -> (float -> float) -> t -> t
+val map_op2 :
+  ?memo:Memo.t ->
+  ?commutative:bool -> ?idempotent:bool ->
+  ?special:(t -> t -> t option) ->
+  (float -> float -> float) -> t -> t -> t
+val map_op3 :
+  ?memo:Memo.t ->
+  ?special:(t -> t -> t -> t option) ->
+  (float -> float -> float -> float) -> t -> t -> t -> t
+val map_opN :
+  ?memo:Memo.t ->
+  (Bdd.dt array -> t array -> t option) ->
+  Bdd.dt array -> t array -> t
+val map_test2 :
+  ?memo:Memo.t ->
+  ?symetric:bool -> ?reflexive:bool ->
+  ?special:(t -> t -> bool option) ->
+  (float -> float -> bool) -> t -> t -> bool
+")
+
+quote(ML,"
+let make_common = User.make_common
+let make_op1 ?memo op =
+  let common = make_common 1 ?memo in
+  { common1 = common; closure1=op }
+
+let make_op2
+    ?memo
+    ?(commutative=false)
+    ?(idempotent=false)
+    ?special
+    op
+    =
+  let common = make_common 2 ?memo in
+  {
+    common2=common;
+    closure2=op;
+    ospecial2=Obj.magic special;
+    commutative=commutative;
+    idempotent=idempotent;
+  }
+let make_test2
+    ?memo
+    ?(symetric=false)
+    ?(reflexive=false)
+    ?special
+    op
+    =
+  let common = make_common 2 ?memo in
+  {
+    common2t=common;
+    closure2t=op;
+    ospecial2t=Obj.magic special;
+    symetric;
+    reflexive;
+  }
+let make_op3
+    ?memo
+    ?special
+    op
+    =
+  let common = make_common 3 ?memo in
+  {
+    common3=common;
+    closure3=op;
+    ospecial3=Obj.magic special;
+  }
+let make_opN ?memo arityB arityN op : opN =
+  let common = make_common ?memo (arityB+arityN) in
+  { commonN=common; closureN=op; arityNbdd=arityB; }
+let make_opG ?memo ?beforeRec ?ite arityB arityV op =
+  let common = make_common ?memo (arityB+arityV) in
+  {
+    commonG=common;
+    arityGbdd=arityB;
+    closureG=op;
+    oclosureBeforeRec=beforeRec;
+    oclosureIte=ite;
+  }
+let make_exist ?memo combine =
+  let common = make_common 2 ?memo in
+  { commonexist=common; combineexist=combine }
+let make_existand ?memo ~bottom combine =
+  let common = make_common 3 ?memo in
+  { commonexistand=common; combineexistand=combine; bottomexistand=bottom }
+let make_existop1 ?memo ~op1 combine =
+  let common = make_common 2 ?memo in
+  { commonexistop1=common; combineexistop1=combine; existop1=op1 }
+let make_existandop1 ?memo ~op1 ~bottom combine =
+  let common = make_common 3 ?memo in
+  { commonexistandop1=common; combineexistandop1=combine; existandop1=op1; bottomexistandop1=bottom }
+
+let apply_op1 = Obj.magic User.apply_op1
+let apply_op2 = Obj.magic User.apply_op2
+let apply_op3 = Obj.magic User.apply_op3
+let apply_opN = Obj.magic User.apply_opN
+let apply_opG = Obj.magic User.apply_opG
+let apply_test2 = Obj.magic User.apply_test2
+let apply_exist = Obj.magic User.apply_exist
+let apply_existand = Obj.magic User.apply_existand
+let apply_existop1 = Obj.magic User.apply_existop1
+let apply_existandop1 = Obj.magic User.apply_existandop1
+
+let map_op1 = Obj.magic User.map_op1
+let map_op2 = Obj.magic User.map_op2
+let map_op3 = Obj.magic User.map_op3
+let map_opN = Obj.magic User.map_opN
+let map_test2 = Obj.magic User.map_test2
+
+let clear_op1 = User.clear_op1
+let clear_op2 = User.clear_op2
+let clear_op3 = User.clear_op3
+let clear_opN op = Memo.clear op.commonN.memo
+let clear_opG op = Memo.clear op.commonG.memo
+let clear_test2 = User.clear_test2
+let clear_exist = User.clear_exist
+let clear_existand = User.clear_existand
+let clear_existop1 = User.clear_existop1
+let clear_existandop1 = User.clear_existandop1
+")
+
+/* ====================================================================== */
+/* Miscellaneous */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Miscellaneous} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLI,"(** [Cuddaux_addTransfer]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_bddTransfer}[Cudd_bddTransfer]}. Transfers a ADD to a different manager. *)")
+add__t transfer(add__t no, man__dt man)
+     quote(call, "
+Begin_roots2(_v_no,_v_man);
+_res.man = man;
+_res.node = Cuddaux_addTransfer(no.man->man,man->man,no.node);
+End_roots();
+");
+
+/* ====================================================================== */
+/* Printing */
+/* ====================================================================== */
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Printing} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"")
+
+quote(MLMLI,"
+(** C printing function. The output may mix badly with the OCaml output. *)
+external _print: t -> unit = \"camlidl_cudd_print\"
+")
+
+quote(MLI,"
+(** Prints the minterms of the BDD in the same way as {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Printminterm}[Cudd_Printminterm]}. *)
+val print__minterm: Format.formatter -> t -> unit
+
+(** [print_minterm print_id print_leaf fmt bdd] prints the minterms of the BDD using [print_id] to print indices of variables and [print_leaf] to print leaf values. *)
+val print_minterm:
+  (Format.formatter -> int -> unit) ->
+  (Format.formatter -> float -> unit) ->
+  Format.formatter -> t -> unit
+
+(** Prints a BDD by recursively decomposing it as monomial followed by a tree. *)
+val print:
+  (Format.formatter -> int -> unit) ->
+  (Format.formatter -> float -> unit) ->
+  Format.formatter -> t -> unit
+")
+
+
+quote(ML,"
+open Format
+
+let print__minterm fmt dd =
+  if is_cst dd then pp_print_float fmt (dval dd)
+  else
+    let nb = nbpaths dd in
+    if nb > (float_of_int !Man.print_limit) then
+      fprintf fmt \"dd with %i nodes, %i leaves and %g paths\" (size dd) (nbleaves dd) nb
+  else begin
+    fprintf fmt \"@[<v>\";
+    let first = ref true in
+    iter_cube
+      (begin fun cube leaf ->
+	if not !first then fprintf fmt \"@ \" else first := false;
+	let str = String.create (Array.length cube) in
+	Array.iteri
+	  (begin fun i elt ->
+	    str.[i] <-
+	      begin match elt with
+	      | Man.False -> '0'
+	      | Man.True -> '1'
+	      | Man.Top -> '-'
+	      end
+	  end)
+	  cube;
+	fprintf fmt \"%s -> %g\" str leaf
+      end)
+      dd;
+    fprintf fmt \"@]\"
+  end
+
+let print_minterm print_id print_leaf fmt dd =
+  if is_cst dd then print_leaf fmt (dval dd)
+  else
+    let nb = nbpaths dd in
+    if nb > (float_of_int !Man.print_limit) then
+      fprintf fmt \"dd with %i nodes, %i leaves and %g paths\" (size dd) (nbleaves dd) nb
+  else begin
+    let leaves = leaves dd in
+    fprintf fmt \"{ @[<v>\";
+    for i=Array.length leaves - 1 downto 0 do
+      let leaf = leaves.(i) in
+      let bdd = guard_of_leaf dd leaf in
+      fprintf fmt \"%a IF %a\"
+	print_leaf leaf (Bdd.print_minterm print_id) bdd;
+      if i > 0 then
+	fprintf fmt \",@ \";
+    done;
+    fprintf fmt \"@] }\"
+  end
+
+let rec print print_id print_leaf formatter dd =
+  match inspect dd with
+  | Leaf(v) -> print_leaf formatter v
+  | Ite(var,alors,sinon) ->
+      fprintf formatter \"ITE(@[<hv>%a;@,%a;@,%a)@]\"
+	print_id var (print print_id print_leaf) alors (print print_id print_leaf) sinon
+")

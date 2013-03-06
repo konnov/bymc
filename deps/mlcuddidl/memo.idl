@@ -1,0 +1,35 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"stdio.h\"
+#include \"cuddaux.h\"
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+")
+
+import "hash.idl";
+import "cache.idl";
+
+enum memo_discr { Global, Cache, Hash };
+
+union memo_union {
+ case Global: ;
+ case Cache: cache__t cache;
+ case Hash: hash__t hash;
+};
+
+struct memo__t {
+  enum memo_discr discr;
+  [switch_is(discr)] union memo_union u;
+};
+
+quote(MLI,"val clear : t -> unit")
+quote(ML,"
+let clear = function
+  | Hash x -> Hash.clear x
+  | Cache x -> Cache.clear x
+  | Global -> ()
+")

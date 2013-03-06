@@ -1,0 +1,574 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+#include \"stdio.h\"
+")
+
+/* ====================================================================== */
+/* Datatypes */
+/* ====================================================================== */
+
+typedef [abstract,c2ml(camlidl_cudd_man_c2ml),ml2c(camlidl_cudd_man_ml2c)] struct man_t* man__dt;
+typedef [abstract,c2ml(camlidl_cudd_man_c2ml),ml2c(camlidl_cudd_man_ml2c)] struct man_t* man__vt;
+typedef [abstract,c2ml(camlidl_cudd_man_c2ml),ml2c(camlidl_cudd_man_ml2c)] struct man_t* man__t;
+
+enum reorder {
+    CUDD_REORDER_SAME,
+    CUDD_REORDER_NONE,
+    CUDD_REORDER_RANDOM,
+    CUDD_REORDER_RANDOM_PIVOT,
+    CUDD_REORDER_SIFT,
+    CUDD_REORDER_SIFT_CONVERGE,
+    CUDD_REORDER_SYMM_SIFT,
+    CUDD_REORDER_SYMM_SIFT_CONV,
+    CUDD_REORDER_WINDOW2,
+    CUDD_REORDER_WINDOW3,
+    CUDD_REORDER_WINDOW4,
+    CUDD_REORDER_WINDOW2_CONV,
+    CUDD_REORDER_WINDOW3_CONV,
+    CUDD_REORDER_WINDOW4_CONV,
+    CUDD_REORDER_GROUP_SIFT,
+    CUDD_REORDER_GROUP_SIFT_CONV,
+    CUDD_REORDER_ANNEALING,
+    CUDD_REORDER_GENETIC,
+    CUDD_REORDER_LINEAR,
+    CUDD_REORDER_LINEAR_CONVERGE,
+    CUDD_REORDER_LAZY_SIFT,
+    CUDD_REORDER_EXACT
+};
+
+enum aggregation {
+    CUDD_NO_CHECK,
+    CUDD_GROUP_CHECK,
+    CUDD_GROUP_CHECK2,
+    CUDD_GROUP_CHECK3,
+    CUDD_GROUP_CHECK4,
+    CUDD_GROUP_CHECK5,
+    CUDD_GROUP_CHECK6,
+    CUDD_GROUP_CHECK7,
+    CUDD_GROUP_CHECK8,
+    CUDD_GROUP_CHECK9
+};
+
+enum lazygroup {
+    CUDD_LAZY_NONE,
+    CUDD_LAZY_SOFT_GROUP,
+    CUDD_LAZY_HARD_GROUP,
+    CUDD_LAZY_UNGROUP
+};
+
+enum vartype {
+    CUDD_VAR_PRIMARY_INPUT,
+    CUDD_VAR_PRESENT_STATE,
+    CUDD_VAR_NEXT_STATE
+};
+
+enum mtr { MTR_DEFAULT=0, MTR_FIXED=4 };
+
+enum error {
+    CUDD_NO_ERROR,
+    CUDD_MEMORY_OUT,
+    CUDD_TOO_MANY_NODES,
+    CUDD_MAX_MEM_EXCEEDED,
+    CUDD_INVALID_ARG,
+    CUDD_INTERNAL_ERROR
+};
+
+quote(MLMLI,"
+type dt = d t
+type vt = v t
+  (** Shortcuts *)
+
+type tbool = False | True | Top
+  (** Ternary Boolean type, used to defines minterms where [Top] means [True]
+      or [False] *)
+")
+
+quote(MLI,"
+val string_of_reorder : reorder -> string
+val string_of_error : error -> string
+(** Printing functions *)
+")
+
+quote(ML,"\n
+(** Printing functions *)
+let string_of_reorder = function
+  | REORDER_SAME -> \"SAME\"
+  | REORDER_NONE -> \"NONE\"
+  | REORDER_RANDOM -> \"RANDOM\"
+  | REORDER_RANDOM_PIVOT -> \"RANDOM_PIVOT\"
+  | REORDER_SIFT -> \"SIFT\"
+  | REORDER_SIFT_CONVERGE -> \"SIFT_CONVERGE\"
+  | REORDER_SYMM_SIFT -> \"SYMM_SIFT\"
+  | REORDER_SYMM_SIFT_CONV -> \"SYMM_SIFT_CONV\"
+  | REORDER_WINDOW2 -> \"WINDOW2\"
+  | REORDER_WINDOW3 -> \"WINDOW3\"
+  | REORDER_WINDOW4 -> \"WINDOW4\"
+  | REORDER_WINDOW2_CONV -> \"WINDOW2_CONV\"
+  | REORDER_WINDOW3_CONV -> \"WINDOW3_CONV\"
+  | REORDER_WINDOW4_CONV -> \"WINDOW4_CONV\"
+  | REORDER_GROUP_SIFT -> \"GROUP_SIFT\"
+  | REORDER_GROUP_SIFT_CONV -> \"GROUP_SIFT_CONV\"
+  | REORDER_ANNEALING -> \"ANNEALING\"
+  | REORDER_GENETIC -> \"GENETIC\"
+  | REORDER_LINEAR -> \"LINEAR\"
+  | REORDER_LINEAR_CONVERGE -> \"LINEAR_CONVERGE\"
+  | REORDER_LAZY_SIFT -> \"LAZY_SIFT\"
+  | REORDER_EXACT -> \"EXACT\"
+let string_of_error = function
+  | NO_ERROR -> \"NO_ERROR\"
+  | MEMORY_OUT -> \"MEMORY_OUT\"
+  | TOO_MANY_NODES -> \"TOO_MANY_NODES\"
+  | MAX_MEM_EXCEEDED -> \"MAX_MEM_EXCEEDED\"
+  | INVALID_ARG -> \"INVALID_ARG\"
+  | INTERNAL_ERROR -> \"INTERNAL_ERROR\"
+")
+
+/* ====================================================================== */
+/* Global settings */
+/* ====================================================================== */
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Global settings} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"
+(** Parameter for printing functions: specify the maximum number of minterms to
+be printed. Above this numbers, only statistics on the BDD is printed. *)
+val print_limit : int ref
+")
+quote(ML,"let print_limit = ref 30")
+
+quote(MLMLI,"\n
+(** [set_gc max gc reordering] performs several things:
+- It sets the ratio used/max for BDDs abstract values to [1/max] (see
+the OCaml manual for details). 1 000 000 is a good value.
+- It also sets for all the future managers that will be created the hook
+function to be called before a CUDD garbage collection, and the hook
+function to be called before a CUDD reordering. You may typically specify
+a OCaml garbage collection function for both hooks, in order to make
+OCaml dereference unused nodes, thus allowing CUDD to remove
+them. Default values are [Gc.full_major()] for both hooks. *)
+external set_gc: int -> (unit -> unit) -> (unit -> unit) ->
+unit = \"camlidl_cudd_set_gc\"")
+
+quote(MLI,"\n
+(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Srandom}[Cudd_Srandom]}. Initializes the seed for the CUDD rnadom number generator (used in a number of functions, like {!Bdd.pick_cubes_on_support}. *)")
+void srandom(long int seed)
+  quote(call,"Cudd_Srandom(seed);");
+
+
+/* ====================================================================== */
+/* Managers */
+/* ====================================================================== */
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Managers} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLMLI,"(** Internal, do not use ! *)")
+man__t _make(boolean caml, int numVars, int numVarsZ, int numSlots,int cacheSize, long maxMemory)
+  quote(call,
+"
+{  int res;
+
+   if (numVars<0) numVars = 0;
+   if (numVarsZ<0) numVarsZ = 0;
+   if (numSlots<=0) numSlots = CUDD_UNIQUE_SLOTS;
+   if (cacheSize<=0) cacheSize = CUDD_CACHE_SLOTS;
+   if (maxMemory<0) maxMemory = 0;
+   _res = (struct CuddauxMan*)malloc(sizeof(struct CuddauxMan));
+   _res->man = Cudd_Init(numVars, numVarsZ, numSlots, cacheSize, maxMemory);
+   _res->count = 0;
+   _res->caml = caml;
+   res = Cudd_AddHook(_res->man,camlidl_cudd_garbage,CUDD_PRE_GC_HOOK);
+   if (res!=1)
+     caml_failwith(\"Man.make: unable to add the garbage collection hook\");
+   if (caml){
+     res = Cudd_AddHook(_res->man,Cuddaux_addCamlPreGC, CUDD_PRE_GC_HOOK);
+     if (res!=1)
+       caml_failwith(\"Man.make_caml: unable to add the caml garbage collection hook Cuddaux_addCamlPreGC\");
+   }
+   res = Cudd_AddHook(_res->man,camlidl_cudd_reordering,CUDD_PRE_REORDERING_HOOK);
+   if (res!=1)
+     caml_failwith(\"Man.make: unable to add the reordering hook\");
+}
+");
+
+quote(MLI,"
+val make_d : ?numVars:int -> ?numVarsZ:int -> ?numSlots:int -> ?cacheSize:int -> ?maxMemory:int -> unit -> d t
+val make_v : ?numVars:int -> ?numVarsZ:int -> ?numSlots:int -> ?cacheSize:int -> ?maxMemory:int -> unit -> v t
+(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_Init}[Cudd_Init]}.
+
+[make_d ~numVars ~numVarsZ ~numSlots ~cacheSize ~maxMemory ()] creates a manager with the
+given parameters. [make_d ()] is OK. In addition, the function sets a hook
+function to be called whenever a CUDD garbage collection occurs, and a
+(dummy) hook function to be called whenever a CUDD reordering occurs. The defaults can be modified with {!set_gc}. *)
+")
+quote(ML,"
+let make_d ?(numVars=0) ?(numVarsZ=0) ?(numSlots=0) ?(cacheSize=0) ?(maxMemory=0) () =
+  _make false numVars numVarsZ numSlots cacheSize maxMemory
+let make_v ?(numVars=0) ?(numVarsZ=0) ?(numSlots=0) ?(cacheSize=0) ?(maxMemory=0) () =
+  _make true numVars numVarsZ numSlots cacheSize maxMemory
+")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_DebugCheck}[Cudd_DebugCheck]}.
+Returns [false] if it is OK, [true] if there is a problem, and throw
+a [Failure] exception in case of [CUDD_OUT_OF_MEM]. *) ")
+boolean debugcheck(man__t man)
+     quote(call,
+"_res = Cudd_DebugCheck(man->man);
+ fflush(man->man->err);
+ if (_res == CUDD_OUT_OF_MEM)
+   caml_failwith(\"Dd.debugcheck returned CUDD_OUT_OF_MEM\");
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CheckKeys}[Cudd_CheckKeys]}. *)")
+int check_keys(man__t man)
+     quote(call, "_res = Cudd_CheckKeys(man->man);");
+
+quote(MLMLI,"(** Internal use: duplicate a block to the major heap. Used by {!Mtbdd} and {!Mtbddc} modules *)
+external copy_shr : 'a -> 'a = \"camlidl_cudd_custom_copy_shr\"
+")
+
+/* ====================================================================== */
+/* Variables, Reordering and Mapping */
+/* ====================================================================== */
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Variables, Reordering and Mapping} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadPerm}[Cudd_ReadPerm]}. Returns the level of the variable (its order in the BDD) *)")
+int level_of_var(man__t man, int var)
+     quote(call, "_res = Cudd_ReadPerm(man->man,var);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadInvPerm}[Cudd_ReadInvPerm]}. Returns the variable associated to the given level. *)")
+int var_of_level(man__t man, int level)
+     quote(call, "_res = Cudd_ReadInvPerm(man->man,level);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReduceHeap}[Cudd_ReduceHeap]}. Main reordering function, that applies the given heuristic. The provided integer is a bound below which no reordering takes place. *)")
+void reduce_heap(man__t man, enum reorder heuristic, int minsize)
+     quote(call,
+"{
+  int ok = Cudd_ReduceHeap(man->man,heuristic,minsize);
+  if (ok==0) caml_failwith(\"Man.reduce_heap failed\");
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ShuffleHeap}[Cudd_ShuffleHeap]}. Reorder variables according to the given permutation. *)")
+void shuffle_heap(man__t man, int permut[])
+     quote(call,
+"{
+  int ok = Cudd_ShuffleHeap(man->man,permut);
+  if (ok==0) caml_failwith(\"Man.shuffle_heap failed\");
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddAllDet.html#cuddGarbageCollect}[cuddGarbageCollect]}. Force a garbage collection (with cache clearing) *)")
+int garbage_collect(man__t man)
+  quote(call,"_res = cuddGarbageCollect(man->man,1);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddAllDet.html#cuddCacheFlush}[cuddCacheFlush]}. Clear the global cache *)")
+void cache_flush(man__t man)
+  quote(call,"cuddCacheFlush(man->man);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_AutodynEnable}[Cudd_AutodynEnable]}. Enables dynamic reordering with the given heuristics. *)")
+void enable_autodyn(man__t man, enum reorder heuristic)
+     quote(call, "Cudd_AutodynEnable(man->man,heuristic);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_AutodynDisable}[Cudd_AutodynDisable]}. Disables dynamic reordering. *)")
+void disable_autodyn(man__t man)
+     quote(call, "Cudd_AutodynDisable(man->man);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReorderingStatus}[Cudd_ReorderingStatus]}. Returns [None] if dynamic reordering is disables, [Some(heuristic)] otherwise. *)")
+void autodyn_status(man__t man, [out,unique] enum reorder * heuristic)
+     quote(call,"
+{
+  int b;
+  b = Cudd_ReorderingStatus(man->man,(Cudd_ReorderingType*)heuristic);
+  if (!b) heuristic = NULL;
+}
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_MakeTreeNode}[Cudd_MakeTreeNode]}.
+[group man low size typ] creates a new variable group, ranging from index [low] to index [low+size-1], in which [typ] specifies if reordering is allowed inside the group. *)")
+void group(man__t man, int low, int size, enum mtr type)
+     quote(call, "Cudd_MakeTreeNode(man->man, low, size, type);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_FreeTree}[Cudd_FreeTree]}. Removes all the groups in the manager. *)")
+void ungroupall(man__t man)
+     quote(call, "Cudd_FreeTree(man->man);");
+
+quote(MLI,"(**
+[Cuddaux_SetVarMap]/{{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetVarMap}[Cudd_SetVarMap]}. Initializes
+the global mapping table, used by functions {!Bdd.varmap}, {!Vdd.varmap},
+{!Mtbdd.varmap}, {!Mtbddc.varmap},... Convenient when the same mapping is
+applied several times, because the the different calls reuse the same
+cache. *)")
+void set_varmap(man__t man, [size_is(size)] int permut[], int size)
+     quote(call,
+"{
+  int ok = Cuddaux_SetVarMap(man->man,permut,size);
+  if (ok==0) caml_failwith(\"Man.set_varmap failed\");
+}");
+
+/* ====================================================================== */
+/* Parameters */
+/* ====================================================================== */
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Parameters} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"(** {4 RDDs} *)")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadBackground}[Cudd_ReadBackground]}. *)")
+double get_background(man__dt man)
+     quote(call,
+"{
+  DdNode* add = Cudd_ReadBackground(man->man);
+  _res = cuddV(add);
+}");
+
+quote(MLI,"(** Variation of {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetBackground}[Cudd_SetBackground]}. *)")
+void   set_background(man__dt man, double v)
+     quote(call,
+"{
+  DdNode* add = Cudd_addConst(man->man,v);
+  cuddRef(add);
+  Cudd_SetBackground(man->man,add);
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadEpsilon}[Cudd_ReadEpsilon]}. *)")
+double get_epsilon(man__dt man) VAL_OF_MAN(Cudd_ReadEpsilon);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetEpsilon}[Cudd_SetEpsilon]}. *)")
+void   set_epsilon(man__dt man, double v) UNIT_OF_MAN_VAL(Cudd_SetEpsilon);
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"(** {4 Cache related} *)")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMinHit}[Cudd_ReadMinHit]}. *)")
+int    get_min_hit(man__t man) VAL_OF_MAN(Cudd_ReadMinHit);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMinHit}[Cudd_SetMinHit]}. *)")
+void   set_min_hit(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetMinHit);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxCacheHard}[Cudd_ReadMaxCacheHard]}. *)")
+int    get_max_cache_hard(man__t man) VAL_OF_MAN(Cudd_ReadMaxCacheHard);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMaxCacheHard}[Cudd_SetMaxCacheHard]}. *)")
+void   set_max_cache_hard(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetMaxCacheHard);
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"(** {4 Manager} *)")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadLooseUpTo}[Cudd_ReadLooseUpTo]}. *)")
+int    get_looseupto(man__t man) VAL_OF_MAN(Cudd_ReadLooseUpTo);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetLooseUpTo}[Cudd_SetLooseUpTo]}. *)")
+void   set_looseupto(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetLooseUpTo);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxLive}[Cudd_ReadMaxLive]}. *)")
+int    get_max_live(man__t man) VAL_OF_MAN(Cudd_ReadMaxLive);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMaxLive}[Cudd_SetMaxLive]}. *)")
+void   set_max_live(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetMaxLive);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxMemory}[Cudd_ReadMaxMemory]}. *)")
+int    get_max_mem(man__t man) VAL_OF_MAN(Cudd_ReadMaxMemory);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMaxMemory}[Cudd_SetMaxMemory]}. *)")
+void   set_max_mem(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetMaxMemory);
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"(** {4 Reordering methods} *)")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSiftMaxSwap}[Cudd_ReadSiftMaxSwap]}. *)")
+int    get_sift_max_swap(man__t man) VAL_OF_MAN(Cudd_ReadSiftMaxSwap);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetSiftMaxSwap}[Cudd_SetSiftMaxSwap]}. *)")
+void   set_sift_max_swap(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetSiftMaxSwap);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSiftMaxVar}[Cudd_ReadSiftMaxVar]}. *)")
+int    get_sift_max_var(man__t man) VAL_OF_MAN(Cudd_ReadSiftMaxVar);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetSiftMaxVar}[Cudd_SetSiftMaxVar]}. *)")
+void   set_sift_max_var(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetSiftMaxVar);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadGroupcheck}[Cudd_ReadGroupcheck]}. *)")
+enum aggregation get_groupcheck(man__t man) VAL_OF_MAN(Cudd_ReadGroupcheck);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetGroupcheck}[Cudd_SetGroupcheck]}. *)")
+void   set_groupcheck(man__t man, enum aggregation v) UNIT_OF_MAN_VAL(Cudd_SetGroupcheck);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadArcviolation}[Cudd_ReadArcviolation]}. *)")
+int    get_arcviolation(man__t man) VAL_OF_MAN(Cudd_ReadArcviolation);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetArcviolation}[Cudd_SetArcviolation]}. *)")
+void   set_arcviolation(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetArcviolation);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadNumberXovers}[Cudd_ReadNumberXovers]}. *)")
+int    get_crossovers(man__t man) VAL_OF_MAN(Cudd_ReadNumberXovers);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetNumberXovers}[Cudd_SetNumberXovers]}. *)")
+void   set_crossovers(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetNumberXovers);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadPopulationSize}[Cudd_ReadPopulationSize]}. *)")
+int    get_population(man__t man) VAL_OF_MAN(Cudd_ReadPopulationSize);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetPopulationSize}[Cudd_SetPopulationSize]}. *)")
+void   set_population(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetPopulationSize);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadRecomb}[Cudd_ReadRecomb]}. *)")
+int    get_recomb(man__t man) VAL_OF_MAN(Cudd_ReadRecomb);
+
+quote(MLI,"(** [(Cudd_SetRecomb]. *)")
+void   set_recomb(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetRecomb);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSymmviolation}[Cudd_ReadSymmviolation]}. *)")
+int    get_symmviolation(man__t man) VAL_OF_MAN(Cudd_ReadSymmviolation);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetSymmviolation}[Cudd_SetSymmviolation]}. *)")
+void   set_symmviolation(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetSymmviolation);
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"(** {4 Dynamic reordering} *)")
+quote(MLMLI,"(*  ------------------------------------------------------ *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxGrowth}[Cudd_ReadMaxGrowth]}. *)")
+double get_max_growth(man__t man) VAL_OF_MAN(Cudd_ReadMaxGrowth);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMaxGrowth}[Cudd_SetMaxGrowth]}. *)")
+void   set_max_growth(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetMaxGrowth);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxGrowthAlternate}[Cudd_ReadMaxGrowthAlternate]}. *)")
+double get_max_growth_alt(man__t man) VAL_OF_MAN(Cudd_ReadMaxGrowthAlternate);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetMaxGrowthAlternate}[Cudd_SetMaxGrowthAlternate]}. *)")
+void   set_max_growth_alt(man__t man, double v) UNIT_OF_MAN_VAL(Cudd_SetMaxGrowthAlternate);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadReorderingCycle}[Cudd_ReadReorderingCycle]}. *)")
+int    get_reordering_cycle(man__t man) VAL_OF_MAN(Cudd_ReadReorderingCycle);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetReorderingCycle}[Cudd_SetReorderingCycle]}. *)")
+void   set_reordering_cycle(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetReorderingCycle);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadNextReordering}[Cudd_ReadNextReordering]}. *)")
+int    get_next_autodyn(man__t man) VAL_OF_MAN(Cudd_ReadNextReordering);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_SetNextReordering}[Cudd_SetNextReordering]}. *)")
+void   set_next_autodyn(man__t man, int v) UNIT_OF_MAN_VAL(Cudd_SetNextReordering);
+
+/* ====================================================================== */
+/* Statistics */
+/* ====================================================================== */
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Statistics} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadCacheHits}[Cudd_ReadCacheHits]}. *)")
+double get_cache_hits(man__t man) VAL_OF_MAN(Cudd_ReadCacheHits);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadCacheLookUps}[Cudd_ReadCacheLookUps]}. *)")
+double get_cache_lookups(man__t man) VAL_OF_MAN(Cudd_ReadCacheLookUps);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadCacheSlots}[Cudd_ReadCacheSlots]}. *)")
+int    get_cache_slots(man__t man) VAL_OF_MAN(Cudd_ReadCacheSlots);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadCacheUsedSlots}[Cudd_ReadCacheUsedSlots]}. *)")
+double get_cache_used_slots(man__t man) VAL_OF_MAN(Cudd_ReadCacheUsedSlots);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadDead}[Cudd_ReadDead]}. *)")
+int    get_dead(man__t man) VAL_OF_MAN(Cudd_ReadDead);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadErrorCode}[Cudd_ReadErrorCode]}. *)")
+enum error get_error(man__t man) VAL_OF_MAN(Cudd_ReadErrorCode);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadGarbageCollectionTime}[Cudd_ReadGarbageCollectionTime]}. *)")
+int    get_gc_time(man__t man) VAL_OF_MAN(Cudd_ReadGarbageCollectionTime);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadGarbageCollections}[Cudd_ReadGarbageCollections]}. *)")
+int    get_gc_nb(man__t man) VAL_OF_MAN(Cudd_ReadGarbageCollections);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadKeys}[Cudd_ReadKeys]}. *)")
+int    get_keys(man__t man) VAL_OF_MAN(Cudd_ReadKeys);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadLinear}[Cudd_ReadLinear]}. *)")
+int    get_linear(man__t man, int x, int y)
+     quote(call, "_res = Cudd_ReadLinear(man->man,x,y);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMaxCache}[Cudd_ReadMaxCache]}. *)")
+int    get_max_cache(man__t man) VAL_OF_MAN(Cudd_ReadMaxCache);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadMinDead}[Cudd_ReadMinDead]}. *)")
+int    get_min_dead(man__t man) VAL_OF_MAN(Cudd_ReadMinDead);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadNodeCount}[Cudd_ReadNodeCount]}. *)")
+int    get_node_count(man__t man) VAL_OF_MAN(Cudd_ReadNodeCount);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadPeakNodeCount}[Cudd_ReadPeakNodeCount]}. *)")
+int    get_node_count_peak(man__t man) VAL_OF_MAN(Cudd_ReadPeakNodeCount);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadReorderingTime}[Cudd_ReadReorderingTime]}. *)")
+int    get_reordering_time(man__t man) VAL_OF_MAN(Cudd_ReadReorderingTime);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadReorderings}[Cudd_ReadReorderings]}. *)")
+int    get_reordering_nb(man__t man) VAL_OF_MAN(Cudd_ReadReorderings);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSize}[Cudd_ReadSize]}. *)")
+int    get_bddvar_nb(man__t man) VAL_OF_MAN(Cudd_ReadSize);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadZddSize}[Cudd_ReadZddSize]}. *)")
+int    get_zddvar_nb(man__t man) VAL_OF_MAN(Cudd_ReadZddSize);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSlots}[Cudd_ReadSlots]}. *)")
+int    get_slots(man__t man) VAL_OF_MAN(Cudd_ReadSlots);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadUsedSlots}[Cudd_ReadUsedSlots]}. *)")
+double get_used_slots(man__t man) VAL_OF_MAN(Cudd_ReadUsedSlots);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadSwapSteps}[Cudd_ReadSwapSteps]}. *)")
+double get_swap_nb(man__t man) VAL_OF_MAN(Cudd_ReadSwapSteps);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_PrintInfo}[Cudd_PrintInfo]}. *)")
+void print_info(man__t man)
+  quote(call,
+"  fflush(stdout);
+   Cudd_PrintInfo(man->man,stdout);
+   fflush(stdout);
+");
+
+
+quote(ML,"
+let _ = set_gc 1000000 Gc.full_major (fun () -> ())
+let _ = Callback.register_exception \"invalid argument exception\" (Invalid_argument \"\")
+")

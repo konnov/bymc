@@ -1,0 +1,2 @@
+1 a\\n/* This file is part of the MLCUDDIDL Library, released under LGPL license.\n   Please read the COPYING file packaged in the distribution  */
+s/camlidl_\(ml2c\|c2ml\|transl\|man\|hash\|cache\|bdd\|add\|vdd\|zdd\)/camlidl_cudd_\1/g

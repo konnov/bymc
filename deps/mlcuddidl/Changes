@@ -1,0 +1,133 @@
+
+-------------
+MLCuddIDL 2.2.0:
+-------------
+
+Distribution:
+  * Uses findlib and findlib conventions
+  * Now includes CUDD 2.4.2
+  * Groups mlcuddidl and CUDD libraries in a single library libcuddcaml
+
+General:
+  * VDDs and MTBDDs:
+    - New interface for user-defined operations, see module User.
+  * Local caches and hashtables
+    - New modules Cache, Hash, Memo
+    - Possibility to create local caches or hashtables and to control their
+      use, in functions Xdd.permute, Xdd.vectorcompose, and user-defined
+      operations.
+
+Improvements:
+  * vectorcompose and permute operations are more robust to non-expert users:
+    if the provided arrays are smaller than the number of variables in the
+    manager, they are automatically extended. This prevents core dumps...
+
+-------------
+MLCuddIDL 2.1.0:
+-------------
+
+General: documentation and again (sorry) reorganizatioon
+
+  * Annoying GC bug in Custom module solved (use of CUDD hashtables).
+
+  * Rdd renamed in Add (to match CUDD names).
+
+  * Vdd and Mtbdd does not contain user operations, which are available only
+    in Mapleaf and User modules.
+
+  * New module Mtbddc when the type of leaf are implemented as custom OCaml
+    blocks.
+
+  * User operations for VDDs and MTBDDs in Mapleaf and User modules (with
+    good documentation)
+
+  * Internal changes
+
+Migration advices
+
+  * Rdd -> Add
+
+  * Functions (Vdd|Mtbdd|Mtbddc).(register|map|apply) ->
+    User.(register|map|apply)
+ 
+  * In (Custom|Vdd|Mtbdd|Mtbddc), type 'a cache -> type ('a,'b) cache, and
+    related changes to the type of user operations.
+
+-------------
+MLCuddIDL 2.0:
+-------------
+
+General: big reorganization ! (and new, not fully compatible API).
+
+  * Integration of former cuddaux and mlcuddidl packages into the new
+    mlcuddidl package.
+
+  * all the modules are packaged in a global Cudd module
+
+  * Manager: 
+    - renamed in Man
+    - type Manager.t becomes either Man.d Man.t or Man.v Man.t
+      (for technical reasons introduced by new MTBDDs, this is
+       unfortunately not a feature)
+
+    - for BDDs, type Bdd.t becomes either Man.d Bdd.t or Man.v Bdd.t
+
+  * new Vdd/Mtbdd module, much more smoothly integrated with OCaml
+    programming.  (no more global and not-garbage-collected
+    correspondance table integers <-> values)
+
+  * Idd removed (use the type int Vdd instead).
+
+  * new user operations system for Rdd, Vdd, and Mtbdd, with
+    possibility of selecting global or local caches.
+
+Migration advices: mostly change of types Manager.t and Bdd.t.
+
+-------------
+MLCuddIDL 1.4:
+-------------
+General:
+  New management of objects of type Manager.t, which are automatically (and
+  safely) garbage collected.
+
+cudd_caml.c:
+  Bugs related to (unsufficient) memory protection corrected.
+
+-------------
+MLCuddIDL 1.3b:
+-------------
+bdd.idl:
+  Type of is_var_essential changed.
+  New functions: pick_minterm, pick_cube(s)_on_support, 
+  
+-------------
+MLCuddIDL 1.3a:
+-------------
+Distribution slightly modified (makefile.config)
+
+-------------
+MLCuddIDL 1.3:
+-------------
+
+LGPL license explicitly mentioned.
+Distribution slightly modified
+
+-------------
+MLCuddIDL 1.2:
+-------------
+
+Call to Manager.set_varmap prior to call to Bdd.varmap or Rdd.varmap is
+checked. Last version working with OCaml-3.07 and older (problem with OCaml
+runtime C function gc_full_major() renamed as caml_gc_full_major()).
+
+-------------
+MLCuddIDL 1.1:
+-------------
+
+Function Bdd.is_complement added.
+
+MLCuddIDL 1.0:
+-------------
+
+Starting point of Changes file.
+

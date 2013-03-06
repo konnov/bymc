@@ -1,0 +1,58 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"stdio.h\"
+#include \"cuddInt.h\"
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+")
+
+import "man.idl";
+
+typedef [abstract,c2ml(camlidl_cudd_cache_c2ml),ml2c(camlidl_cudd_cache_ml2c)] struct cache__t* cache__t;
+
+cache__t _create(int arity, int size, int maxsize)
+  quote(call,"
+_res = malloc(sizeof(struct CuddauxCache));
+_res->cache = NULL;
+_res->arity = arity;
+_res->initialsize = size;
+_res->maxsize = maxsize;
+_res->man = NULL;
+");
+quote(MLI,"
+val create : ?size:int -> ?maxsize:int -> arity:int -> t
+val create1 : ?size:int -> ?maxsize:int -> unit -> t
+val create2 : ?size:int -> ?maxsize:int -> unit -> t
+val create3 : ?size:int -> ?maxsize:int -> unit -> t
+  (** Creates local caches of the given arity, with initial size [size] and
+      maximal size [maxsize]. *)
+")
+
+quote(MLI,"(** Returns the arity of the local cache. *)")
+int arity(cache__t cache)
+quote(call,"_res = cache->arity;");
+
+quote(MLI,"(** Clears the content of the local cache. *)")
+void clear(cache__t cache)
+  quote(call,"
+if (cache->cache){
+  cuddLocalCacheQuit(cache->cache);
+  cache->cache = NULL;
+}
+");
+
+quote(ML,"
+let create ?(size=0) ?(maxsize=max_int) ~arity =
+  _create arity size maxsize
+
+let create1 ?size ?maxsize () =
+  (create ?size ?maxsize ~arity:1)
+let create2 ?size ?maxsize () =
+  (create ?size ?maxsize ~arity:2)
+let create3 ?size ?maxsize () =
+  (create ?size ?maxsize ~arity:3)
+")

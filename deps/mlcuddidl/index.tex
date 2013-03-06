@@ -1,0 +1,92 @@
+\documentclass[a4paper,11pt]{article}
+
+\htmlcss{style.css}
+\htmltitle{MLCuddIDL}
+\htmlpanel{0}
+\setcounter{htmlautomenu}{1}
+\setcounter{htmldepth}{1}
+
+\usepackage{hyperlatex}
+\usepackage{xspace}
+%\usepackage{frames}
+
+\newcommand{\ocaml}{\xlink{OCaml}{http://www.caml.org}\xspace}
+\newcommand{\cudd}{\xlink{CUDD}{http://vlsi.colorado.edu/\~{}fabio/CUDD/cuddIntro.html}\xspace}
+\newcommand{\camlidl}{\xlink{CamlIDL}{http://caml.inria.fr/camlidl/}\xspace}
+\newcommand{\camlmod}[1]{\xlink{#1}{html/Cudd.#1.html}\xspace}
+\newcommand{\findlib}{\xlink{FINDLIB}{http://projects.camlcity.org/projects/findlib.html}\xspace}
+
+\title{MLCuddIDL}
+\date{}
+\author{}
+
+\begin{document}
+
+%\xmlattributes*{img}{align="left"}
+%\xlink{\htmlimg{http://devel.inria.fr/logo_inria.png}{INRIA}}{http://www.inria.fr}
+\xlink{Up}{../index.html}
+\maketitle
+
+\section{About}
+
+MLCuddIDL is a C library offering an interface to the \cudd BDD
+library for \ocaml version 3.00 or higher. The interface offers
+access to most of the functions of the library, and in addition
+implements some new functions. It is provided as a single module
+\texttt{Cudd} containing submodules.
+
+The interface is organized as follows:
+\begin{itemize}
+\item the module \camlmod{Man} implements functions common to all the
+  other modules (initialization, variable ordering, ...) ;
+\item the module \camlmod{Bdd} allows to manipulate ordinary BDDs (with
+  complemented edge) ;
+\item the module \camlmod{Add} allows to manipulate ADDs (Algebraic Decision
+  Diagrams), the leaves of which are reals ;
+\item the modules \camlmod{Mtbdd}, \camlmod{Mtbddc},
+  \camlmod{User} and \camlmod{Mapleaf} allows to manipulate MTBDDs
+  (Multi-Terminal Binary Decision Diagram), the leaves of which
+  are a user-defined OCaml datatype; the user can define and
+  register new operations, that will then take advantage of
+  caching techniques .
+\end{itemize}
+I did not (yet) interfaced ZDDs, but I could do it quite quickly
+is someone requests it.
+
+The interface is clean for garbage collection (it makes use of custom
+blocks). In addition, the garbage collectors of CUDD and OCaml are
+synchronized: the OCaml garbage collector is requested to perform a
+"full major" cycle before any CUDD garbage collection (in order to
+allow the later to be more efficient). Serialization and
+deserialization operations are not implemented.
+
+Feel free to ask me any feature you need and which is not implemented !
+
+\section{License}
+LGPL
+
+\section{Requirements}
+\begin{itemize}
+\item An ANSI C compiler (only gcc with ansi option has been really
+  tested)
+\item The \ocaml system (of course !)
+\item The \camlidl stub code generator
+\item The \findlib OCaml library manager
+\end{itemize}
+
+\section{Download}
+
+Current version 2.2.0
+\begin{itemize}
+%\item \xlink{Tar-gzipped sources}{http://gforge.inria.fr/projects/mlxxxidl/}
+\item \xlink{Subversion repository}{http://gforge.inria.fr/plugins/scmsvn/viewcvs.php/?root=mlxxxidl}
+\end{itemize}
+
+\section{Documentation}
+\begin{itemize}
+\item \xlink{Changes}{Changes}
+\item \xlink{On-line}{html/index.html}
+\item \xlink{PDF}{mlcuddidl.pdf}
+\end{itemize}
+
+\end{document}

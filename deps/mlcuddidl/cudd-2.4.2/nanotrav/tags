@@ -1,0 +1,209 @@
+BnetNetwork	bnet.h	/^} BnetNetwork;$/
+BnetNode	bnet.h	/^} BnetNode;$/
+BnetTabline	bnet.h	/^} BnetTabline;$/
+Bnet_BuildNodeBDD	bnet.c	/^Bnet_BuildNodeBDD($/
+Bnet_DfsVariableOrder	bnet.c	/^Bnet_DfsVariableOrder($/
+Bnet_FreeNetwork	bnet.c	/^Bnet_FreeNetwork($/
+Bnet_PrintNetwork	bnet.c	/^Bnet_PrintNetwork($/
+Bnet_PrintOrder	bnet.c	/^Bnet_PrintOrder($/
+Bnet_ReadNetwork	bnet.c	/^Bnet_ReadNetwork($/
+Bnet_ReadOrder	bnet.c	/^Bnet_ReadOrder($/
+Bnet_bddArrayDump	bnet.c	/^Bnet_bddArrayDump($/
+Bnet_bddDump	bnet.c	/^Bnet_bddDump($/
+Cudd_AggregationType	../include/cudd.h	/^} Cudd_AggregationType;$/
+Cudd_Complement	../include/cudd.h	/^#define Cudd_Complement(node) ((DdNode *)((unsigne/
+Cudd_E	../include/cudd.h	/^#define Cudd_E(node) ((Cudd_Regular(node))->type.k/
+Cudd_ErrorType	../include/cudd.h	/^} Cudd_ErrorType;$/
+Cudd_ForeachCube	../include/cudd.h	/^#define Cudd_ForeachCube(manager, f, gen, cube, va/
+Cudd_ForeachNode	../include/cudd.h	/^#define Cudd_ForeachNode(manager, f, gen, node)\\$/
+Cudd_ForeachPrime	../include/cudd.h	/^#define Cudd_ForeachPrime(manager, l, u, gen, cube/
+Cudd_HookType	../include/cudd.h	/^} Cudd_HookType;$/
+Cudd_IsComplement	../include/cudd.h	/^#define Cudd_IsComplement(node)	((int) ((long) (no/
+Cudd_IsConstant	../include/cudd.h	/^#define Cudd_IsConstant(node) ((Cudd_Regular(node)/
+Cudd_LazyGroupType	../include/cudd.h	/^} Cudd_LazyGroupType;$/
+Cudd_Not	../include/cudd.h	/^#define Cudd_Not(node) ((DdNode *)((long)(node) ^ /
+Cudd_NotCond	../include/cudd.h	/^#define Cudd_NotCond(node,c) ((DdNode *)((long)(no/
+Cudd_ReadIndex	../include/cudd.h	/^#define Cudd_ReadIndex(dd,index) (Cudd_ReadPerm(dd/
+Cudd_Regular	../include/cudd.h	/^#define Cudd_Regular(node) ((DdNode *)((unsigned l/
+Cudd_ReorderingType	../include/cudd.h	/^} Cudd_ReorderingType;$/
+Cudd_T	../include/cudd.h	/^#define Cudd_T(node) ((Cudd_Regular(node))->type.k/
+Cudd_V	../include/cudd.h	/^#define Cudd_V(node) ((Cudd_Regular(node))->type.v/
+Cudd_VariableType	../include/cudd.h	/^} Cudd_VariableType;$/
+Cudd_zddForeachPath	../include/cudd.h	/^#define Cudd_zddForeachPath(manager, f, gen, path)/
+DD_LSDIGIT	../include/cuddInt.h	/^#define DD_LSDIGIT(x)	((x) & DD_APA_MASK)$/
+DD_MINUS_INFINITY	../include/cuddInt.h	/^#define DD_MINUS_INFINITY(dd) ((dd)->minusinfinity/
+DD_MSDIGIT	../include/cuddInt.h	/^#define DD_MSDIGIT(x)	((x) >> DD_APA_BITS)$/
+DD_ONE	../include/cuddInt.h	/^#define DD_ONE(dd)		((dd)->one)$/
+DD_PLUS_INFINITY	../include/cuddInt.h	/^#define DD_PLUS_INFINITY(dd) ((dd)->plusinfinity)$/
+DD_ZERO	../include/cuddInt.h	/^#define DD_ZERO(dd) ((dd)->zero)$/
+DdApaDigit	../include/cudd.h	/^typedef unsigned int DdApaDigit;$/
+DdApaDoubleDigit	../include/cudd.h	/^typedef unsigned long int DdApaDoubleDigit;$/
+DdApaNumber	../include/cudd.h	/^typedef DdApaDigit * DdApaNumber;$/
+DdCache	../include/cuddInt.h	/^} DdCache;$/
+DdChildren	../include/cudd.h	/^} DdChildren;$/
+DdGen	../include/cudd.h	/^typedef struct DdGen DdGen;$/
+DdHalfWord	../include/cudd.h	/^typedef unsigned int   DdHalfWord;$/
+DdHashItem	../include/cuddInt.h	/^} DdHashItem;$/
+DdHashTable	../include/cuddInt.h	/^} DdHashTable;$/
+DdHook	../include/cuddInt.h	/^} DdHook;$/
+DdLevelQueue	../include/cuddInt.h	/^} DdLevelQueue;$/
+DdLocalCache	../include/cuddInt.h	/^} DdLocalCache;$/
+DdLocalCacheItem	../include/cuddInt.h	/^} DdLocalCacheItem;$/
+DdManager	../include/cudd.h	/^typedef struct DdManager DdManager;$/
+DdNode	../include/cudd.h	/^typedef struct DdNode DdNode;$/
+DdNodePtr	../include/cuddInt.h	/^typedef DdNode *DdNodePtr;$/
+DdQueueItem	../include/cuddInt.h	/^} DdQueueItem;$/
+DdSubtable	../include/cuddInt.h	/^} DdSubtable;$/
+DdTlcInfo	../include/cudd.h	/^typedef struct DdTlcInfo DdTlcInfo;$/
+Dddmp_CheckAndGotoLabel	../include/dddmp.h	/^#define Dddmp_CheckAndGotoLabel(expr,errMsg,label)/
+Dddmp_CheckAndReturn	../include/dddmp.h	/^#define Dddmp_CheckAndReturn(expr,errMsg) \\$/
+Dddmp_DecompCnfLoadType	../include/dddmp.h	/^} Dddmp_DecompCnfLoadType;$/
+Dddmp_DecompCnfStoreType	../include/dddmp.h	/^} Dddmp_DecompCnfStoreType;$/
+Dddmp_DecompType	../include/dddmp.h	/^} Dddmp_DecompType;$/
+Dddmp_Hdr_t	../include/dddmp.h	/^typedef struct Dddmp_Hdr_s Dddmp_Hdr_t;$/
+Dddmp_RootMatchType	../include/dddmp.h	/^} Dddmp_RootMatchType;$/
+Dddmp_VarInfoType	../include/dddmp.h	/^} Dddmp_VarInfoType;$/
+Dddmp_VarMatchType	../include/dddmp.h	/^} Dddmp_VarMatchType;$/
+Dddmp_Warning	../include/dddmp.h	/^#define Dddmp_Warning(expr,errMsg) \\$/
+ITEM	ntrHeap.c	/^#define ITEM(p,i)	((p)[i].item)$/
+KEY	ntrHeap.c	/^#define KEY(p,i)	((p)[i].key)$/
+LEFT	ntrHeap.c	/^#define LEFT(i)		(((i)<<1)|1)$/
+Mmain	main.c	/^main($/
+Move	../include/cuddInt.h	/^} Move;$/
+NtrHeap	ntr.h	/^} NtrHeap;$/
+NtrHeapSlot	ntr.h	/^} NtrHeapSlot;$/
+NtrOptions	ntr.h	/^} NtrOptions;$/
+NtrPartTR	ntr.h	/^} NtrPartTR;$/
+Ntr_ClosureTrav	ntr.c	/^Ntr_ClosureTrav($/
+Ntr_Envelope	ntr.c	/^Ntr_Envelope($/
+Ntr_FreeHeap	ntrHeap.c	/^Ntr_FreeHeap($/
+Ntr_HeapClone	ntrHeap.c	/^Ntr_HeapClone($/
+Ntr_HeapCount	ntrHeap.c	/^Ntr_HeapCount($/
+Ntr_HeapExtractMin	ntrHeap.c	/^Ntr_HeapExtractMin($/
+Ntr_HeapInsert	ntrHeap.c	/^Ntr_HeapInsert($/
+Ntr_InitHeap	ntrHeap.c	/^Ntr_InitHeap($/
+Ntr_SCC	ntr.c	/^Ntr_SCC($/
+Ntr_ShortestPaths	ntrShort.c	/^Ntr_ShortestPaths($/
+Ntr_TestCharToVect	ntrBddTest.c	/^Ntr_TestCharToVect($/
+Ntr_TestClipping	ntrBddTest.c	/^Ntr_TestClipping($/
+Ntr_TestClosestCube	ntrBddTest.c	/^Ntr_TestClosestCube($/
+Ntr_TestCofactorEstimate	ntrBddTest.c	/^Ntr_TestCofactorEstimate($/
+Ntr_TestDecomp	ntrBddTest.c	/^Ntr_TestDecomp($/
+Ntr_TestDensity	ntrBddTest.c	/^Ntr_TestDensity($/
+Ntr_TestEquivAndContain	ntrBddTest.c	/^Ntr_TestEquivAndContain($/
+Ntr_TestHeap	ntrHeap.c	/^Ntr_TestHeap($/
+Ntr_TestMinimization	ntrBddTest.c	/^Ntr_TestMinimization($/
+Ntr_TestTwoLiteralClauses	ntrBddTest.c	/^Ntr_TestTwoLiteralClauses($/
+Ntr_TransitiveClosure	ntr.c	/^Ntr_TransitiveClosure($/
+Ntr_Trav	ntr.c	/^Ntr_Trav($/
+Ntr_VerifyEquivalence	ntrBddTest.c	/^Ntr_VerifyEquivalence($/
+Ntr_buildDDs	ntr.c	/^Ntr_buildDDs($/
+Ntr_buildTR	ntr.c	/^Ntr_buildTR($/
+Ntr_cloneTR	ntr.c	/^Ntr_cloneTR($/
+Ntr_freeTR	ntr.c	/^Ntr_freeTR($/
+Ntr_getStateCube	ntr.c	/^Ntr_getStateCube($/
+Ntr_initState	ntr.c	/^Ntr_initState($/
+Ntr_maxflow	ntr.c	/^Ntr_maxflow($/
+Ntr_maximum01Flow	ntrMflow.c	/^Ntr_maximum01Flow($/
+Ntr_testISOP	ntrZddTest.c	/^Ntr_testISOP($/
+Ntr_testZDD	ntrZddTest.c	/^Ntr_testZDD($/
+PARENT	ntrHeap.c	/^#define PARENT(i)	(((i)-1)>>1)$/
+RIGHT	ntrHeap.c	/^#define RIGHT(i)	(((i)+1)<<1)$/
+STRING_EQUAL	ntr.h	/^#define STRING_EQUAL(s1,s2) (strcmp((s1),(s2)) == /
+bnetBlifWriteReencode	bnet.c	/^bnetBlifWriteReencode($/
+bnetBlifXnorTable	bnet.c	/^bnetBlifXnorTable($/
+bnetDfsOrder	bnet.c	/^bnetDfsOrder($/
+bnetDumpReencodingLogic	bnet.c	/^bnetDumpReencodingLogic($/
+bnetFindVectorSupport	bnet.c	/^bnetFindVectorSupport($/
+bnetGenerateNewNames	bnet.c	/^bnetGenerateNewNames($/
+bnetLevelCompare	bnet.c	/^bnetLevelCompare($/
+bnetLevelDFS	bnet.c	/^bnetLevelDFS($/
+bnetOrderRoots	bnet.c	/^bnetOrderRoots($/
+bnetSetLevel	bnet.c	/^bnetSetLevel($/
+buildExorBDD	bnet.c	/^buildExorBDD($/
+buildMuxBDD	bnet.c	/^buildMuxBDD($/
+checkMinterms	chkMterm.c	/^checkMinterms($/
+cuddAdjust	../include/cuddInt.h	/^#define cuddAdjust(x)$/
+cuddClean	../include/cuddInt.h	/^#define cuddClean(p) ((DdNode *)((ptruint)(p) & ~0/
+cuddDeallocMove	../include/cuddInt.h	/^#define cuddDeallocMove(unique,node) \\$/
+cuddDeallocNode	../include/cuddInt.h	/^#define cuddDeallocNode(unique,node) \\$/
+cuddDeref	../include/cuddInt.h	/^#define cuddDeref(n) cuddSatDec(Cudd_Regular(n)->r/
+cuddE	../include/cuddInt.h	/^#define cuddE(node) ((node)->type.kids.E)$/
+cuddI	../include/cuddInt.h	/^#define	cuddI(dd,index) (((index)==CUDD_CONST_INDE/
+cuddIZ	../include/cuddInt.h	/^#define	cuddIZ(dd,index) (((index)==CUDD_CONST_IND/
+cuddIsConstant	../include/cuddInt.h	/^#define cuddIsConstant(node) ((node)->index == CUD/
+cuddRef	../include/cuddInt.h	/^#define cuddRef(n) cuddSatInc(Cudd_Regular(n)->ref/
+cuddSatDec	../include/cuddInt.h	/^#define cuddSatDec(x) ((x)--)$/
+cuddSatInc	../include/cuddInt.h	/^#define cuddSatInc(x) ((x)++)$/
+cuddT	../include/cuddInt.h	/^#define cuddT(node) ((node)->type.kids.T)$/
+cuddV	../include/cuddInt.h	/^#define cuddV(node) ((node)->type.value)$/
+ddAbs	../include/cuddInt.h	/^#define ddAbs(x) (((x)<0) ? -(x) : (x))$/
+ddCHash	../include/cuddInt.h	/^#define ddCHash(o,f,g,h,s) \\$/
+ddCHash2	../include/cuddInt.h	/^#define ddCHash2(o,f,g,s) \\$/
+ddEqualVal	../include/cuddInt.h	/^#define ddEqualVal(x,y,e) (ddAbs((x)-(y))<(e))$/
+ddHash	../include/cuddInt.h	/^#define ddHash(f,g,s) \\$/
+ddMax	../include/cuddInt.h	/^#define ddMax(x,y) (((y) > (x)) ? (y) : (x))$/
+ddMin	../include/cuddInt.h	/^#define ddMin(x,y) (((y) < (x)) ? (y) : (x))$/
+flowStats	ntrMflow.c	/^} flowStats;$/
+freeOption	main.c	/^freeOption($/
+hourglass	ntrMflow.c	/^hourglass($/
+hourglassPush	ntrMflow.c	/^hourglassPush($/
+long	../include/cudd.h	/^typedef void (*DD_OOMFP)(long);$/
+mainInit	main.c	/^mainInit($/
+makecube	ntr.c	/^makecube($/
+maximal_pull	ntrMflow.c	/^maximal_pull($/
+maximal_push	ntrMflow.c	/^maximal_push($/
+ntrAllocMatrix	ntr.c	/^ntrAllocMatrix($/
+ntrBellman	ntrShort.c	/^ntrBellman($/
+ntrChooseFrom	ntr.c	/^ntrChooseFrom($/
+ntrCompress1	ntrBddTest.c	/^ntrCompress1($/
+ntrCompress2	ntrBddTest.c	/^ntrCompress2($/
+ntrCountDFS	ntr.c	/^ntrCountDFS($/
+ntrEliminateDependencies	ntr.c	/^ntrEliminateDependencies($/
+ntrFreeMatrix	ntr.c	/^ntrFreeMatrix($/
+ntrHeapResize	ntrHeap.c	/^ntrHeapResize($/
+ntrHeapify	ntrHeap.c	/^ntrHeapify($/
+ntrImage	ntr.c	/^ntrImage($/
+ntrInitializeCount	ntr.c	/^ntrInitializeCount($/
+ntrLatchDependencies	ntr.c	/^ntrLatchDependencies($/
+ntrNodeIsBuffer	ntrBddTest.c	/^ntrNodeIsBuffer($/
+ntrPartCompare	ntr.c	/^ntrPartCompare($/
+ntrPermuteParts	ntr.c	/^ntrPermuteParts($/
+ntrPreimage	ntr.c	/^ntrPreimage($/
+ntrReadOptions	main.c	/^ntrReadOptions($/
+ntrReadOptionsFile	main.c	/^ntrReadOptionsFile($/
+ntrReadTree	main.c	/^ntrReadTree($/
+ntrSignatureCompare	ntr.c	/^ntrSignatureCompare($/
+ntrSignatureCompare2	ntr.c	/^ntrSignatureCompare2($/
+ntrSquare	ntrShort.c	/^ntrSquare($/
+ntrTestCharToVect	ntrBddTest.c	/^ntrTestCharToVect($/
+ntrTestClippingAux	ntrBddTest.c	/^ntrTestClippingAux($/
+ntrTestClosestCubeAux	ntrBddTest.c	/^ntrTestClosestCubeAux($/
+ntrTestCofEstAux	ntrBddTest.c	/^ntrTestCofEstAux($/
+ntrTestDecompAux	ntrBddTest.c	/^ntrTestDecompAux($/
+ntrTestDensityAux	ntrBddTest.c	/^ntrTestDensityAux($/
+ntrTestEquivAndContainAux	ntrBddTest.c	/^ntrTestEquivAndContainAux($/
+ntrTestMinimizationAux	ntrBddTest.c	/^ntrTestMinimizationAux($/
+ntrUpdateQuantificationSchedule	ntr.c	/^ntrUpdateQuantificationSchedule($/
+ntrUpdateReached	ntr.c	/^ntrUpdateReached($/
+ntrWarshall	ntrShort.c	/^ntrWarshall($/
+open_file	main.c	/^open_file($/
+printList	bnet.c	/^printList($/
+propagate_maximal_flow	ntrMflow.c	/^propagate_maximal_flow($/
+ptrint	../include/cuddInt.h	/^typedef long ptrint;$/
+ptruint	../include/cuddInt.h	/^typedef unsigned long ptruint;$/
+qsort	ucbqsort.c	/^qsort($/
+qst	ucbqsort.c	/^qst(char *base, char *max)$/
+readLine	main.c	/^readLine($/
+readList	bnet.c	/^readList($/
+readString	bnet.c	/^readString($/
+reorder	main.c	/^reorder($/
+reorderZdd	ntrZddTest.c	/^reorderZdd($/
+rhombus	ntrMflow.c	/^rhombus($/
+rhombusPush	ntrMflow.c	/^rhombusPush($/
+startCudd	main.c	/^startCudd($/
+statLine	../include/cuddInt.h	/^#define statLine(dd) dd->recursiveCalls++; \\$/
+tFree	chkMterm.c	/^stFree($/
+trellis	ntrMflow.c	/^trellis($/
+trellisPush	ntrMflow.c	/^trellisPush($/
+void	ucbqsort.c	/^typedef  int (*QSFP)(const void *, const void *);$/

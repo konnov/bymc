@@ -1,0 +1,98 @@
+# -*- mode: makefile -*-
+
+######################################################################
+# HAS Flags
+######################################################################
+
+# If defined to non-empty value, generates dynamic libraries.
+# Do not forget to add -fPIC to CFLAGS and CFLAGS_DEBUG.
+
+HAS_SHARED=1
+
+######################################################################
+# Directories
+######################################################################
+
+# mlcuddidl is installed with ocamlfind as the package "cudd"
+# The installation directory is thus $(shell ocamlfind printconf destdir)/cudd
+
+# Where to find OCAML ($(CAML_PREFIX)/bin, $(CAML_PREFIX)/lib/ocaml, ...)
+#
+CAML_PREFIX = $(dir $(shell which ocamlc))/..
+
+# Where to find CAMLIDL ($(CAMLIDL_PREFIX)/bin, $(CAMLIDL_PREFIX)/lib/ocaml, ...)
+#
+CAMLIDL_PREFIX = $(dir $(shell which camlidl))/..
+
+######################################################################
+# Tools and Flags
+######################################################################
+
+##################################################
+# OCaml and related
+
+OCAMLFIND = ocamlfind
+CAMLIDL = $(CAMLIDL_PREFIX)/bin/camlidl
+
+OCAMLC = $(CAML_PREFIX)/bin/ocamlc.opt
+OCAMLOPT = $(CAML_PREFIX)/bin/ocamlopt.opt
+
+# ocamlc compilation flags
+OCAMLFLAGS = -annot -g
+# ocamlopt compilation flags
+OCAMLOPTFLAGS = -annot -inline 10 -g
+
+OCAMLDEP = $(CAML_PREFIX)/bin/ocamldep
+OCAMLLEX = $(CAML_PREFIX)/bin/ocamllex.opt
+OCAMLYACC = $(CAML_PREFIX)/bin/ocamlyacc
+OCAMLDOC = $(CAML_PREFIX)/bin/ocamldoc.opt
+OCAMLMKTOP = $(CAML_PREFIX)/bin/ocamlmktop
+OCAMLMKLIB = $(CAML_PREFIX)/bin/ocamlmklib
+
+
+##################################################
+# C compiler
+CC = gcc
+
+#
+# FOR CUDD: IMPORTANT
+# GCC on i386
+XCFLAGS = -fPIC -march=pentium4 -malign-double -DHAVE_IEEE_754 -DBSD
+# GCC on x86_64
+#XCFLAGS = -fPIC -m64 -DHAVE_IEEE_754 -DSIZEOF_VOID_P=8 -DSIZEOF_LONG=8 -DSIZEOF_INT=4
+
+# C compilation flags
+CFLAGS = \
+-Wcast-qual -Wswitch -Werror-implicit-function-declaration \
+-Wall -Wextra -Wundef -Wbad-function-cast -Wcast-align -Wstrict-prototypes \
+-Wno-unused \
+-std=c99 \
+-fPIC -O3 -DNDEBUG
+# For Mac x86_64, add -m64 -flat_namespace -undefined suppress
+
+# C compilation flags in debug mode
+CFLAGS_DEBUG = \
+-Wcast-qual -Wswitch -Werror-implicit-function-declaration \
+-Wall -Wextra -Wundef -Wbad-function-cast -Wcast-align -Wstrict-prototypes \
+-Wno-unused \
+-std=c99 \
+-fPIC -g -O0 -UNDEBUG
+
+# C compilation flags in profiling mode
+CFLAGS_PROF = \
+-Wcast-qual -Wswitch -Werror-implicit-function-declaration \
+-Wall -Wextra -Wundef -Wbad-function-cast -Wcast-align -Wstrict-prototypes \
+-Wno-unused \
+-std=c99 \
+-fPIC -O3 -DNDEBUG -g -pg
+
+##################################################
+# Other
+AR = ar
+RANLIB = ranlib
+SED = sed
+M4 = m4
+LATEX=latex
+DVIPS=dvips
+DVIPDF=dvipdf
+MAKEINDEX=makeindex

@@ -1,0 +1,246 @@
+
+@c \input texinfo 
+@c %**start of header
+@setfilename cuddaux.info
+@setcontentsaftertitlepage
+@set VERSION 1.0
+@iftex
+@afourpaper
+@end iftex
+@comment %**end of header
+
+@tex
+\global\parskip=0.5ex
+\global\baselineskip=3ex
+@end tex
+
+@direntry
+* cuddaux: (cuddaux).                   CUDDAUX auxiliary library for BDDs library CUDD
+@end direntry
+
+@iftex
+@finalout
+@end iftex
+
+@setchapternewpage even
+
+@c Texinfo version 4 or up will be needed to process this into .info files.
+@c
+@c The edition number is in three places and the month/year in one, all
+@c taken from version.texi.  version.texi is created when you configure with
+@c --enable-maintainer-mode, and is included in a distribution made with
+@c "make dist".
+
+@titlepage
+@c  use the new format for titles
+
+@title CUDDAUX
+@subtitle Auxiliary Library for BDDs library CUDD
+@subtitle Edition 1.0, 14 May 2002
+
+@author by Bertrand Jeannet
+@c Include the Distribution inside the titlepage so
+@c that headings are turned off.
+@end titlepage
+
+@ifnottex
+This manual documents how to install and use the CUDDAUX auxiliary BDD library, version @value{VERSION}.
+@node Top, Introduction, (dir), (dir)
+@top cuddaux
+
+@end ifnottex
+
+
+@menu
+* Introduction::
+* Functions::
+* Index::
+@end menu
+
+@ifhtml
+@uref{../index.html, Back to CUDDAUX main page}
+@end ifhtml
+
+@c ===================================================================
+@node Introduction, Functions, Top, Top
+@chapter Introduction
+@c ===================================================================
+
+This library provides additional functions to the CUDD library,
+available at @uref{http://vlsi.colorado.edu/software.html}. Many of
+them allow to replace 0-1 ADDs by BDDs in if-then-else and generalized
+cofactors operations, some offer functions for ADDs which are counterparts of
+functions already implemented for BDDs, others offer a different
+interface, and last really new functions are implemented.
+
+As the library uses @emph{internal} operations of CUDD, it is mandatory
+to compile it with the same option than the one applied to CUDD. Among
+others, check data alignement options !
+
+This library is necessary to the OCAML interface to CUDD that I
+developped and which is available at
+@uref{http://pop-art.inrialpes.fr/people/bjeannet/mlcuddidl/index.html}.
+
+To compile it, set the flags in @file{Makefile.config.model}, copy it
+to @file{Makefile.config}, and type @kbd{make all}. To use it, you
+should include the header file @file{cuddaux.h} and link your program
+with @samp{-lcuddaux}.
+
+
+@c *******************************************************************
+@node Functions, Index, Introduction, Top
+@chapter Functions
+@c *******************************************************************
+
+@c ===================================================================
+@section ADD ITE Functions
+@c ===================================================================
+@deftypefun DdNode* Cuddaux_addIte (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g}, DdNode* @var{h})
+@deftypefunx DdNode* Cuddaux_addIteConstant (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g}, DdNode* @var{h})
+@deftypefunx DdNode* Cuddaux_addEvalConst (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g})
+Same as @code{Cudd_addIte}, @code{Cudd_addIteConstant} and
+@code{Cudd_addEvalConst}, but here @var{f} is a BDD node instead of a
+0-1 ADD node. @var{g} and @var{h} are ADDs.
+@end deftypefun
+
+@deftypefun DdNode* Cuddaux_addBddAnd (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g})
+Same as
+@code{Cuddaux_addIte(@var{dd},@var{f},@var{g},Cudd_ReadBackground(@var{dd}))}:
+selects in @var{g} the valuations that satisfies @var{f} and makes the
+other valuations lead to the background node.
+@end deftypefun
+
+@c ===================================================================
+@section Bridge Function for ADDs
+@c ===================================================================
+
+@deftypefun DdNode* Cuddaux_addTransfer (DdManager* @var{ddS}, DdManager* @var{ddD}, DdNode* @var{f})
+@code{Cudd_bddTransfer}-like function for ADDs.
+@end deftypefun
+
+@c ===================================================================
+@section Generelized Cofactor functions
+@c ===================================================================
+@deftypefun DdNode* Cuddaux_bddRestrict (DdManager * dd, DdNode * f, DdNode * c)
+ Same as @code{Cudd_bddRestrict}, but the @emph{real} result is
+returned instead of the smallest (in term of BDD nodes) among the
+result and the argument.
+@end deftypefun
+@deftypefun DdNode* Cuddaux_addRestrict (DdManager * dd, DdNode * f, DdNode * c)
+@deftypefunx DdNode* Cuddaux_addConstrain (DdManager * dd, DdNode * f, DdNode * c)
+Same as @code{Cudd_addRestrict} and @code{Cudd_addConstrain}, but here
+@var{c} is a BDD node instead of a 0-1 ADD node.
+@end deftypefun
+
+@deftypefun DdNode* Cuddaux_bddTDRestrict (DdManager* @var{dd}, DdNode* @var{f}, DdNode* c)
+@deftypefunx DdNode* Cuddaux_bddTDConstrain (DdManager* @var{dd}, DdNode* @var{f}, DdNode* c)
+@deftypefunx DdNode* Cuddaux_addTDRestrict (DdManager* @var{dd}, DdNode* @var{f}, DdNode* c)
+@deftypefunx DdNode* Cuddaux_addTDConstrain (DdManager* @var{dd}, DdNode* @var{f}, DdNode* c)
+@emph{Top-Down} Restrict and Constrain operations from
+P. Raymond. Good but expensive. For BDD versions, @var{f} and @var{c}
+are BDD nodes, for ADD versions, @var{f} is a ADD node and @var{c} a
+BDD node.
+@end deftypefun
+@deftypefun DdNode* Cuddaux_bddTDSimplify (DdManager* @var{dd}, DdNode* inf, DdNode* sup)
+Given two BDDs @var{inf} and @var{sup} such that @var{inf}@code{=>}@var{sup},
+compute the smallest BDD in the interval. Core of the BDD version of
+the previous generalized cofactor operations.
+@end deftypefun
+@deftypefun DdNode* Cuddaux_addTDSimplify (DdManager* @var{dd}, DdNode* @var{f})
+Given an ADD @var{f} with background value, return a small ADD @var{r}
+without background value that coincides with @var{f} outside the
+background value. In other words, for any valuation @math{v}, either
+@math{f(v)=background} and @math{r(v)} is equal to a non background
+leaf of @math{f}, either @math{f(v)=r(v)}.  Core of the ADD version of
+the previous generalized cofactor operations.
+@end deftypefun
+
+@c ===================================================================
+@section Composition functions for ADDs
+@c ===================================================================
+
+@deftypefun DdNode* Cuddaux_addCompose (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g}, int @var{v})
+@deftypefunx DdNode* Cuddaux_addVectorCompose (DdManager* @var{dd}, DdNode* @var{f}, DdNode** @var{vector})
+Same as @code{Cudd_addCompose} and @code{Cudd_addVectorCompose}, but
+the substitution function (resp. the vector of substitution functions)
+is a BDD (resp. an array of BDDs) instead of a 0-1 ADD.
+@end deftypefun
+
+@deftypefun DdNode* Cuddaux_addVarMap (DdManager* @var{dd}, DdNode* @var{f})
+The equivalent for ADDs of the function @code{Cudd_bddVarMap}.
+@end deftypefun
+@deftypefun int Cuddaux_SetVarMap (DdManager* @var{dd}, int* @var{array})
+Offers the same functionality than @code{Cudd_SetVarMap}, but with a
+different interface, which match the interface for the permutation
+functions. The array @var{array} gives for each variable of index
+@math{i} present in the manager @var{dd} the index of the variable to
+be substituted to @math{i}.
+@end deftypefun
+
+@c ===================================================================
+@section Miscellaneous functions
+@c ===================================================================
+
+These functions offers functionality not directly present in CUDD.
+
+@deftypefun int Cuddaux_IsVarIn (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{var})
+@var{f} is a BDD or an ADD and @var{var} is a BDD or ADD projection
+function. Returns @code{1} whenever @var{var} occurs in @var{f}, 0
+otherwise. Using this function is more efficient than computing the
+support and test inclusion of the variable in it. No new node is created.
+@end deftypefun
+
+@deftypefun DdNode* Cuddaux_bddCubeUnion (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{g})
+@var{f} and @var{g} are BDD cubes. The function returns the smallest
+cube which is implied both by @var{f} and by @var{g}. It is functionally equivalent to @code{Cudd_FindEssential(dd,Cudd_bddOr(dd,f,g))}.
+@end deftypefun
+
+
+
+@deftp Datatype list_t
+@display
+typedef struct list_t @{
+  struct list_t* next;
+  DdNode* node;
+@} list_t;
+@end display
+@end deftp
+
+@deftypefun list_t* Cuddaux_NodesBelowLevel (DdManager* @var{dd}, DdNode* @var{f}, int @var{level})
+@var{f} is a ADD or a BDD and @var{level} a variable level. The
+functions collects in the result all the (regular) nodes pointed by
+@var{f}, indexed by a variable of level greater or equal than
+@var{level}, and encountered first in the top-down exploration (i.e.,
+whenever a node is collected, its sons are not collected). This
+function allows for instance to collect efficently all the terminal
+nodes of an ADD @var{f}. The result of type @code{list_t*} is
+allocated by the function. The nodes in the list are not
+referenced. No new node is created. Returns @code{NULL} if not
+successfull.
+@end deftypefun
+@deftypefun void list_free (list_t* @var{l})
+Frees the memory occupied by the list @var{l}.
+@end deftypefun
+@deftypefun DdNode* Cuddaux_addGuardOfNode (DdManager* @var{dd}, DdNode* @var{f}, DdNode* @var{h})
+@var{f} and @var{h} are ADDs. Returns a BDD equal to the sum of the
+paths that leads from the root node @var{f} to the node @var{h} in the
+ADD @var{f}. If @var{h} is not in the graph of @var{f}, the logical
+false node is returned. Can be used for instance to compute the guard of a terminal node @var{h} in an ADD @var{f}.
+@end deftypefun
+
+
+
+
+@c *******************************************************************
+@node Index,  , Functions, Top
+@appendix Index
+@c *******************************************************************
+@appendixsec Datatypes index
+@printindex tp
+
+@appendixsec Functions Index
+@printindex fn
+
+@contents
+
+@bye

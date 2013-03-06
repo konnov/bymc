@@ -1,0 +1,77 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+#include \"stdio.h\"
+")
+
+import "man.idl";
+
+typedef [abstract,c2ml(camlidl_cudd_hash_c2ml),ml2c(camlidl_cudd_hash_ml2c)] struct hash__t* hash__t;
+
+hash__t _create(int arity, int size)
+  quote(call,"
+_res = malloc(sizeof(struct CuddauxHash));
+_res->hash = NULL;
+_res->arity = arity;
+_res->initialsize = size;
+_res->man = NULL;
+");
+
+quote(MLI,"
+(** Internal table *)
+val table : t Weak.t ref
+
+(** [create ~size:n arity] create a hashtable of arity [arity], of the
+    optional size [n] *)
+val create : ?size:int -> int -> t
+")
+
+quote(MLI,"(** Returns the arity of the hashtable *)")
+int arity(hash__t hash)
+quote(call,"_res = hash->arity;");
+
+quote(MLI,"(** Clears the content of the hashtable *)")
+void clear(hash__t hash)
+  quote(call,"cuddauxHashClear(hash);");
+
+quote(MLI,"
+(** Clears the content of all created hashtables *)
+val clear_all : unit -> unit
+")
+
+quote(ML,"
+let (table:t Weak.t ref) = ref (Weak.create 32)
+
+let create ?(size=2) arity =
+  let hash = _create arity size in
+  let index = ref 0 in
+  while
+    !index < Weak.length !table
+    && Weak.check !table !index
+  do
+    incr index
+  done;
+  if !index = Weak.length !table then begin
+    let newtable = Weak.create (2* !index) in
+    Weak.blit !table 0 newtable 0 !index;
+    table := newtable;
+  end;
+  Weak.set !table !index (Some (Obj.magic hash));
+  hash
+
+let clear_all () =
+  for i=0 to (Weak.length !table)-1 do
+    let ohash = Weak.get_copy !table i in
+    match ohash with
+      | None -> ()
+      | Some hash -> clear hash
+  done;
+  ()
+
+let _ = Callback.register \"camlidl_cudd_hash_clear_all\" clear_all
+")

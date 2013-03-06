@@ -1,0 +1,65 @@
+# -*- mode: makefile -*-
+
+include Makefile.build.config
+
+#---------------------------------------
+# Directories
+#---------------------------------------
+
+SRCDIR = $(shell pwd)
+#
+# Installation directory
+#
+PKG-NAME = cudd
+
+#---------------------------------------
+# Files
+#---------------------------------------
+
+MLMODULES = $(shell cat cudd.mllib)
+
+FILES_TOINSTALL = \
+	$(MLMODULES:%=%.ml) $(MLMODULES:%=%.mli) \
+	$(MLMODULES:%=%.cmt) $(MLMODULES:%=%.cmti) \
+	$(MLMODULES:%=%.cmi) cudd.cma \
+	$(MLMODULES:%=%.cmx) cudd.cmxa cudd.a \
+	$(MLMODULES:%=%.p.cmx) cudd.p.cmxa cudd.p.a
+
+all: cudd-2.4.2/libcuddall.a
+	$(OCAMLBUILD) all.otarget
+doc:
+	$(OCAMLBUILD) doc.otarget
+
+install: $(FILES_TOINSTALL)
+	$(OCAMLFIND) remove $(PKG-NAME)
+	$(OCAMLFIND) install $(PKG-NAME) META $(FILES_TOINSTALL:%=_build/%)
+
+uninstall:
+	$(OCAMLFIND) remove $(PKG-NAME)
+
+clean:
+	$(OCAMLBUILD) -clean
+
+distclean: clean
+	/bin/rm -f TAGS Makefile.depend myocamlbuild
+
+homepage: doc
+	hyperlatex index
+	scp -r index.html _build/cudd.docdir _build/cudd.pdf \
+		avedon:/home/wwwpop-art/people/bjeannet/bjeannet-forge/cudd
+	ssh avedon chmod -R ugoa+rx /home/wwwpop-art/people/bjeannet/bjeannet-forge/cudd
+
+cudd-2.4.2/libcuddall.a:
+	(cd cudd-2.4.2; \
+	make libcuddall.a CPP="$(CC)" CC="$(CC)" XCFLAGS="$(XCFLAGS)" ICFLAGS="$(CFLAGS)" RANLIB="$(RANLIB)" DDDEBUG="" MTRDEBUG="")
+cudd-2.4.2/libcuddall.p.a:
+	(cd cudd-2.4.2; \
+	make libcuddall.p.a CPP="$(CC)" CC="$(CC)" XCFLAGS="$(XCFLAGS)" ICFLAGS="$(CFLAGS_PROF)" RANLIB="$(RANLIB)" DDDEBUG="" MTRDEBUG="")
+cudd-2.4.2/libcuddall.d.a:
+	(cd cudd-2.4.2; \
+	make libcuddall.d.a CPP="$(CC)" CC="$(CC)" XCFLAGS="$(XCFLAGS)" ICFLAGS="$(CFLAGS_DEBUG)" RANLIB="$(RANLIB)" DDDEBUG="-DDD_DEBUG -DDD_VERBOSE -DDD_STATS -DDD_CACHE_PROFILE -DDD_UNIQUE_PROFILE -DDD_COUNT" MTRDEBUG="-DMTR_DEBUG")
+
+.PHONY: TAGS
+tags: TAGS
+TAGS: $(MLMODULES:%=%.mli) $(MLMODULES:%=%.ml)
+	ocamltags $^

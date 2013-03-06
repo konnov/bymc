@@ -1,0 +1,114 @@
+/* -*- mode: c -*- */
+/* $Id$ */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+#include \"stdio.h\"
+")
+
+/* ====================================================================== */
+/* Variables, Reordering and Mapping */
+/* ====================================================================== */
+
+quote(MLMLI,"\n")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"(** {3 Variables, Reordering and Mapping} *)")
+quote(MLMLI,"(*  ====================================================== *)")
+quote(MLMLI,"\n")
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadPermZdd}[Cudd_ReadPermZdd]}. Returns the level of the variable (its order in the ZDD) *)")
+int level_of_var(manager man, int var);
+     quote(call, "_res = Cudd_ReadPermZdd(man,var);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadInvPermZdd}[Cudd_ReadInvPermZdd]}. Returns the variable associated to the given level. *)")
+int var_of_level(manager man, int level);
+     quote(call, "_res = Cudd_ReadInvPermZdd(man,level);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_zddReduceHeap}[Cudd_zddReduceHeap]}. Main reordering function, that applies the given heuristic. The provided integer is a bound below which no reordering takes place. *)")
+void reduce_heap(manager__t man, enum reorder heuristic, int minsize)
+     quote(call,
+"{
+  int ok = Cudd_zddReduceHeap(man,heuristic,minsize);
+  if (ok==0) caml_failwith(\"Manager.reduce_heap failed\");
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_zddShuffleHeap}[Cudd_zddShuffleHeap]}. Reorder variables according to the given permutation. *)")
+void shuffle_heap(manager__t man, int permut[])
+     quote(call,
+"{
+  int ok = Cudd_zddShuffleHeap(man,permut);
+  if (ok==0) caml_failwith(\"Manager.shuffle_heap failed\");
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_AutodynEnableZdd}[Cudd_AutodynEnableZdd]}. Enables dynamic reordering with the given heuristics. *)")
+void enable_autodyn(manager__t man, enum reorder heuristic)
+     quote(call, "Cudd_AutodynEnableZdd(man,heuristic);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_AutodynDisableZdd}[Cudd_AutodynDisableZdd]}. Disables dynamic reordering. *)")
+void disable_autodyn(manager__t man)
+     quote(call, "Cudd_AutodynDisableZdd(man);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReorderingStatusZdd}[Cudd_ReorderingStatusZdd]}. Returns [None] if dynamic reordering is disables, [Some(heuristic)] otherwise. *)")
+void autodyn_status(manager__t man, [out,unique] enum reorder * heuristic)
+     quote(call,"
+{
+  int b;
+  b = Cudd_ReorderingStatusZdd(man,(Cudd_ReorderingType*)heuristic);
+  if (!b) heuristic = NULL;
+}
+");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_MakeZddTreeNode}[Cudd_MakeZddTreeNode]}.
+[group man low size typ] creates a new variable group, ranging from index [low] to index [low+size-1], in which [typ] specifies if reordering is allowed inside the group. *)")
+void group(manager__t man, int low, int size, enum mtr type)
+     quote(call, "Cudd_MakeZddTreeNode(man, low, size, type);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_FreeZddTreeNode}[Cudd_FreeZddTree]}. Removes all the groups in the manager. *)")
+void ungroupall(manager__t man)
+     quote(call, "Cudd_FreeZddTree(man);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_bddRealignEnable}[Cudd_bddRealignEnable]}. *)")
+void align_zdd_with_bdd(manager__t man)
+     quote(call, "Cudd_bddRealignEnable(man)");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_bddRealignDisable}[Cudd_bddRealignDisable]}. *)")
+void unalign_zdd_with_bdd(manager__t man)
+     quote(call, "Cudd_bddRealignDisable(man)");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_bddRealignmentEnabled}[Cudd_bddRealignmentEnabled]}. *)")
+boolean is_align_zdd_with_bdd(manager__t man)
+     quote(call, "_res = Cudd_bddRealignmentEnabled(man)");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_zddChange}[Cudd_zddChange]}. *)")
+zdd__t change(zdd__t no)
+     quote(call, "_res.man = no.man; _res.node = Cudd_zddChange(no.man,no.node);");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_zddComplement}[Cudd_zddComplement]}. *)")
+zdd__t complement(zdd__t no) NO_OF_MAN_NO(Cudd_zddComplement)
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_CountMinterm}[Cudd_CountMinterm]}. Number of minterms  of the BDD assuming that it depends on the given number of variables. *)")
+double nbminterms(int nvar, bdd__t no)
+quote(call,
+"_res = Cudd_zddCountMinterm(no.man,no.node,nvar); \
+if (_res==(double)CUDD_OUT_OF_MEM){ \
+  caml_failwith(\"Zdd.nbminterms returned CUDD_OUT_OF_MEM\"); \
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_zddCountDouble}[Cudd_zddCountDouble]}. Number of paths in the BDD from the root to the leaves. *)")
+double nbpaths(bdd__t no)
+quote(call,
+"_res = Cudd_CountDouble(no.man,no.node); \
+if (_res==(double)CUDD_OUT_OF_MEM){ \
+  caml_failwith(\"Zdd.nbpaths returned CUDD_OUT_OF_MEM\"); \
+}");
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_MakeBddFromZddCover}[Cudd_MakeBddFromZddCover]}. *)")
+bdd__t cover_to_bdd(zdd__t node)) NO_OF_MAN_NO(Cudd_MakeBddFromZddCover);
+
+quote(MLI,"(** {{:http://vlsi.colorado.edu/~fabio/CUDD/cuddExtDet.html#Cudd_ReadZddOne}[Cudd_ReadZddOne]}. *)")
+zdd__t dtrue(manager__t man, int i)
+     quote(call, "_res.man = man; _res.node = Cudd_ReadZddOne(man,i)");

@@ -1,0 +1,422 @@
+/* -*- mode: c -*- */
+
+/* This file is part of the MLCUDDIDL Library, released under LGPL license.
+   Please read the COPYING file packaged in the distribution  */
+
+quote(C, "
+#include \"stdio.h\"
+#include \"cuddaux.h\"
+#include \"caml/custom.h\"
+#include \"cudd_caml.h\"
+")
+
+import "hash.idl";
+import "cache.idl";
+import "memo.idl";
+import "vdd.idl";
+
+/* ====================================================================== */
+/* Datatypes */
+/* ====================================================================== */
+
+typedef [abstract,c2ml(camlidl_cudd_pid_c2ml),ml2c(camlidl_cudd_pid_ml2c)] void* pid;
+typedef [abstract,c2ml(camlidl_cudd_mlvalue_c2ml),ml2c(camlidl_cudd_mlvalue_ml2c)] void* mlvalue;
+
+struct common {
+  pid pid;
+  int arity;
+  struct memo__t memo;
+  [ignore] void* man;
+  [ignore] void* exn;
+};
+
+struct op1 {
+  struct common common1;
+  mlvalue closure1;
+  [ignore] void* funptr1;
+};
+
+struct op2 {
+  struct common common2;
+  mlvalue closure2;
+  mlvalue ospecial2;
+  boolean commutative;
+  boolean idempotent;
+  [ignore] void* funptr2;
+};
+struct test2 {
+  struct common common2t;
+  mlvalue closure2t;
+  mlvalue ospecial2t;
+  boolean symetric;
+  boolean reflexive;
+  [ignore] void* funptr2t;
+};
+struct op3 {
+  struct common common3;
+  mlvalue closure3;
+  mlvalue ospecial3;
+  [ignore] void* funptr3;
+};
+struct opN {
+  struct common commonN;
+  int arityNbdd;
+  mlvalue closureN;
+  [ignore] void* funptrN;
+};
+struct opG {
+  struct common commonG;
+  int arityGbdd;
+  mlvalue closureG;
+  [ignore] void* funptrG;
+  mlvalue oclosureBeforeRec;
+  [ignore] void* funptrBeforeRec;
+  mlvalue oclosureIte;
+  [ignore] void* funptrIte;
+};
+struct exist {
+  struct common commonexist;
+  struct op2 combineexist;
+};
+struct existand {
+  struct common commonexistand;
+  struct op2 combineexistand;
+  mlvalue bottomexistand;
+};
+struct existop1 {
+  struct common commonexistop1;
+  struct op2 combineexistop1;
+  struct op1 existop1;
+};
+struct existandop1 {
+  struct common commonexistandop1;
+  struct op2 combineexistandop1;
+  struct op1 existandop1;
+  mlvalue bottomexistandop1;
+};
+
+
+pid newpid()
+  quote(call,"_res = malloc(1);");
+
+vdd__t apply_op1(struct op1 op, vdd__t no)
+quote(call,"
+op.common1.man = no.man;
+op.common1.exn = Val_unit;
+op.funptr1 = &camlidl_cudd_custom_op1;
+Begin_roots4(_v_op,_v_no,op.common1.exn,op.closure1);
+   _res.man = no.man;
+   _res.node = Cuddaux_addApply1(&op,no.node);
+End_roots();
+if (op.common1.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.common1.exn);
+}
+");
+vdd__t apply_op2(struct op2 op, vdd__t no1, vdd__t no2)
+quote(call,"
+CHECK_MAN2;
+op.common2.man = no1.man;
+op.common2.exn = Val_unit;
+op.funptr2 = &camlidl_cudd_custom_op2;
+Begin_roots3(_v_op,_v_no1,_v_no2);
+Begin_roots3(op.common2.exn,op.closure2,op.ospecial2);
+   _res.man = no1.man;
+   _res.node = Cuddaux_addApply2(&op,no1.node,no2.node);
+End_roots();
+End_roots();
+if (op.common2.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.common2.exn);
+}
+");
+boolean apply_test2(struct test2 op, vdd__t no1, vdd__t no2)
+quote(call,"
+CHECK_MAN2;
+op.common2t.man = no1.man;
+op.common2t.exn = Val_unit;
+op.funptr2t = &camlidl_cudd_custom_test2;
+Begin_roots3(_v_op,_v_no1,_v_no2);
+Begin_roots3(op.common2t.exn,op.closure2t,op.ospecial2t);
+_res = Cuddaux_addTest2(&op,no1.node,no2.node);
+End_roots();
+End_roots();
+if (op.common2t.exn!=Val_unit){
+  Cudd_ClearErrorCode(no1.man->man);
+  caml_raise(op.common2t.exn);
+}
+if (_res == -1){
+  caml_failwith(\"Custom.apply_test2 returned -1\");
+}
+");
+vdd__t apply_op3(struct op3 op, vdd__t no1, vdd__t no2, vdd__t no3)
+quote(call,"
+CHECK_MAN3;
+op.common3.man = no1.man;
+op.common3.exn = Val_unit;
+op.funptr3 = &camlidl_cudd_custom_op3;
+Begin_roots4(_v_op,_v_no1,_v_no2,_v_no3);
+Begin_roots3(op.common3.exn,op.closure3,op.ospecial3);
+_res.man = no1.man;
+_res.node = Cuddaux_addApply3(&op,no1.node,no2.node,no3.node);
+End_roots();
+End_roots();
+if (op.common3.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.common3.exn);
+}
+");
+
+quote(MLMLI,"
+external apply_opN : ('a,'b) opN -> Bdd.vt array -> 'a Vdd.t array -> 'b Vdd.t = \"camlidl_cudd_apply_opN\"
+external apply_opG : ('a,'b) opG -> Bdd.vt array -> 'a Vdd.t array -> 'b Vdd.t = \"camlidl_cudd_apply_opG\"
+")
+
+quote(C,"
+value camlidl_cudd_apply_opN(value _v_op, value _v_vec1, value _v_vec2)
+{
+  struct opN op; /*in*/
+  DdNode** vec;
+  vdd__t _res;
+  int size1,size2,size;
+  value _vres;
+  man__t man1,man2,man;
+
+  struct camlidl_ctx_struct _ctxs = { CAMLIDL_TRANSIENT, NULL };
+  camlidl_ctx _ctx = &_ctxs;
+  camlidl_cudd_ml2c_custom_struct_opN(_v_op, &op, _ctx);
+  size1 = Wosize_val(_v_vec1);
+  size2 = Wosize_val(_v_vec2);
+  size=size1+size2;
+  if (size!=op.commonN.arity || size1!=op.arityNbdd){
+    caml_invalid_argument(\"Cudd.Custom.apply_opN: the arity of the operation is not equal to the size of the arrays of BDDs and VDDs\");
+  }
+  else if (size==0){
+    caml_invalid_argument(\"Cudd.Custom.apply_opN: empty array\");
+  }
+  vec = (DdNode**)malloc(size*sizeof(DdNode*));
+  man = man1 = man2 = NULL;
+  if (size1>0){
+    man = man1 = camlidl_cudd_tnode_ml2c(_v_vec1,size1,vec);
+    if (man1==NULL){
+      free(vec);
+      caml_invalid_argument(\"Custom.apply_opN called with BDDs belonging to different managers !\");
+    }
+  }
+  if (size2>0){
+    man = man2 = camlidl_cudd_tnode_ml2c(_v_vec2,size2,vec+size1);
+    if (man2==NULL){
+      free(vec);
+      caml_invalid_argument(\"Custom.apply_opN called with VDDs belonging to different managers !\");
+    }
+  }
+  if (size1>0 && size2>0 && man1!=man2){
+    free(vec);
+    caml_invalid_argument(\"Custom.apply_opN called with BDDs/VDDs belonging to different managers !\");
+  }
+  op.commonN.man = man;
+  op.commonN.exn = Val_unit;
+  op.funptrN = &camlidl_cudd_custom_opNG;
+  Begin_roots5(_v_op,_v_vec1,_v_vec2,op.commonN.exn,op.closureN);
+    _res.man = man;
+    _res.node = Cuddaux_addApplyN(&op,vec);
+  End_roots();
+  free(vec);
+  if (op.commonN.exn!=Val_unit){
+    Cudd_ClearErrorCode(_res.man->man);
+    caml_raise(op.commonN.exn);
+  }
+  _vres = camlidl_cudd_c2ml_vdd_vdd__t(&_res, _ctx);
+  camlidl_free(_ctx);
+  return _vres;
+}
+
+value camlidl_cudd_apply_opG(value _v_op, value _v_vec1, value _v_vec2)
+{
+  struct opG op; /*in*/
+  DdNode** vec;
+  vdd__t _res;
+  int size1,size2,size;
+  value _vres;
+  man__t man1,man2,man;
+
+  struct camlidl_ctx_struct _ctxs = { CAMLIDL_TRANSIENT, NULL };
+  camlidl_ctx _ctx = &_ctxs;
+  camlidl_cudd_ml2c_custom_struct_opG(_v_op, &op, _ctx);
+  size1 = Wosize_val(_v_vec1);
+  size2 = Wosize_val(_v_vec2);
+  size=size1+size2;
+  if (size!=op.commonG.arity || size1!=op.arityGbdd){
+    caml_invalid_argument(\"Cudd.Custom.apply_opG: the arity of the operation is not equal to the size of the arrays of BDDs and VDDs\");
+  }
+  else if (size==0){
+    caml_invalid_argument(\"Cudd.Custom.apply_opG: empty array\");
+  }
+  vec = (DdNode**)malloc(size*sizeof(DdNode*));
+  man = man1 = man2 = NULL;
+  if (size1>0){
+    man = man1 = camlidl_cudd_tnode_ml2c(_v_vec1,size1,vec);
+    if (man1==NULL){
+      free(vec);
+      caml_invalid_argument(\"Custom.apply_opG called with BDDs belonging to different managers !\");
+    }
+  }
+  if (size2>0){
+    man = man2 = camlidl_cudd_tnode_ml2c(_v_vec2,size2,vec+size1);
+    if (man2==NULL){
+      free(vec);
+      caml_invalid_argument(\"Custom.apply_opG called with VDDs belonging to different managers !\");
+    }
+  }
+  if (size1>0 && size2>0 && man1!=man2){
+    free(vec);
+    caml_invalid_argument(\"Custom.apply_opG called with BDDs/VDDs belonging to different managers !\");
+  }
+  op.commonG.man = man;
+  op.commonG.exn = Val_unit;
+  op.funptrG = (DdNode* (*)(DdManager*, struct opG*, DdNode**))(&camlidl_cudd_custom_opNG);
+  op.funptrBeforeRec =
+    Is_block(op.oclosureBeforeRec) ?
+    &camlidl_cudd_custom_opGbeforeRec :
+    NULL;
+  op.funptrIte =
+    Is_block(op.oclosureIte) ?
+    &camlidl_cudd_custom_opGite :
+    NULL;
+  Begin_roots4(_v_op,_v_vec1,_v_vec2,op.commonG.exn);
+  Begin_roots3(op.closureG,op.oclosureBeforeRec,op.oclosureIte);
+    _res.man = man;
+    _res.node = Cuddaux_addApplyG(&op,vec);
+  End_roots();
+  End_roots();
+  free(vec);
+  if (op.commonG.exn!=Val_unit){
+    Cudd_ClearErrorCode(_res.man->man);
+    caml_raise(op.commonG.exn);
+  }
+  _vres = camlidl_cudd_c2ml_vdd_vdd__t(&_res, _ctx);
+  camlidl_free(_ctx);
+  return _vres;
+}
+")
+
+vdd__t _apply_exist(struct exist op, bdd__t no1, vdd__t no2)
+quote(call,"
+CHECK_MAN2;
+op.commonexist.man = no1.man;
+op.commonexist.exn = Val_unit;
+op.combineexist.common2.man = no1.man;
+op.combineexist.common2.exn = Val_unit;
+op.combineexist.funptr2 = &camlidl_cudd_custom_op2;
+Begin_roots3(_v_op,_v_no1,_v_no2);
+Begin_roots3(op.combineexist.common2.exn,op.combineexist.closure2,op.combineexist.ospecial2);
+_res.man = no1.man;
+_res.node = Cuddaux_addAbstract(&op,no2.node,no1.node);
+End_roots();
+End_roots();
+if (op.combineexist.common2.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.combineexist.common2.exn);
+}
+");
+
+vdd__t _apply_existand(struct existand op, bdd__t no1, bdd__t no2, vdd__t no3)
+quote(call,"
+CHECK_MAN3;
+op.commonexistand.man = no1.man;
+op.commonexistand.exn = Val_unit;
+op.combineexistand.common2.man = no1.man;
+op.combineexistand.common2.exn = Val_unit;
+op.combineexistand.funptr2 = &camlidl_cudd_custom_op2;
+Begin_roots4(_v_op,_v_no1,_v_no2,_v_no3);
+Begin_roots3(op.combineexistand.common2.exn,op.combineexistand.closure2,op.combineexistand.ospecial2);
+  _res.man = no1.man;
+  _res.node = NULL;
+  DdNode* background =
+    no1.man->caml ?
+    Cuddaux_addCamlConst(no1.man->man,op.bottomexistand) :
+    cuddUniqueConst(no1.man->man,Double_val(op.bottomexistand));
+  ;
+  if (background){
+    cuddRef(background);
+    _res.node = Cuddaux_addBddAndAbstract(&op,no2.node,no3.node,no1.node,background);
+    if (_res.node) cuddRef(_res.node);
+    Cudd_RecursiveDeref(no1.man->man,background);
+    if (_res.node) cuddDeref(_res.node);
+  }
+End_roots();
+End_roots();
+if (op.combineexistand.common2.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.combineexistand.common2.exn);
+}
+");
+vdd__t _apply_existop1(struct existop1 op, bdd__t no1, vdd__t no2)
+quote(call,"
+CHECK_MAN2;
+op.commonexistop1.man = no1.man;
+op.commonexistop1.exn = Val_unit;
+op.combineexistop1.common2.man = no1.man;
+op.combineexistop1.common2.exn = Val_unit;
+op.combineexistop1.funptr2 = &camlidl_cudd_custom_op2;
+op.existop1.common1.man = no1.man;
+op.existop1.common1.exn = Val_unit;
+op.existop1.funptr1 = &camlidl_cudd_custom_op1;
+Begin_roots3(_v_op,_v_no1,_v_no2);
+Begin_roots5(op.combineexistop1.common2.exn,
+	     op.existop1.common1.exn,
+	     op.combineexistop1.closure2,op.combineexistop1.ospecial2,
+	     op.existop1.closure1);
+_res.man = no1.man;
+_res.node = Cuddaux_addApplyAbstract(&op,no2.node,no1.node);
+End_roots();
+End_roots();
+if (op.existop1.common1.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.existop1.common1.exn);
+}
+else if (op.combineexistop1.common2.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.combineexistop1.common2.exn);
+}
+");
+vdd__t _apply_existandop1(struct existandop1 op, bdd__t no1, bdd__t no2, vdd__t no3)
+quote(call,"
+CHECK_MAN3;
+op.commonexistandop1.man = no1.man;
+op.commonexistandop1.exn = Val_unit;
+op.combineexistandop1.common2.man = no1.man;
+op.combineexistandop1.common2.exn = Val_unit;
+op.combineexistandop1.funptr2 = &camlidl_cudd_custom_op2;
+op.existandop1.common1.man = no1.man;
+op.existandop1.common1.exn = Val_unit;
+op.existandop1.funptr1 = &camlidl_cudd_custom_op1;
+Begin_roots4(_v_op,_v_no1,_v_no2,_v_no3);
+Begin_roots5(op.combineexistandop1.common2.exn,
+	     op.existandop1.common1.exn,
+	     op.combineexistandop1.closure2,op.combineexistandop1.ospecial2,
+	     op.existandop1.closure1);
+_res.man = no1.man;
+  DdNode* background =
+    no1.man->caml ?
+    Cuddaux_addCamlConst(no1.man->man,op.bottomexistandop1) :
+    cuddUniqueConst(no1.man->man,Double_val(op.bottomexistandop1));
+  ;
+  if (background){
+    cuddRef(background);
+    _res.node = Cuddaux_addApplyBddAndAbstract(&op,no2.node,no3.node,no1.node,NULL);
+    if (_res.node) cuddRef(_res.node);
+    Cudd_RecursiveDeref(no1.man->man,background);
+    if (_res.node) cuddDeref(_res.node);
+  }
+End_roots();
+End_roots();
+if (op.existandop1.common1.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.existandop1.common1.exn);
+}
+else if (op.combineexistandop1.common2.exn!=Val_unit){
+  Cudd_ClearErrorCode(_res.man->man);
+  caml_raise(op.combineexistandop1.common2.exn);
+}
+");
