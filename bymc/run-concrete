@@ -6,43 +6,63 @@ if [ "$#" -lt 3 ]; then
     echo "Not enough arguments"
     echo ""
     echo "Use: run-concrete param1=value1,param2=value2 promela_system property"
+    echo ""
+    echo "  Set GEN_SCRIPT=1 to generate a compilation and execution script"
     exit 1
 fi
 
 trap "killall pan; exit 99" SIGHUP SIGINT SIGTERM
 
 PROG=$2
+PROG_FULL=`dirname $2`; PROG_FULL=`cd $PROG_FULL; pwd`/$PROG
 PROP=$3
 PARAM=$1
 BYMC_HOME=`dirname $0`
+BYMC_HOME=`cd $BYMC_HOME; pwd`
 PROG_S=`basename $PROG .pml`
 
 SPIN=spin
 PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"
 PAN_FLAGS="-m100000" #-m50000000"
-SPIN_OUT="spin-`basename $PROG`-$PROP-$PARAM.out"
-SPIN_TRACE="spin-`basename $PROG`-$PROP-$PARAM.trace"
 cmd=""
 step="0"
 rand=""
 out=""
 
-CUR_DIR=`pwd`
+CUR_DIR=`pwd`; CUR_DIR=`cd $CUR_DIR; pwd`
 cd $BYMC_HOME
 ./make.sh || (cd $CUR_DIR; exit 1)
 cd $CUR_DIR
 
-START_TIME=$(date +%s)
+INSTANCE="spin-`basename $PROG .pml`-$PROP-$PARAM"
+EXEC_DIR="${CUR_DIR}/${INSTANCE}"
+SPIN_OUT="spin.out"
+SPIN_TRACE="spin.trace"
 
-rm -rf "$SPIN_OUT" "$SPIN_TRACE"
+mkdir -p "${EXEC_DIR}"
+
+cd "${EXEC_DIR}" && echo "Changed directory to ${EXEC_DIR}"
 
 echo "INPUT: $PROG_S, $PARAM, $PROP"
 
-$BYMC_HOME/run.native -s "$PARAM" $PROG || (echo "FAILURE"; exit 1)
+$BYMC_HOME/run.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
 
 $SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
-$SPIN -a -N $PROP.never concrete.prm \
-  && gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
+$SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
+
+cd $CUR_DIR
+
+SCRIPT="compile-and-run.sh"
+if [ ! -f "$SCRIPT" ]; then
+    echo "#!/bin/bash" >$SCRIPT
+    chmod u+x $SCRIPT
+fi
+
+cat >>"$SCRIPT" <<EOF
+cd "$INSTANCE"
+START_TIME=\$(date +%s)
+
+gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
   && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 
 if egrep -q "errors: +0" $SPIN_OUT; then
@@ -54,10 +74,26 @@ else
     out="|00:exitcode=incomplete|01:valid=maybe"
 fi
 
-END_TIME=$(date +%s)
-DIFF_TIME=$(($END_TIME-$START_TIME))
+END_TIME=\$(date +%s)
+DIFF_TIME=\$((\$END_TIME-\$START_TIME))
+cd ..
+EOF
 
-spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
-common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
-echo "$out|$common|$spin_data" >>verdict-concrete.txt
 
+if [ "$GEN_SCRIPT" == "" ]; then
+    . "$SCRIPT"
+
+    spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
+    common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+    echo "$out|$common|$spin_data" >>verdict-concrete.txt
+else
+    # add some statistics to the script,
+    # do not parse spin data in a fresh environment
+    cat >>"$SCRIPT" <<EOF
+common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=\$DIFF_TIME"
+echo "\$out|\$common" >>verdict-concrete.txt
+EOF
+ 
+fi # otherwise, the script is just added to the end of file
+
+cd ${CUR_DIR}
