@@ -45,21 +45,25 @@ cd "${EXEC_DIR}" && echo "Changed directory to ${EXEC_DIR}"
 
 echo "INPUT: $PROG_S, $PARAM, $PROP"
 
-$BYMC_HOME/run.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
-
-$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
-$SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
-
 cd $CUR_DIR
 
 SCRIPT="compile-and-run.sh"
-if [ ! -f "$SCRIPT" ]; then
+if [ ! -f "$SCRIPT" -o "$GEN_SCRIPT" == "" ]; then
     echo "#!/bin/bash" >$SCRIPT
     chmod u+x $SCRIPT
 fi
 
+cd $INSTANCE
+$BYMC_HOME/run.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
+$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
+
+cd $CUR_DIR
+
 cat >>"$SCRIPT" <<EOF
 cd "$INSTANCE"
+
+$SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
+
 START_TIME=\$(date +%s)
 
 echo "+ gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c"
