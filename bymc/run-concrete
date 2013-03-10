@@ -23,6 +23,7 @@ PROG_S=`basename $PROG .pml`
 
 SPIN=spin
 PAN_COMP_FLAGS="-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"
+PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
 PAN_FLAGS="-m100000" #-m50000000"
 cmd=""
 step="0"
@@ -60,6 +61,7 @@ $SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
 cd $CUR_DIR
 
 cat >>"$SCRIPT" <<EOF
+echo "Changed directory to $INSTANCE"
 cd "$INSTANCE"
 
 $SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
