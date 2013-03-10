@@ -68,9 +68,9 @@ $SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
 
 START_TIME=\$(date +%s)
 
-echo "+ gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c"
+echo "+ gcc $rand $PANCC_FLAGS -o ./pan pan.c"
 echo "+ ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT"
-gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
+gcc $rand $PANCC_FLAGS -o ./pan pan.c \
   && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 
 if egrep -q "errors: +0" $SPIN_OUT; then
