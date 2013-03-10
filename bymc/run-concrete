@@ -14,7 +14,7 @@ fi
 trap "killall pan; exit 99" SIGHUP SIGINT SIGTERM
 
 PROG=$2
-PROG_FULL=`dirname $2`; PROG_FULL=`cd $PROG_FULL; pwd`/$PROG
+PROG_FULL=`dirname $2`; PROG_FULL=`cd $PROG_FULL; pwd`/`basename $PROG`
 PROP=$3
 PARAM=$1
 BYMC_HOME=`dirname $0`
@@ -62,6 +62,8 @@ cat >>"$SCRIPT" <<EOF
 cd "$INSTANCE"
 START_TIME=\$(date +%s)
 
+echo "+ gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c"
+echo "+ ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT"
 gcc $rand $PAN_COMP_FLAGS -o ./pan pan.c \
   && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 
