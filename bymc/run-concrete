@@ -2,6 +2,8 @@
 #
 # Run experiments on concrete instances
 
+trap "exit 255" SIGINT SIGTERM
+
 if [ "$#" -lt 3 ]; then
     echo "Not enough arguments"
     echo ""
@@ -55,7 +57,6 @@ fi
 
 cd $INSTANCE
 $BYMC_HOME/run.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
-$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
 
 cd $CUR_DIR
 
@@ -63,6 +64,7 @@ cat >>"$SCRIPT" <<EOF
 echo "Changed directory to $INSTANCE"
 cd "$INSTANCE"
 
+$SPIN -f "!\`head $PROP.ltl\`" >$PROP.never || (cat $PROP.never; exit 1)
 $SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
 
 START_TIME=\$(date +%s)
