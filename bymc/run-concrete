@@ -83,6 +83,7 @@ fi
 
 END_TIME=\$(date +%s)
 DIFF_TIME=\$((\$END_TIME-\$START_TIME))
+echo "\$out|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=\$DIFF_TIME" >exit-status.txt
 cd ..
 EOF
 

@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Search a directory for experiments subdirectories and put the summary
+# of their results into a verdict file
+#
+# Igor Konnov, 2013
+
+VERDICT="verdict-concrete.txt"
+VERDICT_CSV="verdict-concrete.csv"
+EXP_DIR="$1"
+if [ "$EXP_DIR" == "" -o ! -d "$EXP_DIR" ]; then
+    echo "Use: $0 <experiments-dir>"
+    exit 1
+fi
+
+BYMC_HOME=`dirname $0`
+BYMC_HOME=`cd $BYMC_HOME; pwd`
+
+echo -n "" >$VERDICT
+
+files=`find "$EXP_DIR" -name spin.out`
+
+for f in $files; do
+    full_dir=`dirname $f`; dir=`basename $full_dir`
+    spin_data=`$BYMC_HOME/parse-spin-out.py $f`
+    ex_status=`head -n 1 ${full_dir}/exit-status.txt`
+    echo "07:experiment=$dir|$ex_status|$spin_data" >>$VERDICT
+done
+
+$BYMC_HOME/verdict-to-csv.py <$VERDICT >$VERDICT_CSV
