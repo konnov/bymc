@@ -103,8 +103,20 @@ let conc_prop pa pmap prop =
         | _ as e -> e
     in
     let rec tr_ae = function
-    | PropAll e -> PropGlob (conc_expr pa (unfold ForAll e))
-    | PropSome e -> PropGlob (conc_expr pa (unfold Exist e))
+    | PropAll e ->
+        let pname = find_proc_name e in
+        if pname = ""
+        then PropGlob e (* no process variables inside *)
+        else let count = find_proc pname in
+            let clones = List.map (mk_inst (conc_expr pa e)) (range 0 count) in
+            PropGlob (list_to_binex AND clones)
+    | PropSome e ->
+        let pname = find_proc_name e in
+        if pname = ""
+        then PropGlob e (* no process variables inside *)
+        else let count = find_proc pname in
+            let clones = List.map (mk_inst (conc_expr pa e)) (range 0 count) in
+            PropGlob (list_to_binex OR clones)
     | PropGlob e -> PropGlob (conc_expr pa (replace_card e))
     | PropAnd (l, r) -> PropAnd (tr_ae l, tr_ae r)
     | PropOr (l, r) -> PropOr (tr_ae l, tr_ae r)
