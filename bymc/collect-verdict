@@ -18,7 +18,7 @@ BYMC_HOME=`cd $BYMC_HOME; pwd`
 
 echo -n "" >$VERDICT
 
-files=`find "$EXP_DIR" -name spin.out`
+files=`find "$EXP_DIR" -name exit-status.txt`
 
 for f in $files; do
     full_dir=`dirname $f`; dir=`basename $full_dir`
