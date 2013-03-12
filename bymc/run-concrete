@@ -93,7 +93,7 @@ EOF
 if [ "$GEN_SCRIPT" == "" ]; then
     . "$SCRIPT"
 
-    spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
+    spin_data=`$BYMC_HOME/parse-spin-out.py ${CUR_DIR}/${INSTANCE}/$SPIN_OUT`
     common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
     echo "$out|$common|$spin_data" >>verdict-concrete.txt
 else
