@@ -16,7 +16,7 @@ def parse(f):
     while line:
         line = line[:-1] # remove the trailing \n
 
-        m = match('^.*State-vector (\d+) byte, depth reached\s+(\d+),\s+errors:\s+(\d+)', line)
+        m = match('^.*State-vector\s+(\d+)\s+byte, depth reached\s+(\d+),\s+errors:\s+(\d+)', line)
         if m:
             data['19:VectorSize'] = m.group(1)
             data['16:Depth'] = m.group(2)

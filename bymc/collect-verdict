@@ -22,8 +22,8 @@ files=`find "$EXP_DIR" -name exit-status.txt`
 
 for f in $files; do
     full_dir=`dirname $f`; dir=`basename $full_dir`
-    spin_data=`$BYMC_HOME/parse-spin-out.py $f`
-    ex_status=`head -n 1 ${full_dir}/exit-status.txt`
+    spin_data=`$BYMC_HOME/parse-spin-out.py ${full_dir}/spin.out`
+    ex_status=`head -n 1 $f`
     echo "07:experiment=$dir|$ex_status|$spin_data" >>$VERDICT
 done
 
