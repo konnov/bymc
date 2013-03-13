@@ -140,6 +140,8 @@ let rec concretize_stmt pa pmap stmt =
             MDeclProp (id, v, conc_prop pa pmap e)
     | MAssume (id, e) ->
             MUnsafe (id, (sprintf "/* %s */" (expr_s e)))
+    | MAssert (id, e) ->
+            MAssert (id, conc_expr pa e)
     | MIf (id, options) ->
             MIf (id, (List.map (conc_opt (concretize_stmt pa pmap)) options))
     | MAtomic (id, seq) ->
