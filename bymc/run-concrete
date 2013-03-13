@@ -65,7 +65,8 @@ echo "Changed directory to $INSTANCE"
 cd "$INSTANCE"
 
 $SPIN -f "!\`head $PROP.ltl\`" >$PROP.never || (cat $PROP.never; exit 1)
-$SPIN -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
+# turn on the old scoping rules, otherwise remote references do not work
+$SPIN -O -a -N $PROP.never concrete.prm || (echo "FAILED spin -a"; exit 1)
 
 START_TIME=\$(date +%s)
 
