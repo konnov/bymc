@@ -1,0 +1,60 @@
+#!/usr/bin/python
+#
+# A filter on CSV that is similar to SELECT name1, .., name_k FROM CSV in SQL.
+#
+# Igor Konnov
+
+import argparse
+import csv
+import re
+from sys import stdout
+import sys
+
+class DataError(BaseException):
+    def __init__(self, msg):
+        BaseException.__init__(self, msg)
+
+def use():
+    print "Use: %s field1 ... field_k <csv" % sys.argv[0]
+    print ""
+    sys.exit(1)
+
+
+def parse():
+    if len(sys.argv) < 2:
+        use()
+
+    return sys.argv[1:]
+
+
+def cut_csv(target_fields, infile):
+    def escape(s):
+        if s.find(",") != -1:
+            return '"%s"' % s
+        else:
+            return s
+
+    data = {}
+    keys = []
+
+    reader = csv.reader(infile, delimiter=',', quotechar='"')
+    fields = None                                                               
+    for row_arr in reader:
+        if not fields:
+            fields = row_arr # the first row is the header
+            for f in target_fields:
+                if f not in fields:
+                    raise DataError("Column %s not found" % f)
+            print ",".join(target_fields)
+        else:
+            row = {}
+            for i, k in enumerate(fields):
+                row[k] = row_arr[i]
+            
+            print ",".join([escape(row[f]) for f in target_fields])
+
+
+if __name__ == "__main__":
+    fields = parse()
+    cut_csv(fields, sys.stdin)
+

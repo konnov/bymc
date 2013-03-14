@@ -99,24 +99,22 @@ class Parser:
 
 
 def use():
-    print "Use: %s k1=v1 -a k2~=v2 -o k3=v3 csvfile" % sys.argv[0]
+    print "Use: %s k1=v1 -a k2~=v2 -o k3=v3 <csv" % sys.argv[0]
     print ""
     sys.exit(1)
 
 
 def parse():
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         use()
 
     try:
-        expr = Parser(sys.argv[1:-1]).parse_and()
+        expr = Parser(sys.argv[1:]).parse_and()
     except ArgError, e:
         print "Error: " + str(e)
         use()
 
-    filename = sys.argv[-1]
-
-    return (expr, filename)
+    return expr
 
 
 def row_matches(expr, row):
@@ -142,7 +140,7 @@ def row_matches(expr, row):
             raise DataError("Column %s not found" % name)
 
 
-def filter_csv(expr, filename):
+def filter_csv(expr, infile):
     def escape(s):
         if s.find(",") != -1:
             return '"%s"' % s
@@ -151,9 +149,8 @@ def filter_csv(expr, filename):
 
     data = {}
     keys = []
-    csvfile = open(filename, 'r')
 
-    reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+    reader = csv.reader(infile, delimiter=',', quotechar='"')
     fields = None                                                               
     for row_arr in reader:
         if not fields:
@@ -170,10 +167,8 @@ def filter_csv(expr, filename):
             except DataError, e:
                 print >>sys.stderr, "%s in: %s" % (str(e), r)
 
-    csvfile.close()        
-
 
 if __name__ == "__main__":
-    expr, filename = parse()
-    filter_csv(expr, filename)
+    expr = parse()
+    filter_csv(expr, sys.stdin)
 
