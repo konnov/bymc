@@ -10,8 +10,6 @@ import re
 from sys import stdout
 import sys
 
-SPECS = ["unforg", "corr", "relay", "safety"]
-
 class ArgError(BaseException):
     def __init__(self, msg):
         BaseException.__init__(self, msg)
@@ -146,9 +144,6 @@ def filter_csv(expr, infile):
             return '"%s"' % s
         else:
             return s
-
-    data = {}
-    keys = []
 
     reader = csv.reader(infile, delimiter=',', quotechar='"')
     fields = None                                                               

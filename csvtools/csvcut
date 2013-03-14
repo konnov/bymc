@@ -34,9 +34,6 @@ def cut_csv(target_fields, infile):
         else:
             return s
 
-    data = {}
-    keys = []
-
     reader = csv.reader(infile, delimiter=',', quotechar='"')
     fields = None                                                               
     for row_arr in reader:
