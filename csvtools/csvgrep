@@ -48,9 +48,14 @@ class Parser:
     def parse_or(self):
         lhs = self.parse_not()
         if not self.is_eof():
-            self.consume("-o")
-            rhs = self.parse_not()
-            return Expr(OR, [lhs, rhs])
+            tok = self.get()
+            if tok == "-o":
+                self.consume("-o")
+                rhs = self.parse_not()
+                return Expr(OR, [lhs, rhs])
+            else:
+                self.put(tok)
+                return lhs
         else:
             return lhs
 
@@ -117,13 +122,13 @@ def parse():
 
 def row_matches(expr, row):
     if expr.kind == AND:
-        return (self.matches(expr.ops[0], row)
-            and self.matches(expr.ops[1], row))
+        return (row_matches(expr.ops[0], row)
+            and row_matches(expr.ops[1], row))
     elif expr.kind == OR:
-        return (self.matches(expr.ops[0], row)
-            or self.matches(expr.ops[1], row))
+        return (row_matches(expr.ops[0], row)
+            or row_matches(expr.ops[1], row))
     elif expr.kind == NOT:
-        return not self.matches(expr.ops[0], row)
+        return not row_matches(expr.ops[0], row)
     elif expr.kind == EQ:
         name, val = expr.ops
         try:
