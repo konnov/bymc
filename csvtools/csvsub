@@ -1,0 +1,61 @@
+#!/usr/bin/python
+#
+# Replace the value of a column, probably using a regular expression.
+#
+# Igor Konnov
+
+import argparse
+import csv
+import re
+from sys import stdout
+import sys
+
+class DataError(BaseException):
+    def __init__(self, msg):
+        BaseException.__init__(self, msg)
+
+def use():
+    print "Use: %s field regex replacement <csv" % sys.argv[0]
+    print ""
+    sys.exit(1)
+
+
+def parse():
+    if len(sys.argv) != 4:
+        use()
+
+    return sys.argv[1:]
+
+
+def sub(field, regex, subst, infile):
+    def escape(s):
+        if s.find(",") != -1:
+            return '"%s"' % s
+        else:
+            return s
+
+    def sub_field(f, val):
+        if f == field:
+            return re.sub(regex, subst, val)
+        else:
+            return val
+                
+
+    reader = csv.reader(infile, delimiter=',', quotechar='"')
+    fields = None                                                               
+    for row_arr in reader:
+        if not fields:
+            fields = row_arr # the first row is the header
+            print ",".join(fields)
+        else:
+            row = {}
+            for i, k in enumerate(fields):
+                row[k] = row_arr[i]
+            
+            print ",".join([escape(sub_field(f, row[f])) for f in fields])
+
+
+if __name__ == "__main__":
+    field, regex, subst = parse()
+    sub(field, regex, subst, sys.stdin)
+
