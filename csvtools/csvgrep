@@ -1,0 +1,179 @@
+#!/usr/bin/python
+#
+# A filter on CSV that is similar to SELECT * FROM CSV WHERE... in SQL.
+#
+# Igor Konnov
+
+import argparse
+import csv
+import re
+from sys import stdout
+import sys
+
+SPECS = ["unforg", "corr", "relay", "safety"]
+
+class ArgError(BaseException):
+    def __init__(self, msg):
+        BaseException.__init__(self, msg)
+
+class DataError(BaseException):
+    def __init__(self, msg):
+        BaseException.__init__(self, msg)
+
+
+EQ = "EQ"
+RE = "RE"
+AND = "AND"
+OR = "OR"
+NOT = "NOT"
+class Expr:
+    def __init__(self, kind, ops):
+        self.kind = kind
+        self.ops = ops
+
+
+# XXX: a simple recursive parser, I don't have time to think about it
+class Parser:
+    def __init__(self, args):
+        self.args = args
+        self.buf = args
+
+    def parse_and(self):
+        lhs = self.parse_or()
+        if not self.is_eof():
+            self.consume("-a")
+            rhs = self.parse_or()
+            return Expr(AND, [lhs, rhs])
+        else:
+            return lhs
+
+    def parse_or(self):
+        lhs = self.parse_not()
+        if not self.is_eof():
+            self.consume("-o")
+            rhs = self.parse_not()
+            return Expr(OR, [lhs, rhs])
+        else:
+            return lhs
+
+    def parse_not(self):
+        tok = self.get()
+        if tok == NOT:
+            expr = self.parse_eq_re()
+            return Expr(NOT, [expr])
+        else:
+            self.put(tok)
+            return self.parse_eq_re()
+
+    def parse_eq_re(self):
+        tok = self.get()
+        if tok.find("~=") != -1:
+            i = tok.find("~=")
+            k, r = tok[: i], re.compile(tok[i + 2 :])
+            return Expr(RE, [k, r])
+        elif tok.find('=') != -1:
+            i = tok.find('=')
+            k, v = tok[: i], tok[i + 1 :]
+            return Expr(EQ, [k, v])
+        else:
+            raise ArgError("Expected k=v or k~=re, found %s" % tok)
+
+    def is_eof(self):
+        return self.buf == []
+
+    def get(self):
+        if self.buf == []:
+            raise ArgError("No arguments")
+        tok = self.buf[0]
+        self.buf = self.buf[1:]
+        return tok
+
+    def put(self, tok):
+        self.buf = [tok] + self.buf
+
+    def consume(self, expected):
+        if self.buf[0] <> expected:
+            raise ArgError("Expected %s, found %s" % (expected, self.buf[0]))
+        else:
+            self.buf = self.buf[1:]
+
+
+def use():
+    print "Use: %s k1=v1 -a k2~=v2 -o k3=v3 csvfile" % sys.argv[0]
+    print ""
+    sys.exit(1)
+
+
+def parse():
+    if len(sys.argv) < 3:
+        use()
+
+    try:
+        expr = Parser(sys.argv[1:-1]).parse_and()
+    except ArgError, e:
+        print "Error: " + str(e)
+        use()
+
+    filename = sys.argv[-1]
+
+    return (expr, filename)
+
+
+def row_matches(expr, row):
+    if expr.kind == AND:
+        return (self.matches(expr.ops[0], row)
+            and self.matches(expr.ops[1], row))
+    elif expr.kind == OR:
+        return (self.matches(expr.ops[0], row)
+            or self.matches(expr.ops[1], row))
+    elif expr.kind == NOT:
+        return not self.matches(expr.ops[0], row)
+    elif expr.kind == EQ:
+        name, val = expr.ops
+        try:
+            return row[name] == val
+        except KeyError:
+            raise DataError("Column %s not found" % name)
+    elif expr.kind == RE:
+        name, rexp = expr.ops
+        try:
+            return rexp.match(row[name])
+        except KeyError:
+            raise DataError("Column %s not found" % name)
+
+
+def filter_csv(expr, filename):
+    def escape(s):
+        if s.find(",") != -1:
+            return '"%s"' % s
+        else:
+            return s
+
+    data = {}
+    keys = []
+    csvfile = open(filename, 'r')
+
+    reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+    fields = None                                                               
+    for row_arr in reader:
+        if not fields:
+            fields = row_arr # the first row is the header
+            print ",".join(fields)
+        else:
+            row = {}
+            for i, k in enumerate(fields):
+                row[k] = row_arr[i]
+            
+            try:
+                if row_matches(expr, row):
+                    print ",".join([escape(r) for r in row_arr])
+            except DataError, e:
+                print >>sys.stderr, "%s in: %s" % (str(e), r)
+
+    csvfile.close()        
+
+
+if __name__ == "__main__":
+    expr, filename = parse()
+    filter_csv(expr, filename)
+
