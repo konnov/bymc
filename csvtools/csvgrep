@@ -36,37 +36,45 @@ class Parser:
         self.args = args
         self.buf = args
 
-    def parse_and(self):
-        lhs = self.parse_or()
+    def parse(self):
+        expr = self.parse_and()
         if not self.is_eof():
+            raise ArgError("Expected end, found: " + " ".join(self.buf))
+        return expr
+
+    def parse_and(self):
+        ops = [self.parse_or()]
+        while self.top() == "-a":
             self.consume("-a")
-            rhs = self.parse_or()
-            return Expr(AND, [lhs, rhs])
+            ops.append(self.parse_or())
+
+        if len(ops) > 1:
+            return Expr(AND, ops)
         else:
-            return lhs
+            return ops[0]
 
     def parse_or(self):
-        lhs = self.parse_not()
-        if not self.is_eof():
-            tok = self.get()
-            if tok == "-o":
-                self.consume("-o")
-                rhs = self.parse_not()
-                return Expr(OR, [lhs, rhs])
-            else:
-                self.put(tok)
-                return lhs
+        ops = [self.parse_not()]
+        while self.top() == "-o":
+            self.consume("-o")
+            ops.append(self.parse_not())
+
+        if len(ops) > 1:
+            return Expr(OR, ops)
         else:
-            return lhs
+            return ops[0]
 
     def parse_not(self):
-        tok = self.get()
-        if tok == NOT:
-            expr = self.parse_eq_re()
+        neg = False
+        while self.top() == "!":
+            self.consume("!")
+            neg = not neg
+
+        expr = self.parse_eq_re()
+        if neg:
             return Expr(NOT, [expr])
         else:
-            self.put(tok)
-            return self.parse_eq_re()
+            return expr
 
     def parse_eq_re(self):
         tok = self.get()
@@ -83,6 +91,12 @@ class Parser:
 
     def is_eof(self):
         return self.buf == []
+
+    def top(self):
+        if self.buf == []:
+            return None
+        else:
+            return self.buf[0]
 
     def get(self):
         if self.buf == []:
@@ -112,7 +126,7 @@ def parse():
         use()
 
     try:
-        expr = Parser(sys.argv[1:]).parse_and()
+        expr = Parser(sys.argv[1:]).parse()
     except ArgError, e:
         print "Error: " + str(e)
         use()
@@ -122,11 +136,17 @@ def parse():
 
 def row_matches(expr, row):
     if expr.kind == AND:
-        return (row_matches(expr.ops[0], row)
-            and row_matches(expr.ops[1], row))
+        for op in expr.ops:
+            if not row_matches(op, row):
+                return False
+
+        return True
     elif expr.kind == OR:
-        return (row_matches(expr.ops[0], row)
-            or row_matches(expr.ops[1], row))
+        for op in expr.ops:
+            if row_matches(op, row):
+                return True
+
+        return False
     elif expr.kind == NOT:
         return not row_matches(expr.ops[0], row)
     elif expr.kind == EQ:
