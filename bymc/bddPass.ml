@@ -16,6 +16,7 @@ open Spin
 open SpinIr
 open SpinIrImp
 open Ssa
+open SymbExec
 open VarRole
 
 exception Bdd_error of string
@@ -217,6 +218,7 @@ let proc_to_bdd prog smt_fun proc filename =
     IntMap.iter out_f block_forms_map;
     let path_no = ref 0 in
     let out_path path = 
+        exec_path path;
         Format.fprintf ff "(let P%d @,(exists [" !path_no;
         path_no := !path_no + 1;
         List.iter (fun v -> Format.fprintf ff "%s @," v) hidden_vars;
