@@ -254,6 +254,40 @@ let translate_expr ctx dom solver atype expr =
     trans_e false expr
 
 
+let abstract_expr solver caches id e =
+    let ctx = caches#get_analysis#get_pia_data_ctx in
+    let roles = caches#get_analysis#get_var_roles in
+    let dom = caches#get_analysis#get_pia_dom in
+    if not (expr_exists (over_dom roles) e)
+    then MExpr(id, e) (* no domain variables, keep as it is *)
+    else begin
+        match e with
+        | BinEx (ASGN, lhs, rhs) ->
+            (* special cases *)
+            if ctx#must_keep_concrete lhs
+            then MExpr(id, e) (* XXX: hack shared variables in VASS, keep untouched *)
+            else if not (expr_exists not_symbolic rhs)
+            (* substitute a constant expression
+               by its abstract value on the right-hand side *)
+            then MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
+            else if is_var rhs
+            (* special case: foo = bar; keep untouched *)
+            then MExpr(id, e)
+            (* the general case: find all possible abstract values of the rhs *)
+            else let expr_abs_vals =
+                    mk_expr_abstraction solver dom
+                        (fun e -> is_var e && not_symbolic e) rhs in
+                (mk_assign_unfolding lhs expr_abs_vals)
+
+        | _ ->
+                solver#push_ctx;
+                let out = MExpr (id, translate_expr ctx dom solver ExistAbs e) in
+                solver#pop_ctx;
+                out
+    end                
+
+
+
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
 let translate_stmt solver caches type_tab new_type_tab stmt =
@@ -262,34 +296,19 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
     let dom = caches#get_analysis#get_pia_dom in
     let rec abs_seq seq = List.fold_right (fun s l -> (abs_stmt s) :: l) seq [] 
     and abs_stmt = function
-    | MExpr (id, e) as s ->
-        if not (expr_exists (over_dom roles) e)
-        then s (* no domain variables, keep as it is *)
-        else begin
-            match e with
-            | BinEx (ASGN, lhs, rhs) ->
-                (* special cases *)
-                if ctx#must_keep_concrete lhs
-                then s (* XXX: hack shared variables in VASS, keep untouched *)
-                else if not (expr_exists not_symbolic rhs)
-                (* substitute a constant expression
-                   by its abstract value on the right-hand side *)
-                then MExpr (id, BinEx (ASGN, lhs, (dom#map_concrete solver rhs)))
-                else if is_var rhs
-                (* special case: foo = bar; keep untouched *)
-                then s
-                (* the general case: find all possible abstract values of the rhs *)
-                else let expr_abs_vals =
-                        mk_expr_abstraction solver dom
-                            (fun e -> is_var e && not_symbolic e) rhs in
-                    (mk_assign_unfolding lhs expr_abs_vals)
+    | MExpr (id, e) -> abstract_expr solver caches id e
 
-            | _ ->
-                    solver#push_ctx;
-                    let out = MExpr (id, translate_expr ctx dom solver ExistAbs e) in
-                    solver#pop_ctx;
-                    out
-        end                
+    | MAssert (id, e) -> 
+        solver#push_ctx;
+        let out = MAssert (id, translate_expr ctx dom solver ExistAbs e) in
+        solver#pop_ctx;
+        out
+
+    | MAssume (id, e) -> 
+        solver#push_ctx;
+        let out = MAssume (id, translate_expr ctx dom solver ExistAbs e) in
+        solver#pop_ctx;
+        out
 
     | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
 
