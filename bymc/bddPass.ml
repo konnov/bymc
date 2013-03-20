@@ -63,18 +63,19 @@ let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
         @ (Program.get_instrumental prog) @ (Program.get_all_locals prog) in
     let vis_vs, hid_vs = List.partition is_visible all_vars in
     log INFO (sprintf "  mk_ssa...");
-    let cfg = mk_ssa true vis_vs hid_vs (mk_cfg lirs) in
-    Cfg.write_dot (sprintf "%s.dot" filename) cfg;
+    let cfg = mk_cfg lirs in
+    let ssa_cfg = mk_ssa true vis_vs hid_vs cfg in
+    Cfg.write_dot (sprintf "%s.dot" filename) ssa_cfg;
     log INFO (sprintf "  move_phis_to_blocks...");
-    let cfg = move_phis_to_blocks cfg in
+    let ssa_cfg = move_phis_to_blocks ssa_cfg in
     let mk_block_cons block_map block =
         let cons = block_intra_cons p#get_name type_tab new_type_tab block in
         IntMap.add block#label cons block_map
     in
     let block_cons =
-        List.fold_left mk_block_cons IntMap.empty cfg#block_list in
+        List.fold_left mk_block_cons IntMap.empty ssa_cfg#block_list in
     log INFO "DONE";
-    (cfg#block_list, block_cons, (enum_paths cfg))
+    (ssa_cfg#block_list, block_cons, (enum_paths ssa_cfg), (enum_paths cfg))
 
 
 (* XXX: REWRITE EVERYTHING WHEN IT WORKS! *)
@@ -186,7 +187,7 @@ let proc_to_bdd prog smt_fun proc filename =
         | _ as s -> 
             raise (Bdd_error ("Cannot convert to BDD: " ^ (mir_stmt_s s)))
     in
-    let blocks, block_map, path_enum_fun = smt_fun proc in 
+    let blocks, block_map, path_enum_fun, path_efun = smt_fun proc in 
     let all_stmts = List.concat (intmap_vals block_map) in
     let var_map =
         List.fold_left collect_stmt_vars StringMap.empty all_stmts in
@@ -218,7 +219,6 @@ let proc_to_bdd prog smt_fun proc filename =
     IntMap.iter out_f block_forms_map;
     let path_no = ref 0 in
     let out_path path = 
-        exec_path path;
         Format.fprintf ff "(let P%d @,(exists [" !path_no;
         path_no := !path_no + 1;
         List.iter (fun v -> Format.fprintf ff "%s @," v) hidden_vars;
@@ -269,11 +269,30 @@ let proc_to_bdd prog smt_fun proc filename =
     close_out out
 
 
+let proc_to_symb caches prog proc block_fun filename =
+    let lirs = mir_to_lir (block_fun caches proc) in
+    log INFO (sprintf "  mk_ssa...");
+    let cfg = mk_cfg lirs in
+    let path_efun = enum_paths cfg in
+
+    let path_no = ref 0 in
+    log INFO (sprintf "  constructing symbolic paths...");
+    let num_paths = path_efun (fun _ -> ()) in
+    Printf.printf "    %d paths to construct...\n" num_paths;
+    let num_paths = path_efun exec_path in
+    Printf.printf "    constructed %d paths\n" num_paths
+
+
 let transform_to_bdd solver caches prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let xprog = Program.set_type_tab new_type_tab prog in
     let convert_proc proc =
+        let fname = proc#get_name ^ "-I" in
+        (proc_to_symb caches xprog proc get_init_body fname);
+        let fname = proc#get_name ^ "-R" in
+        (proc_to_symb caches xprog proc get_main_body fname);
+        (*
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog
             (blocks_to_smt caches xprog type_tab new_type_tab get_init_body fname)
@@ -282,6 +301,7 @@ let transform_to_bdd solver caches prog =
         (proc_to_bdd xprog
             (blocks_to_smt caches xprog type_tab new_type_tab get_main_body fname)
             proc fname)
+        *)
     in
     List.iter convert_proc (Program.get_procs prog)
 

@@ -16,108 +16,113 @@ let get_abs_traitget_abs_trait26,674
 absCounter.ml,2296
 AbsCounter1,0
 let mk_nondet_choicemk_nondet_choice32,406
-let rec remove_bad_statementsremove_bad_statements45,645
-let trans_prop_decltrans_prop_decl66,1363
-let find_init_local_valsfind_init_local_vals201,6666
-let omit_local_assignmentsomit_local_assignments236,7964
-class virtual ctr_funcsctr_funcs257,8716
-        method virtual introduced_varsintroduced_vars259,8753
-        method virtual mk_pre_loopmk_pre_loop262,8815
-        method virtual mk_pre_assertsmk_pre_asserts264,8912
-        method virtual mk_post_assertsmk_post_asserts266,9040
-        method virtual mk_initmk_init268,9169
-        method virtual mk_counter_updatemk_counter_update272,9321
-        method deref_ctrderef_ctr275,9439
-        method virtual keep_assumekeep_assume278,9569
-        method virtual embed_invembed_inv281,9637
-        method virtual set_embed_invset_embed_inv282,9676
-        method virtual register_new_varsregister_new_vars284,9728
-class abs_ctr_funcsabs_ctr_funcs288,9821
-        method introduced_varsintroduced_vars292,9903
-        method mk_pre_loopmk_pre_loop294,9940
-        method mk_pre_assertsmk_pre_asserts297,10003
-        method mk_post_assertsmk_post_asserts300,10087
-        method mk_initmk_init313,10741
-        method mk_counter_updatemk_counter_update336,11810
-        method keep_assumekeep_assume353,12631
-        method embed_invembed_inv355,12677
-        method set_embed_invset_embed_inv356,12710
-        method register_new_varsregister_new_vars358,12747
-class vass_funcsvass_funcs372,13226
-        val mutable deltadelta377,13383
-        val mutable m_embed_invm_embed_inv379,13431
-        method introduced_varsintroduced_vars381,13471
-        method mk_pre_loopmk_pre_loop383,13513
-        method mk_pre_assertsmk_pre_asserts387,13654
-        method mk_post_assertsmk_post_asserts401,14461
-        method mk_initmk_init404,14599
-        method mk_counter_updatemk_counter_update430,15906
-        method keep_assumekeep_assume448,16812
-        method embed_invembed_inv450,16857
-        method set_embed_invset_embed_inv451,16896
-        method register_new_varsregister_new_vars453,16947
-let fuse_ltl_formfuse_ltl_form468,17503
-let do_counter_abstractiondo_counter_abstraction508,19211
+let rec remove_bad_statementsremove_bad_statements45,654
+let trans_prop_decltrans_prop_decl66,1372
+let find_init_local_valsfind_init_local_vals201,6675
+let omit_local_assignmentsomit_local_assignments236,7973
+class virtual ctr_funcsctr_funcs257,8725
+        method virtual introduced_varsintroduced_vars259,8762
+        method virtual mk_pre_loopmk_pre_loop262,8824
+        method virtual mk_pre_assertsmk_pre_asserts264,8921
+        method virtual mk_post_assertsmk_post_asserts266,9049
+        method virtual mk_initmk_init268,9178
+        method virtual mk_counter_updatemk_counter_update272,9330
+        method deref_ctrderef_ctr276,9480
+        method virtual keep_assumekeep_assume279,9610
+        method virtual embed_invembed_inv282,9678
+        method virtual set_embed_invset_embed_inv283,9717
+        method virtual register_new_varsregister_new_vars285,9769
+class abs_ctr_funcsabs_ctr_funcs289,9862
+        method introduced_varsintroduced_vars293,9944
+        method mk_pre_loopmk_pre_loop295,9981
+        method mk_pre_assertsmk_pre_asserts298,10044
+        method mk_post_assertsmk_post_asserts301,10128
+        method mk_initmk_init314,10791
+        method mk_counter_updatemk_counter_update337,11869
+        method keep_assumekeep_assume360,12916
+        method embed_invembed_inv362,12962
+        method set_embed_invset_embed_inv363,12995
+        method register_new_varsregister_new_vars365,13032
+class vass_funcsvass_funcs379,13511
+        val mutable deltadelta384,13668
+        val mutable m_embed_invm_embed_inv386,13716
+        method introduced_varsintroduced_vars388,13756
+        method mk_pre_loopmk_pre_loop390,13798
+        method mk_pre_assertsmk_pre_asserts394,13957
+        method mk_post_assertsmk_post_asserts409,14798
+        method mk_initmk_init412,14936
+        method mk_counter_updatemk_counter_update440,16293
+        method keep_assumekeep_assume463,17452
+        method embed_invembed_inv465,17497
+        method set_embed_invset_embed_inv466,17536
+        method register_new_varsregister_new_vars468,17587
+let fuse_ltl_formfuse_ltl_form483,18143
+let do_counter_abstractiondo_counter_abstraction523,19851
 
-absInterval.ml,572
+absInterval.ml,615
 AbsInterval1,0
 let mk_expr_abstractionmk_expr_abstraction26,473
 let mk_assign_unfoldingmk_assign_unfolding69,2115
-let over_domover_dom99,3313
-let var_traitvar_trait110,3597
-let refine_var_typerefine_var_type118,3740
-let abstract_pointwiseabstract_pointwise152,4912
-let abstract_arith_relabstract_arith_rel164,5450
-let translate_exprtranslate_expr225,7808
-let translate_stmttranslate_stmt258,9063
-let rec trans_prop_decltrans_prop_decl345,12876
-let trans_ltl_formtrans_ltl_form387,14407
-let do_interval_abstractiondo_interval_abstraction424,15801
+let over_domover_dom100,3372
+let var_traitvar_trait111,3656
+let refine_var_typerefine_var_type119,3799
+let abstract_pointwiseabstract_pointwise153,4971
+let abstract_arith_relabstract_arith_rel165,5509
+let translate_exprtranslate_expr226,7867
+let abstract_exprabstract_expr257,9018
+let translate_stmttranslate_stmt293,10524
+let rec trans_prop_decltrans_prop_decl365,13427
+let trans_ltl_formtrans_ltl_form407,14958
+let do_interval_abstractiondo_interval_abstraction444,16352
 
 abstract.ml,339
 Abstract1,0
-let write_to_filewrite_to_file24,237
-let do_abstractiondo_abstraction45,1050
-let make_vass_xducersmake_vass_xducers86,2680
-let check_invariantcheck_invariant121,4156
-let check_all_invariantscheck_all_invariants152,5626
-let filter_good_fairnessfilter_good_fairness162,5981
-let do_refinementdo_refinement176,6540
+let write_to_filewrite_to_file25,250
+let do_abstractiondo_abstraction46,1063
+let make_vass_xducersmake_vass_xducers94,3015
+let check_invariantcheck_invariant129,4491
+let check_all_invariantscheck_all_invariants160,5961
+let filter_good_fairnessfilter_good_fairness170,6316
+let do_refinementdo_refinement184,6875
 
-accums.ml,1256
+accums.ml,1420
 Accums1,0
-let rec mk_productmk_product9,242
-let str_joinstr_join21,582
-let list_cut_generallist_cut_general31,912
-let list_cutlist_cut49,1537
-let list_cut_ignorelist_cut_ignore52,1605
-let rec list_nth_slicelist_nth_slice58,1789
-let rec list_sublist_sub69,2146
-let list_sort_uniqlist_sort_uniq84,2563
-let list_find_poslist_find_pos99,3057
-let rec rangerange109,3313
-let rec rev_rangerev_range113,3385
-let str_containsstr_contains117,3471
-let hashtbl_eqhashtbl_eq125,3736
-let hashtbl_valshashtbl_vals143,4154
-let hashtbl_keyshashtbl_keys146,4221
-let hashtbl_as_listhashtbl_as_list149,4288
-let hashtbl_inversehashtbl_inverse152,4363
-let hashtbl_filter_keyshashtbl_filter_keys158,4552
-let hashtbl_findhashtbl_find164,4811
-let hashtbl_find_strhashtbl_find_str170,5060
-let n_copiesn_copies174,5167
-let bits_to_fitbits_to_fit182,5276
-let rec ipowipow191,5460
-let rec str_shortenstr_shorten201,5740
-class stop_watchstop_watch218,6189
-        val mutable last_timelast_time220,6240
-        val mutable last_eventlast_event221,6276
-        method next_eventnext_event223,6313
-let daysdays233,6652
-let monthsmonths234,6717
-let format_timeformat_time238,6838
-let format_time_nowformat_time_now250,7108
+exception Not_found_msgNot_found_msg8,186
+let rec mk_productmk_product11,277
+let rec mk_product_of_listsmk_product_of_lists23,632
+let str_joinstr_join34,1030
+let list_cut_generallist_cut_general44,1360
+let list_cutlist_cut62,1985
+let list_cut_ignorelist_cut_ignore65,2053
+let rec list_nth_slicelist_nth_slice71,2237
+let rec list_sublist_sub83,2614
+let list_sort_uniqlist_sort_uniq105,3242
+let list_find_poslist_find_pos120,3736
+let rec rangerange130,3992
+let rec rev_rangerev_range134,4064
+let str_containsstr_contains138,4150
+let hashtbl_eqhashtbl_eq146,4415
+let hashtbl_valshashtbl_vals164,4833
+let hashtbl_keyshashtbl_keys167,4900
+let hashtbl_as_listhashtbl_as_list170,4967
+let hashtbl_inversehashtbl_inverse173,5042
+let hashtbl_filter_keyshashtbl_filter_keys179,5231
+let hashtbl_findhashtbl_find185,5490
+let hashtbl_find_strhashtbl_find_str191,5739
+let n_copiesn_copies195,5846
+let bits_to_fitbits_to_fit203,5955
+let rec ipowipow212,6139
+let rec str_shortenstr_shorten222,6419
+let is_noneis_none238,6829
+let get_someget_some244,6924
+class stop_watchstop_watch251,7104
+        val mutable last_timelast_time253,7155
+        val mutable last_eventlast_event254,7191
+        method next_eventnext_event256,7228
+let daysdays266,7567
+let monthsmonths267,7632
+let format_timeformat_time271,7753
+let format_time_nowformat_time_now283,8023
 
 analysis.ml,989
 Analysis1,0
@@ -144,16 +149,17 @@ let transfer_rolestransfer_roles148,4020
 let transfer_var_usetransfer_var_use179,5026
 let find_copy_pairsfind_copy_pairs212,5880
 
-bddPass.ml,308
+bddPass.ml,347
 BddPass1,0
-exception Bdd_errorBdd_error18,226
-module StringMapStringMap20,257
-module IntMapIntMap22,294
-let intmap_valsintmap_vals28,373
-let blocks_to_smtblocks_to_smt33,500
-let proc_to_bddproc_to_bdd62,1705
-let enum_in_outsenum_in_outs247,9075
-let transform_to_bddtransform_to_bdd265,9815
+exception Bdd_errorBdd_error22,277
+module StringMapStringMap24,308
+module IntMapIntMap26,345
+let intmap_valsintmap_vals32,424
+let get_main_bodyget_main_body36,497
+let get_init_bodyget_init_body43,751
+let blocks_to_smtblocks_to_smt50,989
+let proc_to_bddproc_to_bdd81,2248
+let transform_to_bddtransform_to_bdd274,9875
 
 bits.ml,1303
 Bits1,0
@@ -239,26 +245,26 @@ let merge_neighb_labelsmerge_neighb_labels101,2884
 let collect_jump_targetscollect_jump_targets129,3754
 let separateseparate144,4163
 let mk_cfgmk_cfg161,4721
-let find_dominatorfind_dominator221,6867
-type labellabel238,7494
-type label = { node_numnode_num238,7494
-type label = { node_num: int; lowlow238,7494
-type label = { node_num: int; low: int; on_stackon_stack238,7494
-let comp_sccscomp_sccs246,7713
-let comp_domscomp_doms309,9942
-let comp_idomscomp_idoms342,11049
-let comp_idom_treecomp_idom_tree370,12103
-let print_detailed_cfgprint_detailed_cfg380,12467
-let write_dotwrite_dot400,13233
-let enum_pathsenum_paths436,14555
+let find_dominatorfind_dominator221,6894
+type labellabel238,7521
+type label = { node_numnode_num238,7521
+type label = { node_num: int; lowlow238,7521
+type label = { node_num: int; low: int; on_stackon_stack238,7521
+let comp_sccscomp_sccs246,7740
+let comp_domscomp_doms309,9969
+let comp_idomscomp_idoms342,11076
+let comp_idom_treecomp_idom_tree370,12130
+let print_detailed_cfgprint_detailed_cfg380,12494
+let write_dotwrite_dot400,13260
+let enum_pathsenum_paths436,14582
 
 cfgSmt.ml,203
 CfgSmt1,0
 let mkemke14,171
 let mkezmkez15,201
-let block_to_constraintsblock_to_constraints22,409
-let block_intra_consblock_intra_cons126,4770
-let cfg_to_constraintscfg_to_constraints164,6154
+let block_to_constraintsblock_to_constraints22,418
+let block_intra_consblock_intra_cons127,4787
+let cfg_to_constraintscfg_to_constraints166,6222
 
 debug.ml,494
 Debug1,0
@@ -292,13 +298,13 @@ class analysis_cacheanalysis_cache20,390
         method set_pia_ctr_ctx_tblset_pia_ctr_ctx_tbl56,1558
 class proc_struc_cacheproc_struc_cache68,1965
         val mutable m_reg_tblm_reg_tbl70,2007
-        method get_regionsget_regions72,2089
-        method set_regionsset_regions77,2269
-class pass_cachespass_caches82,2386
-        method get_analysisget_analysis84,2480
-        method get_strucget_struc85,2521
-type analysis_funanalysis_fun89,2566
-type translation_funtranslation_fun92,2637
+        method get_regionsget_regions73,2101
+        method set_regionsset_regions78,2303
+class pass_cachespass_caches83,2444
+        method get_analysisget_analysis85,2538
+        method get_strucget_struc86,2579
+type analysis_funanalysis_fun90,2624
+type translation_funtranslation_fun93,2695
 
 instantiation.ml,495
 Instantiation1,0
@@ -309,12 +315,12 @@ type quantquant43,1047
 type quant = ForAllForAll43,1047
 type quant = ForAll | ExistExist43,1047
 let conc_propconc_prop45,1076
-let rec concretize_stmtconcretize_stmt114,3901
-    conc_optconc_opt139,4832
-    conc_seqconc_seq143,4981
-let concretize_procconcretize_proc146,5029
-let concretize_unitconcretize_unit157,5382
-let do_substitutiondo_substitution175,5981
+let rec concretize_stmtconcretize_stmt126,4401
+    conc_optconc_opt153,5398
+    conc_seqconc_seq157,5547
+let concretize_procconcretize_proc160,5595
+let concretize_unitconcretize_unit171,5948
+let do_substitutiondo_substitution189,6562
 
 ltl.ml,457
 Ltl1,0
@@ -323,11 +329,11 @@ exception Fairness_errorFairness_error10,107
 exception Prop_errorProp_error11,142
 let is_propositionalis_propositional13,174
 let normalize_formnormalize_form39,958
-let embed_atomicsembed_atomics77,2351
-let find_fair_atomsfind_fair_atoms98,3036
-let collect_fairness_formscollect_fairness_forms110,3479
-let is_invariant_atomicis_invariant_atomic138,4535
-let find_invariantsfind_invariants142,4620
+let embed_atomicsembed_atomics77,2384
+let find_fair_atomsfind_fair_atoms98,3069
+let collect_fairness_formscollect_fairness_forms110,3512
+let is_invariant_atomicis_invariant_atomic138,4568
+let find_invariantsfind_invariants142,4653
 
 parse.ml,169
 Parse1,0
@@ -346,28 +352,28 @@ class ctr_abs_ctxctr_abs_ctx13,228
         val mutable var_sizesvar_sizes19,469
         val ctr_varctr_var20,540
         val mutable ctr_dimctr_dim21,595
-        method proctype_nameproctype_name53,1917
-        method abbrev_nameabbrev_name54,1962
-        method get_control_varsget_control_vars56,2004
-        method get_control_sizeget_control_size57,2051
-        method get_localsget_locals58,2098
-        method get_ctrget_ctr59,2136
-        method get_ctr_dimget_ctr_dim60,2169
-        method get_spurget_spur61,2206
-        method var_vecvar_vec63,2242
-        method unpack_from_constunpack_from_const65,2310
-        method pack_to_constpack_to_const74,2706
-        method pack_index_exprpack_index_expr85,3152
-        method all_indices_forall_indices_for95,3537
-class ctr_abs_ctx_tblctr_abs_ctx_tbl102,3802
-        val mutable tbltbl104,3861
-        val mutable abbrev_tblabbrev_tbl106,3986
-        val spur_varspur_var108,4118
-        method get_ctxget_ctx120,4550
-        method get_ctx_by_abbrevget_ctx_by_abbrev124,4692
-        method all_countersall_counters128,4854
-        method all_ctxsall_ctxs131,4946
-        method get_spurget_spur133,4990
+        method proctype_nameproctype_name54,1955
+        method abbrev_nameabbrev_name55,2000
+        method get_control_varsget_control_vars57,2042
+        method get_control_sizeget_control_size58,2089
+        method get_localsget_locals59,2136
+        method get_ctrget_ctr60,2174
+        method get_ctr_dimget_ctr_dim61,2207
+        method get_spurget_spur62,2244
+        method var_vecvar_vec64,2280
+        method unpack_from_constunpack_from_const66,2348
+        method pack_to_constpack_to_const75,2744
+        method pack_index_exprpack_index_expr86,3190
+        method all_indices_forall_indices_for96,3575
+class ctr_abs_ctx_tblctr_abs_ctx_tbl103,3840
+        val mutable tbltbl105,3899
+        val mutable abbrev_tblabbrev_tbl107,4024
+        val spur_varspur_var109,4156
+        method get_ctxget_ctx122,4627
+        method get_ctx_by_abbrevget_ctx_by_abbrev126,4769
+        method all_countersall_counters130,4931
+        method all_ctxsall_ctxs133,5023
+        method get_spurget_spur135,5067
 
 piaDataCtx.ml,341
 PiaDataCtx1,0
@@ -396,7 +402,7 @@ let identify_conditionsidentify_conditions150,6153
 let sort_thresholdssort_thresholds201,8112
 let createcreate256,10163
 
-program.ml,1526
+program.ml,1646
 Program1,0
 module StringMapStringMap3,13
 type expr_texpr_t5,51
@@ -405,39 +411,42 @@ type programprogram9,117
     f_paramsf_params10,134
     f_params: var list; f_sharedf_shared10,134
     f_params: var list; f_shared: var list; f_instrumentalf_instrumental10,134
-    f_type_tabf_type_tab11,204
-    f_assumesf_assumes12,235
-    f_assumes: expr_t list; f_unsafesf_unsafes12,235
-    f_procsf_procs13,287
-    f_atomicsf_atomics14,322
-    f_ltl_formsf_ltl_forms15,373
-let emptyempty18,412
-let get_paramsget_params25,633
-let set_paramsset_params26,669
-let get_sharedget_shared28,737
-let set_sharedset_shared29,773
-let get_instrumentalget_instrumental31,841
-let set_instrumentalset_instrumental32,889
-let get_typeget_type34,967
-let set_type_tabset_type_tab39,1142
-let get_type_tabget_type_tab42,1216
-let get_assumesget_assumes45,1261
-let set_assumesset_assumes46,1299
-let get_unsafesget_unsafes48,1371
-let set_unsafesset_unsafes49,1409
-let get_procsget_procs51,1481
-let set_procsset_procs52,1515
-let get_atomicsget_atomics54,1579
-let set_atomicsset_atomics55,1617
-let get_ltl_formsget_ltl_forms57,1689
-let set_ltl_formsset_ltl_forms58,1731
-let get_ltl_forms_as_hashget_ltl_forms_as_hash59,1810
-let is_globalis_global65,1993
-let is_not_globalis_not_global69,2109
-let get_all_localsget_all_locals73,2165
-let program_of_unitsprogram_of_units84,2411
-let units_of_programunits_of_program109,3347
-let run_smt_solverrun_smt_solver130,4192
+    f_sym_tabf_sym_tab11,204
+    f_type_tabf_type_tab12,251
+    f_assumesf_assumes13,282
+    f_assumes: expr_t list; f_unsafesf_unsafes13,282
+    f_procsf_procs14,334
+    f_atomicsf_atomics15,369
+    f_ltl_formsf_ltl_forms16,420
+let emptyempty19,459
+let update_sym_tabupdate_sym_tab27,732
+let get_paramsget_params47,1526
+let set_paramsset_params50,1567
+let get_sharedget_shared53,1656
+let set_sharedset_shared56,1697
+let get_instrumentalget_instrumental59,1786
+let set_instrumentalset_instrumental62,1839
+let get_typeget_type65,1938
+let set_type_tabset_type_tab70,2113
+let get_type_tabget_type_tab73,2187
+let get_sym_tabget_sym_tab77,2282
+let get_assumesget_assumes80,2325
+let set_assumesset_assumes81,2363
+let get_unsafesget_unsafes83,2435
+let set_unsafesset_unsafes84,2473
+let get_procsget_procs86,2545
+let set_procsset_procs88,2580
+let get_atomicsget_atomics91,2665
+let set_atomicsset_atomics93,2704
+let get_ltl_formsget_ltl_forms96,2797
+let set_ltl_formsset_ltl_forms99,2844
+let get_ltl_forms_as_hashget_ltl_forms_as_hash102,2945
+let is_globalis_global108,3128
+let is_not_globalis_not_global112,3244
+let get_all_localsget_all_locals115,3299
+let program_of_unitsprogram_of_units126,3545
+let units_of_programunits_of_program156,4767
+let run_smt_solverrun_smt_solver177,5648
 
 refinement.ml,929
 Refinement1,0
@@ -459,19 +468,20 @@ let find_max_predfind_max_pred365,14625
 let intro_new_predintro_new_pred388,15326
 let retrieve_unsat_coresretrieve_unsat_cores401,15800
 let refine_spurious_steprefine_spurious_step413,16348
-let print_vass_traceprint_vass_trace428,16942
-let is_loop_state_fair_by_stepis_loop_state_fair_by_step440,17336
-let check_loop_unfaircheck_loop_unfair484,18855
+let print_vass_traceprint_vass_trace431,17035
+let is_loop_state_fair_by_stepis_loop_state_fair_by_step443,17429
+let check_loop_unfaircheck_loop_unfair487,18957
 
-regions.ml,197
+regions.ml,260
 Regions1,0
-exception Region_errorRegion_error9,107
-class region_tblregion_tbl11,141
-        val mutable m_regionsm_regions13,171
-        method addadd16,279
-        method getget19,361
+exception Region_errorRegion_error24,832
+let rec find_region_by_rangefind_region_by_range26,866
+class region_tblregion_tbl93,2961
+        val mutable m_regionsm_regions95,2991
+        method addadd98,3084
+        method getget104,3331
 
-run.ml,883
+run.ml,905
 Run1,0
 module StringMapStringMap4,30
 type action_optionaction_option13,148
@@ -490,7 +500,8 @@ type optionsoptions17,243
         bdd_pass: bool; verboseverbose21,395
 let parse_key_valuesparse_key_values24,440
 let parse_optionsparse_options34,815
-let write_to_filewrite_to_file66,2297
+let write_to_filewrite_to_file66,2295
+let mainmain72,2432
 
 sat.ml,1661
 Sat1,0
@@ -537,6 +548,23 @@ let rec replace_placeholdersreplace_placeholders328,10206
 let rec inject_lit_into_cnfinject_lit_into_cnf356,11099
 let cnf_to_textcnf_to_text368,11500
 let collect_varscollect_vars387,12063
+
+simplif.ml,697
+Simplif1,0
+module VarMapVarMap18,364
+module StringSetStringSet23,448
+exception Simplif_errorSimplif_error25,485
+let mk_expr_bindingsmk_expr_bindings30,659
+let prop_constprop_const58,1625
+let prop_const_in_stmtprop_const_in_stmt95,2577
+let binding_to_eqsbinding_to_eqs104,2774
+let expand_array_accessexpand_array_access112,3055
+let expand_array_access_strucexpand_array_access_struc176,5257
+let replace_arr_elem_with_varreplace_arr_elem_with_var273,8851
+let replace_arr_elem_with_var_in_stmtreplace_arr_elem_with_var_in_stmt292,9296
+let flatten_array_declflatten_array_decl311,9793
+let eliminate_arrayseliminate_arrays342,10748
+let simplify_progsimplify_prog367,11621
 
 skelStruc.ml,113
 SkelStruc1,0
@@ -592,8 +620,16 @@ class yices_smtyices_smt86,3000
 smtXducerPass.ml,119
 SmtXducerPass1,0
 let write_exprswrite_exprs17,208
-let to_xducerto_xducer37,998
-let do_xducersdo_xducers54,1741
+let to_xducerto_xducer35,920
+let do_xducersdo_xducers52,1687
+
+spinIrEval.ml,191
+SpinIrEval1,0
+type eval_reseval_res7,51
+type eval_res = BoolBool7,51
+type eval_res = Bool of bool | IntInt7,51
+exception Eval_errorEval_error9,94
+let rec eval_expreval_expr11,126
 
 spinIrImp.ml,555
 SpinIrImp1,0
@@ -605,14 +641,14 @@ let rec fprint_exprfprint_expr200,5709
 let op_of_exprop_of_expr265,7817
 let stmt_sstmt_s272,7928
 let mir_to_lirmir_to_lir296,8945
-let rec atomic_expr_satomic_expr_s357,11428
-let rec mir_stmt_smir_stmt_s367,11788
-let prog_unit_sprog_unit_s403,13220
-let symm_of_arith_relsymm_of_arith_rel425,13950
-let not_of_arith_relnot_of_arith_rel437,14194
-let rec is_side_eff_freeis_side_eff_free449,14437
+let rec atomic_expr_satomic_expr_s349,11167
+let rec mir_stmt_smir_stmt_s359,11527
+let prog_unit_sprog_unit_s395,12959
+let symm_of_arith_relsymm_of_arith_rel417,13694
+let not_of_arith_relnot_of_arith_rel429,13938
+let rec is_side_eff_freeis_side_eff_free441,14181
 
-spinIr.ml,8393
+spinIr.ml,8516
 SpinIr1,0
 module StringSetStringSet15,422
 let label_nextlabel_next18,535
@@ -636,189 +672,191 @@ type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquivHByteEquiv26,714
            | HFormalPar | HInlinePar | HTreatLocalHTreatLocal27,774
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnceHReadOnce27,774
            | HSymbolicHSymbolic29,869
-let hflag_shflag_s31,894
-exception Invalid_typeInvalid_type44,1217
-type sym_typesym_type46,1251
-type sym_type = SymGenSymGen46,1251
-type sym_type = SymGen | SymVarSymVar46,1251
-type sym_type = SymGen | SymVar | SymLabSymLab46,1251
-let var_id_nextvar_id_next50,1324
-let fresh_var_idfresh_var_id52,1349
-class symbsymb59,1465
-        val namename61,1502
-        val mutable flagsflags62,1536
-        method get_sym_typeget_sym_type64,1603
-        method get_nameget_name66,1641
-        method has_flaghas_flag68,1673
-        method add_flagadd_flag70,1719
-        method get_flagsget_flags76,1877
-        method flags_sflags_s78,1919
-        method as_varas_var84,2121
-        method as_labelas_label88,2247
-varvar95,2441
-        val mutable vtypevtype100,2549
-        val mutable m_isarraym_isarray101,2582
-        val mutable nbitsnbits102,2666
-        val mutable m_rangem_range104,2807
-        val mutable nelnel105,2855
-        val mutable iniini106,2928
-        val mutable m_proc_namem_proc_name109,3072
-        val mutable m_proc_indexm_proc_index111,3174
-        method idid113,3218
-        method get_sym_typeget_sym_type115,3246
-        method as_varas_var117,3292
-        method set_iniset_ini119,3331
-        method get_iniget_ini120,3367
-        method is_symbolicis_symbolic122,3397
-        method set_symbolicset_symbolic123,3450
-        method proc_nameproc_name125,3505
-        method set_proc_nameset_proc_name126,3544
-        method proc_indexproc_index128,3595
-        method set_proc_indexset_proc_index129,3636
-        method qual_namequal_name133,3789
-        method copycopy144,4265
-        method fresh_copyfresh_copy153,4624
-labellabel163,4980
-        val mutable numnum167,5047
-        method get_sym_typeget_sym_type169,5085
-        method as_labelas_label171,5131
-        method get_numget_num173,5174
-let new_varnew_var177,5213
-module VarTypeVarType179,5268
-        type tt181,5296
-        let comparecompare182,5317
-module VarSetVarSet185,5388
-exception Symbol_not_foundSymbol_not_found188,5424
-class symb_tabsymb_tab191,5483
-        val tabtab193,5528
-        val mutable parentparent194,5590
-        method tab_nametab_name196,5642
-        method add_symbadd_symb198,5680
-        method add_all_symbadd_all_symb199,5742
-        method lookuplookup202,5855
-        method find_or_errorfind_or_error216,6405
-        method get_symbsget_symbs218,6464
-        method set_parentset_parent220,6519
-        method get_parentget_parent221,6566
-exception Type_not_foundType_not_found225,6611
-class data_typedata_type227,6647
-        val m_basetypem_basetype230,6757
-        val mutable m_isarraym_isarray232,6880
-        val mutable m_nelemsm_nelems234,6996
-        val mutable m_nbitsm_nbits237,7130
-        val mutable m_rangem_range240,7313
-        method basetypebasetype242,7362
-        method is_arrayis_array243,7399
-        method nelemsnelems245,7439
-        method set_nelemsset_nelems246,7472
-        method nbitsnbits248,7517
-        method set_nbitsset_nbits249,7548
-        method has_rangehas_range251,7591
-        method rangerange252,7646
-        method range_lenrange_len253,7677
-        method set_rangeset_range254,7736
-class data_type_tabdata_type_tab259,7870
-        val mutable m_tabm_tab261,7903
-        method has_typehas_type263,7977
-        method get_typeget_type264,8035
-        method set_typeset_type269,8224
-        method set_all_typesset_all_types271,8319
-        method lengthlength273,8378
-        method copycopy275,8424
-type 't exprexpr281,8572
-type 't expr = NopNop281,8572
-type 't expr = Nop of string (* a comment *) | ConstConst281,8572
-type 't expr = Nop of string (* a comment *) | Const of int | VarVar281,8572
-    | UnExUnEx282,8645
-    | UnEx of 't * 't expr | BinExBinEx282,8645
-    | PhiPhi283,8706
-    | LabelRefLabelRef284,8772
-let is_nopis_nop287,8845
-let not_nopnot_nop292,8906
-let is_varis_var294,8956
-let cmp_varscmp_vars299,9017
-let cmp_qual_varscmp_qual_vars305,9227
-let expr_used_varsexpr_used_vars313,9500
-let expr_list_used_varsexpr_list_used_vars324,9845
-let rec expr_existsexpr_exists335,10221
-let not_symbolicnot_symbolic344,10431
-let is_symbolicis_symbolic349,10511
-let rec expr_forallexpr_forall354,10586
-type 't stmtstmt362,10876
-      SkipSkip363,10891
-    | ExprExpr364,10909
-    | DeclDecl365,10937
-    | LabelLabel366,10971
-    | Atomic_begAtomic_beg367,10996
-    | Atomic_beg of int | Atomic_endAtomic_end367,10996
-    | D_step_begD_step_beg368,11040
-    | D_step_beg of int | D_step_endD_step_end368,11040
-    | GotoGoto369,11084
-    | IfIf370,11108
-    | AssertAssert371,11181
-    | AssumeAssume372,11211
-    | HavocHavoc373,11241
-    | PrintPrint374,11319
-let stmt_idstmt_id376,11363
-let is_expris_expr392,11750
-let expr_of_stmtexpr_of_stmt397,11818
-let cmp_stmtcmp_stmt402,11946
-let replace_stmt_idreplace_stmt_id407,12008
-type 't mir_stmtmir_stmt427,12752
-      MSkipMSkip428,12771
-      MSkip of int | MExprMExpr428,12771
-    | MDeclMDecl429,12815
-    | MLabelMLabel430,12850
-    | MAtomicMAtomic431,12876
-    | MAtomic of int * 't mir_stmt list | MD_stepMD_step431,12876
-    | MGotoMGoto432,12952
-    | MIfMIf433,12977
-    | MAssertMAssert434,13015
-    | MAssumeMAssume435,13046
-    | MPrintMPrint436,13077
-    | MHavocMHavoc437,13121
-    | MUnsafeMUnsafe438,13147
-    | MDeclPropMDeclProp439,13223
-and 't atomic_expratomic_expr440,13269
-      PropAllPropAll441,13290
-    | PropSomePropSome442,13315
-    | PropGlobPropGlob443,13341
-    | PropAndPropAnd444,13405
-    | PropOrPropOr445,13454
-and 't mir_optionmir_option446,13502
-      MOptGuardedMOptGuarded447,13522
-    | MOptElseMOptElse448,13560
-let m_stmt_idm_stmt_id451,13597
-let cmp_m_stmtcmp_m_stmt468,14007
-let expr_of_m_stmtexpr_of_m_stmt472,14074
-let first_normal_stmtfirst_normal_stmt478,14260
-let is_declis_decl482,14336
-let is_mdeclis_mdecl487,14407
-class ['t] procproc493,14496
-        val mutable argsargs498,14613
-        val mutable stmtsstmts499,14653
-        val mutable active_expractive_expr501,14738
-        val mutable provided_exprprovided_expr503,14834
-        method set_argsset_args505,14887
-        method get_argsget_args506,14925
-        method set_stmtsset_stmts508,14957
-        method get_stmtsget_stmts509,14997
-        method set_active_exprset_active_expr511,15031
-        method get_active_exprget_active_expr512,15083
-        method set_providedset_provided514,15129
-        method get_providedget_provided515,15180
-        method labels_as_hashlabels_as_hash517,15225
-        method get_localsget_locals528,15595
-let proc_replace_bodyproc_replace_body537,15800
-let map_varsmap_vars545,16075
-type 't prog_unitprog_unit555,16277
-type 't prog_unit = ProcProc555,16277
-type 't prog_unit = Proc of 't proc | StmtStmt555,16277
-    | LtlLtl556,16335
-    | Ltl of string * 't expr | NoneNone556,16335
-let proc_of_unitproc_of_unit559,16374
-let collect_final_labscollect_final_labs564,16485
-let list_to_binexlist_to_binex581,16981
+           | HSymbolic | HInstrumentalHInstrumental29,869
+let hflag_shflag_s31,909
+exception Invalid_typeInvalid_type45,1272
+type sym_typesym_type47,1306
+type sym_type = SymGenSymGen47,1306
+type sym_type = SymGen | SymVarSymVar47,1306
+type sym_type = SymGen | SymVar | SymLabSymLab47,1306
+let uniq_id_nextuniq_id_next51,1409
+let fresh_idfresh_id54,1461
+class symbsymb63,1684
+        val namename65,1721
+        val mutable flagsflags66,1755
+        method get_sym_typeget_sym_type68,1822
+        method get_nameget_name70,1860
+        method has_flaghas_flag72,1892
+        method add_flagadd_flag74,1938
+        method get_flagsget_flags80,2096
+        method flags_sflags_s82,2138
+        method as_varas_var88,2340
+        method as_labelas_label92,2466
+varvar99,2660
+        val mutable iniini102,2725
+        val mutable m_proc_namem_proc_name105,2869
+        val mutable m_proc_indexm_proc_index107,2971
+        method idid109,3015
+        method get_sym_typeget_sym_type111,3043
+        method as_varas_var113,3089
+        method set_iniset_ini115,3128
+        method get_iniget_ini116,3164
+        method is_symbolicis_symbolic118,3194
+        method set_symbolicset_symbolic119,3247
+        method is_instrumentalis_instrumental121,3302
+        method set_instrumentalset_instrumental122,3363
+        method proc_nameproc_name124,3426
+        method set_proc_nameset_proc_name125,3465
+        method proc_indexproc_index127,3516
+        method set_proc_indexset_proc_index128,3557
+        method qual_namequal_name132,3710
+        method copycopy143,4186
+        method fresh_copyfresh_copy153,4612
+labellabel164,5031
+        val mutable numnum168,5098
+        method get_sym_typeget_sym_type170,5136
+        method as_labelas_label172,5182
+        method get_numget_num174,5225
+let new_varnew_var178,5264
+module VarTypeVarType180,5315
+        type tt182,5343
+        let comparecompare183,5364
+module VarSetVarSet186,5435
+exception Symbol_not_foundSymbol_not_found189,5471
+class symb_tabsymb_tab192,5530
+        val mutable tabtab194,5575
+        val mutable parentparent195,5645
+        method tab_nametab_name197,5697
+        method add_symbadd_symb199,5735
+        method add_all_symbadd_all_symb200,5797
+        method set_symsset_syms202,5909
+        method lookuplookup206,6077
+        method find_or_errorfind_or_error220,6627
+        method get_symbsget_symbs222,6686
+        method set_parentset_parent224,6741
+        method get_parentget_parent225,6788
+exception Type_not_foundType_not_found229,6833
+class data_typedata_type231,6869
+        val m_basetypem_basetype234,6979
+        val mutable m_isarraym_isarray236,7102
+        val mutable m_nelemsm_nelems238,7218
+        val mutable m_nbitsm_nbits241,7352
+        val mutable m_rangem_range244,7535
+        method basetypebasetype246,7584
+        method is_arrayis_array247,7621
+        method nelemsnelems249,7661
+        method set_nelemsset_nelems250,7694
+        method nbitsnbits252,7739
+        method set_nbitsset_nbits253,7770
+        method has_rangehas_range255,7813
+        method rangerange256,7868
+        method range_lenrange_len257,7899
+        method set_rangeset_range258,7958
+        method copycopy260,8008
+class data_type_tabdata_type_tab271,8309
+        val mutable m_tabm_tab273,8342
+        method has_typehas_type275,8416
+        method get_typeget_type276,8474
+        method set_typeset_type281,8663
+        method set_all_typesset_all_types283,8758
+        method lengthlength285,8817
+        method copycopy287,8863
+type 't exprexpr294,9012
+type 't expr = NopNop294,9012
+type 't expr = Nop of string (* a comment *) | ConstConst294,9012
+type 't expr = Nop of string (* a comment *) | Const of int | VarVar294,9012
+    | UnExUnEx295,9085
+    | UnEx of 't * 't expr | BinExBinEx295,9085
+    | PhiPhi296,9146
+    | LabelRefLabelRef297,9212
+let is_nopis_nop300,9285
+let not_nopnot_nop305,9346
+let is_varis_var307,9396
+let cmp_varscmp_vars312,9457
+let cmp_qual_varscmp_qual_vars318,9667
+let expr_used_varsexpr_used_vars326,9940
+let expr_list_used_varsexpr_list_used_vars337,10285
+let rec expr_existsexpr_exists348,10661
+let not_symbolicnot_symbolic357,10871
+let is_symbolicis_symbolic362,10951
+let rec expr_forallexpr_forall367,11026
+type 't stmtstmt374,11285
+      SkipSkip375,11300
+    | ExprExpr376,11318
+    | DeclDecl377,11346
+    | LabelLabel378,11380
+    | Atomic_begAtomic_beg379,11405
+    | Atomic_beg of int | Atomic_endAtomic_end379,11405
+    | D_step_begD_step_beg380,11449
+    | D_step_beg of int | D_step_endD_step_end380,11449
+    | GotoGoto381,11493
+    | IfIf382,11517
+    | AssertAssert383,11590
+    | AssumeAssume384,11620
+    | HavocHavoc385,11650
+    | PrintPrint386,11728
+let stmt_idstmt_id388,11772
+let is_expris_expr404,12159
+let expr_of_stmtexpr_of_stmt409,12227
+let cmp_stmtcmp_stmt414,12355
+let replace_stmt_idreplace_stmt_id419,12417
+type 't mir_stmtmir_stmt439,13161
+    | MSkipMSkip440,13180
+    | MExprMExpr441,13199
+    | MDeclMDecl442,13228
+    | MLabelMLabel443,13263
+    | MAtomicMAtomic444,13289
+    | MD_stepMD_step445,13329
+    | MGotoMGoto446,13369
+    | MIfMIf447,13394
+    | MAssertMAssert448,13432
+    | MAssumeMAssume449,13463
+    | MPrintMPrint450,13494
+    | MHavocMHavoc451,13538
+    | MUnsafeMUnsafe452,13564
+    | MDeclPropMDeclProp453,13640
+and 't atomic_expratomic_expr454,13686
+    | PropAllPropAll455,13707
+    | PropSomePropSome456,13732
+    | PropGlobPropGlob457,13758
+    | PropAndPropAnd458,13822
+    | PropOrPropOr459,13871
+and 't mir_optionmir_option460,13919
+    | MOptGuardedMOptGuarded461,13939
+    | MOptElseMOptElse462,13977
+let m_stmt_idm_stmt_id465,14014
+let cmp_m_stmtcmp_m_stmt482,14424
+let expr_of_m_stmtexpr_of_m_stmt486,14491
+let first_normal_stmtfirst_normal_stmt492,14677
+let is_declis_decl496,14753
+let is_mdeclis_mdecl501,14824
+let stmt_list_used_varsstmt_list_used_vars506,14897
+class ['t] procproc517,15186
+        val mutable m_argsm_args522,15313
+        val mutable m_stmtsm_stmts523,15355
+        val mutable m_active_exprm_active_expr525,15442
+        val mutable m_provided_exprm_provided_expr527,15540
+        method set_argsset_args530,15596
+        method get_argsget_args531,15636
+        method set_stmtsset_stmts533,15670
+        method get_stmtsget_stmts538,15840
+        method set_active_exprset_active_expr540,15876
+        method get_active_exprget_active_expr541,15930
+        method set_providedset_provided543,15978
+        method get_providedget_provided544,16031
+        method labels_as_hashlabels_as_hash546,16078
+        method get_localsget_locals555,16428
+let proc_replace_bodyproc_replace_body564,16635
+let map_varsmap_vars572,16910
+type 't prog_unitprog_unit582,17112
+type 't prog_unit = ProcProc582,17112
+type 't prog_unit = Proc of 't proc | StmtStmt582,17112
+    | LtlLtl583,17170
+    | Ltl of string * 't expr | EmptyUnitEmptyUnit583,17170
+let proc_of_unitproc_of_unit586,17214
+let collect_final_labscollect_final_labs591,17325
+let list_to_binexlist_to_binex608,17821
+let replace_basic_stmtsreplace_basic_stmts617,18024
 
 spinlexGlue.ml,360
 SpinlexGlue1,0
@@ -849,14 +887,24 @@ type xu_type = XS | XRXR3,104
 let var_type_svar_type_s5,130
 let xu_type_sxu_type_s18,416
 
-ssa.ml,247
+ssa.ml,292
 Ssa1,0
-let comp_dom_frontierscomp_dom_frontiers18,265
-let place_phiplace_phi53,1428
-let map_rvaluesmap_rvalues109,3645
-let optimize_ssaoptimize_ssa130,4185
-let mk_ssamk_ssa167,5423
-let move_phis_to_blocksmove_phis_to_blocks316,11679
+exception Var_not_foundVar_not_found18,265
+let comp_dom_frontierscomp_dom_frontiers20,300
+let place_phiplace_phi55,1463
+let map_rvaluesmap_rvalues113,3745
+let optimize_ssaoptimize_ssa134,4285
+let mk_ssamk_ssa171,5523
+let move_phis_to_blocksmove_phis_to_blocks329,12154
+
+symbExec.ml,215
+SymbExec1,0
+type var_cons_tblvar_cons_tbl12,161
+let is_inputis_input14,206
+let mk_inputmk_input19,316
+let linearize_blockslinearize_blocks23,392
+let sub_varssub_vars36,766
+let exec_pathexec_path45,919
 
 varRole.ml,838
 VarRole1,0
@@ -889,7 +937,7 @@ let macro_newlmacro_newl30,591
 let var_type_promelavar_type_promela32,631
 let find_bit_widthfind_bit_width51,1197
 let hflag_promelahflag_promela59,1395
-let rec write_atomic_exprwrite_atomic_expr73,1671
-let rec write_stmtwrite_stmt100,2469
-let write_procwrite_proc242,7296
-let write_unitwrite_unit278,8427
+let rec write_atomic_exprwrite_atomic_expr74,1714
+let rec write_stmtwrite_stmt101,2512
+let write_procwrite_proc243,7339
+let write_unitwrite_unit279,8470

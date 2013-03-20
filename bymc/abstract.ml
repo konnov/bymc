@@ -67,6 +67,19 @@ let do_abstraction solver is_first_run bdd_pass prog =
     write_to_file false "abs-interval.prm"
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
+    if bdd_pass then begin
+        log INFO "> Constructing BDDs...";
+        (*
+        let simp_prog = simplify_prog caches ctrabs_prog in
+        write_to_file true "abs-counter-simp.prm"
+            (units_of_program simp_prog) (get_type_tab simp_prog);
+        *)
+        (* counter abstraction builds its own skeleton... *)
+        (*BddPass.transform_to_bdd solver caches simp_prog;*)
+        let _ = SkelStruc.pass caches intabs_prog in
+        BddPass.transform_to_bdd solver caches intabs_prog;
+        log INFO "[DONE]";
+    end;
     log INFO "> Constructing counter abstraction";
     analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
@@ -74,16 +87,6 @@ let do_abstraction solver is_first_run bdd_pass prog =
     write_to_file true "abs-counter.prm"
         (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
     log INFO "[DONE]";
-    if bdd_pass then begin
-        log INFO "> Constructing BDDs...";
-        let simp_prog = simplify_prog caches ctrabs_prog in
-        write_to_file true "abs-counter-simp.prm"
-            (units_of_program simp_prog) (get_type_tab simp_prog);
-        (* counter abstraction builds its own skeleton...
-        let _ = SkelStruc.pass caches ctrabs_prog in*)
-        BddPass.transform_to_bdd solver caches simp_prog;
-        log INFO "[DONE]";
-    end;
     solver#pop_ctx;
     ctrabs_prog
 

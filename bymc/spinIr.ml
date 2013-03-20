@@ -503,6 +503,16 @@ let is_mdecl = function
     | _ -> false
 
 
+let stmt_list_used_vars (stmt_list: 't stmt list): var list =
+    let to_expr lst = function
+    | Expr (_, e) -> e :: lst
+    | Assert (_, e) -> e :: lst
+    | Assume (_, e) -> e :: lst
+    | _ -> lst
+    in
+    expr_list_used_vars (List.fold_left to_expr [] stmt_list)
+
+
 (* a process *)
 class ['t] proc name_i active_expr_i =
     object(self)
