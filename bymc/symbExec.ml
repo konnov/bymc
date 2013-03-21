@@ -64,9 +64,7 @@ let is_sat solver type_tab exp =
     then begin
         List.iter add_var vars;
         solver#append_expr exp;
-        printf "Y"; flush stdout;
         let res = solver#check in
-        printf "z"; flush stdout;
         solver#pop_ctx;
         res
     end else
@@ -158,15 +156,15 @@ let exec_path solver (type_tab: data_type_tab) (path: token basic_block list) =
 
     let path_cons = List.fold_left exec (Const 1) stmts in
     let path_cons = compute_consts path_cons in
-    if ((is_c_false path_cons)
+    if not ((is_c_false path_cons)
         || (not (is_c_true path_cons)
             && not (is_sat solver new_type_tab path_cons)))
-    then printf " ."
-    else begin
+    then begin
+        (* TODO: write debug info to a file *)
         (*
         printf "  Path constraint %d: %s\n" !path_cnt (expr_s path_cons);
         *)
-        printf " %d" !path_cnt;
+        printf " %d\n" !path_cnt;
         path_cnt := !path_cnt + 1;
         (*
         let print_var v =
