@@ -34,7 +34,8 @@ let extract_skel proc_body =
     let cfg = Cfg.mk_cfg (mir_to_lir proc_body) in
     let loop = match (comp_sccs cfg#entry) with
     | [] -> raise (Skel_error "Skeleton does not have the main loop")
-    | [one_scc] -> one_scc
+    | [one_scc] ->
+        one_scc
     | _ as sccs ->
         List.iter
             (fun scc ->
@@ -79,8 +80,10 @@ let extract_skel proc_body =
     let update = (List.rev hd) @ (List.rev assumps) in
     let comp = List.rev (el @ tl) in
     let reg_tbl = new region_tbl in
-    reg_tbl#add "decl" decls; reg_tbl#add "init" init_s;
-    reg_tbl#add "loop_prefix" prefix_s; reg_tbl#add "comp" comp;
+    reg_tbl#add "decl" decls;
+    reg_tbl#add "init" init_s;
+    reg_tbl#add "loop_prefix" prefix_s;
+    reg_tbl#add "comp" comp;
     reg_tbl#add "update" update;
     reg_tbl#add "loop_body" (if_s @ rest_s);
     reg_tbl

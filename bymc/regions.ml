@@ -96,10 +96,12 @@ class region_tbl =
             Hashtbl.create 5
 
         method add name (stmts: token mir_stmt list): unit =
-            let first = List.hd stmts in
-            let last = List.hd (List.rev stmts) in
-            Hashtbl.replace
-                m_regions name (m_stmt_id first, m_stmt_id last)
+            if stmts = []
+            then Hashtbl.replace m_regions name (0, -1)
+            else let first = List.hd stmts in
+                let last = List.hd (List.rev stmts) in
+                Hashtbl.replace
+                    m_regions name (m_stmt_id first, m_stmt_id last)
 
         method get name all_stmts =
             let first_id, last_id =
@@ -107,7 +109,9 @@ class region_tbl =
                 with Not_found ->
                     raise (Region_error ("No region " ^ name))
             in
-            match find_region_by_range first_id last_id all_stmts with
+            if first_id > last_id
+            then [] (* An empty region. Yes, it is possible. *)
+            else match find_region_by_range first_id last_id all_stmts with
             | Some stmts -> stmts
             | None ->
                 let m = sprintf "No region %s:[%d, %d] found"
