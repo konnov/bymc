@@ -123,30 +123,40 @@ class yices_smt =
                 let buf = String.create buf_len in
                 let stop = ref false in
                 while not !stop do
-                    let len = Unix.read fd buf 0 buf_len in
-                    printf "%s\n" buf; flush stdout;
-                    fprintf cerrlog "%s" buf; flush cerrlog;
-                    stop := (len < buf_len);
+                    let read = Unix.read fd buf 0 buf_len in
+                    if read > 0 then begin
+                        fprintf cerrlog "%s" (String.sub buf 0 read);
+                        flush cerrlog;
+                    end;
+                    stop := (read < buf_len);
                 done
             in
+            let fdin = Unix.descr_of_in_channel cin
+                and fdout = Unix.descr_of_out_channel cout
+                and fderr = Unix.descr_of_in_channel cerr in
+            let selin = if poll_i then [fdin; fderr] else [fderr]
+                and selout = if poll_o then [fdout] else [] in
+
             (* read the error input first as it can block other chans *)
             while !read_err do
-                let ins, outs, errs =
-                    Unix.select
-                        [Unix.descr_of_in_channel cin]
-                        (if poll_o then [Unix.descr_of_out_channel cout] else [])
-                        [Unix.descr_of_in_channel cerr] poll_tm_sec in
-                if errs <> []
-                then log_input_to_errlog (List.hd errs)
-                else if poll_o && not poll_i && outs = [] && ins <> []
-                then
-                    (* yices produced too many warnings to stdout and thus
-                       blocks its stdin.
-                       Consume the text and spit it to the error log. *)
-                    log_input_to_errlog (List.hd ins)
-                else read_err := false;
-                rs := ins;
-                ws := outs
+                let ins, outs, errs = Unix.select selin selout [] poll_tm_sec
+                in
+                match ins with
+                | [_; _] -> (* one of these is err *)
+                    log_input_to_errlog fderr
+                | [fd] ->
+                    if fd = fderr
+                    then log_input_to_errlog fderr
+                    else begin
+                        read_err := false;
+                        rs := ins;
+                        ws := outs
+                    end
+                | [] ->
+                    read_err := false;
+                    rs := ins;
+                    ws := outs
+                | _ -> raise (Failure "More than three input descriptors?")
             done;
             (!rs, !ws)
 
@@ -184,6 +194,7 @@ class yices_smt =
             done
 
         method read_line =
+            fprintf clog ";; polling...\n"; flush clog;
             let start_tm = Unix.time () in (* raise the watchdog time *)
             let fd = self#poll_read in
             (* too inefficient??? *)
@@ -223,6 +234,7 @@ class yices_smt =
                     then raise (Communication_failure "Yices is not responding")
             done;
             let out = collected_str () in
+            fprintf clog ";; READ: %s\n" out; flush clog;
             log TRACE (sprintf "YICES: ^^^%s$$$\n" out);
             out
 
@@ -281,11 +293,12 @@ class yices_smt =
             if not (self#is_out_sat true)
             then false
             else begin
+                self#sync;
                 self#append "(check)";
-                poll_tm_sec <- check_timeout_sec;
+                (*poll_tm_sec <- check_timeout_sec;*)
                 flush cout;
                 let res = self#is_out_sat false in
-                poll_tm_sec <- timeout_sec;
+                (*poll_tm_sec <- timeout_sec;*)
                 res
             end
 
