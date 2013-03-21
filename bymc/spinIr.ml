@@ -304,6 +304,14 @@ let is_nop = function
 
 let not_nop e = not (is_nop e) (* a shorthand *)
 
+let is_c_true = function
+    | Const i -> i > 0
+    | _ -> false
+
+let is_c_false = function
+    | Const i -> i = 0
+    | _ -> false
+
 let is_var = function
     | Var _ -> true
     | _ -> false

@@ -24,6 +24,38 @@ module StringSet = Set.Make(String)
 
 exception Simplif_error of string
 
+let rec compute_consts exp =
+    let int_of_bool b = if b then 1 else 0 in
+    let fold = function
+    | BinEx (PLUS, Const l, Const r) -> Const (l + r)
+    | BinEx (MINUS, Const l, Const r) -> Const (l - r)
+    | BinEx (MULT, Const l, Const r) -> Const (l * r)
+    | BinEx (DIV, Const l, Const r) -> Const (l / r)
+    | BinEx (LT, Const l, Const r) -> Const (int_of_bool (l < r))
+    | BinEx (LE, Const l, Const r) -> Const (int_of_bool (l <= r))
+    | BinEx (GT, Const l, Const r) -> Const (int_of_bool (l > r))
+    | BinEx (GE, Const l, Const r) -> Const (int_of_bool (l >= r))
+    | BinEx (NE, Const l, Const r) -> Const (int_of_bool (l != r))
+    | BinEx (EQ, Const l, Const r) -> Const (int_of_bool (l == r))
+    | BinEx (AND, Const 0, _) -> Const 0
+    | BinEx (AND, _, Const 0) -> Const 0
+    | BinEx (AND, Const 1, r) -> r
+    | BinEx (AND, l, Const 1) -> l
+    | BinEx (OR, Const 1, _) -> Const 1
+    | BinEx (OR, _, Const 1) -> Const 1
+    | BinEx (OR, Const 0, r) -> r
+    | BinEx (OR, l, Const 0) -> l
+    | UnEx (NEG, Const 1) -> Const 0
+    | UnEx (NEG, Const 0) -> Const 1
+    | _ as e -> e
+    in
+    let rec explore = function
+    | BinEx (t, l, r) -> fold (BinEx (t, explore l, explore r))
+    | UnEx (t, e) -> fold (UnEx (t, explore e))
+    | _ as e -> e
+    in
+    explore exp
+
 (* Find all possible bindings for all variables used in an expression.
  * Yes, it blows up for large ranges as well as many variables.
  *)

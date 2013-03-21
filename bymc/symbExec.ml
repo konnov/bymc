@@ -5,6 +5,7 @@
 
 open Cfg
 open Printf
+open Simplif
 open Spin
 open SpinIr
 open SpinIrImp
@@ -48,128 +49,6 @@ type simple_eval_res = TFalse | TTrue | TMaybe | Int of int
 
 exception Eval_error of string
 
-let uint = function
-    | Int i -> i
-    | _ -> raise (Eval_error ("expected int"))
-
-
-let tbool_and l r =
-    match (l, r) with
-    | TMaybe, _ -> TMaybe
-    | _, TMaybe -> TMaybe
-    | TFalse, _ -> TFalse
-    | _, TFalse -> TFalse
-    | TTrue, TTrue -> TTrue
-    | _ -> raise (Eval_error ("expected TFalse, TTrue, or TMaybe"))
-
-let tbool_or l r =
-    match (l, r) with
-    | TTrue, _ -> TTrue
-    | _, TTrue -> TTrue
-    | TFalse, TFalse -> TFalse
-    | TMaybe, _ -> TMaybe
-    | _, TMaybe -> TMaybe
-    | _ -> raise (Eval_error ("expected TFalse, TTrue, or TMaybe"))
-
-let tbool_not = function
-    | TTrue -> TFalse
-    | TFalse -> TTrue
-    | TMaybe -> TMaybe
-    | _ -> raise (Eval_error ("expected TFalse, TTrue, or TMaybe"))
-
-let is_uncertain l r =
-    l = TMaybe || r = TMaybe
-
-let mk_tbool b =
-    if b then TTrue else TFalse
-
-let is_trivially_unsat exp =
-    let rec eval_expr = function
-    | Const value ->
-            Int value
-    | Var v ->
-            TMaybe
-    | Nop _ ->
-            TTrue
-    | BinEx (EQ, le, re) ->
-            let lv = eval_expr le in
-            let rv = eval_expr re in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) = (uint rv))
-    | BinEx (NE, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) <> (uint rv))
-    | BinEx (GT, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) > (uint rv))
-    | BinEx (GE, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) >= (uint rv))
-    | BinEx (LT, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) < (uint rv))
-    | BinEx (LE, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else mk_tbool ((uint lv) <= (uint rv))
-    | BinEx (AND, le, re) ->
-            let lv = eval_expr le in
-            let rv = eval_expr re in
-            tbool_and lv rv
-    | BinEx (OR, le, re) ->
-            let lv = eval_expr le in
-            let rv = eval_expr re in
-            tbool_or lv rv
-    | UnEx (NEG, e) ->
-            tbool_not (eval_expr e)
-
-    | BinEx (MINUS, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else (Int ((uint lv) - (uint rv)))
-    | BinEx (PLUS, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else (Int ((uint lv) + (uint rv)))
-    | BinEx (MULT, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else (Int ((uint lv) * (uint rv)))
-    | BinEx (DIV, le, re) ->
-            let lv = (eval_expr le) in
-            let rv = (eval_expr re) in
-            if is_uncertain lv rv
-            then TMaybe
-            else (Int ((uint lv) / (uint rv)))
-
-    | _ as e ->
-        raise (Eval_error
-            (sprintf "Unknown expression to evaluate: %s" (expr_s e)))
-    in
-    TFalse = (eval_expr exp)
-
-
 let is_sat solver type_tab exp =
     solver#push_ctx;
     let vars = expr_used_vars exp in
@@ -212,8 +91,11 @@ let exec_path solver (type_tab: data_type_tab) (path: token basic_block list) =
     let stmts = linearize_blocks path in
     let vars = stmt_list_used_vars stmts in
     List.iter add_input vars;
-    let path_cons = List.fold_left exec (Nop "") stmts in
-    if is_trivially_unsat path_cons || not (is_sat solver type_tab path_cons)
+    let path_cons = List.fold_left exec (Const 1) stmts in
+    let path_cons = compute_consts path_cons in
+    if ((is_c_false path_cons)
+        || (not (is_c_true path_cons)
+            && not (is_sat solver type_tab path_cons)))
     then printf "  UNSAT\n"
     else begin
         printf "  Path constraint %d: %s\n" !path_cnt (expr_s path_cons);
