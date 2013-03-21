@@ -269,7 +269,9 @@ let proc_to_bdd prog smt_fun proc filename =
     close_out out
 
 
-let proc_to_symb caches prog proc block_fun filename =
+let proc_to_symb solver caches prog proc block_fun filename =
+    let type_tab = Program.get_type_tab prog in
+
     let lirs = mir_to_lir (block_fun caches proc) in
     log INFO (sprintf "  mk_ssa...");
     let cfg = mk_cfg lirs in
@@ -279,7 +281,7 @@ let proc_to_symb caches prog proc block_fun filename =
     log INFO (sprintf "  constructing symbolic paths...");
     let num_paths = path_efun (fun _ -> ()) in
     Printf.printf "    %d paths to construct...\n" num_paths;
-    let num_paths = path_efun exec_path in
+    let num_paths = path_efun (exec_path solver type_tab) in
     Printf.printf "    constructed %d paths\n" num_paths
 
 
@@ -289,9 +291,9 @@ let transform_to_bdd solver caches prog =
     let xprog = Program.set_type_tab new_type_tab prog in
     let convert_proc proc =
         let fname = proc#get_name ^ "-I" in
-        (proc_to_symb caches xprog proc get_init_body fname);
+        (proc_to_symb solver caches xprog proc get_init_body fname);
         let fname = proc#get_name ^ "-R" in
-        (proc_to_symb caches xprog proc get_main_body fname);
+        (proc_to_symb solver caches xprog proc get_main_body fname);
         (*
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog
