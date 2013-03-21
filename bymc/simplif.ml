@@ -47,6 +47,7 @@ let rec compute_consts exp =
     | BinEx (OR, l, Const 0) -> l
     | UnEx (NEG, Const 1) -> Const 0
     | UnEx (NEG, Const 0) -> Const 1
+    | Nop _ -> Const 1
     | _ as e -> e
     in
     let rec explore = function
@@ -88,40 +89,12 @@ let mk_expr_bindings type_tab exp =
 
 (* propagate constants *)
 let prop_const exp binding =
-    let compute tok le re =
-        match tok, le, re with
-        | PLUS, Const l, Const r -> Const (l + r)
-        | MINUS, Const l, Const r -> Const (l - r)
-        | MULT, Const l, Const r -> Const (l * r)
-        | DIV, Const l, Const r -> Const (l / r)
-        | _ -> BinEx (tok ,le, re)
-    in
-    let rec prop_rec = function
-    | Var v ->
+    let map v = 
         if VarMap.mem v binding
         then Const (VarMap.find v binding)
         else Var v
-
-    | BinEx (PLUS, l, r) ->
-        compute PLUS (prop_rec l) (prop_rec r)
-
-    | BinEx (MINUS, l, r) ->
-        compute MINUS (prop_rec l) (prop_rec r)
-
-    | BinEx (MULT, l, r) ->
-        compute MULT (prop_rec l) (prop_rec r)
-
-    | BinEx (DIV, l, r) ->
-        compute DIV (prop_rec l) (prop_rec r)
-
-    | UnEx (tok, e) ->
-        UnEx (tok, (prop_rec e))
-
-    | BinEx (tok, l, r) ->
-        BinEx (tok, (prop_rec l), (prop_rec r))
-    | _ as e -> e
     in
-    prop_rec exp
+    compute_consts (map_vars map exp)
 
 
 let prop_const_in_stmt stmt binding =

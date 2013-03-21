@@ -277,6 +277,7 @@ let proc_to_symb solver caches prog proc block_fun filename =
     let cfg = mk_cfg lirs in
     let path_efun = enum_paths cfg in
 
+    solver#set_need_evidence false;
     let path_no = ref 0 in
     log INFO (sprintf "  constructing symbolic paths...");
     let num_paths = path_efun (fun _ -> ()) in

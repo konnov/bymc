@@ -11,6 +11,7 @@ open Spin
 open SpinIr
 open SpinIrImp
 
+(* TODO: replace by Simplif.compute_consts *)
 let try_eval = function
     | BinEx(PLUS, Const li, Const ri) ->
             Const (li + ri)
