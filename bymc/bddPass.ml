@@ -299,41 +299,58 @@ let transform_vars prog proc type_tab =
         new_sym_tab#add_symb nv#get_name (nv :> symb);
         nv :: collected
     in
-    let vars = (Program.get_shared prog) @ (Program.get_instrumental prog)
-        @ proc#get_locals in
-    let unfolded_vars = List.fold_left flatten_array_var [] vars in
+    let shared = (Program.get_shared prog) @ (Program.get_instrumental prog)
+    in
+    let unfolded_shared = List.fold_left flatten_array_var [] shared in
+    let local = proc#get_locals in
+    let unfolded_vars =
+        List.fold_left flatten_array_var unfolded_shared local in
     let _ = List.fold_left intro_old_copies unfolded_vars unfolded_vars in
-    (new_type_tab, new_sym_tab)
+    (new_type_tab, new_sym_tab, unfolded_shared)
+
+
+let write_smv_header new_type_tab shared out =    
+    let decl_var v = 
+        let tp = new_type_tab#get_type v in
+        fprintf out "  %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
+    in
+    fprintf out "MODULE main\nVAR\n";
+    List.iter decl_var shared
 
 
 (* TODO: re-use parts of the computed tree as in symbolic execution! *)
-let proc_to_symb solver caches prog proc block_fun filename =
-    let type_tab = Program.get_type_tab prog in
-    let new_type_tab, new_sym_tab = transform_vars prog proc type_tab in
-
-    let lirs = mir_to_lir (block_fun caches proc) in
+let proc_to_symb solver caches prog proc
+        new_type_tab new_sym_tab shared block_fun out section =
     log INFO (sprintf "  mk_cfg...");
+    let lirs = mir_to_lir (block_fun caches proc) in
     let cfg = mk_cfg lirs in
-    Cfg.write_dot (sprintf "%s.dot" filename) cfg;
+    Cfg.write_dot (sprintf "%s-%s.dot" proc#get_name section) cfg;
     let path_efun = enum_paths cfg in
 
     solver#set_need_evidence false;
-    let path_no = ref 0 in
     log INFO (sprintf "  constructing symbolic paths...");
+    let path_no = ref 0 in
     let num_paths = path_efun (fun _ -> ()) in
-    let out = open_out (filename ^ ".smv") in
-    Printf.printf "    %d paths to construct...\n" num_paths;
-    let num_paths = path_efun (exec_path solver out new_type_tab new_sym_tab) in
-    Printf.printf "    constructed %d paths\n" num_paths;
-    close_out out
+
+    fprintf out "%s\n  FALSE\n" section;
+    Printf.printf "    %d paths to enumerate...\n" num_paths;
+    let num_paths =
+        path_efun (exec_path solver out new_type_tab new_sym_tab shared) in
+    Printf.printf "    enumerated %d paths\n" num_paths
 
 
 let transform_to_bdd solver caches prog =
     let convert_proc proc =
-        let fname = proc#get_name ^ "-I" in
-        (proc_to_symb solver caches prog proc get_init_body fname);
-        let fname = proc#get_name ^ "-R" in
-        (proc_to_symb solver caches prog proc get_main_body fname);
+        let type_tab = Program.get_type_tab prog in
+        let new_type_tab, new_sym_tab, shared =
+            transform_vars prog proc type_tab in
+        let out = open_out (sprintf "%s.smv" proc#get_name) in
+        write_smv_header new_type_tab shared out; 
+        proc_to_symb solver caches prog proc new_type_tab
+            new_sym_tab shared get_init_body out "INIT";
+        proc_to_symb solver caches prog proc new_type_tab
+            new_sym_tab shared get_main_body out "TRANS";
+        close_out out
         (*
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog

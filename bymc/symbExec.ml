@@ -79,10 +79,15 @@ let is_sat solver type_tab exp =
 
 let indexed_var v idx = sprintf "%s_%d_" v#get_name idx
 
+let smv_name sym_tab v =
+    if is_input v
+    then (get_output sym_tab v)#get_name
+    else sprintf "next(%s)" (get_output sym_tab v)#get_name
+
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (path: token basic_block list) =
+        (shared: var list) (path: token basic_block list) =
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
@@ -144,8 +149,12 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         || (not (is_c_true path_cons)
             && not (is_sat solver type_tab path_cons)))
     then begin
-        fprintf log "# Path %d: %s\n"
-            !path_cnt (expr_s path_cons);
+        fprintf log "-- path %d\n" !path_cnt;
+        if not (is_c_true path_cons)
+        then fprintf log "  | (%s\n"
+            (Nusmv.expr_s (smv_name sym_tab) path_cons)
+        else fprintf log "  | (TRUE\n";
+
         printf " %d" !path_cnt;
         path_cnt := !path_cnt + 1;
         let find_changes changed v =
@@ -155,14 +164,24 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
                 let ov = get_output sym_tab arg in
                 if ov#id = v#id
                 then changed
-                else (v#get_name, arg#get_name) :: changed
-            | _ as e ->
-                (v#get_name, expr_s exp) :: changed
+                else (smv_name sym_tab v, arg#get_name) :: changed
+            | _ ->
+                (smv_name sym_tab v,
+                 Nusmv.expr_s (smv_name sym_tab) exp) :: changed
         in
-        let changed = List.fold_left find_changes [] vars in
+        (* nusmv syntax *)
+        let changed = List.fold_left find_changes [] shared in
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e ) changed in
         let unchanged = List.map (fun (v, _) -> sprintf "%s" v) changed in
-        fprintf log "%s & unchanged_except_%s\n;"
-            (str_join " & " eqs) (str_join "_" unchanged);
+        let unchanged_s =
+            if unchanged <> []
+            then sprintf "unchanged_except_%s" (str_join "_" unchanged)
+            else ""
+        in
+        fprintf log "  & %s" (str_join " & " eqs);
+        if unchanged <> []
+        then fprintf log "\n  & unchanged_except_%s)\n"
+            (str_join "_" unchanged)
+        else fprintf log ";\n";
     end
 

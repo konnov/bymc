@@ -1,6 +1,6 @@
 type var_type = TBIT | TBYTE | TSHORT
-    | TINT | TUNSIGNED | TCHAN | TMTYPE | TPROPOSITION | TUNDEF;;
-type xu_type = XS | XR;;
+    | TINT | TUNSIGNED | TCHAN | TMTYPE | TPROPOSITION | TUNDEF
+type xu_type = XS | XR
 
 let var_type_s tp =
     match tp with
@@ -13,11 +13,9 @@ let var_type_s tp =
       | TMTYPE -> "MTYPE"
       | TPROPOSITION -> "PROPOSITION"
       | TUNDEF -> "UNDEFINED"
-;;
 
 let xu_type_s tp =
     match tp with
-      XS -> "XS"
-      | XR -> "XR"
-;;
+    | XS -> "XS"
+    | XR -> "XR"
 
