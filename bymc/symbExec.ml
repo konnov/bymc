@@ -77,7 +77,7 @@ let is_sat solver type_tab exp =
         true
 
 
-let indexed_var v idx = sprintf "%s_%d_" v#get_name idx
+let indexed_var v idx = sprintf "%s_%di" v#get_name idx
 
 let smv_name sym_tab is_init v =
     let oname = (get_output sym_tab v)#get_name in
@@ -159,30 +159,27 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             then Nusmv.expr_s var_fun path_cons
             else ""
         in
-        let find_changes changed v =
+        let find_changes (unchanged, changed) v =
             let exp = Hashtbl.find vals v#id in
             match exp with
             | Var arg ->
                 let ov = get_output sym_tab arg in
                 if ov#id = v#id
-                then changed
-                else (var_fun v, arg#get_name) :: changed
+                then (ov#get_name :: unchanged), changed
+                else (unchanged, (var_fun v, arg#get_name) :: changed)
             | _ ->
-                (var_fun v, Nusmv.expr_s var_fun exp) :: changed
+                (unchanged, (var_fun v, Nusmv.expr_s var_fun exp) :: changed)
         in
         (* nusmv syntax *)
-        let changed = List.fold_left find_changes [] shared in
+        let unchanged, changed = List.fold_left find_changes ([], []) shared in
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
-        let unchanged = List.map (fun (v, _) -> sprintf "%s" v) changed in
-        let unchanged_s =
-            if unchanged <> []
-            then sprintf "unchanged_except_%s" (str_join "_" unchanged)
-            else ""
-        in
+        let unchanged_eqs =
+            let mk_eq n = sprintf "next(%s) = %s" n n in
+            List.map mk_eq unchanged in
         let eq_s = str_join " & " eqs in
         let unchg_s =
             if unchanged <> [] && not is_init
-            then sprintf "unchanged_except_%s" (str_join "_" unchanged)
+            then str_join " & " unchanged_eqs
             else ""
         in
         let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in

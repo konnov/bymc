@@ -352,7 +352,6 @@ let transform_to_bdd solver caches prog =
             new_sym_tab shared get_init_body out "INIT";
         proc_to_symb solver caches prog proc new_type_tab
             new_sym_tab shared get_main_body out "TRANS";
-        fprintf out ";";
         close_out out
         (*
         let fname = proc#get_name ^ "-I" in
