@@ -92,12 +92,13 @@ let rec find_region_by_range
 
 class region_tbl =
     object
+        val null_id = -1
         val mutable m_regions: (string, int * int) Hashtbl.t =
             Hashtbl.create 5
 
         method add name (stmts: token mir_stmt list): unit =
             if stmts = []
-            then Hashtbl.replace m_regions name (0, -1)
+            then Hashtbl.replace m_regions name (null_id, null_id)
             else let first = List.hd stmts in
                 let last = List.hd (List.rev stmts) in
                 Hashtbl.replace
@@ -109,7 +110,7 @@ class region_tbl =
                 with Not_found ->
                     raise (Region_error ("No region " ^ name))
             in
-            if first_id > last_id
+            if first_id = null_id
             then [] (* An empty region. Yes, it is possible. *)
             else match find_region_by_range first_id last_id all_stmts with
             | Some stmts -> stmts
