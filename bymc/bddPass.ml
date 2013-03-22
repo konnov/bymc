@@ -306,6 +306,7 @@ let transform_vars prog proc type_tab =
     (new_type_tab, new_sym_tab)
 
 
+(* TODO: re-use parts of the computed tree as in symbolic execution! *)
 let proc_to_symb solver caches prog proc block_fun filename =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab, new_sym_tab = transform_vars prog proc type_tab in

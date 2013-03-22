@@ -26,6 +26,11 @@ let get_input (sym_tab: symb_tab) (v: var): var =
     let sym = sym_tab#lookup name in
     sym#as_var
 
+let get_output (sym_tab: symb_tab) (v: var): var =
+    let n = v#get_name in
+    if is_input v
+    then (sym_tab#lookup (String.sub n 1 ((String.length n) - 1)))#as_var
+    else v
 
 let linearize_blocks (path: token basic_block list) =
     let seq = List.concat (List.map (fun b -> b#get_seq) path) in
@@ -139,13 +144,25 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         || (not (is_c_true path_cons)
             && not (is_sat solver type_tab path_cons)))
     then begin
-        fprintf log "  Path constraint %d: %s\n"
+        fprintf log "# Path %d: %s\n"
             !path_cnt (expr_s path_cons);
         printf " %d" !path_cnt;
         path_cnt := !path_cnt + 1;
-        let to_assgn v =
+        let find_changes changed v =
             let exp = Hashtbl.find vals v#id in
-            sprintf "%s = %s" v#get_name (expr_s exp) in
-        fprintf log "%s\n;" (str_join " & " (List.map to_assgn vars));
+            match exp with
+            | Var arg ->
+                let ov = get_output sym_tab arg in
+                if ov#id = v#id
+                then changed
+                else (v#get_name, arg#get_name) :: changed
+            | _ as e ->
+                (v#get_name, expr_s exp) :: changed
+        in
+        let changed = List.fold_left find_changes [] vars in
+        let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e ) changed in
+        let unchanged = List.map (fun (v, _) -> sprintf "%s" v) changed in
+        fprintf log "%s & unchanged_except_%s\n;"
+            (str_join " & " eqs) (str_join "_" unchanged);
     end
 
