@@ -1,8 +1,8 @@
 (* simple logging/debugging facility *)
 
-type verbosity = QUIET | ERROR | WARN | INFO | DEBUG | TRACE;;
+type verbosity = QUIET | ERROR | WARN | INFO | DEBUG | TRACE
 
-let current_verbosity_level = ref INFO;; (* extremely long on purpose *)
+let current_verbosity_level = ref INFO (* extremely long on purpose *)
 
 let verbosity_s = function
     | QUIET -> ""
@@ -11,7 +11,6 @@ let verbosity_s = function
     | INFO -> " "
     | DEBUG -> " *** "
     | TRACE -> " --- "
-;;
 
 let may_log level =
     let to_num = function
@@ -23,7 +22,6 @@ let may_log level =
         | TRACE -> 5
     in
     (to_num level) <= (to_num !current_verbosity_level)
-;;
 
 let log level message =
     if may_log level
@@ -31,5 +29,4 @@ let log level message =
       Printf.printf "%s %s\n" (verbosity_s level) message;
       flush stdout;
     end
-;;
 

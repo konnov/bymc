@@ -78,7 +78,9 @@ let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     (ssa_cfg#block_list, block_cons, (enum_paths ssa_cfg), (enum_paths cfg))
 
 
-(* XXX: REWRITE EVERYTHING WHEN IT WORKS! *)
+(* XXX: REWRITE EVERYTHING WHEN IT WORKS!
+   XXX: symbolic execution works much better!
+ *)
 let proc_to_bdd prog smt_fun proc filename =
     let var_len v =
         let tp = Program.get_type prog v in
@@ -269,32 +271,68 @@ let proc_to_bdd prog smt_fun proc filename =
     close_out out
 
 
+let transform_vars prog proc type_tab =
+(* XXX: similar to Simplif.flatten_array_decl *)
+    let new_type_tab = type_tab#copy in
+    let new_sym_tab = new symb_tab proc#get_name in
+    let flatten_array_var collected var =
+        let tp = type_tab#get_type var in
+        let decl_elem_var lst i =
+            let nv = var#fresh_copy (SymbExec.indexed_var var i) in
+            let nt = tp#copy in
+            nt#set_nelems 1;
+            new_type_tab#set_type nv nt;
+            new_sym_tab#add_symb nv#get_name (nv :> symb);
+            nv :: lst
+        in
+        if tp#is_array
+        then List.fold_left decl_elem_var collected (range 0 tp#nelems)
+        else begin
+            new_type_tab#set_type var (type_tab#get_type var);
+            new_sym_tab#add_symb var#get_name (var :> symb);
+            var :: collected
+        end
+    in
+    let intro_old_copies collected var =
+        let nv = new var ("O" ^ var#get_name) (fresh_id ()) in
+        let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
+        new_sym_tab#add_symb nv#get_name (nv :> symb);
+        nv :: collected
+    in
+    let vars = (Program.get_shared prog) @ (Program.get_instrumental prog)
+        @ proc#get_locals in
+    let unfolded_vars = List.fold_left flatten_array_var [] vars in
+    let _ = List.fold_left intro_old_copies unfolded_vars unfolded_vars in
+    (new_type_tab, new_sym_tab)
+
+
 let proc_to_symb solver caches prog proc block_fun filename =
     let type_tab = Program.get_type_tab prog in
+    let new_type_tab, new_sym_tab = transform_vars prog proc type_tab in
 
     let lirs = mir_to_lir (block_fun caches proc) in
-    log INFO (sprintf "  mk_ssa...");
+    log INFO (sprintf "  mk_cfg...");
     let cfg = mk_cfg lirs in
+    Cfg.write_dot (sprintf "%s.dot" filename) cfg;
     let path_efun = enum_paths cfg in
 
     solver#set_need_evidence false;
     let path_no = ref 0 in
     log INFO (sprintf "  constructing symbolic paths...");
     let num_paths = path_efun (fun _ -> ()) in
+    let out = open_out (filename ^ ".smv") in
     Printf.printf "    %d paths to construct...\n" num_paths;
-    let num_paths = path_efun (exec_path solver type_tab) in
-    Printf.printf "    constructed %d paths\n" num_paths
+    let num_paths = path_efun (exec_path solver out new_type_tab new_sym_tab) in
+    Printf.printf "    constructed %d paths\n" num_paths;
+    close_out out
 
 
 let transform_to_bdd solver caches prog =
-    let type_tab = Program.get_type_tab prog in
-    let new_type_tab = type_tab#copy in
-    let xprog = Program.set_type_tab new_type_tab prog in
     let convert_proc proc =
         let fname = proc#get_name ^ "-I" in
-        (proc_to_symb solver caches xprog proc get_init_body fname);
+        (proc_to_symb solver caches prog proc get_init_body fname);
         let fname = proc#get_name ^ "-R" in
-        (proc_to_symb solver caches xprog proc get_main_body fname);
+        (proc_to_symb solver caches prog proc get_main_body fname);
         (*
         let fname = proc#get_name ^ "-I" in
         (proc_to_bdd xprog

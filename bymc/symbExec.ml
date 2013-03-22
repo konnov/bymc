@@ -19,11 +19,12 @@ let is_input (v: var): bool =
     let n = v#get_name in
     (String.length n) > 0 && (String.get n 0) = 'O'
 
+let not_input (v: var): bool = not (is_input v)
 
-let mk_input (type_tab: data_type_tab) (v: var): var =
-    let nv = new var ("O" ^ v#get_name) (fresh_id ()) in
-    let _ = type_tab#set_type nv (type_tab#get_type v) in
-    nv
+let get_input (sym_tab: symb_tab) (v: var): var =
+    let name = "O" ^ v#get_name in
+    let sym = sym_tab#lookup name in
+    sym#as_var
 
 
 let linearize_blocks (path: token basic_block list) =
@@ -42,7 +43,7 @@ let linearize_blocks (path: token basic_block list) =
 
 let sub_vars vals exp =
     let sub v =
-        if not (is_input v) && (Hashtbl.mem vals v#id)
+        if (not_input v) && (Hashtbl.mem vals v#id)
         then Hashtbl.find vals v#id
         else Var v
     in
@@ -73,32 +74,13 @@ let is_sat solver type_tab exp =
 
 let indexed_var v idx = sprintf "%s_%d_" v#get_name idx
 
-(* XXX: similar to Simplif.flatten_array_decl *)
-let flatten_array_var type_tab new_type_tab new_sym_tab var =
-    let tp = type_tab#get_type var in
-    let decl_elem_var i =
-        let nv = var#fresh_copy (indexed_var var i) in
-        let nt = tp#copy in
-        nt#set_nelems 1;
-        new_type_tab#set_type nv nt;
-        new_sym_tab#add_symb nv#get_name (nv :> symb)
-    in
-    if tp#is_array
-    then List.iter decl_elem_var (range 0 tp#nelems)
-    else begin
-        new_type_tab#set_type var (type_tab#get_type var);
-        new_sym_tab#add_symb var#get_name (var :> symb)
-    end
-
-
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
 
-let exec_path solver (type_tab: data_type_tab) (path: token basic_block list) =
-    let new_sym_tab = new symb_tab "" in
-    let new_type_tab = type_tab#copy in
+let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
+        (path: token basic_block list) =
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
-        Var ((new_sym_tab#lookup (indexed_var arr i))#as_var)
+        Var ((sym_tab#lookup (indexed_var arr i))#as_var)
     | BinEx (ARR_ACCESS, Var arr, idx_exp) ->
         raise (SymbExec_error
             (sprintf "Expected a constant index, found: %s" (expr_s idx_exp)))
@@ -113,9 +95,6 @@ let exec_path solver (type_tab: data_type_tab) (path: token basic_block list) =
         raise (SymbExec_error (sprintf "Expected var, found: %s" (expr_s e)))
     in
     let vals = Hashtbl.create 10 in
-    let add_input v =
-        Hashtbl.add vals v#id (Var (mk_input new_type_tab v))
-    in
     let stmts = linearize_blocks path in
     let exec path_cons = function
     | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, idx_exp), rhs)) ->
@@ -147,31 +126,26 @@ let exec_path solver (type_tab: data_type_tab) (path: token basic_block list) =
 
     | _ -> path_cons
     in
-    let vars = stmt_list_used_vars stmts in
-
-    (* XXX: this can be done once and for all paths! Move it out... *)
-    List.iter (flatten_array_var type_tab new_type_tab new_sym_tab) vars;
-    let new_vars = List.map (fun (_, s) -> s#as_var) new_sym_tab#get_symbs in
-    List.iter add_input new_vars;
+    let add_input v =
+        Hashtbl.add vals v#id (Var (get_input sym_tab v))
+    in
+    let all_vars = List.map (fun (_, s) -> s#as_var) sym_tab#get_symbs in
+    let vars = List.filter not_input all_vars in
+    List.iter add_input vars;
 
     let path_cons = List.fold_left exec (Const 1) stmts in
     let path_cons = compute_consts path_cons in
     if not ((is_c_false path_cons)
         || (not (is_c_true path_cons)
-            && not (is_sat solver new_type_tab path_cons)))
+            && not (is_sat solver type_tab path_cons)))
     then begin
-        (* TODO: write debug info to a file *)
-        (*
-        printf "  Path constraint %d: %s\n" !path_cnt (expr_s path_cons);
-        *)
-        printf " %d\n" !path_cnt;
+        fprintf log "  Path constraint %d: %s\n"
+            !path_cnt (expr_s path_cons);
+        printf " %d" !path_cnt;
         path_cnt := !path_cnt + 1;
-        (*
-        let print_var v =
+        let to_assgn v =
             let exp = Hashtbl.find vals v#id in
-            printf " %s = %s," v#get_name (expr_s exp) in
-        List.iter print_var new_vars;
-        printf "\n\n"
-        *)
+            sprintf "%s = %s" v#get_name (expr_s exp) in
+        fprintf log "%s\n;" (str_join " & " (List.map to_assgn vars));
     end
 
