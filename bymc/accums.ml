@@ -31,10 +31,9 @@ let rec mk_product_of_lists range_lists =
 
 
 (* like String.join in python *)
-let str_join sep list_of_strings =
-    List.fold_left
-        (fun res s -> if res <> "" then (res ^ sep ^ s) else res ^ s)
-        "" list_of_strings
+let str_join (sep: string) (strs: string list) =
+    let join accum s = if accum <> "" then (accum ^ sep ^ s) else s in
+    List.fold_left join "" strs
 
 
 (* separate a list into three parts:

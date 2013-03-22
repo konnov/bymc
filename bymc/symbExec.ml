@@ -79,15 +79,17 @@ let is_sat solver type_tab exp =
 
 let indexed_var v idx = sprintf "%s_%d_" v#get_name idx
 
-let smv_name sym_tab v =
-    if is_input v
-    then (get_output sym_tab v)#get_name
-    else sprintf "next(%s)" (get_output sym_tab v)#get_name
+let smv_name sym_tab is_init v =
+    let oname = (get_output sym_tab v)#get_name in
+    if is_input v || is_init
+    then oname
+    else sprintf "next(%s)" oname
 
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (path: token basic_block list) =
+        (shared: var list) is_init (path: token basic_block list) =
+    let var_fun = smv_name sym_tab is_init in
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
@@ -150,13 +152,13 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             && not (is_sat solver type_tab path_cons)))
     then begin
         fprintf log "-- path %d\n" !path_cnt;
-        if not (is_c_true path_cons)
-        then fprintf log "  | (%s\n"
-            (Nusmv.expr_s (smv_name sym_tab) path_cons)
-        else fprintf log "  | (TRUE\n";
-
         printf " %d" !path_cnt;
         path_cnt := !path_cnt + 1;
+        let path_s =
+            if not (is_c_true path_cons)
+            then Nusmv.expr_s var_fun path_cons
+            else ""
+        in
         let find_changes changed v =
             let exp = Hashtbl.find vals v#id in
             match exp with
@@ -164,25 +166,27 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
                 let ov = get_output sym_tab arg in
                 if ov#id = v#id
                 then changed
-                else (smv_name sym_tab v, arg#get_name) :: changed
+                else (var_fun v, arg#get_name) :: changed
             | _ ->
-                (smv_name sym_tab v,
-                 Nusmv.expr_s (smv_name sym_tab) exp) :: changed
+                (var_fun v, Nusmv.expr_s var_fun exp) :: changed
         in
         (* nusmv syntax *)
         let changed = List.fold_left find_changes [] shared in
-        let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e ) changed in
+        let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
         let unchanged = List.map (fun (v, _) -> sprintf "%s" v) changed in
         let unchanged_s =
             if unchanged <> []
             then sprintf "unchanged_except_%s" (str_join "_" unchanged)
             else ""
         in
-        if eqs <> []
-        then fprintf log "  & %s" (str_join " & " eqs);
-        if unchanged <> []
-        then fprintf log "\n  & unchanged_except_%s)\n"
-            (str_join "_" unchanged)
-        else fprintf log "\n";
+        let eq_s = str_join " & " eqs in
+        let unchg_s =
+            if unchanged <> [] && not is_init
+            then sprintf "unchanged_except_%s" (str_join "_" unchanged)
+            else ""
+        in
+        let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in
+        let expr_s = str_join "\n  & " strs in
+        fprintf log " | (%s)\n" expr_s
     end
 
