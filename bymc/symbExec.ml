@@ -122,7 +122,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
 
     | Expr (_, e) ->
         let ne =
-            try replace_arr (sub_vars vals e)
+            try sub_vars vals (replace_arr (sub_vars vals e))
             with SymbExec_error s ->
             begin
                 printf "The troublesome path is:\n";
@@ -178,10 +178,11 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             then sprintf "unchanged_except_%s" (str_join "_" unchanged)
             else ""
         in
-        fprintf log "  & %s" (str_join " & " eqs);
+        if eqs <> []
+        then fprintf log "  & %s" (str_join " & " eqs);
         if unchanged <> []
         then fprintf log "\n  & unchanged_except_%s)\n"
             (str_join "_" unchanged)
-        else fprintf log ";\n";
+        else fprintf log "\n";
     end
 
