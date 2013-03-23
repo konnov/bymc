@@ -363,7 +363,7 @@ let transform_to_bdd solver caches prog =
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
             proc#get_locals in
         fprintf out "-- %s\n" proc#get_name;
-        fprintf out " | (\n";
+        fprintf out " | (FALSE\n";
         proc_to_symb solver caches prog proc proc_type_tab
             proc_sym_tab shared get_main_body out "TRANS";
         fprintf out ")\n"
