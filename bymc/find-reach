@@ -1,0 +1,54 @@
+#!/usr/bin/python
+
+import re
+
+HIDDEN = [
+  #"bymc_kP_1i",
+  "bymc_kP_2i", "bymc_kP_3i",
+  "bymc_kP_5i", "bymc_kP_6i", "bymc_kP_7i", #"bymc_kP_8i",
+  #"bymc_kP_9i",
+  #"bymc_kP_10i",
+  "bymc_kP_11i", "bymc_kP_12i",
+  "bymc_kP_13i", "bymc_kP_14i",
+  #"bymc_kP_15i"
+]
+
+def rewrite(in_filename, out_filename):
+    fin = open(in_filename, "r")
+    fout = open(out_filename, "w+")
+
+    trans = False
+    for line in fin:
+        if line == "TRANS\n":
+            trans = True
+        
+        new_line = line
+        for v in HIDDEN:
+            re_text = '(.*)(next\(%s\) = )([0-9]+)(.*)' % v
+            m = re.compile(re_text).match(new_line)
+            if m:
+                new_line = "%s%s%s%s\n" % (m.group(1), m.group(2), "1", m.group(4))
+
+        remove = False
+        for v in HIDDEN:
+            re_text = '.*%s (=|!=) ([0-9]+).*' % v
+            m = re.compile(re_text).match(line)
+            if m and m.group(1) == '=' and m.group(2) != '0':
+                remove = True
+                break
+
+        if trans and not remove:
+            fout.write(new_line)
+
+        if not trans:
+            fout.write(line)
+
+
+    for v in HIDDEN:
+        fout.write('SPEC AG (%s = 0)\n' % v)
+
+    fout.close()
+    fin.close()
+
+if __name__ == '__main__':
+    rewrite("Proc.smv", "out.smv")
