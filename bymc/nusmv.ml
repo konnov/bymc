@@ -27,6 +27,19 @@ let var_type_smv tp =
     else base_str tp#basetype
 
 
+let type_default_smv tp =
+    match tp#basetype with
+      | TBIT -> "FALSE"
+      | TBYTE -> "0"
+      | TSHORT -> "0"
+      | TINT -> "0"
+      | TUNSIGNED -> raise (Smv_error "Unsigned is not supported")
+      | TCHAN -> raise (Smv_error "Unsigned is not supported")
+      | TMTYPE -> raise (Smv_error "Unsigned is not supported") 
+      | TPROPOSITION -> raise (Smv_error "Unsigned is not supported")
+      | TUNDEF -> raise (Failure "Undefined type")
+
+
 let token_s t =
     match t with
       | ASSERT -> "ASSERT"

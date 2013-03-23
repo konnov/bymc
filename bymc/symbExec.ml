@@ -153,7 +153,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     in
     if is_final && is_sat
     then begin
-        fprintf log "-- path %d\n" !path_cnt;
+        fprintf log "-- PATH %d\n" !path_cnt;
         printf " %d" !path_cnt;
         path_cnt := !path_cnt + 1;
         let path_s =
@@ -177,15 +177,23 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
         let unchanged_eqs =
             let mk_eq n = sprintf "next(%s) = %s" n n in
-            List.map mk_eq unchanged in
-        let eq_s = str_join " & " eqs in
+            let mk_init n =
+                let nv = (sym_tab#lookup n)#as_var in
+                sprintf "%s = %s"
+                    n (Nusmv.type_default_smv (type_tab#get_type nv)) in
+            if is_init
+            then List.map mk_init unchanged
+            else List.map mk_eq unchanged
+        in
+        let eq_s = if eqs <> [] then "  " ^ (str_join " & " eqs) else ""
+        in
         let unchg_s =
-            if unchanged <> [] && not is_init
-            then str_join " & " unchanged_eqs
+            if unchanged <> []
+            then "  " ^ (str_join " & " unchanged_eqs)
             else ""
         in
         let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in
-        let expr_s = str_join "\n  & " strs in
+        let expr_s = str_join " & " strs in
         fprintf log " | (%s)\n" expr_s
     end;
     is_sat

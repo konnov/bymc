@@ -329,10 +329,12 @@ let proc_to_symb solver caches prog proc
 
     solver#set_need_evidence false;
     log INFO (sprintf "  constructing symbolic paths...");
+    (*
     let num_paths = path_efun (fun _ fin -> not fin) in
+    Printf.printf "    %d paths to enumerate...\n" num_paths;
+    *)
 
     fprintf out "%s\n  FALSE\n" section;
-    Printf.printf "    %d paths to enumerate...\n" num_paths;
     let is_init = (section = "INIT") in
     let num_paths =
         path_efun (exec_path solver out new_type_tab new_sym_tab shared is_init)
