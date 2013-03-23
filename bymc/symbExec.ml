@@ -88,7 +88,8 @@ let smv_name sym_tab is_init v =
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) is_init (path: token basic_block list) =
+        (shared: var list) (is_init: bool)
+        (path: token basic_block list) (is_final: bool) =
     let var_fun = smv_name sym_tab is_init in
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
@@ -147,9 +148,10 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
 
     let path_cons = List.fold_left exec (Const 1) stmts in
     let path_cons = compute_consts path_cons in
-    if not ((is_c_false path_cons)
-        || (not (is_c_true path_cons)
-            && not (is_sat solver type_tab path_cons)))
+    let is_sat = (not (is_c_false path_cons))
+        || ((is_c_true path_cons) && (is_sat solver type_tab path_cons))
+    in
+    if is_final && is_sat
     then begin
         fprintf log "-- path %d\n" !path_cnt;
         printf " %d" !path_cnt;
@@ -185,5 +187,6 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in
         let expr_s = str_join "\n  & " strs in
         fprintf log " | (%s)\n" expr_s
-    end
+    end;
+    is_sat
 

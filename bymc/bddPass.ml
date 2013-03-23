@@ -329,8 +329,7 @@ let proc_to_symb solver caches prog proc
 
     solver#set_need_evidence false;
     log INFO (sprintf "  constructing symbolic paths...");
-    let path_no = ref 0 in
-    let num_paths = path_efun (fun _ -> ()) in
+    let num_paths = path_efun (fun _ fin -> not fin) in
 
     fprintf out "%s\n  FALSE\n" section;
     Printf.printf "    %d paths to enumerate...\n" num_paths;

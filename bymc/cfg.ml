@@ -434,24 +434,22 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
  We use a naive DFS algorithm, it works only on small graphs!
  *)
 let enum_paths (cfg: 't control_flow_graph)
-        (path_fun: 't basic_block list -> unit): int =
-    (*
-    let sccs = comp_sccs cfg#entry in
-    if sccs <> [] then raise (CfgError "CFG has a cycle!");
-    *)
-    
+        (path_fun: 't basic_block list -> bool -> bool): int =
     let rec dfs path bb =
         if bb#get_visit_flag
         then raise (CfgError
             (sprintf "Graph is cyclic: %d -> .. -> %d" bb#label bb#label))
         else bb#set_visit_flag true;
         let new_path = bb :: path in
-        let num = if bb#get_succ = [] (* the final state is reached *)
-        then begin
-            path_fun (List.rev new_path);
-            1 (* one path enumerated *)
-        end else List.fold_left (+) 0
-            (List.map (dfs new_path) bb#get_succ) (* many paths *)
+        let is_final = (bb#get_succ = []) in
+        let go_further = path_fun (List.rev new_path) is_final in
+        let num =
+            if is_final
+            then 1 (* a full path is constructed *)
+            else if not go_further
+            then 0
+            (* many paths *)
+            else List.fold_left (+) 0 (List.map (dfs new_path) bb#get_succ)
         in
         bb#set_visit_flag false;
         num
