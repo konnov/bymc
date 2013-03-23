@@ -7,6 +7,7 @@ import sys
 
 def find_line(filename, lineno):
     # try to open the file
+    errf = None
     try:
         errf = open(filename, "r")
         for i, l in enumerate(errf):
