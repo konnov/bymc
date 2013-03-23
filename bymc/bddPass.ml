@@ -271,12 +271,10 @@ let proc_to_bdd prog smt_fun proc filename =
     close_out out
 
 
-let transform_vars prog proc type_tab =
+let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
 (* XXX: similar to Simplif.flatten_array_decl *)
-    let new_type_tab = type_tab#copy in
-    let new_sym_tab = new symb_tab proc#get_name in
     let flatten_array_var collected var =
-        let tp = type_tab#get_type var in
+        let tp = old_type_tab#get_type var in
         let decl_elem_var lst i =
             let nv = var#fresh_copy (SymbExec.indexed_var var i) in
             let nt = tp#copy in
@@ -288,7 +286,7 @@ let transform_vars prog proc type_tab =
         if tp#is_array
         then List.fold_left decl_elem_var collected (range 0 tp#nelems)
         else begin
-            new_type_tab#set_type var (type_tab#get_type var);
+            new_type_tab#set_type var (old_type_tab#get_type var);
             new_sym_tab#add_symb var#get_name (var :> symb);
             var :: collected
         end
@@ -299,14 +297,16 @@ let transform_vars prog proc type_tab =
         new_sym_tab#add_symb nv#get_name (nv :> symb);
         nv :: collected
     in
-    let shared = (Program.get_shared prog) @ (Program.get_instrumental prog)
-    in
-    let unfolded_shared = List.fold_left flatten_array_var [] shared in
+    let unfolded = List.fold_left flatten_array_var [] vars in
+    let _ = List.fold_left intro_old_copies [] unfolded in
+    unfolded
+(*
     let local = proc#get_locals in
     let unfolded_vars =
         List.fold_left flatten_array_var unfolded_shared local in
     let _ = List.fold_left intro_old_copies unfolded_vars unfolded_vars in
     (new_type_tab, new_sym_tab, unfolded_shared)
+ *)
 
 
 let write_smv_header new_type_tab shared out =    
@@ -329,12 +329,6 @@ let proc_to_symb solver caches prog proc
 
     solver#set_need_evidence false;
     log INFO (sprintf "  constructing symbolic paths...");
-    (*
-    let num_paths = path_efun (fun _ fin -> not fin) in
-    Printf.printf "    %d paths to enumerate...\n" num_paths;
-    *)
-
-    fprintf out "%s\n  FALSE\n" section;
     let is_init = (section = "INIT") in
     let num_paths =
         path_efun (exec_path solver out new_type_tab new_sym_tab shared is_init)
@@ -343,27 +337,40 @@ let proc_to_symb solver caches prog proc
 
 
 let transform_to_bdd solver caches prog =
-    let convert_proc proc =
-        let type_tab = Program.get_type_tab prog in
-        let new_type_tab, new_sym_tab, shared =
-            transform_vars prog proc type_tab in
-        let out = open_out (sprintf "%s.smv" proc#get_name) in
-        write_smv_header new_type_tab shared out; 
-        proc_to_symb solver caches prog proc new_type_tab
-            new_sym_tab shared get_init_body out "INIT";
-        proc_to_symb solver caches prog proc new_type_tab
-            new_sym_tab shared get_main_body out "TRANS";
-        close_out out
-        (*
-        let fname = proc#get_name ^ "-I" in
-        (proc_to_bdd xprog
-            (blocks_to_smt caches xprog type_tab new_type_tab get_init_body fname)
-            proc fname);
-        let fname = proc#get_name ^ "-R" in
-        (proc_to_bdd xprog
-            (blocks_to_smt caches xprog type_tab new_type_tab get_main_body fname)
-            proc fname)
-        *)
+    let type_tab = Program.get_type_tab prog in
+    let new_type_tab = type_tab#copy in
+    let new_sym_tab = new symb_tab "main" in
+    let shared = (Program.get_shared prog) @ (Program.get_instrumental prog) in
+    let shared = transform_vars prog type_tab new_type_tab new_sym_tab shared in
+    let out = open_out "main.smv" in
+    write_smv_header new_type_tab shared out; 
+    let make_init proc =
+        let proc_sym_tab = new symb_tab proc#get_name in
+        proc_sym_tab#set_parent new_sym_tab;
+        let proc_type_tab = new_type_tab#copy in
+        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
+            proc#get_locals in
+        fprintf out "-- %s\n" proc#get_name;
+        fprintf out " & (\n";
+        proc_to_symb solver caches prog proc proc_type_tab
+            proc_sym_tab shared get_init_body out "INIT";
+        fprintf out ")\n"
     in
-    List.iter convert_proc (Program.get_procs prog)
+    let make_trans proc =
+        let proc_sym_tab = new symb_tab proc#get_name in
+        proc_sym_tab#set_parent new_sym_tab;
+        let proc_type_tab = new_type_tab#copy in
+        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
+            proc#get_locals in
+        fprintf out "-- %s\n" proc#get_name;
+        fprintf out " | (\n";
+        proc_to_symb solver caches prog proc proc_type_tab
+            proc_sym_tab shared get_main_body out "TRANS";
+        fprintf out ")\n"
+    in
+    fprintf out "INIT\n  TRUE\n";
+    List.iter make_init (Program.get_procs prog);
+    fprintf out "TRANS\n  FALSE\n";
+    List.iter make_trans (Program.get_procs prog);
+    close_out out
 

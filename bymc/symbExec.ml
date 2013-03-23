@@ -142,7 +142,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let add_input v =
         Hashtbl.add vals v#id (Var (get_input sym_tab v))
     in
-    let all_vars = List.map (fun (_, s) -> s#as_var) sym_tab#get_symbs in
+    let all_vars = List.map (fun (_, s) -> s#as_var) sym_tab#get_symbs_rec in
     let vars = List.filter not_input all_vars in
     List.iter add_input vars;
 
@@ -162,7 +162,11 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             else ""
         in
         let find_changes (unchanged, changed) v =
-            let exp = Hashtbl.find vals v#id in
+            let exp = 
+                try Hashtbl.find vals v#id
+                with Not_found ->
+                    raise (SymbExec_error (sprintf "%s not found" v#get_name))
+            in
             match exp with
             | Var arg ->
                 let ov = get_output sym_tab arg in

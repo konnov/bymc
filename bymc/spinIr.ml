@@ -221,6 +221,11 @@ class symb_tab i_tab_name =
 
         method get_symbs = Accums.hashtbl_as_list tab
 
+        method get_symbs_rec: ((string * symb) list) =
+            match parent with
+            | Some p -> (Accums.hashtbl_as_list tab) @ p#get_symbs_rec
+            | None -> Accums.hashtbl_as_list tab
+
         method set_parent p = parent <- Some p
         method get_parent = parent
     end
