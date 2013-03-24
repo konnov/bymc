@@ -130,7 +130,10 @@ let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
 let print_path log =        
     fprintf log "-- PATH %d\n" !path_cnt;
     if (!path_cnt mod 1000) = 0
-    then printf " visited %d paths...\n" !path_cnt;
+    then begin
+        printf " visited %d paths...\n" !path_cnt;
+        flush stdout;
+    end;
     path_cnt := !path_cnt + 1
 
 
