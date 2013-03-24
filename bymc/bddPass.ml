@@ -320,7 +320,7 @@ let write_smv_header new_type_tab shared out =
 
 (* TODO: re-use parts of the computed tree as in symbolic execution! *)
 let proc_to_symb solver caches prog proc
-        new_type_tab new_sym_tab shared block_fun out section =
+        new_type_tab new_sym_tab shared hidden block_fun out section =
     log INFO (sprintf "  mk_cfg...");
     let lirs = mir_to_lir (block_fun caches proc) in
     let cfg = mk_cfg lirs in
@@ -331,9 +331,33 @@ let proc_to_symb solver caches prog proc
     log INFO (sprintf "  constructing symbolic paths...");
     let is_init = (section = "INIT") in
     let num_paths =
-        path_efun (exec_path solver out new_type_tab new_sym_tab shared is_init)
+        path_efun (exec_path solver out
+            new_type_tab new_sym_tab shared hidden is_init)
     in
     Printf.printf "    enumerated %d paths\n" num_paths
+
+
+let read_hidden (sym_tab: symb_tab) (filename: string): var list =
+    (* XXX: we should definitely use batteries here *)
+    let vars = ref [] in
+    let fin = open_in filename in
+    try
+        while true; do
+            let line = input_line fin in
+            let sym = sym_tab#lookup line in
+            vars := (sym#as_var :: !vars)
+        done;
+        !vars
+    with End_of_file ->
+        close_in fin;
+        !vars
+
+
+let write_hidden_spec hidden out =
+    let write v =
+        fprintf out "SPEC AG (%s = 0)\n" v#get_name
+    in
+    List.iter write hidden
 
 
 let transform_to_bdd solver caches prog =
@@ -345,18 +369,19 @@ let transform_to_bdd solver caches prog =
     let out = open_out "main.smv" in
     write_smv_header new_type_tab shared out; 
     let make_init proc =
+        (* XXX: fix the initial states formula for several processes! *)
         let proc_sym_tab = new symb_tab proc#get_name in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
             proc#get_locals in
         fprintf out "-- %s\n" proc#get_name;
-        fprintf out " & (TRUE\n";
+        fprintf out " & (FALSE\n";
         proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab shared get_init_body out "INIT";
+            proc_sym_tab shared [] get_init_body out "INIT";
         fprintf out ")\n"
     in
-    let make_trans proc =
+    let make_trans hidden proc =
         let proc_sym_tab = new symb_tab proc#get_name in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
@@ -365,12 +390,15 @@ let transform_to_bdd solver caches prog =
         fprintf out "-- %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
         proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab shared get_main_body out "TRANS";
+            proc_sym_tab shared hidden get_main_body out "TRANS";
         fprintf out ")\n"
     in
     fprintf out "INIT\n  TRUE\n";
     List.iter make_init (Program.get_procs prog);
     fprintf out "TRANS\n  FALSE\n";
-    List.iter make_trans (Program.get_procs prog);
+    let hidden = read_hidden new_sym_tab "hidden.txt" in
+    List.iter (make_trans hidden) (Program.get_procs prog);
+
+    write_hidden_spec hidden out;
     close_out out
 

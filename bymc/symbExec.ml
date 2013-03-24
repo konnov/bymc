@@ -41,7 +41,7 @@ let linearize_blocks (path: token basic_block list) =
     | Assert (_, _) -> true
     | Assume (_, _) -> true
     | Havoc (_, _) -> true
-    | _ -> false (* ignore anything else *)
+    | _ -> false (* ignore everything else *)
     in
     List.filter is_lin_stmt seq
 
@@ -77,6 +77,46 @@ let is_sat solver type_tab exp =
         true
 
 
+let has_hidden_precond sym_tab hidden exp =
+    let is_hidden = function
+    | BinEx (EQ, Var v, Const 0)
+    | BinEx (NE, Var v, Const 0) ->
+    (* we cannot disable checking for zero as it might be a precondition for
+       changing the variables
+     *)
+        false
+    | BinEx (EQ, Var v, _)
+    | BinEx (NE, Var v, _) ->
+        let ov = get_output sym_tab v in
+        List.exists (fun h -> ov#id = h#id) hidden 
+    | _ -> false
+    in
+    expr_exists is_hidden exp
+
+
+let activate_hidden sym_tab hidden vals =
+    let try_activate v =
+        let exp = 
+            try Hashtbl.find vals v#id
+            with Not_found ->
+                raise (SymbExec_error (sprintf "%s not found" v#get_name))
+        in
+        let needs_activation =
+            match exp with
+            | Const i ->
+                i <> 0
+            | Var arg ->
+                let ov = get_output sym_tab arg in
+                ov#id <> v#id
+            | _ ->
+                true
+        in
+        if needs_activation
+        then Hashtbl.replace vals v#id (Const 1) (* activate *)
+    in
+    List.iter try_activate hidden
+
+
 let indexed_var v idx = sprintf "%s_%di" v#get_name idx
 
 let smv_name sym_tab is_init v =
@@ -85,10 +125,17 @@ let smv_name sym_tab is_init v =
     then oname
     else sprintf "next(%s)" oname
 
+
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
+let print_path log =        
+    fprintf log "-- PATH %d\n" !path_cnt;
+    if (!path_cnt mod 1000) = 0
+    then printf " %d" !path_cnt;
+    path_cnt := !path_cnt + 1
+
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (is_init: bool)
+        (shared: var list) (hidden: var list) (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
     let var_fun = smv_name sym_tab is_init in
     let rec replace_arr = function
@@ -151,11 +198,11 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let is_sat = (not (is_c_false path_cons))
         || ((is_c_true path_cons) && (is_sat solver type_tab path_cons))
     in
-    if is_final && is_sat
+    let is_hidden = has_hidden_precond sym_tab hidden path_cons in
+
+    if is_final && is_sat && not is_hidden
     then begin
-        fprintf log "-- PATH %d\n" !path_cnt;
-        printf " %d" !path_cnt;
-        path_cnt := !path_cnt + 1;
+        print_path log;
         let path_s =
             if not (is_c_true path_cons)
             then Nusmv.expr_s var_fun path_cons
@@ -177,6 +224,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
                 (unchanged, (var_fun v, Nusmv.expr_s var_fun exp) :: changed)
         in
         (* nusmv syntax *)
+        activate_hidden sym_tab hidden vals;
         let unchanged, changed = List.fold_left find_changes ([], []) shared in
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
         let unchanged_eqs =
@@ -200,5 +248,5 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         let expr_s = str_join " & " strs in
         fprintf log " | (%s)\n" expr_s
     end;
-    is_sat
+    is_sat && not is_hidden
 
