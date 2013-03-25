@@ -21,8 +21,7 @@ let var_type_smv tp =
       | TUNDEF -> raise (Failure "Undefined type")
     in
     let l, r = tp#range in
-    (* whatever looks reasonable to enumerate *)
-    if not tp#is_array && tp#has_range && (r - l) <= 20
+    if not tp#is_array && tp#has_range
     then sprintf "{ %s }" (str_join ", " (List.map string_of_int (range l r)))
     else base_str tp#basetype
 
