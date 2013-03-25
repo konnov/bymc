@@ -316,8 +316,8 @@ let write_smv_header new_type_tab new_sym_tab shared hidden out =
     let decl_var v = 
         let tp = new_type_tab#get_type v in
         if List.mem v hidden
-        then fprintf out "  -- %s: %s;\n" v#qual_name (Nusmv.var_type_smv tp)
-        else fprintf out "  %s: %s;\n" v#qual_name (Nusmv.var_type_smv tp)
+        then fprintf out "  -- %s: %s;\n" v#mangled_name (Nusmv.var_type_smv tp)
+        else fprintf out "  %s: %s;\n" v#mangled_name (Nusmv.var_type_smv tp)
     in
     fprintf out "MODULE main\nVAR\n";
     List.iter decl_var shared
@@ -325,7 +325,7 @@ let write_smv_header new_type_tab new_sym_tab shared hidden out =
 
 (* TODO: re-use parts of the computed tree as in symbolic execution! *)
 let proc_to_symb solver caches prog proc
-        new_type_tab new_sym_tab shared hidden block_fun out section =
+        new_type_tab new_sym_tab vars hidden block_fun out section =
     log INFO (sprintf "  mk_cfg...");
     let lirs = mir_to_lir (block_fun caches proc) in
     let cfg = mk_cfg lirs in
@@ -337,9 +337,21 @@ let proc_to_symb solver caches prog proc
     let is_init = (section = "INIT") in
     let num_paths =
         path_efun (exec_path solver out
-            new_type_tab new_sym_tab shared hidden is_init)
+            new_type_tab new_sym_tab vars hidden is_init)
     in
-    Printf.printf "    enumerated %d paths\n" num_paths
+    Printf.printf "    enumerated %d paths\n" num_paths;
+    if num_paths = 0
+    then begin
+        Printf.printf "WARNING: added a loop in %s\n" section;
+        let keep sym =
+            let v = sym#as_var in
+            if List.exists (fun h -> h#id = v#id) hidden
+            then "TRUE"
+            else Printf.sprintf "next(%s)=%s" v#mangled_name v#mangled_name
+        in
+        let keep_s = str_join " & " (List.map keep vars) in
+        Printf.fprintf out " | (%s)\n" keep_s
+    end
 
 
 let read_hidden (sym_tab: symb_tab) (shared: var list)
@@ -352,7 +364,7 @@ let read_hidden (sym_tab: symb_tab) (shared: var list)
     if not exists
     then begin
         let fout = open_out filename in
-        List.iter (fun v -> fprintf fout "%s\n" v#qual_name) shared;
+        List.iter (fun v -> fprintf fout "%s\n" v#mangled_name) shared;
         close_out fout;
         shared
     end else 

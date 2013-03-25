@@ -32,6 +32,9 @@ let get_output (sym_tab: symb_tab) (v: var): var =
     then (sym_tab#lookup (String.sub n 1 ((String.length n) - 1)))#as_var
     else v
 
+let get_use (sym_tab: symb_tab): var =
+    (sym_tab#lookup "bymc_use")#as_var
+
 let linearize_blocks (path: token basic_block list) =
     let seq = List.concat (List.map (fun b -> b#get_seq) path) in
     let is_lin_stmt = function
@@ -59,49 +62,84 @@ type simple_eval_res = TFalse | TTrue | TMaybe | Int of int
 
 exception Eval_error of string
 
-let is_sat solver type_tab exp =
-    solver#push_ctx;
-    let vars = expr_used_vars exp in
-    let add_var v =
-        let t = type_tab#get_type v in
-        solver#append_var_def v t
-    in
-    if not (is_c_true exp)
-    then begin
+let check_sat solver type_tab exp =
+    if is_c_true exp
+    then true
+    else if is_c_false exp
+    then false
+    else begin
+        let vars = expr_used_vars exp in
+        let add_var v =
+            let t = type_tab#get_type v in
+            solver#append_var_def v t
+        in
+        solver#push_ctx;
         List.iter add_var vars;
         solver#append_expr exp;
         let res = solver#check in
         solver#pop_ctx;
         res
-    end else
-        true
+    end
 
 
-let has_hidden_precond sym_tab hidden exp =
-    let is_hidden = function
-    | BinEx (EQ, Var v, Const 0)
-    | BinEx (NE, Var v, Const 0) ->
-    (* we cannot disable checking for zero as it might be a precondition for
-       changing the variables
-     *)
-        false
-    | BinEx (EQ, Var v, _)
-    | BinEx (NE, Var v, _) ->
+let hide_non_zero sym_tab hidden exp =
+    let find_idx v =
+        (* XXX: use a hashtable here? *)
         let ov = get_output sym_tab v in
-        List.exists (fun h -> ov#id = h#id) hidden 
-    | _ -> false
+        try 1 + (list_find_match_pos (fun h -> ov#id = h#id) hidden)
+        with Not_found -> 0
     in
-    expr_exists is_hidden exp
+    let rec rewrite = function
+    | BinEx (EQ, Var v, Const i) as e ->
+        let idx = find_idx v in
+        if i > 0 && idx > 0
+        then Const 0 (* FALSE *)
+        else e
+
+    | BinEx (NE, Var v, Const i) as e ->
+        let idx = find_idx v in
+        if i = 0 && idx > 0
+        then Const 0 (* FALSE *)
+        else e
+
+    | BinEx (EQ, Var v, _)
+    | BinEx (NE, Var v, _) as e ->
+        let idx = find_idx v in
+        if idx > 0
+        then begin
+            Const 0 (* FALSE *)
+        end
+        else e
+
+    | BinEx (t, l, r) ->
+        BinEx (t, rewrite l, rewrite r)
+
+    | UnEx (t, r) ->
+        UnEx (t, rewrite r)
+
+    | _ as e -> e
+    in
+    rewrite exp
 
 
 (* TODO: rewrite x = _ to TRUE for all hidden x's *)
-let abstract_hidden sym_tab hidden exp = 
+let abstract_hidden sym_tab hidden vals exp = 
     let rec rewrite = function
     | BinEx (EQ, Var v, _)
     | BinEx (NE, Var v, _) as e ->
         let ov = get_output sym_tab v in
-        if List.exists (fun h -> ov#id = h#id) hidden 
-        then Const 1 (* TRUE *)
+        (* XXX: use a hashtable here? *)
+        let idx =
+            try 1 + (list_find_match_pos (fun h -> ov#id = h#id) hidden)
+            with Not_found -> 0
+        in
+        if idx > 0
+        then begin
+            let use_var = get_use sym_tab in
+            (* remember that this transition was hidden *)
+            Hashtbl.replace vals use_var#id (Const idx);
+            Const 1 (* TRUE *)
+        end
         else e
 
     | BinEx (t, l, r) ->
@@ -130,7 +168,7 @@ let activate_hidden sym_tab hidden vals =
             | _ ->
                 true
         in
-        let use_var = (sym_tab#lookup "bymc_use")#as_var in
+        let use_var = get_use sym_tab in
         if needs_activation
         then begin
             Hashtbl.replace vals use_var#id (Const (n + 1)); (* activate *)
@@ -221,17 +259,18 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
 
     let path_cons = List.fold_left exec (Const 1) stmts in
     let path_cons = compute_consts path_cons in
-    let is_sat = (not (is_c_false path_cons))
-        || ((is_c_true path_cons) && (is_sat solver type_tab path_cons))
+    let is_sat = check_sat solver type_tab path_cons
     in
     (* XXX: the following code is a disaster, rewrite *)
-    let is_hidden = has_hidden_precond sym_tab hidden path_cons in
+    let hidden_path_cons =
+        compute_consts (hide_non_zero sym_tab hidden path_cons) in
+    let is_hidden = not (check_sat solver type_tab hidden_path_cons) in
 
     if is_final && is_sat && not is_hidden
     then begin
         print_path log;
         let path_cons =
-            compute_consts (abstract_hidden sym_tab hidden path_cons) in
+            compute_consts (abstract_hidden sym_tab hidden vals path_cons) in
         let path_s =
             if not (is_c_true path_cons)
             then Nusmv.expr_s next_fun path_cons
@@ -241,7 +280,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             let exp = 
                 try Hashtbl.find vals v#id
                 with Not_found ->
-                    raise (SymbExec_error (sprintf "%s not found" v#qual_name))
+                    raise (SymbExec_error (sprintf "%s not found" v#mangled_name))
             in
             match exp with
             | Var arg ->

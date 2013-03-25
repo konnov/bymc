@@ -125,11 +125,11 @@ let list_find_pos e lst =
     fnd lst
 
 
-let list_find_match_pos match_fun e lst =
+let list_find_match_pos match_fun lst =
     let rec fnd = function
         | [] -> raise Not_found
         | hd :: tl ->
-            if match_fun e then 0 else 1 + (fnd tl)
+            if match_fun hd then 0 else 1 + (fnd tl)
     in
     fnd lst
 
