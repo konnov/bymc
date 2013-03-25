@@ -79,7 +79,7 @@ let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
 
 
 (* XXX: REWRITE EVERYTHING WHEN IT WORKS!
-   XXX: symbolic execution works much better!
+   XXX: symbolic execution works much better! Remove this version afterwards.
  *)
 let proc_to_bdd prog smt_fun proc filename =
     let var_len v =
@@ -271,9 +271,9 @@ let proc_to_bdd prog smt_fun proc filename =
     close_out out
 
 let intro_old_copies new_type_tab new_sym_tab collected var =
-    let nv = new var ("O" ^ var#get_name) (fresh_id ()) in
+    let nv = new var ("O" ^ var#mangled_name) (fresh_id ()) in
     let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
-    new_sym_tab#add_symb nv#get_name (nv :> symb);
+    new_sym_tab#add_symb nv#mangled_name (nv :> symb);
     nv :: collected
 
 
@@ -286,14 +286,14 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
             let nt = tp#copy in
             nt#set_nelems 1;
             new_type_tab#set_type nv nt;
-            new_sym_tab#add_symb nv#get_name (nv :> symb);
+            new_sym_tab#add_symb nv#mangled_name (nv :> symb);
             nv :: lst
         in
         if tp#is_array
         then List.fold_left decl_elem_var collected (range 0 tp#nelems)
         else begin
             new_type_tab#set_type var (old_type_tab#get_type var);
-            new_sym_tab#add_symb var#get_name (var :> symb);
+            new_sym_tab#add_symb var#mangled_name (var :> symb);
             var :: collected
         end
     in
@@ -306,7 +306,7 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
 
 let create_bymc_use new_type_tab new_sym_tab hidden =
     let var_use = new var "bymc_use" (fresh_id ()) in
-    new_sym_tab#add_symb var_use#get_name (var_use :> symb);
+    new_sym_tab#add_symb var_use#mangled_name (var_use :> symb);
     let use_tp = new data_type SpinTypes.TINT in
     use_tp#set_range 0 (1 + (List.length hidden));
     new_type_tab#set_type var_use use_tp;
@@ -316,8 +316,8 @@ let write_smv_header new_type_tab new_sym_tab shared hidden out =
     let decl_var v = 
         let tp = new_type_tab#get_type v in
         if List.mem v hidden
-        then fprintf out "  -- %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
-        else fprintf out "  %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
+        then fprintf out "  -- %s: %s;\n" v#qual_name (Nusmv.var_type_smv tp)
+        else fprintf out "  %s: %s;\n" v#qual_name (Nusmv.var_type_smv tp)
     in
     fprintf out "MODULE main\nVAR\n";
     List.iter decl_var shared
@@ -352,7 +352,7 @@ let read_hidden (sym_tab: symb_tab) (shared: var list)
     if not exists
     then begin
         let fout = open_out filename in
-        List.iter (fun v -> fprintf fout "%s\n" v#get_name) shared;
+        List.iter (fun v -> fprintf fout "%s\n" v#qual_name) shared;
         close_out fout;
         shared
     end else 

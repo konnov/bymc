@@ -16,18 +16,18 @@ exception SymbExec_error of string
 type var_cons_tbl = (string, int) Hashtbl.t
 
 let is_input (v: var): bool =
-    let n = v#get_name in
+    let n = v#mangled_name in
     (String.length n) > 0 && (String.get n 0) = 'O'
 
 let not_input (v: var): bool = not (is_input v)
 
 let get_input (sym_tab: symb_tab) (v: var): var =
-    let name = "O" ^ v#get_name in
+    let name = "O" ^ v#mangled_name in
     let sym = sym_tab#lookup name in
     sym#as_var
 
 let get_output (sym_tab: symb_tab) (v: var): var =
-    let n = v#get_name in
+    let n = v#mangled_name in
     if is_input v
     then (sym_tab#lookup (String.sub n 1 ((String.length n) - 1)))#as_var
     else v
@@ -120,7 +120,7 @@ let activate_hidden sym_tab hidden vals =
         let exp = 
             try Hashtbl.find vals v#id
             with Not_found ->
-                raise (SymbExec_error (sprintf "%s not found" v#get_name))
+                raise (SymbExec_error (sprintf "%s not found" v#mangled_name))
         in
         let needs_activation =
             match exp with
@@ -140,10 +140,10 @@ let activate_hidden sym_tab hidden vals =
     List.iter try_activate (List.combine (range 0 (List.length hidden)) hidden)
 
 
-let indexed_var v idx = sprintf "%s_%di" v#get_name idx
+let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
 
 let smv_name sym_tab is_init v =
-    let oname = (get_output sym_tab v)#get_name in
+    let oname = (get_output sym_tab v)#mangled_name in
     if is_input v || is_init
     then oname
     else sprintf "next(%s)" oname
@@ -241,14 +241,14 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             let exp = 
                 try Hashtbl.find vals v#id
                 with Not_found ->
-                    raise (SymbExec_error (sprintf "%s not found" v#get_name))
+                    raise (SymbExec_error (sprintf "%s not found" v#qual_name))
             in
             match exp with
             | Var arg ->
                 let oarg = get_output sym_tab arg in
                 if oarg#id = v#id
                 then (v :: unchanged), changed
-                else (unchanged, (next_fun v, arg#get_name) :: changed)
+                else (unchanged, (next_fun v, arg#mangled_name) :: changed)
             | _ ->
                 (unchanged, (next_fun v, Nusmv.expr_s next_fun exp) :: changed)
         in
@@ -261,9 +261,9 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         in
         let unchanged_eqs =
             let mk_eq v = 
-                sprintf "next(%s) = %s" v#get_name v#get_name in
+                sprintf "next(%s) = %s" v#mangled_name v#mangled_name in
             let mk_init v =
-                sprintf "%s = %s" v#get_name
+                sprintf "%s = %s" v#mangled_name
                     (Nusmv.type_default_smv (type_tab#get_type v))
             in
             if is_init

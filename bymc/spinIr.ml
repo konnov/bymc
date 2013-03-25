@@ -137,6 +137,16 @@ var name_i var_id =
                 else q in
             if qi <> "" then qi ^ "." ^ name else name
 
+        (* a qualified name as a mangled identifier, e.g.,
+           when an external tool does not likes dots and brackets *)
+        method mangled_name =
+            let q = if m_proc_name <> "" then m_proc_name else "" in
+            let qi =
+                if m_proc_index <> -1
+                then sprintf "%s%dI" q m_proc_index
+                else q in
+            if qi <> "" then qi ^ "O" ^ name else name
+
         (* Make a copy of the variable, but keep id the same.
            It means that two copies will be considered similar
            (e.g., types and variable roles are the same). *)
