@@ -33,19 +33,6 @@ let intmap_vals m =
     List.map (fun (k, v) -> v) (IntMap.bindings m)
 
 
-let get_main_body caches proc =
-    let reg_tbl = caches#get_struc#get_regions proc#get_name in
-    let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
-    let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
-    loop_body @ loop_prefix
-
-
-let get_init_body caches proc =
-    let reg_tbl = caches#get_struc#get_regions proc#get_name in
-    (reg_tbl#get "decl" proc#get_stmts)
-        @ (reg_tbl#get "init" proc#get_stmts)
-
-
 (* this code deviates a lot (!) from smtXducerPass *)
 let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     log INFO (sprintf "  blocks_to_smt %s..." filename);
@@ -324,12 +311,12 @@ let write_smv_header new_type_tab new_sym_tab shared hidden out =
 
 
 (* TODO: re-use parts of the computed tree as in symbolic execution! *)
-let proc_to_symb solver caches prog proc
-        new_type_tab new_sym_tab vars hidden block_fun out section =
+let proc_to_symb solver caches prog 
+        new_type_tab new_sym_tab vars hidden body out name section =
     log INFO (sprintf "  mk_cfg...");
-    let lirs = mir_to_lir (block_fun caches proc) in
+    let lirs = mir_to_lir body in
     let cfg = mk_cfg lirs in
-    Cfg.write_dot (sprintf "%s-%s.dot" proc#get_name section) cfg;
+    Cfg.write_dot (sprintf "%s-%s.dot" name section) cfg;
     let path_efun = enum_paths cfg in
 
     solver#set_need_evidence false;
@@ -402,18 +389,29 @@ let transform_to_bdd solver caches prog =
     let _ = intro_old_copies new_type_tab new_sym_tab shared bymc_use in
     let out = open_out "main.smv" in
     write_smv_header new_type_tab new_sym_tab vars hidden out; 
-    let make_init proc =
+    let make_init procs =
+        let add_init_section accum proc =
+            let reg_tbl = caches#get_struc#get_regions proc#get_name in
+            (reg_tbl#get "decl" proc#get_stmts)
+                @ (reg_tbl#get "init" proc#get_stmts) @ accum
+        in
         (* XXX: fix the initial states formula for several processes! *)
-        let proc_sym_tab = new symb_tab proc#get_name in
+        let proc_sym_tab = new symb_tab "all" in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
+        (* cat all init sections in one *)
+        (* XXX: it will break for tricky
+           interdependencies between init sections *)
+        let all_locals =
+            List.fold_left (fun a p -> p#get_locals @ a) [] procs in
+        let all_stmts = List.fold_left add_init_section [] procs in
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
-            proc#get_locals in
-        fprintf out "-- %s\n" proc#get_name;
-        fprintf out " & (FALSE\n";
-        proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab vars hidden get_init_body out "INIT";
-        fprintf out ")\n"
+            all_locals in
+        fprintf out "-- Processes: %s\n"
+            (str_join ", " (List.map (fun p -> p#get_name) procs));
+        fprintf out " FALSE\n";
+        proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab vars hidden all_stmts out "init" "INIT"
     in
     let make_trans hidden proc =
         let proc_sym_tab = new symb_tab proc#get_name in
@@ -421,14 +419,18 @@ let transform_to_bdd solver caches prog =
         let proc_type_tab = new_type_tab#copy in
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
             proc#get_locals in
-        fprintf out "-- %s\n" proc#get_name;
+        fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
-        proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab vars hidden get_main_body out "TRANS";
+        let reg_tbl = caches#get_struc#get_regions proc#get_name in
+        let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
+        let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
+        let body = loop_body @ loop_prefix in
+        proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab vars hidden body out proc#get_name "TRANS";
         fprintf out ")\n"
     in
-    fprintf out "INIT\n  TRUE\n";
-    List.iter make_init (Program.get_procs prog);
+    fprintf out "INIT\n";
+    make_init (Program.get_procs prog);
     fprintf out "TRANS\n  FALSE\n";
     List.iter (make_trans hidden) (Program.get_procs prog);
 
