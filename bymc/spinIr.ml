@@ -245,7 +245,7 @@ class data_type i_basetype =
            showing how many bits this datatype requires *)
         val mutable m_nbits: int = 0
         (* optional range of (integer-like) values represented by this datatype:
-           left margin is included, right margine is excluded *)
+           left margin is included, right margin is excluded *)
         val mutable m_range: int * int = (0, 0)
 
         method basetype = m_basetype
@@ -260,6 +260,8 @@ class data_type i_basetype =
         method has_range = let l, r = m_range in r > l
         method range = m_range
         method range_len = let l, r = m_range in r - l + 1
+        method range_list =
+           let l, r = m_range in Accums.range l r
         method set_range l r = m_range <- (l, r)
 
         method copy =

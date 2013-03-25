@@ -94,8 +94,29 @@ let has_hidden_precond sym_tab hidden exp =
     expr_exists is_hidden exp
 
 
+(* TODO: rewrite x = _ to TRUE for all hidden x's *)
+let abstract_hidden sym_tab hidden exp = 
+    let rec rewrite = function
+    | BinEx (EQ, Var v, _)
+    | BinEx (NE, Var v, _) as e ->
+        let ov = get_output sym_tab v in
+        if List.exists (fun h -> ov#id = h#id) hidden 
+        then Const 1 (* TRUE *)
+        else e
+
+    | BinEx (t, l, r) ->
+        BinEx (t, rewrite l, rewrite r)
+
+    | UnEx (t, r) ->
+        UnEx (t, rewrite r)
+
+    | _ as e -> e
+    in
+    rewrite exp
+
+
 let activate_hidden sym_tab hidden vals =
-    let try_activate v =
+    let try_activate (n, v) =
         let exp = 
             try Hashtbl.find vals v#id
             with Not_found ->
@@ -103,18 +124,20 @@ let activate_hidden sym_tab hidden vals =
         in
         let needs_activation =
             match exp with
-            | Const i ->
-                i <> 0
             | Var arg ->
                 let ov = get_output sym_tab arg in
                 ov#id <> v#id
             | _ ->
                 true
         in
+        let use_var = (sym_tab#lookup "bymc_use")#as_var in
         if needs_activation
-        then Hashtbl.replace vals v#id (Const 1) (* activate *)
+        then begin
+            Hashtbl.replace vals use_var#id (Const (n + 1)); (* activate *)
+            Hashtbl.replace vals v#id (Var (get_input sym_tab v)); (* deactivate *)
+        end
     in
-    List.iter try_activate hidden
+    List.iter try_activate (List.combine (range 0 (List.length hidden)) hidden)
 
 
 let indexed_var v idx = sprintf "%s_%di" v#get_name idx
@@ -140,7 +163,7 @@ let print_path log =
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         (shared: var list) (hidden: var list) (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
-    let var_fun = smv_name sym_tab is_init in
+    let next_fun = smv_name sym_tab is_init in
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
@@ -201,14 +224,17 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let is_sat = (not (is_c_false path_cons))
         || ((is_c_true path_cons) && (is_sat solver type_tab path_cons))
     in
+    (* XXX: the following code is a disaster, rewrite *)
     let is_hidden = has_hidden_precond sym_tab hidden path_cons in
 
     if is_final && is_sat && not is_hidden
     then begin
         print_path log;
+        let path_cons =
+            compute_consts (abstract_hidden sym_tab hidden path_cons) in
         let path_s =
             if not (is_c_true path_cons)
-            then Nusmv.expr_s var_fun path_cons
+            then Nusmv.expr_s next_fun path_cons
             else ""
         in
         let find_changes (unchanged, changed) v =
@@ -219,23 +245,27 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             in
             match exp with
             | Var arg ->
-                let ov = get_output sym_tab arg in
-                if ov#id = v#id
-                then (ov#get_name :: unchanged), changed
-                else (unchanged, (var_fun v, arg#get_name) :: changed)
+                let oarg = get_output sym_tab arg in
+                if oarg#id = v#id
+                then (v :: unchanged), changed
+                else (unchanged, (next_fun v, arg#get_name) :: changed)
             | _ ->
-                (unchanged, (var_fun v, Nusmv.expr_s var_fun exp) :: changed)
+                (unchanged, (next_fun v, Nusmv.expr_s next_fun exp) :: changed)
         in
         (* nusmv syntax *)
         activate_hidden sym_tab hidden vals;
         let unchanged, changed = List.fold_left find_changes ([], []) shared in
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
+        let unchanged = List.filter
+            (fun v -> not (List.exists (fun h -> h#id = v#id) hidden)) unchanged
+        in
         let unchanged_eqs =
-            let mk_eq n = sprintf "next(%s) = %s" n n in
-            let mk_init n =
-                let nv = (sym_tab#lookup n)#as_var in
-                sprintf "%s = %s"
-                    n (Nusmv.type_default_smv (type_tab#get_type nv)) in
+            let mk_eq v = 
+                sprintf "next(%s) = %s" v#get_name v#get_name in
+            let mk_init v =
+                sprintf "%s = %s" v#get_name
+                    (Nusmv.type_default_smv (type_tab#get_type v))
+            in
             if is_init
             then List.map mk_init unchanged
             else List.map mk_eq unchanged
@@ -244,7 +274,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         in
         let unchg_s =
             if unchanged <> []
-            then "  " ^ (str_join " & " unchanged_eqs)
+            then "  " ^ (str_join " & " (List.filter (fun s -> s <> "") unchanged_eqs))
             else ""
         in
         let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in

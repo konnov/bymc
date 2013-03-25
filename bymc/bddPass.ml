@@ -270,6 +270,12 @@ let proc_to_bdd prog smt_fun proc filename =
     Format.pp_print_flush ff ();
     close_out out
 
+let intro_old_copies new_type_tab new_sym_tab collected var =
+    let nv = new var ("O" ^ var#get_name) (fresh_id ()) in
+    let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
+    new_sym_tab#add_symb nv#get_name (nv :> symb);
+    nv :: collected
+
 
 let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
 (* XXX: similar to Simplif.flatten_array_decl *)
@@ -291,28 +297,27 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
             var :: collected
         end
     in
-    let intro_old_copies collected var =
-        let nv = new var ("O" ^ var#get_name) (fresh_id ()) in
-        let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
-        new_sym_tab#add_symb nv#get_name (nv :> symb);
-        nv :: collected
-    in
     let unfolded = List.fold_left flatten_array_var [] vars in
-    let _ = List.fold_left intro_old_copies [] unfolded in
-    unfolded
-(*
-    let local = proc#get_locals in
-    let unfolded_vars =
-        List.fold_left flatten_array_var unfolded_shared local in
-    let _ = List.fold_left intro_old_copies unfolded_vars unfolded_vars in
-    (new_type_tab, new_sym_tab, unfolded_shared)
- *)
+    let _ =
+        List.fold_left (intro_old_copies new_type_tab new_sym_tab) [] unfolded
+    in
+    List.rev unfolded
 
 
-let write_smv_header new_type_tab shared out =    
+let create_bymc_use new_type_tab new_sym_tab hidden =
+    let var_use = new var "bymc_use" (fresh_id ()) in
+    new_sym_tab#add_symb var_use#get_name (var_use :> symb);
+    let use_tp = new data_type SpinTypes.TINT in
+    use_tp#set_range 0 (1 + (List.length hidden));
+    new_type_tab#set_type var_use use_tp;
+    var_use
+
+let write_smv_header new_type_tab new_sym_tab shared hidden out =
     let decl_var v = 
         let tp = new_type_tab#get_type v in
-        fprintf out "  %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
+        if List.mem v hidden
+        then fprintf out "  -- %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
+        else fprintf out "  %s: %s;\n" v#get_name (Nusmv.var_type_smv tp)
     in
     fprintf out "MODULE main\nVAR\n";
     List.iter decl_var shared
@@ -337,27 +342,39 @@ let proc_to_symb solver caches prog proc
     Printf.printf "    enumerated %d paths\n" num_paths
 
 
-let read_hidden (sym_tab: symb_tab) (filename: string): var list =
+let read_hidden (sym_tab: symb_tab) (shared: var list)
+        (filename: string): var list =
     (* XXX: we should definitely use batteries here *)
-    let vars = ref [] in
-    let fin = open_in filename in
-    try
-        while true; do
-            let line = input_line fin in
-            let sym = sym_tab#lookup line in
-            vars := (sym#as_var :: !vars)
-        done;
-        !vars
-    with End_of_file ->
-        close_in fin;
-        !vars
+    let exists =
+        try Unix.access filename [Unix.F_OK]; true
+        with (Unix.Unix_error (_, _, _)) -> false
+    in
+    if not exists
+    then begin
+        let fout = open_out filename in
+        List.iter (fun v -> fprintf fout "%s\n" v#get_name) shared;
+        close_out fout;
+        shared
+    end else 
+        let vars = ref [] in
+        let fin = open_in filename in
+        try
+            while true; do
+                let line = input_line fin in
+                let sym = sym_tab#lookup line in
+                vars := (sym#as_var :: !vars)
+            done;
+            List.rev !vars
+        with End_of_file ->
+            close_in fin;
+            List.rev !vars
 
 
 let write_hidden_spec hidden out =
-    let write v =
-        fprintf out "SPEC AG (%s = 0)\n" v#get_name
+    let write n =
+        fprintf out "SPEC AG (bymc_use != %d)\n" (1 + n)
     in
-    List.iter write hidden
+    List.iter write (range 0 (List.length hidden))
 
 
 let transform_to_bdd solver caches prog =
@@ -366,8 +383,12 @@ let transform_to_bdd solver caches prog =
     let new_sym_tab = new symb_tab "main" in
     let shared = (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let shared = transform_vars prog type_tab new_type_tab new_sym_tab shared in
+    let hidden = read_hidden new_sym_tab shared "hidden.txt" in
+    let bymc_use = create_bymc_use new_type_tab new_sym_tab hidden in
+    let vars = bymc_use :: shared in
+    let _ = intro_old_copies new_type_tab new_sym_tab shared bymc_use in
     let out = open_out "main.smv" in
-    write_smv_header new_type_tab shared out; 
+    write_smv_header new_type_tab new_sym_tab vars hidden out; 
     let make_init proc =
         (* XXX: fix the initial states formula for several processes! *)
         let proc_sym_tab = new symb_tab proc#get_name in
@@ -378,7 +399,7 @@ let transform_to_bdd solver caches prog =
         fprintf out "-- %s\n" proc#get_name;
         fprintf out " & (FALSE\n";
         proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab shared [] get_init_body out "INIT";
+            proc_sym_tab vars hidden get_init_body out "INIT";
         fprintf out ")\n"
     in
     let make_trans hidden proc =
@@ -390,13 +411,12 @@ let transform_to_bdd solver caches prog =
         fprintf out "-- %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
         proc_to_symb solver caches prog proc proc_type_tab
-            proc_sym_tab shared hidden get_main_body out "TRANS";
+            proc_sym_tab vars hidden get_main_body out "TRANS";
         fprintf out ")\n"
     in
     fprintf out "INIT\n  TRUE\n";
     List.iter make_init (Program.get_procs prog);
     fprintf out "TRANS\n  FALSE\n";
-    let hidden = read_hidden new_sym_tab "hidden.txt" in
     List.iter (make_trans hidden) (Program.get_procs prog);
 
     write_hidden_spec hidden out;
