@@ -327,18 +327,19 @@ let proc_to_symb solver caches prog
             new_type_tab new_sym_tab vars hidden is_init)
     in
     Printf.printf "    enumerated %d paths\n" num_paths;
-    if num_paths = 0
-    then begin
-        Printf.printf "WARNING: added a loop in %s\n" section;
-        let keep sym =
-            let v = sym#as_var in
-            if List.exists (fun h -> h#id = v#id) hidden
-            then "TRUE"
-            else Printf.sprintf "next(%s)=%s" v#mangled_name v#mangled_name
-        in
-        let keep_s = str_join " & " (List.map keep vars) in
-        Printf.fprintf out " | (%s)\n" keep_s
-    end
+    num_paths
+
+
+let write_trans_loop vars hidden out =
+    Printf.printf "WARNING: added a loop to TRANS\n";
+    let keep sym =
+        let v = sym#as_var in
+        if List.exists (fun h -> h#id = v#id) hidden
+        then "TRUE"
+        else Printf.sprintf "next(%s)=%s" v#mangled_name v#mangled_name
+    in
+    let keep_s = str_join " & " (List.map keep vars) in
+    Printf.fprintf out " | (%s)\n" keep_s
 
 
 let read_hidden (sym_tab: symb_tab) (shared: var list)
@@ -425,14 +426,18 @@ let transform_to_bdd solver caches prog =
         let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
-        proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden body out proc#get_name "TRANS";
-        fprintf out ")\n"
+        let num = proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab vars hidden body out proc#get_name "TRANS" in
+        fprintf out ")\n";
+        num
     in
     fprintf out "INIT\n";
     make_init (Program.get_procs prog);
     fprintf out "TRANS\n  FALSE\n";
-    List.iter (make_trans hidden) (Program.get_procs prog);
+    let no_paths = List.map (make_trans hidden) (Program.get_procs prog) in
+    let no_total = List.fold_left (+) 0 no_paths in
+    if no_total = 0
+    then write_trans_loop vars hidden out;
 
     write_hidden_spec hidden out;
     close_out out
