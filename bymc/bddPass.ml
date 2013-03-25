@@ -367,6 +367,7 @@ let read_hidden (sym_tab: symb_tab) (shared: var list)
             List.rev !vars
         with End_of_file ->
             close_in fin;
+            printf "    %d variables are hidden\n" (List.length !vars);
             List.rev !vars
 
 

@@ -1,54 +1,65 @@
 #!/usr/bin/python
 
+import os
 import re
+import sys
 
-HIDDEN = [
-  #"bymc_kP_1i",
-  "bymc_kP_2i", "bymc_kP_3i",
-  "bymc_kP_5i", "bymc_kP_6i", "bymc_kP_7i", #"bymc_kP_8i",
-  #"bymc_kP_9i",
-  #"bymc_kP_10i",
-  "bymc_kP_11i", "bymc_kP_12i",
-  "bymc_kP_13i", "bymc_kP_14i",
-  #"bymc_kP_15i"
-]
+def collect_excluded(filename):
+    excluded = []
+    spec_re = re.compile('^.*spec.*bymc_use != ([0-9]*) *is false.*$')
+    fin = open(filename, "r")
+    try:
+        for line in fin:
+            m = spec_re.match(line)
+            if m:
+                excluded.append(int(m.group(1)))
+    finally:
+        fin.close()
 
-def rewrite(in_filename, out_filename):
+    print 'excluded = [%s]' % ", ".join(str(d) for d in excluded)
+    return excluded        
+
+def exclude_lines(in_filename, out_filename, excluded):
     fin = open(in_filename, "r")
     fout = open(out_filename, "w+")
+    
+    line_no = 1
+    try:
+        for line in fin:
+            if line_no not in excluded:
+                fout.write(line)
+            line_no += 1
+    finally:
+        fout.close()
+        fin.close()
 
-    trans = False
-    for line in fin:
-        if line == "TRANS\n":
-            trans = True
-        
-        new_line = line
-        for v in HIDDEN:
-            re_text = '(.*)(next\(%s\) = )([0-9]+)(.*)' % v
-            m = re.compile(re_text).match(new_line)
-            if m:
-                new_line = "%s%s%s%s\n" % (m.group(1), m.group(2), "1", m.group(4))
-
-        remove = False
-        for v in HIDDEN:
-            re_text = '.*%s (=|!=) ([0-9]+).*' % v
-            m = re.compile(re_text).match(line)
-            if m and m.group(1) == '=' and m.group(2) != '0':
-                remove = True
-                break
-
-        if trans and not remove:
-            fout.write(new_line)
-
-        if not trans:
-            fout.write(line)
-
-
-    for v in HIDDEN:
-        fout.write('SPEC AG (%s = 0)\n' % v)
-
-    fout.close()
-    fin.close()
 
 if __name__ == '__main__':
-    rewrite("Proc.smv", "out.smv")
+    try:
+        tool, nusmv, prog = sys.argv[1:4]
+    except ValueError:
+        print "Use: find-reach tool nusmv program"
+        sys.exit(99)
+
+    step = 1
+    excluded = [1]
+    while excluded != []:
+        print "STEP = %d" % step
+
+        status = os.system("%s %s" % (tool, prog))
+        if status != 0:
+            print "Abnormal termination of %s" % tool
+            sys.exit(1)
+
+        status = os.system("%s -dcx main.smv >nusmv.out" % nusmv)
+        if status != 0:
+            print "Abnormal termination of %s" % nusmv
+            sys.exit(1)
+
+        excluded = collect_excluded('nusmv.out')
+        exclude_lines('hidden.txt', 'hidden.new', excluded)
+        os.remove('hidden.txt')
+        os.rename('hidden.new', 'hidden.txt')
+        step += 1
+
+    print "FINISHED"
