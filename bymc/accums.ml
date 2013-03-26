@@ -35,6 +35,7 @@ let str_join (sep: string) (strs: string list) =
     let join accum s = if accum <> "" then (accum ^ sep ^ s) else s in
     List.fold_left join "" strs
 
+let str_nempty (s: string): bool = s <> ""
 
 (* separate a list into three parts:
     before a matching element, the matching element, the tail.

@@ -35,6 +35,9 @@ let get_output (sym_tab: symb_tab) (v: var): var =
 let get_use (sym_tab: symb_tab): var =
     (sym_tab#lookup "bymc_use")#as_var
 
+let get_loc (sym_tab: symb_tab): var =
+    (sym_tab#lookup "bymc_loc")#as_var
+
 let linearize_blocks (path: token basic_block list) =
     let seq = List.concat (List.map (fun b -> b#get_seq) path) in
     let is_lin_stmt = function
@@ -180,9 +183,9 @@ let activate_hidden sym_tab hidden vals =
 
 let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
 
-let smv_name sym_tab is_init v =
+let smv_name sym_tab v =
     let oname = (get_output sym_tab v)#mangled_name in
-    if is_input v || is_init
+    if is_input v (*do not use anymore: || is_init*)
     then oname
     else sprintf "next(%s)" oname
 
@@ -201,7 +204,7 @@ let print_path log =
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         (shared: var list) (hidden: var list) (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
-    let next_fun = smv_name sym_tab is_init in
+    let next_fun = smv_name sym_tab in
     let rec replace_arr = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
@@ -271,11 +274,15 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         print_path log;
         let path_cons =
             compute_consts (abstract_hidden sym_tab hidden vals path_cons) in
-        let path_s =
-            if not (is_c_true path_cons)
-            then Nusmv.expr_s next_fun path_cons
-            else ""
-        in
+        let var_loc = get_loc sym_tab in
+        let init_path_cons =
+            let init_expr =
+                BinEx (EQ, Var (get_input sym_tab var_loc),
+                       Const (if is_init then 0 else 1)) in
+            if is_c_true path_cons
+            then init_expr
+            else BinEx (AND, path_cons, init_expr) in
+        let path_s = Nusmv.expr_s next_fun init_path_cons in
         let find_changes (unchanged, changed) v =
             let exp = 
                 try Hashtbl.find vals v#id
@@ -291,6 +298,9 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             | _ ->
                 (unchanged, (next_fun v, Nusmv.expr_s next_fun exp) :: changed)
         in
+
+        (* the first step is initialization *)
+        Hashtbl.add vals var_loc#id (Const 1);
         (* nusmv syntax *)
         activate_hidden sym_tab hidden vals;
         let unchanged, changed = List.fold_left find_changes ([], []) shared in
@@ -301,24 +311,17 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         let unchanged_eqs =
             let mk_eq v = 
                 sprintf "next(%s) = %s" v#mangled_name v#mangled_name in
-            let mk_init v =
-                sprintf "%s = %s" v#mangled_name
-                    (Nusmv.type_default_smv (type_tab#get_type v))
-            in
-            if is_init
-            then List.map mk_init unchanged
-            else List.map mk_eq unchanged
+            List.map mk_eq unchanged
         in
         let eq_s = if eqs <> [] then "  " ^ (str_join " & " eqs) else ""
         in
         let unchg_s =
             if unchanged <> []
-            then "  " ^ (str_join " & " (List.filter (fun s -> s <> "") unchanged_eqs))
+            then "  " ^ (str_join " & " (List.filter str_nempty unchanged_eqs))
             else ""
         in
-        let strs = List.filter (fun s -> s <> "") [path_s; eq_s; unchg_s] in
-        let expr_s = str_join " & " strs in
-        fprintf log " | (%s)\n" expr_s
+        let strs = List.filter str_nempty [path_s; eq_s; unchg_s] in
+        fprintf log " | (%s)\n" (str_join " & " strs)
     end;
     is_sat && not is_hidden
 

@@ -291,13 +291,18 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
     List.rev unfolded
 
 
-let create_bymc_use new_type_tab new_sym_tab hidden =
+let create_aux_vars new_type_tab new_sym_tab hidden =
     let var_use = new var "bymc_use" (fresh_id ()) in
     new_sym_tab#add_symb var_use#mangled_name (var_use :> symb);
     let use_tp = new data_type SpinTypes.TINT in
     use_tp#set_range 0 (1 + (List.length hidden));
     new_type_tab#set_type var_use use_tp;
-    var_use
+    let var_loc = new var "bymc_loc" (fresh_id ()) in
+    new_sym_tab#add_symb var_loc#mangled_name (var_loc :> symb);
+    let init_tp = new data_type SpinTypes.TINT in
+    init_tp#set_range 0 2;
+    new_type_tab#set_type var_loc init_tp;
+    (var_use, var_loc)
 
 let write_smv_header new_type_tab new_sym_tab shared hidden out =
     let decl_var v = 
@@ -321,10 +326,9 @@ let proc_to_symb solver caches prog
 
     solver#set_need_evidence false;
     log INFO (sprintf "  constructing symbolic paths...");
-    let is_init = (section = "INIT") in
     let num_paths =
         path_efun (exec_path solver out
-            new_type_tab new_sym_tab vars hidden is_init)
+            new_type_tab new_sym_tab vars hidden (section = "INIT"))
     in
     Printf.printf "    enumerated %d paths\n" num_paths;
     num_paths
@@ -335,11 +339,13 @@ let write_trans_loop vars hidden out =
     let keep sym =
         let v = sym#as_var in
         if List.exists (fun h -> h#id = v#id) hidden
-        then "TRUE"
+        then ""
         else Printf.sprintf "next(%s)=%s" v#mangled_name v#mangled_name
     in
-    let keep_s = str_join " & " (List.map keep vars) in
-    Printf.fprintf out " | (%s)\n" keep_s
+    let keep_s = str_join " & "
+        (List.filter (fun s -> s <> "") (List.map keep vars)) in
+    Printf.fprintf out " -- a self loop to ensure totality\n";
+    Printf.fprintf out " | bymc_loc = 1 & (%s)\n" keep_s
 
 
 let read_hidden (sym_tab: symb_tab) (shared: var list)
@@ -371,6 +377,18 @@ let read_hidden (sym_tab: symb_tab) (shared: var list)
             List.rev !vars
 
 
+let write_default_init new_type_tab new_sym_tab shared hidden out =
+    let init_var v = 
+        let tp = new_type_tab#get_type v in
+        if List.mem v hidden
+        then ""
+        else sprintf "%s = %s" v#mangled_name (Nusmv.type_default_smv tp)
+    in
+    let conds = List.filter str_nempty (List.map init_var shared) in
+    let eq_s = str_join " & " ("bymc_use = 0" :: "bymc_loc = 0" :: conds) in
+    fprintf out "  %s\n" eq_s
+
+
 let write_hidden_spec hidden out =
     let write n =
         fprintf out "SPEC AG (bymc_use != %d)\n" (1 + n)
@@ -385,9 +403,11 @@ let transform_to_bdd solver caches prog =
     let shared = (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let shared = transform_vars prog type_tab new_type_tab new_sym_tab shared in
     let hidden = read_hidden new_sym_tab shared "hidden.txt" in
-    let bymc_use = create_bymc_use new_type_tab new_sym_tab hidden in
-    let vars = bymc_use :: shared in
-    let _ = intro_old_copies new_type_tab new_sym_tab shared bymc_use in
+    let bymc_use, bymc_loc =
+        create_aux_vars new_type_tab new_sym_tab hidden in
+    let vars = bymc_loc :: bymc_use :: shared in
+    let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab)
+        shared [bymc_use; bymc_loc] in
     let out = open_out "main.smv" in
     write_smv_header new_type_tab new_sym_tab vars hidden out; 
     let make_init procs =
@@ -410,9 +430,9 @@ let transform_to_bdd solver caches prog =
             all_locals in
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
-        fprintf out " FALSE\n";
-        proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden all_stmts out "init" "INIT"
+        let _ = proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab vars hidden all_stmts out "init" "INIT" in
+        ()
     in
     let make_trans hidden proc =
         let proc_sym_tab = new symb_tab proc#get_name in
@@ -432,12 +452,14 @@ let transform_to_bdd solver caches prog =
         num
     in
     fprintf out "INIT\n";
-    make_init (Program.get_procs prog);
+    write_default_init new_type_tab new_sym_tab shared hidden out;
     fprintf out "TRANS\n  FALSE\n";
+    (* initialization is now made as a first step! *)
+    make_init (Program.get_procs prog);
     let no_paths = List.map (make_trans hidden) (Program.get_procs prog) in
     let no_total = List.fold_left (+) 0 no_paths in
-    if no_total = 0
-    then write_trans_loop vars hidden out;
+    (* the receive-compute-update block *)
+    write_trans_loop vars hidden out;
 
     write_hidden_spec hidden out;
     close_out out
