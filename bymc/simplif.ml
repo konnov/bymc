@@ -24,9 +24,9 @@ module StringSet = Set.Make(String)
 
 exception Simplif_error of string
 
-let rec compute_consts exp =
+let compute_consts exp =
     let int_of_bool b = if b then 1 else 0 in
-    let fold = function
+    let rec fold = function
     | BinEx (PLUS, Const l, Const r) -> Const (l + r)
     | BinEx (MINUS, Const l, Const r) -> Const (l - r)
     | BinEx (MULT, Const l, Const r) -> Const (l * r)
@@ -47,6 +47,17 @@ let rec compute_consts exp =
     | BinEx (OR, l, Const 0) -> l
     | UnEx (NEG, Const 1) -> Const 0
     | UnEx (NEG, Const 0) -> Const 1
+
+    | UnEx (ALWAYS, Const 0) -> Const 0
+    | UnEx (ALWAYS, Const 1) -> Const 1
+    | UnEx (EVENTUALLY, Const 0) -> Const 0
+    | UnEx (EVENTUALLY, Const 1) -> Const 1
+    | UnEx (NEXT, Const 0) -> Const 0
+    | UnEx (NEXT, Const 1) -> Const 1
+    | BinEx (UNTIL, _, Const 0) -> Const 0
+    | BinEx (UNTIL, _, Const 1) -> Const 1
+    | BinEx (UNTIL, Const 0, _) -> Const 0
+    | BinEx (UNTIL, Const 1, r) -> fold (UnEx (EVENTUALLY, r))
     | Nop _ -> Const 1
     | _ as e -> e
     in

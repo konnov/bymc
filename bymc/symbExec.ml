@@ -87,7 +87,6 @@ let check_sat solver type_tab exp =
 
 let hide_non_zero sym_tab hidden_idx_fun exp =
     let find_idx v =
-        (* XXX: use a hashtable here? *)
         let ov = get_output sym_tab v in
         hidden_idx_fun ov
     in
@@ -121,10 +120,9 @@ let hide_non_zero sym_tab hidden_idx_fun exp =
 
     | _ as e -> e
     in
-    rewrite exp
+    compute_consts (rewrite exp)
 
 
-(* TODO: rewrite x = _ to TRUE for all hidden x's *)
 let abstract_hidden sym_tab hidden_idx_fun vals exp = 
     let rec rewrite = function
     | BinEx (EQ, Var v, _)
@@ -147,7 +145,7 @@ let abstract_hidden sym_tab hidden_idx_fun vals exp =
 
     | _ as e -> e
     in
-    rewrite exp
+    compute_consts (rewrite exp)
 
 
 let activate_hidden sym_tab shared hidden_idx_fun vals =
@@ -198,19 +196,24 @@ let print_path log =
     path_cnt := !path_cnt + 1
 
 
-let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (hidden_idx_fun: var -> int) (is_init: bool)
-        (path: token basic_block list) (is_final: bool) =
-    let next_fun = smv_name sym_tab in
-    let rec replace_arr = function
+let elim_array_access sym_tab exp =
+    let rec elim = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
     | BinEx (ARR_ACCESS, Var arr, idx_exp) ->
         raise (SymbExec_error
             (sprintf "Expected a constant index, found: %s" (expr_s idx_exp)))
-    | BinEx (t, l, r) -> BinEx (t, replace_arr l, replace_arr r)
-    | UnEx (t, e) -> UnEx (t, replace_arr e)
+    | BinEx (t, l, r) -> BinEx (t, elim l, elim r)
+    | UnEx (t, e) -> UnEx (t, elim e)
     | _ as e -> e
+    in
+    elim exp
+
+
+let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
+        (shared: var list) (hidden_idx_fun: var -> int) (is_init: bool)
+        (path: token basic_block list) (is_final: bool) =
+    let next_fun = smv_name sym_tab
     in
     let get_var = function
     | Var v ->
@@ -223,20 +226,20 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let exec path_cons = function
     | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, idx_exp), rhs)) ->
         let sub_lhs = BinEx (ARR_ACCESS, Var arr, (sub_vars vals idx_exp)) in
-        let new_lhs = replace_arr sub_lhs in
-        let new_rhs = replace_arr (sub_vars vals rhs) in
+        let new_lhs = elim_array_access sym_tab sub_lhs in
+        let new_rhs = elim_array_access sym_tab (sub_vars vals rhs) in
         let v = get_var new_lhs in
         Hashtbl.replace vals v#id new_rhs;
         path_cons
 
     | Expr (_, BinEx (ASGN, Var v, rhs)) ->
-        let new_rhs = replace_arr (sub_vars vals rhs) in
+        let new_rhs = elim_array_access sym_tab (sub_vars vals rhs) in
         Hashtbl.replace vals v#id new_rhs;
         path_cons
 
     | Expr (_, e) ->
         let ne =
-            try sub_vars vals (replace_arr (sub_vars vals e))
+            try sub_vars vals (elim_array_access sym_tab (sub_vars vals e))
             with SymbExec_error s ->
             begin
                 printf "The troublesome path is:\n";
@@ -262,15 +265,14 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let is_sat = check_sat solver type_tab path_cons
     in
     (* XXX: the following code is a disaster, rewrite *)
-    let hidden_path_cons =
-        compute_consts (hide_non_zero sym_tab hidden_idx_fun path_cons) in
+    let hidden_path_cons = hide_non_zero sym_tab hidden_idx_fun path_cons in
     let is_hidden = not (check_sat solver type_tab hidden_path_cons) in
 
     if is_final && is_sat && not is_hidden
     then begin
         print_path log;
-        let path_cons =
-            compute_consts (abstract_hidden sym_tab hidden_idx_fun vals path_cons) in
+        let path_cons = abstract_hidden sym_tab hidden_idx_fun vals path_cons
+        in
         let var_loc = get_loc sym_tab in
         let init_path_cons =
             let init_expr =

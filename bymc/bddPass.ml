@@ -407,9 +407,42 @@ let write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out =
 
 let write_hidden_spec hidden out =
     let write n =
-        fprintf out "SPEC AG (bymc_use != %d)\n" (1 + n)
+        fprintf out "SPEC AG (bymc_use != %d);\n" (1 + n)
     in
     List.iter write (range 0 (List.length hidden))
+
+
+let write_ltl_spec
+        out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
+    let rec rewrite = function
+    | Var v as e ->
+        if (hidden_idx_fun v) = 0
+        then e
+        else Const 0 (* unreachable *)
+
+    | BinEx (EQ, Var v, Const i) as e ->
+        if (hidden_idx_fun v) = 0
+        then e
+        (* then we know it is unreachable *)
+        else if i > 0 then Const 0 else Const 1
+
+    | BinEx (NE, Var v, Const i) as e ->
+        if (hidden_idx_fun v) = 0
+        then e
+        (* then we know it is unreachable *)
+        else if i > 0 then Const 1 else Const 0
+
+    | BinEx (t, l, r) -> BinEx (t, rewrite l, rewrite r)
+
+    | UnEx (t, r) -> UnEx (t, rewrite r)
+
+    | _ as e -> e
+    in
+    let embedded = Ltl.embed_atomics type_tab atomics ltl_form in
+    let flat = elim_array_access sym_tab embedded in
+    let hidden_masked = compute_consts (rewrite flat) in
+    fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
+        name (Nusmv.expr_s (fun v -> v#get_name) hidden_masked)
 
 
 let transform_to_bdd solver caches prog =
@@ -479,5 +512,10 @@ let transform_to_bdd solver caches prog =
     write_trans_loop vars hidden_idx_fun out;
 
     write_hidden_spec hidden out;
+    fprintf out "\n-- specifications\n";
+    let atomics = Program.get_atomics prog in
+    Program.StringMap.mapi
+        (write_ltl_spec out atomics new_type_tab new_sym_tab hidden_idx_fun)
+        (Program.get_ltl_forms prog);
     close_out out
 
