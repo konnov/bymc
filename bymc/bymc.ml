@@ -2,9 +2,11 @@ open Printf
 open Str
 open Map
 
+open Infra
 open Options
 open Parse
 open Program
+
 open Abstract
 open Instantiation
 open Writer
@@ -21,6 +23,8 @@ let main () =
     try
         let opts = parse_options in
         current_verbosity_level := if opts.verbose then DEBUG else INFO;
+        let caches =
+            new pass_caches opts (new analysis_cache) (new proc_struc_cache) in
         let filename, basename, dirname =
             if Array.length Sys.argv > 1
             then opts.filename,
@@ -37,14 +41,15 @@ let main () =
         match opts.action with
         | OptAbstract ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
-            check_all_invariants solver prog;
-            let _ = do_abstraction solver true opts.bdd_pass prog in
+            check_all_invariants caches solver prog;
+            let _ = do_abstraction caches solver true opts.bdd_pass prog in
             let _ = solver#stop in ()
         | OptRefine ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
-            let _ = do_refinement solver opts.trail_name prog in
+            let _ = do_refinement caches solver opts.trail_name prog in
             let _ = solver#stop in ()
-        | OptCheckInv -> ()
+        | OptCheckInv ->
+            printf "WARNING: -i is deprecated, invariants are checked automatically\n"
         | OptSubstitute ->
             let units = units_of_program prog in
             let new_units = do_substitution opts.param_assignments units in

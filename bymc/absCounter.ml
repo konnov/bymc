@@ -521,8 +521,8 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
    Updates proc_struct_cache#regions.
  *)
 let do_counter_abstraction funcs solver caches prog =
-    let t_ctx = caches#get_analysis#get_pia_data_ctx in
-    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
+    let t_ctx = caches#analysis#get_pia_data_ctx in
+    let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let extract_atomic_prop atomics name =
         try
             match (Program.StringMap.find name atomics) with
@@ -657,7 +657,7 @@ let do_counter_abstraction funcs solver caches prog =
         new_reg_tbl#add "comp" new_comp;
         new_reg_tbl#add "update" new_update;
         new_reg_tbl#add "loop_body" new_loop_body;
-        caches#get_struc#set_regions p#get_name new_reg_tbl;
+        caches#struc#set_regions p#get_name new_reg_tbl;
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));

@@ -4,6 +4,8 @@
  Igor Konnov, 2012
  *)
 
+open Options
+
 open VarRole
 open PiaDataCtx
 open PiaDom
@@ -80,10 +82,12 @@ class proc_struc_cache =
     end
 
 
-class pass_caches (i_analysis: analysis_cache) (i_struc: proc_struc_cache) =
+class pass_caches (i_options: options_t)
+        (i_analysis: analysis_cache) (i_struc: proc_struc_cache) =
     object(self)
-        method get_analysis = i_analysis
-        method get_struc = i_struc
+        method options = i_options
+        method analysis = i_analysis
+        method struc = i_struc
     end
 
 

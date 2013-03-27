@@ -36,7 +36,7 @@ let intmap_vals m =
 (* this code deviates a lot (!) from smtXducerPass *)
 let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     log INFO (sprintf "  blocks_to_smt %s..." filename);
-    let roles = caches#get_analysis#get_var_roles in
+    let roles = caches#analysis#get_var_roles in
     let is_visible v =
         try begin
             match roles#get_role v with
@@ -462,7 +462,7 @@ let transform_to_bdd solver caches prog =
     write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
     let make_init procs =
         let add_init_section accum proc =
-            let reg_tbl = caches#get_struc#get_regions proc#get_name in
+            let reg_tbl = caches#struc#get_regions proc#get_name in
             (reg_tbl#get "decl" proc#get_stmts)
                 @ (reg_tbl#get "init" proc#get_stmts) @ accum
         in
@@ -492,7 +492,7 @@ let transform_to_bdd solver caches prog =
             proc#get_locals in
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
-        let reg_tbl = caches#get_struc#get_regions proc#get_name in
+        let reg_tbl = caches#struc#get_regions proc#get_name in
         let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
@@ -507,15 +507,15 @@ let transform_to_bdd solver caches prog =
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
     let no_paths = List.map make_trans (Program.get_procs prog) in
-    let no_total = List.fold_left (+) 0 no_paths in
+    let _ = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
     write_trans_loop vars hidden_idx_fun out;
 
     write_hidden_spec hidden out;
     fprintf out "\n-- specifications\n";
     let atomics = Program.get_atomics prog in
-    Program.StringMap.mapi
+    let _ = Program.StringMap.mapi
         (write_ltl_spec out atomics new_type_tab new_sym_tab hidden_idx_fun)
-        (Program.get_ltl_forms prog);
+        (Program.get_ltl_forms prog) in
     close_out out
 

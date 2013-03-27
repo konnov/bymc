@@ -43,7 +43,7 @@ let write_to_file externalize_ltl name units type_tab =
 
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction solver is_first_run bdd_pass prog =
+let do_abstraction caches solver is_first_run bdd_pass prog =
     solver#push_ctx;
     solver#comment "do_abstraction";
     if is_first_run
@@ -53,14 +53,12 @@ let do_abstraction solver is_first_run bdd_pass prog =
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
     end;
-    let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
-    analysis#set_var_roles roles;
+    caches#analysis#set_var_roles roles;
     let dom = PiaDom.create solver roles prog in
-    analysis#set_pia_dom dom;
+    caches#analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
-    analysis#set_pia_data_ctx pia_data;
-    let caches = new pass_caches analysis (new proc_struc_cache) in
+    caches#analysis#set_pia_data_ctx pia_data;
 
     log INFO "> Constructing interval abstraction";
     let intabs_prog = do_interval_abstraction solver caches prog in
@@ -68,7 +66,8 @@ let do_abstraction solver is_first_run bdd_pass prog =
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
     log INFO "> Constructing counter abstraction";
-    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
+    caches#analysis#set_pia_ctr_ctx_tbl
+        (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
     let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog in
     write_to_file true "abs-counter.prm"
@@ -88,18 +87,16 @@ let do_abstraction solver is_first_run bdd_pass prog =
     ctrabs_prog
 
 
-let make_vass_xducers solver embed_inv prog =
+let make_vass_xducers caches solver embed_inv prog =
     solver#push_ctx;
     solver#comment "make_vass_xducers";
-    let analysis = new analysis_cache in
     let roles = identify_var_roles prog in
-    analysis#set_var_roles roles;
+    caches#analysis#set_var_roles roles;
     let dom = PiaDom.create solver roles prog in
-    analysis#set_pia_dom dom;
+    caches#analysis#set_pia_dom dom;
     let pia_data = new pia_data_ctx roles in
     pia_data#set_hack_shared true;
-    analysis#set_pia_data_ctx pia_data;
-    let caches = new pass_caches analysis (new proc_struc_cache) in
+    caches#analysis#set_pia_data_ctx pia_data;
 
     log INFO "> Constructing interval abstraction...";
     let intabs_prog = do_interval_abstraction solver caches prog in
@@ -107,7 +104,8 @@ let make_vass_xducers solver embed_inv prog =
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "  [DONE]";
     log INFO "> Constructing VASS...";
-    analysis#set_pia_ctr_ctx_tbl (new ctr_abs_ctx_tbl dom roles intabs_prog);
+    caches#analysis#set_pia_ctr_ctx_tbl
+        (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_prog =
@@ -120,12 +118,12 @@ let make_vass_xducers solver embed_inv prog =
         (units_of_program xducer_prog) (get_type_tab xducer_prog);
     log INFO "  [DONE]"; flush stdout;
     solver#pop_ctx;
-    (caches, xducer_prog)
+    xducer_prog
 
 
-let check_invariant solver prog inv_name =
-    let (caches, xducers_prog) = make_vass_xducers solver false prog in
-    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
+let check_invariant caches solver prog inv_name =
+    let xducers_prog = make_vass_xducers caches solver false prog in
+    let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics xducers_prog) in
     let inv_expr = match Program.StringMap.find inv_name aprops with
     | PropGlob e -> e
@@ -154,14 +152,14 @@ let check_invariant solver prog inv_name =
         (List.map (fun c -> c#abbrev_name) ctr_ctx_tbl#all_ctxs)
 
 
-let check_all_invariants solver prog =
+let check_all_invariants caches solver prog =
     let fold_invs name ae lst =
         if is_invariant_atomic name then name :: lst else lst
     in
     let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) [] in
     solver#push_ctx;
     solver#comment "check_all_invariants";
-    List.iter (check_invariant solver prog) invs;
+    List.iter (check_invariant caches solver prog) invs;
     solver#pop_ctx
 
 let filter_good_fairness type_tab aprops fair_forms =
@@ -178,14 +176,14 @@ let filter_good_fairness type_tab aprops fair_forms =
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
-let do_refinement solver trail_filename prog =
+let do_refinement caches solver trail_filename prog =
     solver#push_ctx;
     solver#comment "do_refinement";
-    let (caches, xducers_prog) = make_vass_xducers solver true prog in
+    let xducers_prog = make_vass_xducers caches solver true prog in
     let type_tab = Program.get_type_tab xducers_prog in
-    let ctx = caches#get_analysis#get_pia_data_ctx in (* TODO: move further *)
-    let dom = caches#get_analysis#get_pia_dom in (* TODO: move further *)
-    let ctr_ctx_tbl = caches#get_analysis#get_pia_ctr_ctx_tbl in
+    let ctx = caches#analysis#get_pia_data_ctx in (* TODO: move further *)
+    let dom = caches#analysis#get_pia_dom in (* TODO: move further *)
+    let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let aprops = (Program.get_atomics xducers_prog) in
     let ltl_forms = (Program.get_ltl_forms_as_hash xducers_prog) in
     let inv_forms = find_invariants aprops in
@@ -297,5 +295,5 @@ let do_refinement solver trail_filename prog =
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
-        let _ = do_abstraction solver false false prog in ()
+        let _ = do_abstraction caches solver false false prog in ()
     end
