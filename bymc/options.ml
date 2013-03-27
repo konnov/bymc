@@ -46,29 +46,23 @@ let parse_options =
     (Arg.parse
         [
             ("-a", Arg.Unit (fun () -> opts := {!opts with action = OptAbstract}),
-             "Produce abstraction of a Promela program.");
+             "produce the counter abstraction of a Promela program.");
             ("-t", Arg.String
              (fun s -> opts := {!opts with action = OptRefine; trail_name = s}),
-             "Check feasibility of a counterexample produced by spin -t (not a *.trail!).");
-            ("-i", Arg.String
-             (fun s -> opts := {!opts with action = OptCheckInv; inv_name = s}),
-             "Check if an atomic proposition is an invariant!.");
+             "check feasibility of a counterexample produced by spin -t (not a *.trail!).");
             ("-s", Arg.String (fun s ->
                 opts := {!opts with action = OptSubstitute;
                     param_assignments = parse_key_values s}),
-             "Substitute parameters into the code and produce standard Promela.");
-            ("-d", Arg.Unit
-             (fun () -> opts := {!opts with bdd_pass = true;}),
-             "Make a BDD pass (experimental).");
+             "substitute parameters into the code and produce standard Promela.");
             ("--target", (Arg.Symbol (["spin"; "nusmv"],
                 (fun s -> opts := {!opts with mc_tool = (parse_mc_tool s)}))),
-                " choose a model checker from the list."
+                " choose a model checker from the list (default: spin)."
             );
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
-             "Produce lots of verbose output (you are warned).");
+             "produce lots of verbose output (you are warned).");
         ]
         (fun s -> if !opts.filename = "" then opts := {!opts with filename = s})
-        "Use: run [-a] [-i invariant] [-c spin_sim_out] [-s x=num,y=num] promela_file");
+        "Use: bymc [options] promela_file");
 
     !opts
 

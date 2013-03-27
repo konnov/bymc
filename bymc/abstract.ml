@@ -43,7 +43,7 @@ let write_to_file externalize_ltl name units type_tab =
 
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction caches solver is_first_run bdd_pass prog =
+let do_abstraction caches solver is_first_run prog =
     solver#push_ctx;
     solver#comment "do_abstraction";
     if is_first_run
@@ -73,8 +73,9 @@ let do_abstraction caches solver is_first_run bdd_pass prog =
     write_to_file true "abs-counter.prm"
         (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
     log INFO "[DONE]";
-    if bdd_pass then begin
-        log INFO "> Constructing BDDs...";
+    if caches#options.Options.mc_tool = Options.ToolNusmv
+    then begin
+        log INFO "> Constructing NuSMV processes...";
         (* counter abstraction builds its own skeleton... *)
         BddPass.transform_to_bdd solver caches ctrabs_prog;
         (*
@@ -295,5 +296,5 @@ let do_refinement caches solver trail_filename prog =
     then begin
         log INFO "  Regenerating the counter abstraction";
         (* formulas must be regenerated *)
-        let _ = do_abstraction caches solver false false prog in ()
+        let _ = do_abstraction caches solver false prog in ()
     end

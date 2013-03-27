@@ -42,7 +42,7 @@ let main () =
         | OptAbstract ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
             check_all_invariants caches solver prog;
-            let _ = do_abstraction caches solver true opts.bdd_pass prog in
+            let _ = do_abstraction caches solver true prog in
             let _ = solver#stop in ()
         | OptRefine ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
