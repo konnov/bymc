@@ -51,10 +51,10 @@ CUR_DIR=`pwd`
 cd $BYMC_HOME
 if [ "x$DEBUG" == "x" ]; then
     ./make.sh || (cd $CUR_DIR; exit 1)
-    TOOL="$BYMC_HOME/run.native ${BYMC_FLAGS} "
+    TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
 else
     BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
-    TOOL="ocamldebug $BYMC_HOME/run.byte "
+    TOOL="ocamldebug $BYMC_HOME/bymc.byte "
 fi
 cd $CUR_DIR
 

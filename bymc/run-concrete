@@ -59,7 +59,7 @@ if [ ! -f "$SCRIPT" -o "$GEN_SCRIPT" == "" ]; then
 fi
 
 cd $INSTANCE
-$BYMC_HOME/run.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
+$BYMC_HOME/bymc.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
 
 cd $CUR_DIR
 
