@@ -1,66 +1,14 @@
 open Printf
 open Str
 open Map
-module StringMap = Map.Make(String)
 
+open Options
 open Parse
 open Program
 open Abstract
 open Instantiation
 open Writer
 open Debug
-
-type action_option =
-    OptAbstract | OptRefine | OptCheckInv | OptSubstitute | OptNone
-    
-
-type options =
-    {
-        action: action_option; trail_name: string; filename: string;
-        inv_name: string; param_assignments: int StringMap.t;
-        bdd_pass: bool; verbose: bool
-    }
-
-let parse_key_values str =
-    let parse_pair map s =
-        if string_match (regexp "\\([a-zA-Z0-9]+\\)=\\([0-9]+\\)") s 0
-        then StringMap.add (matched_group 1 s) (int_of_string (matched_group 2 s)) map
-        else raise (Arg.Bad ("Wrong key=value pair: " ^ s))
-    in
-    let pairs = split (regexp ",") str in
-    List.fold_left parse_pair StringMap.empty pairs
-
-
-let parse_options =
-    let opts = ref {
-        action = OptNone; trail_name = ""; filename = ""; inv_name = "";
-        param_assignments = StringMap.empty; bdd_pass = false;
-        verbose = false
-    } in
-    (Arg.parse
-        [
-            ("-a", Arg.Unit (fun () -> opts := {!opts with action = OptAbstract}),
-             "Produce abstraction of a Promela program.");
-            ("-t", Arg.String
-             (fun s -> opts := {!opts with action = OptRefine; trail_name = s}),
-             "Check feasibility of a counterexample produced by spin -t (not a *.trail!).");
-            ("-i", Arg.String
-             (fun s -> opts := {!opts with action = OptCheckInv; inv_name = s}),
-             "Check if an atomic proposition is an invariant!.");
-            ("-s", Arg.String (fun s ->
-                opts := {!opts with action = OptSubstitute;
-                    param_assignments = parse_key_values s}),
-             "Substitute parameters into the code and produce standard Promela.");
-            ("-d", Arg.Unit
-             (fun () -> opts := {!opts with bdd_pass = true;}),
-             "Make a BDD pass (experimental).");
-            ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
-             "Produce lots of verbose output (you are warned).");
-        ]
-        (fun s -> if !opts.filename = "" then opts := {!opts with filename = s})
-        "Use: run [-a] [-i invariant] [-c spin_sim_out] [-s x=num,y=num] promela_file");
-
-    !opts
 
 
 let write_to_file name units type_tab =
