@@ -257,6 +257,10 @@ let proc_to_bdd prog smt_fun proc filename =
     Format.pp_print_flush ff ();
     close_out out
 
+
+(* ======= The new symbolic implementation. ===========================
+           It is much more efficient of that one above.                 *)
+
 let intro_old_copies new_type_tab new_sym_tab collected var =
     let nv = new var ("O" ^ var#mangled_name) (fresh_id ()) in
     let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
@@ -304,10 +308,11 @@ let create_aux_vars new_type_tab new_sym_tab hidden =
     new_type_tab#set_type var_loc init_tp;
     (var_use, var_loc)
 
-let write_smv_header new_type_tab new_sym_tab shared hidden out =
+
+let write_smv_header new_type_tab new_sym_tab shared hidden_idx_fun out =
     let decl_var v = 
         let tp = new_type_tab#get_type v in
-        if List.mem v hidden
+        if (hidden_idx_fun v) <> 0
         then fprintf out "  -- %s: %s;\n" v#mangled_name (Nusmv.var_type_smv tp)
         else fprintf out "  %s: %s;\n" v#mangled_name (Nusmv.var_type_smv tp)
     in
@@ -315,7 +320,6 @@ let write_smv_header new_type_tab new_sym_tab shared hidden out =
     List.iter decl_var shared
 
 
-(* TODO: re-use parts of the computed tree as in symbolic execution! *)
 let proc_to_symb solver caches prog 
         new_type_tab new_sym_tab vars hidden body out name section =
     log INFO (sprintf "  mk_cfg...");
@@ -334,11 +338,11 @@ let proc_to_symb solver caches prog
     num_paths
 
 
-let write_trans_loop vars hidden out =
+let write_trans_loop vars hidden_idx_fun out =
     Printf.printf "WARNING: added a loop to TRANS\n";
     let keep sym =
         let v = sym#as_var in
-        if List.exists (fun h -> h#id = v#id) hidden
+        if (hidden_idx_fun v) <> 0
         then ""
         else Printf.sprintf "next(%s)=%s" v#mangled_name v#mangled_name
     in
@@ -348,39 +352,51 @@ let write_trans_loop vars hidden out =
     Printf.fprintf out " | bymc_loc = 1 & (%s)\n" keep_s
 
 
-let read_hidden (sym_tab: symb_tab) (shared: var list)
-        (filename: string): var list =
+let read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
     (* XXX: we should definitely use batteries here *)
-    let exists =
+    let file_exists =
         try Unix.access filename [Unix.F_OK]; true
         with (Unix.Unix_error (_, _, _)) -> false
     in
-    if not exists
-    then begin
-        let fout = open_out filename in
-        List.iter (fun v -> fprintf fout "%s\n" v#mangled_name) shared;
-        close_out fout;
-        shared
-    end else 
-        let vars = ref [] in
-        let fin = open_in filename in
-        try
-            while true; do
-                let line = input_line fin in
-                let sym = sym_tab#lookup line in
-                vars := (sym#as_var :: !vars)
-            done;
-            List.rev !vars
-        with End_of_file ->
-            close_in fin;
-            printf "    %d variables are hidden\n" (List.length !vars);
-            List.rev !vars
+    let hidden =
+        if not file_exists
+        then begin
+            let fout = open_out filename in
+            List.iter (fun v -> fprintf fout "%s\n" v#mangled_name) shared;
+            close_out fout;
+            shared
+        end else 
+            let vars = ref [] in
+            let fin = open_in filename in
+            try
+                while true; do
+                    let line = input_line fin in
+                    let sym = sym_tab#lookup line in
+                    vars := (sym#as_var :: !vars)
+                done;
+                List.rev !vars
+            with End_of_file ->
+                close_in fin;
+                printf "    %d variables are hidden\n" (List.length !vars);
+                List.rev !vars
+    in
+    let hidden_tab = Hashtbl.create (List.length hidden) in
+    List.iter2 (fun n v -> Hashtbl.add hidden_tab v#id n)
+        (range 1 (1 + (List.length hidden))) hidden;
+    (* If the variable is hidden, return its positive index in the table.
+       Otherwise, return 0.
+    *)
+    let hidden_fun v =
+        try Hashtbl.find hidden_tab v#id
+        with Not_found -> 0
+    in
+    (hidden, hidden_fun)
 
 
-let write_default_init new_type_tab new_sym_tab shared hidden out =
+let write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out =
     let init_var v = 
         let tp = new_type_tab#get_type v in
-        if List.mem v hidden
+        if (hidden_idx_fun v) <> 0
         then ""
         else sprintf "%s = %s" v#mangled_name (Nusmv.type_default_smv tp)
     in
@@ -402,14 +418,15 @@ let transform_to_bdd solver caches prog =
     let new_sym_tab = new symb_tab "main" in
     let shared = (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let shared = transform_vars prog type_tab new_type_tab new_sym_tab shared in
-    let hidden = read_hidden new_sym_tab shared "hidden.txt" in
+    let hidden, hidden_idx_fun = read_hidden new_sym_tab shared "hidden.txt"
+    in
     let bymc_use, bymc_loc =
         create_aux_vars new_type_tab new_sym_tab hidden in
     let vars = bymc_loc :: bymc_use :: shared in
     let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab)
         shared [bymc_use; bymc_loc] in
     let out = open_out "main.smv" in
-    write_smv_header new_type_tab new_sym_tab vars hidden out; 
+    write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
     let make_init procs =
         let add_init_section accum proc =
             let reg_tbl = caches#get_struc#get_regions proc#get_name in
@@ -431,10 +448,10 @@ let transform_to_bdd solver caches prog =
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
         let _ = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden all_stmts out "init" "INIT" in
+            proc_sym_tab vars hidden_idx_fun all_stmts out "init" "INIT" in
         ()
     in
-    let make_trans hidden proc =
+    let make_trans proc =
         let proc_sym_tab = new symb_tab proc#get_name in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
@@ -447,19 +464,19 @@ let transform_to_bdd solver caches prog =
         let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
         let num = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden body out proc#get_name "TRANS" in
+            proc_sym_tab vars hidden_idx_fun body out proc#get_name "TRANS" in
         fprintf out ")\n";
         num
     in
     fprintf out "INIT\n";
-    write_default_init new_type_tab new_sym_tab shared hidden out;
+    write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out;
     fprintf out "TRANS\n  FALSE\n";
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
-    let no_paths = List.map (make_trans hidden) (Program.get_procs prog) in
+    let no_paths = List.map make_trans (Program.get_procs prog) in
     let no_total = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
-    write_trans_loop vars hidden out;
+    write_trans_loop vars hidden_idx_fun out;
 
     write_hidden_spec hidden out;
     close_out out

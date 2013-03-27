@@ -85,12 +85,11 @@ let check_sat solver type_tab exp =
     end
 
 
-let hide_non_zero sym_tab hidden exp =
+let hide_non_zero sym_tab hidden_idx_fun exp =
     let find_idx v =
         (* XXX: use a hashtable here? *)
         let ov = get_output sym_tab v in
-        try 1 + (list_find_match_pos (fun h -> ov#id = h#id) hidden)
-        with Not_found -> 0
+        hidden_idx_fun ov
     in
     let rec rewrite = function
     | BinEx (EQ, Var v, Const i) as e ->
@@ -126,16 +125,11 @@ let hide_non_zero sym_tab hidden exp =
 
 
 (* TODO: rewrite x = _ to TRUE for all hidden x's *)
-let abstract_hidden sym_tab hidden vals exp = 
+let abstract_hidden sym_tab hidden_idx_fun vals exp = 
     let rec rewrite = function
     | BinEx (EQ, Var v, _)
     | BinEx (NE, Var v, _) as e ->
-        let ov = get_output sym_tab v in
-        (* XXX: use a hashtable here? *)
-        let idx =
-            try 1 + (list_find_match_pos (fun h -> ov#id = h#id) hidden)
-            with Not_found -> 0
-        in
+        let idx = hidden_idx_fun (get_output sym_tab v) in
         if idx > 0
         then begin
             let use_var = get_use sym_tab in
@@ -156,8 +150,8 @@ let abstract_hidden sym_tab hidden vals exp =
     rewrite exp
 
 
-let activate_hidden sym_tab hidden vals =
-    let try_activate (n, v) =
+let activate_hidden sym_tab shared hidden_idx_fun vals =
+    let try_activate v =
         let exp = 
             try Hashtbl.find vals v#id
             with Not_found ->
@@ -174,11 +168,14 @@ let activate_hidden sym_tab hidden vals =
         let use_var = get_use sym_tab in
         if needs_activation
         then begin
-            Hashtbl.replace vals use_var#id (Const (n + 1)); (* activate *)
-            Hashtbl.replace vals v#id (Var (get_input sym_tab v)); (* deactivate *)
+            (* activate *)
+            Hashtbl.replace vals use_var#id (Const (hidden_idx_fun v));
+            (* deactivate *)
+            Hashtbl.replace vals v#id (Var (get_input sym_tab v))
         end
     in
-    List.iter try_activate (List.combine (range 0 (List.length hidden)) hidden)
+    let hidden = List.filter (fun v -> (hidden_idx_fun v) <> 0) shared in 
+    List.iter try_activate hidden
 
 
 let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
@@ -202,7 +199,7 @@ let print_path log =
 
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (hidden: var list) (is_init: bool)
+        (shared: var list) (hidden_idx_fun: var -> int) (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
     let next_fun = smv_name sym_tab in
     let rec replace_arr = function
@@ -266,14 +263,14 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     in
     (* XXX: the following code is a disaster, rewrite *)
     let hidden_path_cons =
-        compute_consts (hide_non_zero sym_tab hidden path_cons) in
+        compute_consts (hide_non_zero sym_tab hidden_idx_fun path_cons) in
     let is_hidden = not (check_sat solver type_tab hidden_path_cons) in
 
     if is_final && is_sat && not is_hidden
     then begin
         print_path log;
         let path_cons =
-            compute_consts (abstract_hidden sym_tab hidden vals path_cons) in
+            compute_consts (abstract_hidden sym_tab hidden_idx_fun vals path_cons) in
         let var_loc = get_loc sym_tab in
         let init_path_cons =
             let init_expr =
@@ -302,11 +299,11 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         (* the first step is initialization *)
         Hashtbl.add vals var_loc#id (Const 1);
         (* nusmv syntax *)
-        activate_hidden sym_tab hidden vals;
+        activate_hidden sym_tab shared hidden_idx_fun vals;
         let unchanged, changed = List.fold_left find_changes ([], []) shared in
         let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
-        let unchanged = List.filter
-            (fun v -> not (List.exists (fun h -> h#id = v#id) hidden)) unchanged
+        let unchanged =
+            List.filter (fun v -> (hidden_idx_fun v) = 0) unchanged
         in
         let unchanged_eqs =
             let mk_eq v = 
