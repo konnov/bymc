@@ -1,5 +1,6 @@
 open Printf
 
+open Accums
 open SpinTypes
 open Spin
 open SpinIr
@@ -93,7 +94,7 @@ let embed_atomics type_tab aprops form =
         | _ as e -> e
     in
     embed form
-;;
+
 
 let find_fair_atoms error_fun type_tab aprops = function
     | UnEx(ALWAYS, UnEx(EVENTUALLY, f)) as ff ->
@@ -105,18 +106,16 @@ let find_fair_atoms error_fun type_tab aprops = function
         then normalize_form (embed_atomics type_tab aprops f)
         else error_fun ff
     | _ as ff -> error_fun ff
-;;
+
+
+let is_fairness_form name = str_starts_with "fairness" name 
+
 
 let collect_fairness_forms ltl_forms =
-    let fairness =
-        try Hashtbl.find ltl_forms "fairness"
-        with Not_found ->
-            raise (Fairness_error "No LTL formula called \"fairness\" found!")
-    in
     (* break down boolean combinations of formulas into a list *)
-    let rec collect = function
+    let rec collect lst = function
     | BinEx (AND, l, r) ->
-            List.append (collect l) (collect r)
+            collect (collect lst l) r
     | BinEx (OR, _, _) as f ->
             let m = ("f||g is not supported in fairness: " ^ (expr_s f)) in
             raise (Fairness_error m)
@@ -130,14 +129,28 @@ let collect_fairness_forms ltl_forms =
             let m = ("!f is not supported in fairness (please normalize): "
                 ^ (expr_s f)) in
             raise (Fairness_error m)
-    | _ as f -> [f]
+    | _ as f -> f :: lst
     in
-    collect fairness
-;;
+    let is_ff (name, _) = is_fairness_form name in
+    let fforms = List.map (fun (_, f) -> f)
+        (List.filter is_ff (hashtbl_as_list ltl_forms)) in
+    List.fold_left collect [] fforms
+
+
+let embed_fairness prog = 
+    let ltl_forms = Program.get_ltl_forms_as_hash prog in
+    let fairness = list_to_binex AND (collect_fairness_forms ltl_forms) in
+    let embed map (name, form) =
+        Program.StringMap.add name (BinEx (IMPLIES, fairness, form)) map in
+    let other_fs = List.filter
+        (fun (n, _) -> not (is_fairness_form n)) (hashtbl_as_list ltl_forms) in
+    let new_forms = List.fold_left embed Program.StringMap.empty other_fs in
+    (Program.set_ltl_forms new_forms prog)
+
 
 let is_invariant_atomic name =
     Str.string_match (Str.regexp ".*_inv") name 0
-;;
+
 
 let find_invariants (aprops: Spin.token atomic_expr Program.StringMap.t):
         Spin.token expr list =
@@ -151,5 +164,5 @@ let find_invariants (aprops: Spin.token atomic_expr Program.StringMap.t):
         if is_invariant_atomic name then form :: inv_props else inv_props
     in
     Program.StringMap.fold collect_invariants aprops []
-;;
+
 

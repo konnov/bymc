@@ -148,6 +148,14 @@ let str_contains str substr =
     let re = Str.regexp_string substr in
     try ((Str.search_forward re str 0) >= 0) with Not_found -> false
 
+
+let str_starts_with substr str =
+    let ssl = String.length substr in
+    if (String.length str) < ssl
+    then false
+    else (String.sub str 0 ssl) = substr
+
+
 (*
    check two hash tables for element equality as standard "=" works
    only on the hash tables of the same capacity!

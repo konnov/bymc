@@ -480,33 +480,23 @@ class vass_funcs dom prog solver =
     end
 
 
-let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
-    let embed_fairness fair_expr no_inf_forms =
-        let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)) in
-        let spur_and_fair =
-            if is_nop fair_expr then [spur] else [spur; fair_expr] in
-        let precond = list_to_binex AND (spur_and_fair @ no_inf_forms) in
-        BinEx(IMPLIES, precond, ltl_expr)
+let create_fairness ctr_ctx_tbl =
+    (* add formulas saying that unfair predicates can't occur forever *)
+    let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
+    (* a lollipop is the same as a lasso, but it sounds nice! *)
+    let out_of_lollipop i =
+        let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
+        UnEx (NEG, r_var)
     in
-    let form = if (name <> "fairness") && (not_nop fairness)
-    then begin
-        (* add formulas saying that unfair predicates can't occur forever *)
-        let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
-        (* a lollipop is the same as a lasso, but it sounds nice! *)
-        let out_of_lollipop i =
-            let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
-            UnEx (NEG, r_var)
-        in
-        let leave_unfair_lollipops =
-            let indices = (range 0 recur_preds_cnt) in
-            let conj = list_to_binex AND (List.map out_of_lollipop indices) in
-            if recur_preds_cnt > 0
-            then [UnEx(ALWAYS, UnEx(EVENTUALLY, conj))]
-            else []
-        in
-        embed_fairness fairness leave_unfair_lollipops
-    end else ltl_expr in
-    form
+    let leave_unfair_lollipops =
+        let indices = (range 0 recur_preds_cnt) in
+        let conj = list_to_binex AND (List.map out_of_lollipop indices) in
+        if recur_preds_cnt > 0
+        then [UnEx(ALWAYS, UnEx(EVENTUALLY, conj))]
+        else []
+    in
+    let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)) in
+    list_to_binex AND (spur :: leave_unfair_lollipops)
 
 
 (* Transform the program using counter abstraction over the piaDomain.
@@ -589,7 +579,10 @@ let do_counter_abstraction funcs solver caches prog =
     let replace_comp atomics stmts =
         let rec hack_nsnt = function
             (* XXX: this is a hack saying if we have nsnt + 1,
-                then it must be nsnt + delta *)
+                then it must be nsnt + delta. This is not required to
+               refine single transitions, but it might be helpful to check
+               feasibility of a counterexample.
+             *)
             | MExpr (id, BinEx (ASGN, Var x, BinEx (PLUS, Var y, Const 1))) as s ->
                 if t_ctx#must_keep_concrete (Var x) && x#get_name = y#get_name
                 then MExpr (id,
@@ -662,9 +655,6 @@ let do_counter_abstraction funcs solver caches prog =
         if Program.StringMap.mem "fairness" (Program.get_ltl_forms prog)
         then Program.StringMap.find "fairness" (Program.get_ltl_forms prog)
         else (Nop "") in
-    let map_ltl_form name ltl_expr =
-        fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr
-    in
     let new_atomics =
         Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
     let new_procs =
@@ -674,7 +664,8 @@ let do_counter_abstraction funcs solver caches prog =
         ctr_ctx_tbl#get_spur
             :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
     let new_ltl_forms =
-        Program.StringMap.mapi map_ltl_form (Program.get_ltl_forms prog) in
+        Program.StringMap.add "fairness_ctr" (create_fairness ctr_ctx_tbl)
+        (Program.get_ltl_forms prog) in
     let new_type_tab = (Program.get_type_tab prog)#copy in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
     let new_prog =

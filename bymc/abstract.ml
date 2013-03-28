@@ -69,8 +69,9 @@ let do_abstraction caches solver is_first_run prog =
     caches#analysis#set_pia_ctr_ctx_tbl
         (new ctr_abs_ctx_tbl dom roles intabs_prog);
     let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog in
-    write_to_file true "abs-counter.prm"
+    let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog
+    in
+    write_to_file false "abs-counter-general.prm"
         (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
     log INFO "[DONE]";
     if caches#options.Options.mc_tool = Options.ToolNusmv
@@ -83,6 +84,13 @@ let do_abstraction caches solver is_first_run prog =
         NusmvPass.transform_to_bdd solver caches intabs_prog;
         *)
         log INFO "[DONE]";
+    end else if caches#options.Options.mc_tool = Options.ToolSpin
+    then begin
+        log INFO "> Embedding fairness...";
+        let f_prog = Ltl.embed_fairness ctrabs_prog in
+        (* TODO: give it a better name like target-spin? *)
+        write_to_file true "abs-counter.prm"
+            (units_of_program f_prog) (get_type_tab f_prog);
     end;
     solver#pop_ctx;
     ctrabs_prog
