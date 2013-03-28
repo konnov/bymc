@@ -72,16 +72,16 @@ let normalize_form form =
                 raise (Ltl_error m)
     in
     norm false form
-;;
+
 
 let embed_atomics type_tab aprops form =
     let get_atomic name =
         try
             match Program.StringMap.find name aprops with
             | PropGlob e -> e
-            | _ -> raise (Fairness_error ("Incorrect atomic expr: " ^ name))
+            | _ -> raise (Ltl_error ("Incorrect atomic expr: " ^ name))
         with Not_found ->
-            raise (Fairness_error ("Atomic expr not found: " ^ name))
+            raise (Ltl_error ("Atomic expr not found: " ^ name))
     in
     let rec embed = function
         | BinEx(op, l, r) -> BinEx(op, embed l, embed r)

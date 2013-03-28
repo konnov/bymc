@@ -492,14 +492,6 @@ let fuse_ltl_form ctr_ctx_tbl fairness name ltl_expr =
     then begin
         (* add formulas saying that unfair predicates can't occur forever *)
         let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
-        (* the old implementation produced a lot of []<>!bymc_r_i,
-           that lead to an extremely inefficient verification
-
-        let mk_fair i =
-            let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
-            UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx(NEG, r_var))) in
-        let no_inf_forms = List.map mk_fair (range 0 recur_preds_cnt) in
-        *)
         (* a lollipop is the same as a lasso, but it sounds nice! *)
         let out_of_lollipop i =
             let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
