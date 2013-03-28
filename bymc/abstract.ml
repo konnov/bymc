@@ -77,7 +77,7 @@ let do_abstraction caches solver is_first_run prog =
     then begin
         log INFO "> Constructing NuSMV processes...";
         (* counter abstraction builds its own skeleton... *)
-        NusmvPass.transform_to_bdd solver caches ctrabs_prog;
+        NusmvPass.transform solver caches ctrabs_prog;
         (*
         let _ = SkelStruc.pass caches intabs_prog in
         NusmvPass.transform_to_bdd solver caches intabs_prog;

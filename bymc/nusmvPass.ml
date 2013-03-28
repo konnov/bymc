@@ -445,7 +445,7 @@ let write_ltl_spec
         name (Nusmv.expr_s (fun v -> v#get_name) hidden_masked)
 
 
-let transform_to_bdd solver caches prog =
+let transform solver caches prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let new_sym_tab = new symb_tab "main" in
