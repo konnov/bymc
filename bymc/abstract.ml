@@ -18,7 +18,7 @@ open SpinIrImp
 open VarRole
 open Writer
 
-open BddPass
+open NusmvPass
 
 open Debug
 
@@ -28,7 +28,7 @@ let write_to_file externalize_ltl name units type_tab =
         | Ltl (form_name, form) as u->
             (* Spin 6.2 supports inline formulas no longer than 1024 chars.
                It produces arbitrary compilation errors for those longer than
-               its authors expected. We thus put the formula into a file. *)
+               its authors expected. We thus save the formula into a file. *)
             if externalize_ltl
             then begin
                 let out = open_out (sprintf "%s.ltl" form_name) in
@@ -77,10 +77,10 @@ let do_abstraction caches solver is_first_run prog =
     then begin
         log INFO "> Constructing NuSMV processes...";
         (* counter abstraction builds its own skeleton... *)
-        BddPass.transform_to_bdd solver caches ctrabs_prog;
+        NusmvPass.transform_to_bdd solver caches ctrabs_prog;
         (*
         let _ = SkelStruc.pass caches intabs_prog in
-        BddPass.transform_to_bdd solver caches intabs_prog;
+        NusmvPass.transform_to_bdd solver caches intabs_prog;
         *)
         log INFO "[DONE]";
     end;
