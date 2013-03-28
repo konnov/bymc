@@ -651,10 +651,6 @@ let do_counter_abstraction funcs solver caches prog =
     let abstract_atomic ae =
         (trans_prop_decl solver ctr_ctx_tbl prog ae)
     in
-    let fairness =
-        if Program.StringMap.mem "fairness" (Program.get_ltl_forms prog)
-        then Program.StringMap.find "fairness" (Program.get_ltl_forms prog)
-        else (Nop "") in
     let new_atomics =
         Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
     let new_procs =

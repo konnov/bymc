@@ -1,6 +1,6 @@
 (*
-  This pass transforms a transducer into a boolean representation,
-  to be used in a BDD model checker.
+  This pass transforms Promela code into Nusmv representation using
+  symbolic execution.
 
   Igor Konnov, 2012
  *)
@@ -259,7 +259,7 @@ let proc_to_bdd prog smt_fun proc filename =
 
 
 (* ======= The new symbolic implementation. ===========================
-           It is much more efficient of that one above.                 *)
+           It is much more efficient than that one above.                 *)
 
 let intro_old_copies new_type_tab new_sym_tab collected var =
     let nv = new var ("O" ^ var#mangled_name) (fresh_id ()) in
@@ -412,8 +412,7 @@ let write_hidden_spec hidden out =
     List.iter write (range 0 (List.length hidden))
 
 
-let write_ltl_spec
-        out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
+let write_ltl_spec out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
     let rec rewrite = function
     | Var v as e ->
         if (hidden_idx_fun v) = 0
@@ -441,18 +440,37 @@ let write_ltl_spec
     let embedded = Ltl.embed_atomics type_tab atomics ltl_form in
     let flat = elim_array_access sym_tab embedded in
     let hidden_masked = compute_consts (rewrite flat) in
-    match hidden_masked with
-    | UnEx (ALWAYS, f) as tf ->
-        if Ltl.is_propositional type_tab f
-        then (* try a chance to use a faster algorithm *)
-            fprintf out " -- INVARSPEC NAME %s := (%s);\n\n"
-                name (Nusmv.expr_s (fun v -> v#get_name) f)
-        else fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
-            name (Nusmv.expr_s (fun v -> v#get_name) tf)
+    if not (Ltl.is_fairness_form name)
+    then begin
+        match hidden_masked with
+        | UnEx (ALWAYS, f) as tf ->
+            if Ltl.is_propositional type_tab f
+            then (* try a chance to use a faster algorithm *)
+                fprintf out " -- INVARSPEC NAME %s := (%s);\n\n"
+                    name (Nusmv.expr_s (fun v -> v#get_name) f)
+            else fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
+                name (Nusmv.expr_s (fun v -> v#get_name) tf)
 
-    | _ as tf ->
-        fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
-            name (Nusmv.expr_s (fun v -> v#get_name) tf)
+        | _ as tf ->
+            fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
+                name (Nusmv.expr_s (fun v -> v#get_name) tf)
+
+    end else begin
+        let write = function
+        | UnEx (ALWAYS, UnEx (EVENTUALLY, f)) as ff ->
+            if Ltl.is_propositional type_tab f
+            then fprintf out " -- JUSTICE (%s);\n\n"
+                    (Nusmv.expr_s (fun v -> v#get_name) f)
+            else raise (Bdd_error ("Unsupported fairness: " ^ (expr_s ff)))
+
+        | _ as ff ->
+            printf "ERROR: unsupported fairness type (ignored): %s\n"
+                (expr_s ff)
+        in
+        let tab = Hashtbl.create 1 in
+        Hashtbl.add tab name hidden_masked;
+        List.iter write (Ltl.collect_fairness_forms tab)
+    end
 
 
 let transform solver caches prog =
