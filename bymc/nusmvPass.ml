@@ -441,8 +441,18 @@ let write_ltl_spec
     let embedded = Ltl.embed_atomics type_tab atomics ltl_form in
     let flat = elim_array_access sym_tab embedded in
     let hidden_masked = compute_consts (rewrite flat) in
-    fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
-        name (Nusmv.expr_s (fun v -> v#get_name) hidden_masked)
+    match hidden_masked with
+    | UnEx (ALWAYS, f) as tf ->
+        if Ltl.is_propositional type_tab f
+        then (* try a chance to use a faster algorithm *)
+            fprintf out " -- INVARSPEC NAME %s := (%s);\n\n"
+                name (Nusmv.expr_s (fun v -> v#get_name) f)
+        else fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
+            name (Nusmv.expr_s (fun v -> v#get_name) tf)
+
+    | _ as tf ->
+        fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
+            name (Nusmv.expr_s (fun v -> v#get_name) tf)
 
 
 let transform solver caches prog =

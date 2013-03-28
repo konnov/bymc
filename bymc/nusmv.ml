@@ -189,15 +189,18 @@ let expr_s var_fun e =
     | BinEx (AND, f, g) -> sprintf "(%s & %s)" (to_s f) (to_s g)
     | BinEx (OR, f, g) -> sprintf "(%s | %s)" (to_s f) (to_s g)
     | BinEx (ASGN, f, g) -> sprintf "%s == %s" (to_s f) (to_s g)
-    | BinEx (AT, proc, lab) -> sprintf "%s@%s" (to_s proc) (to_s lab)
+    | BinEx (AT, proc, lab) ->
+      (* this does not make sense in our NuSMV encoding, replace it by TRUE *)
+        sprintf "TRUE"
     | BinEx (tok, f, g) ->
         sprintf "(%s %s %s)" (to_s f) (token_s tok) (to_s g)
     | Phi (lhs, rhs) ->
         let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
         in
         sprintf "%s = phi(%s)" lhs#get_name rhs_s
-    | LabelRef (proc_name, lab_name) ->
-        sprintf "%s@%s" proc_name lab_name
+    | LabelRef (_, _) ->
+      (* this does not make sense in our NuSMV encoding, replace it by TRUE *)
+        sprintf "TRUE"
     in
     to_s e
 

@@ -13,14 +13,15 @@ exception Prop_error of string
 
 let is_propositional type_tab e =
     let rec isp = function
-    | Var v ->
-            (type_tab#get_type v)#basetype = TPROPOSITION
+    | Var v -> (type_tab#get_type v)#basetype = TPROPOSITION
     | BinEx(GT, _, _)
     | BinEx(GE, _, _)
     | BinEx(LT, _, _)
     | BinEx(LE, _, _)
     | BinEx(EQ, _, _)
-    | BinEx(NE, _, _) -> true
+    | BinEx(NE, _, _)
+    | BinEx(AT, _, _)
+    | LabelRef (_, _) -> true
     | BinEx(AND, l, r) -> (isp l) && (isp r)
     | BinEx(OR, l, r) -> (isp l) && (isp r)
     | BinEx(IMPLIES, l, r) -> (isp l) && (isp r)
