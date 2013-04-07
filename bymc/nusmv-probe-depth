@@ -22,7 +22,7 @@ def get_depth(cin):
 
         m = state_re.match(line)
         if m:
-            num = int(m.group(1))
+            num += 1 # skip stuttering
         
         m = assign_re.match(line)
         if m:
