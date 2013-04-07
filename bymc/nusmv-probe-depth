@@ -1,0 +1,67 @@
+#!/usr/bin/python
+#
+# Use random execution to get an idea of how deep computations we have
+#
+# Igor Konnov, 2013
+
+import re
+import subprocess
+import sys
+
+nusmv="nusmv"
+
+def get_depth(cin):
+    state_re = re.compile("-> State: [0-9]+\\.([0-9]+) <-\\n")
+    assign_re = re.compile(".*=.*\\n")
+    num = 0
+    depth = 0
+    line = cin.readline()
+    while line:
+        if line.find("SIM-END") != -1:
+            break
+
+        m = state_re.match(line)
+        if m:
+            num = int(m.group(1))
+        
+        m = assign_re.match(line)
+        if m:
+            depth = num
+
+        line = cin.readline()
+
+    return depth            
+
+
+if __name__ == "__main__":
+    try:
+        prog = sys.argv[1]
+        steps = int(sys.argv[2])
+        tries = int(sys.argv[3])
+    except IndexError:
+        print "Use: prog nusmv-prog num-tries"
+        sys.exit(1)
+
+    po = subprocess.Popen([nusmv, "-int", prog],
+            stdin = subprocess.PIPE, stdout = subprocess.PIPE,
+            stderr = subprocess.STDOUT)
+
+    po.stdin.write("read_model\n")
+    po.stdin.write("flatten_hierarchy\n")
+    po.stdin.write("encode_variables\n")
+    po.stdin.write("build_model\n")
+
+    max_depth = 0
+    for i in range(0, tries):
+        po.stdin.write("pick_state -r\n")
+        po.stdin.write("simulate -p -r -k %d\n" % steps)
+        po.stdin.write("echo \"SIM-END\"\n")
+
+        depth = get_depth(po.stdout)
+        if depth > max_depth:
+            max_depth = depth
+            print "Depth increased to %d" % max_depth
+
+
+    po.terminate()
+
