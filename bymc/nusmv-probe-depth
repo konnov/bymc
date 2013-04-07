@@ -14,6 +14,7 @@ def get_depth(cin):
     state_re = re.compile("-> State: [0-9]+\\.([0-9]+) <-\\n")
     assign_re = re.compile(".*=.*\\n")
     num = 0
+    old_num = 0
     depth = 0
     line = cin.readline()
     while line:
@@ -22,11 +23,13 @@ def get_depth(cin):
 
         m = state_re.match(line)
         if m:
-            num += 1 # skip stuttering
+            num = int(m.group(1))
         
         m = assign_re.match(line)
         if m:
-            depth = num
+            if old_num != num:
+                depth += 1
+                old_num = num
 
         line = cin.readline()
 
