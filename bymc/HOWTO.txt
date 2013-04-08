@@ -32,7 +32,7 @@ cd theta/tools/bymc
 
 # the manual execution of the tool chain (most likely, you don't need it!)
 
-OCAMLRUNPARAM=b ./run.native -a ../../promela/bcast-byz.pml
+OCAMLRUNPARAM=b ./bymc.native -a ../../promela/bcast-byz.pml
 view original.prm     # the original system as parsed by the tool
 view abs-interval.prm # the interval abstraction
 view abs-counter.prm  # the counter abstraction
@@ -48,4 +48,4 @@ view trace.ys         # the trace encoded in yices (SMT solver)
 
 # see a counter example in VASS and (perhaps) refine the system:
 
-OCAMLRUNPARAM=b ./run.native -t spin.trace ../../promela/bcast-byz.pml
+OCAMLRUNPARAM=b ./bymc.native -t spin.trace ../../promela/bcast-byz.pml
