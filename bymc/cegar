@@ -33,7 +33,7 @@ function appendToVerdict() {
     END_TIME=$(date +%s)
     DIFF_TIME=$(($END_TIME-$START_TIME))
 
-    spin_data=`$BYMC_HOME/parse-spin-out.py $SPIN_OUT`
+    spin_data=`$BYMC_HOME/script/parse-spin-out.py $SPIN_OUT`
     common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
     echo "$out|$common|$spin_data" >>verdict.txt
 }
