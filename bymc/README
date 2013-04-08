@@ -1,6 +1,0 @@
-You need the following tools to compile and run this one:
-
- * ocaml
- * ocamlbuild
- * spin
-
