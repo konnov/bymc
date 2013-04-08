@@ -81,7 +81,9 @@ let embed_atomics type_tab aprops form =
         try
             match Program.StringMap.find name aprops with
             | PropGlob e -> e
-            | _ -> raise (Ltl_error ("Incorrect atomic expr: " ^ name))
+            | _ ->
+                fprintf stderr "WARN: skipped atomic expression: %s\n" name;
+                Const 1
         with Not_found ->
             raise (Ltl_error ("Atomic expr not found: " ^ name))
     in

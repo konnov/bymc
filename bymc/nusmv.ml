@@ -190,8 +190,8 @@ let expr_s var_fun e =
     | BinEx (OR, f, g) -> sprintf "(%s | %s)" (to_s f) (to_s g)
     | BinEx (ASGN, f, g) -> sprintf "%s == %s" (to_s f) (to_s g)
     | BinEx (AT, proc, lab) ->
-      (* this does not make sense in our NuSMV encoding, replace it by TRUE *)
-        sprintf "TRUE"
+        (* initialized *)
+        sprintf "bymc_loc = 1"
     | BinEx (tok, f, g) ->
         sprintf "(%s %s %s)" (to_s f) (token_s tok) (to_s g)
     | Phi (lhs, rhs) ->
@@ -199,8 +199,8 @@ let expr_s var_fun e =
         in
         sprintf "%s = phi(%s)" lhs#get_name rhs_s
     | LabelRef (_, _) ->
-      (* this does not make sense in our NuSMV encoding, replace it by TRUE *)
-        sprintf "TRUE"
+        (* initialized *)
+        sprintf "bymc_loc = 1"
     in
     to_s e
 

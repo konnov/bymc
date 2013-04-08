@@ -49,7 +49,7 @@ let main () =
             let _ = do_refinement caches solver opts.trail_name prog in
             let _ = solver#stop in ()
         | OptCheckInv ->
-            printf "WARNING: -i is deprecated, invariants are checked automatically\n"
+            printf "WARN: -i is deprecated, invariants are checked automatically\n"
         | OptSubstitute ->
             let units = units_of_program prog in
             let new_units = do_substitution opts.param_assignments units in

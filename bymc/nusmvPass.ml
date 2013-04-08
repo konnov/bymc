@@ -33,6 +33,8 @@ let intmap_vals m =
     List.map (fun (k, v) -> v) (IntMap.bindings m)
 
 
+type scope_vars_t = LocalShared | SharedOnly
+
 (* this code deviates a lot (!) from smtXducerPass *)
 let blocks_to_smt caches prog type_tab new_type_tab get_mirs_fun filename p =
     log INFO (sprintf "  blocks_to_smt %s..." filename);
@@ -352,7 +354,7 @@ let write_trans_loop vars hidden_idx_fun out =
     Printf.fprintf out " | bymc_loc = 1 & (%s)\n" keep_s
 
 
-let read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
+let create_read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
     (* XXX: we should definitely use batteries here *)
     let file_exists =
         try Unix.access filename [Unix.F_OK]; true
@@ -464,7 +466,7 @@ let write_ltl_spec out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
             else raise (Bdd_error ("Unsupported fairness: " ^ (expr_s ff)))
 
         | _ as ff ->
-            printf "ERROR: unsupported fairness type (ignored): %s\n"
+            printf "WARN: unsupported fairness type (ignored): %s\n"
                 (expr_s ff)
         in
         let tab = Hashtbl.create 1 in
@@ -473,20 +475,24 @@ let write_ltl_spec out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
     end
 
 
-let transform solver caches prog =
+let transform solver caches scope out_name prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let new_sym_tab = new symb_tab "main" in
-    let shared = (Program.get_shared prog) @ (Program.get_instrumental prog) in
-    let shared = transform_vars prog type_tab new_type_tab new_sym_tab shared in
-    let hidden, hidden_idx_fun = read_hidden new_sym_tab shared "hidden.txt"
-    in
+    let shared = transform_vars prog type_tab new_type_tab new_sym_tab
+        ((Program.get_shared prog) @ (Program.get_instrumental prog)) in
+    let hidden, hidden_idx_fun =
+        create_read_hidden new_sym_tab
+        (if scope = SharedOnly then shared else [] (* no refinement *))
+        (sprintf "%s-hidden.txt" out_name) in
     let bymc_use, bymc_loc =
         create_aux_vars new_type_tab new_sym_tab hidden in
     let vars = bymc_loc :: bymc_use :: shared in
+    let vars = if (scope = LocalShared)
+        then vars @ (Program.get_all_locals prog) else vars in
     let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab)
         shared [bymc_use; bymc_loc] in
-    let out = open_out "main.smv" in
+    let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
     let make_init procs =
         let add_init_section accum proc =

@@ -65,6 +65,13 @@ let do_abstraction caches solver is_first_run prog =
     write_to_file false "abs-interval.prm"
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "[DONE]";
+    if caches#options.Options.mc_tool = Options.ToolNusmv
+    then begin
+        log INFO "> Constructing NuSMV interval abstraction...";
+        let _ = SkelStruc.pass caches intabs_prog in
+        NusmvPass.transform solver caches NusmvPass.LocalShared "main-int" intabs_prog;
+        log INFO "[DONE]";
+    end;
     log INFO "> Constructing counter abstraction";
     caches#analysis#set_pia_ctr_ctx_tbl
         (new ctr_abs_ctx_tbl dom roles intabs_prog);
@@ -77,12 +84,7 @@ let do_abstraction caches solver is_first_run prog =
     if caches#options.Options.mc_tool = Options.ToolNusmv
     then begin
         log INFO "> Constructing NuSMV processes...";
-        (* counter abstraction builds its own skeleton... *)
-        NusmvPass.transform solver caches ctrabs_prog;
-        (*
-        let _ = SkelStruc.pass caches intabs_prog in
-        NusmvPass.transform_to_bdd solver caches intabs_prog;
-        *)
+        NusmvPass.transform solver caches NusmvPass.SharedOnly "main" ctrabs_prog;
         log INFO "[DONE]";
     end else if caches#options.Options.mc_tool = Options.ToolSpin
     then begin

@@ -145,7 +145,7 @@ var name_i var_id =
                 if m_proc_index <> -1
                 then sprintf "%s%dI" q m_proc_index
                 else q in
-            if qi <> "" then qi ^ "O" ^ name else name
+            if qi <> "" then qi ^ "D" ^ name else name
 
         (* Make a copy of the variable, but keep id the same.
            It means that two copies will be considered similar
