@@ -18,7 +18,13 @@ let create_proc_counters caches out proc =
         (* XXX: fix params, they should include next *)
         let params = str_join ", "
             (List.map (fun v -> v#get_name) (hashtbl_keys valtab)) in
-        fprintf out "MODULE ktr_%d(%s, myval, oval)\n" idx params;
+        let next_name v =
+            let next = ctr_ctx#get_next v in
+            next#get_name in
+        let next_params = str_join ", "
+            (List.map next_name (hashtbl_keys valtab)) in
+        fprintf out "MODULE ktr_%d(%s, %s, myval, oval)\n"
+            idx params next_params;
         fprintf out " ASSIGN\n";
         fprintf out " next(myval) =\n";
         fprintf out "  case\n";

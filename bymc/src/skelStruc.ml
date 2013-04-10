@@ -74,6 +74,7 @@ let extract_skel proc_body =
             (function
                 | MExpr (_, _) -> false
                 | MAssume (_, _) -> false
+                | MPrint (_, _, _) -> false
                 | _ -> true)
             (el @ tl)
     in

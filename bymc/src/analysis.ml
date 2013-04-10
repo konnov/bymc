@@ -211,11 +211,13 @@ let transfer_var_use stmt input =
  *)
 let find_copy_pairs stmts =
     let pairs = Hashtbl.create 8 in
-    List.iter
-        (function
-            | Expr (_, BinEx (ASGN, Var x, Var y)) ->
-                    Hashtbl.add pairs x y
-            | _ -> ()
-        ) stmts;
+    let extract = function
+        | Expr (_, BinEx (ASGN, Var x, Var y)) ->
+            if Hashtbl.mem pairs x
+            then raise (Failure ("Two copy pairs for " ^ x#get_name))
+            else Hashtbl.add pairs x y
+        | _ -> ()
+    in
+    List.iter extract stmts;
     pairs
 

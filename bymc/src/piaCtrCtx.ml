@@ -2,8 +2,11 @@ open Printf
 
 open AbsBasics
 open Accums
+open Analysis
+open SkelStruc
 open Spin
 open SpinIr
+open SpinIrImp
 open VarRole
 
 (*
@@ -19,13 +22,23 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
         val ctr_var = new_var ("bymc_k" ^ abbrev_name)
         val mutable ctr_dim: int = -1
+        val mutable m_next_vars: (var, var) Hashtbl.t = Hashtbl.create 1
+
+        method init_next_vars =
+            let reg_tab = extract_skel proc#get_stmts in
+            let update = reg_tab#get "update" proc#get_stmts in
+            m_next_vars <- find_copy_pairs (mir_to_lir update)
         
         initializer
+            self#init_next_vars;
+
             ctr_var#set_instrumental;
             let collect_locals filter_fun =
                 let rec collect lst = function
                 | MDecl (_, v, _) ->
-                    if filter_fun (role_tbl#get_role v) then v :: lst else lst
+                    if filter_fun (role_tbl#get_role v)
+                    then v :: lst
+                    else lst
                 | _ -> lst
                 in
                 List.fold_left collect [] proc#get_stmts
@@ -62,6 +75,13 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         method get_spur = spur_var
 
         method var_vec = (self#get_locals @ self#get_control_vars)
+
+        method get_next v =
+            try Hashtbl.find m_next_vars v
+            with Not_found -> raise (Failure ("no next var for " ^v#get_name))
+
+        method prev_next_pairs =
+            hashtbl_as_list m_next_vars
 
         method unpack_from_const i =
             let vsz v = Hashtbl.find var_sizes v in

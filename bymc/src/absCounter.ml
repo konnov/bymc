@@ -552,15 +552,9 @@ let do_counter_abstraction funcs solver caches prog =
             in
             List.map (fun e -> replace_assume atomics (replace_expr e)) update
         in
-        let prev_next_pairs = find_copy_pairs (mir_to_lir update) in
         let prev_idx_ex = c_ctx#pack_index_expr in
         let next_idx_ex =
-            let map_one_var v =
-                try Var (Hashtbl.find prev_next_pairs v)
-                with Not_found -> Var v
-            in
-            map_vars map_one_var prev_idx_ex
-        in
+            map_vars (fun v -> Var (c_ctx#get_next v)) prev_idx_ex in
         let pre_asserts =
             funcs#mk_pre_asserts c_ctx active_expr prev_idx_ex next_idx_ex
         in
@@ -568,8 +562,7 @@ let do_counter_abstraction funcs solver caches prog =
             funcs#mk_post_asserts c_ctx active_expr prev_idx_ex next_idx_ex
         in
         let ctr_update = funcs#mk_counter_update c_ctx
-            (hashtbl_as_list prev_next_pairs) prev_idx_ex next_idx_ex
-        in
+            c_ctx#prev_next_pairs prev_idx_ex next_idx_ex in
         pre_asserts
         @ ctr_update
         @ [MUnsafe (fresh_id (), "#include \"cegar_post.inc\"")]
