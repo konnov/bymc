@@ -19,6 +19,7 @@ open VarRole
 open Writer
 
 open NusmvPass
+open NusmvCounterClusterPass
 
 open Debug
 
@@ -84,7 +85,8 @@ let do_abstraction caches solver is_first_run prog =
     if caches#options.Options.mc_tool = Options.ToolNusmv
     then begin
         log INFO "> Constructing NuSMV processes...";
-        NusmvPass.transform solver caches NusmvPass.SharedOnly "main" ctrabs_prog;
+        NusmvPass.transform solver caches NusmvPass.SharedOnly "main-alt" ctrabs_prog;
+        NusmvCounterClusterPass.transform caches "main" ctrabs_prog;
         log INFO "[DONE]";
     end else if caches#options.Options.mc_tool = Options.ToolSpin
     then begin

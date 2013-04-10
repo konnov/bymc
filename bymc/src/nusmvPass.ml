@@ -475,6 +475,7 @@ let write_ltl_spec out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
     end
 
 
+(* create a monolithic encoding in nusmv (requires a lot of memory) *)
 let transform solver caches scope out_name prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
