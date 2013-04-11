@@ -40,7 +40,7 @@ type scope_vars_t = LocalShared | SharedOnly
            It is much more efficient than that one above.                 *)
 
 let intro_old_copies new_type_tab new_sym_tab collected var =
-    let nv = new var ("O" ^ var#mangled_name) (fresh_id ()) in
+    let nv = new var (SymbExec.mk_input_name var) (fresh_id ()) in
     let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
     new_sym_tab#add_symb nv#mangled_name (nv :> symb);
     nv :: collected
@@ -99,7 +99,7 @@ let write_smv_header new_type_tab new_sym_tab shared hidden_idx_fun out =
 
 
 let proc_to_symb solver caches prog 
-        new_type_tab new_sym_tab vars hidden body out name section =
+        new_type_tab new_sym_tab vars hidden name_f body out name section =
     log INFO (sprintf "  mk_cfg...");
     let lirs = mir_to_lir body in
     let cfg = mk_cfg lirs in
@@ -110,7 +110,7 @@ let proc_to_symb solver caches prog
     log INFO (sprintf "  constructing symbolic paths...");
     let num_paths =
         path_efun (exec_path solver out
-            new_type_tab new_sym_tab vars hidden (section = "INIT"))
+            new_type_tab new_sym_tab vars hidden name_f (section = "INIT"))
     in
     Printf.printf "    enumerated %d paths\n" num_paths;
     num_paths
@@ -287,15 +287,15 @@ let transform solver caches scope out_name prog =
         let all_locals =
             List.fold_left (fun a p -> p#get_locals @ a) [] procs in
         let all_stmts = List.fold_left add_init_section [] procs in
-        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
-            all_locals in
+        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab all_locals
+        in
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
         let _ = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden_idx_fun all_stmts out "init" "INIT" in
+            proc_sym_tab vars hidden_idx_fun (smv_name proc_sym_tab) all_stmts out "init" "INIT" in
         ()
     in
-    let make_trans proc =
+    let make_mono_trans proc =
         let proc_sym_tab = new symb_tab proc#get_name in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
@@ -308,7 +308,7 @@ let transform solver caches scope out_name prog =
         let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
         let num = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden_idx_fun body out proc#get_name "TRANS" in
+            proc_sym_tab vars hidden_idx_fun (smv_name proc_sym_tab) body out proc#get_name "TRANS" in
         fprintf out ")\n";
         num
     in
@@ -317,7 +317,7 @@ let transform solver caches scope out_name prog =
     fprintf out "TRANS\n  FALSE\n";
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
-    let no_paths = List.map make_trans (Program.get_procs prog) in
+    let no_paths = List.map make_mono_trans (Program.get_procs prog) in
     let _ = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
     write_trans_loop vars hidden_idx_fun out;

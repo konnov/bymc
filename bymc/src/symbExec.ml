@@ -17,12 +17,15 @@ type var_cons_tbl = (string, int) Hashtbl.t
 
 let is_input (v: var): bool =
     let n = v#mangled_name in
-    (String.length n) > 0 && (String.get n 0) = 'O'
+    (String.length n) > 0 && (String.get n 0) = 'i'
 
 let not_input (v: var): bool = not (is_input v)
 
+let mk_input_name (v: var): string =
+    "i" ^ v#mangled_name
+
 let get_input (sym_tab: symb_tab) (v: var): var =
-    let name = "O" ^ v#mangled_name in
+    let name = "i" ^ v#mangled_name in
     let sym = sym_tab#lookup name in
     sym#as_var
 
@@ -180,9 +183,12 @@ let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
 
 let smv_name sym_tab v =
     let oname = (get_output sym_tab v)#mangled_name in
-    if is_input v (*do not use anymore: || is_init*)
+    if is_input v
     then oname
     else sprintf "next(%s)" oname
+
+
+let keep_name v = v#mangled_name
 
 
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
@@ -211,10 +217,10 @@ let elim_array_access sym_tab exp =
 
 
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (hidden_idx_fun: var -> int) (is_init: bool)
+        (shared: var list) (hidden_idx_fun: var -> int)
+        (name_f: var -> string)
+        (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
-    let next_fun = smv_name sym_tab
-    in
     let get_var = function
     | Var v ->
         v
@@ -281,7 +287,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             if is_c_true path_cons
             then init_expr
             else BinEx (AND, path_cons, init_expr) in
-        let path_s = Nusmv.expr_s next_fun init_path_cons in
+        let path_s = Nusmv.expr_s name_f init_path_cons in
         let find_changes (unchanged, changed) v =
             let exp = 
                 try Hashtbl.find vals v#id
@@ -293,9 +299,9 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
                 let oarg = get_output sym_tab arg in
                 if oarg#id = v#id
                 then (v :: unchanged), changed
-                else (unchanged, (next_fun v, arg#mangled_name) :: changed)
+                else (unchanged, (name_f v, arg#mangled_name) :: changed)
             | _ ->
-                (unchanged, (next_fun v, Nusmv.expr_s next_fun exp) :: changed)
+                (unchanged, (name_f v, Nusmv.expr_s name_f exp) :: changed)
         in
 
         (* the first step is initialization *)

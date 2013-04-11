@@ -86,7 +86,7 @@ let do_abstraction caches solver is_first_run prog =
     then begin
         log INFO "> Constructing NuSMV processes...";
         NusmvPass.transform solver caches NusmvPass.SharedOnly "main-alt" ctrabs_prog;
-        NusmvCounterClusterPass.transform solver caches "main" ctrabs_prog;
+        NusmvCounterClusterPass.transform solver caches "main" intabs_prog ctrabs_prog;
         log INFO "[DONE]";
     end else if caches#options.Options.mc_tool = Options.ToolSpin
     then begin
