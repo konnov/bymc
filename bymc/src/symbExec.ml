@@ -24,16 +24,19 @@ let not_input (v: var): bool = not (is_input v)
 let mk_input_name (v: var): string =
     "i" ^ v#mangled_name
 
+let mk_output_name (v: var): string =
+    let n = v#mangled_name in
+    if is_input v
+    then String.sub n 1 ((String.length n) - 1)
+    else v#mangled_name
+
 let get_input (sym_tab: symb_tab) (v: var): var =
     let name = "i" ^ v#mangled_name in
     let sym = sym_tab#lookup name in
     sym#as_var
 
 let get_output (sym_tab: symb_tab) (v: var): var =
-    let n = v#mangled_name in
-    if is_input v
-    then (sym_tab#lookup (String.sub n 1 ((String.length n) - 1)))#as_var
-    else v
+    (sym_tab#lookup (mk_output_name v))#as_var
 
 let get_use (sym_tab: symb_tab): var =
     (sym_tab#lookup "bymc_use")#as_var
@@ -315,7 +318,8 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         in
         let unchanged_eqs =
             let mk_eq v = 
-                sprintf "next(%s) = %s" v#mangled_name v#mangled_name in
+                sprintf "%s = %s" (name_f (get_output sym_tab v))
+                    (name_f (get_input sym_tab v)) in
             List.map mk_eq unchanged
         in
         let eq_s = if eqs <> [] then "  " ^ (str_join " & " eqs) else ""
