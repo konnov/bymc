@@ -124,7 +124,7 @@ let intro_in_out_vars sym_tab type_tab prog proc vars =
     proc_sym_tab, proc_type_tab
 
 
-let declare_locals_and_counters caches sym_tab type_tab prog out proc =
+let declare_locals_and_counters caches sym_tab type_tab prog shared out proc =
     let locals = find_proc_non_scratch caches proc in
     let proc_sym_tab, proc_type_tab =
         intro_in_out_vars sym_tab type_tab prog proc locals in
@@ -137,10 +137,12 @@ let declare_locals_and_counters caches sym_tab type_tab prog out proc =
     List.iter decl_var in_locals;
     List.iter decl_var out_locals;
 
+    let vname v = v#mangled_name in
     fprintf out "  -- modules of %s\n" proc#get_name;
-    fprintf out "  mod%s: %s(%s, %s);\n" proc#get_name proc#get_name
-        (str_join ", " (List.map (fun v -> v#mangled_name) in_locals))
-        (str_join ", " (List.map (fun v -> v#mangled_name) out_locals));
+    fprintf out "  mod%s: %s(%s, %s, %s);\n" proc#get_name proc#get_name
+        (str_join ", " (List.map vname in_locals))
+        (str_join ", " (List.map vname out_locals))
+        (str_join ", " (List.map vname shared));
 
     let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
     let declare_mod idx =
@@ -168,6 +170,7 @@ let transform solver caches out_name intabs_prog prog =
         (sprintf "%s-hidden.txt" out_name) in
     let bymc_use, bymc_loc =
         create_aux_vars new_type_tab main_sym_tab hidden in
+    let orig_shared = Program.get_shared intabs_prog in
     let shared_and_aux = bymc_loc :: bymc_use :: shared in
     let vars = shared_and_aux @ (Program.get_all_locals prog) in
     let _ = List.fold_left (intro_old_copies new_type_tab main_sym_tab)
@@ -175,7 +178,8 @@ let transform solver caches out_name intabs_prog prog =
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
     List.iter
-        (declare_locals_and_counters caches main_sym_tab new_type_tab prog out)
+        (declare_locals_and_counters caches main_sym_tab new_type_tab
+            prog (bymc_loc :: orig_shared) out)
         (Program.get_procs prog);
 
     let make_init procs =
@@ -199,20 +203,23 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
             let _ = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab vars hidden_idx_fun (keep_local proc_sym_tab) all_stmts out "init" "INIT" in
+            proc_sym_tab shared_and_aux hidden_idx_fun
+                (keep_local proc_sym_tab) all_stmts out "init" "INIT" in
         ()
     in
     let make_proc_trans proc =
         let locals = find_proc_non_scratch caches proc in
-        let local_shared = locals @ (Program.get_shared intabs_prog) in
+        let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
 
-        fprintf out "MODULE %s(%s, %s)\n" proc#get_name
-            (str_join ", " (List.map (fun v -> v#mangled_name) in_locals))
-            (str_join ", " (List.map (fun v -> v#mangled_name) out_locals)) ;
+        let vname v = v#mangled_name in
+        fprintf out "MODULE %s(%s, %s, %s)\n" proc#get_name
+            (str_join ", " (List.map vname in_locals))
+            (str_join ", " (List.map vname out_locals))
+            (str_join ", " (List.map vname (bymc_loc :: orig_shared)));
         fprintf out "TRANS\n  FALSE\n";
 
         fprintf out "-- Process: %s\n" proc#get_name;
