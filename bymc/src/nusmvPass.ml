@@ -41,6 +41,9 @@ type scope_vars_t = LocalShared | SharedOnly
 
 let intro_old_copies new_type_tab new_sym_tab collected var =
     let nv = new var (SymbExec.mk_input_name var) (fresh_id ()) in
+    (* this will not work as we need a flat name, i.e., one without
+       process name:
+    let nv = var#fresh_copy (SymbExec.mk_input_name var) in*)
     let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
     new_sym_tab#add_symb nv#mangled_name (nv :> symb);
     nv :: collected

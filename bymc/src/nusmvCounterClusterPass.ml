@@ -19,6 +19,13 @@ open SpinIrImp
 open SymbExec
 open VarRole
 
+let collect_local_ids in_locals out_locals =
+    let gather s v =
+        IntSet.add v#id s in
+    let fold a l = List.fold_left gather a l in
+    fold (fold IntSet.empty in_locals) out_locals
+    
+
 let collect_rhs solver type_tab dom ctr_ctx op =
     solver#push_ctx;
     let x = ctr_ctx#get_ctr#fresh_copy "x" in
@@ -50,7 +57,7 @@ let collect_rhs solver type_tab dom ctr_ctx op =
 let mk_mod_sig proc idx myval params =
     let vname v = v#mangled_name in
     let ps = str_join ", " (List.map vname params) in
-    sprintf "kntr_%s_%d(%s, %s)" proc#get_name idx ps myval
+    sprintf "kntr_%s_%d(%s, %s, bymc_loc)" proc#get_name idx ps myval
 
 
 let write_counter_mods solver caches sym_tab type_tab out proc
@@ -81,15 +88,17 @@ let write_counter_mods solver caches sym_tab type_tab out proc
         fprintf out " next(myval) :=\n";
         fprintf out "  case\n";
         let print_next k vs =
-            fprintf out "   (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
                 prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
         in
         let print_prev k vs =
-            fprintf out "   (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
                 prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
         in
         Hashtbl.iter print_prev dec_tbl;
         Hashtbl.iter print_next inc_tbl;
+        fprintf out "   bymc_loc = 0 : {%s};\n"
+            (str_join ", " (List.map string_of_int (range 0 dom#length)));
         fprintf out "   TRUE : myval;\n";
         fprintf out "  esac;\n";
     in
@@ -97,12 +106,33 @@ let write_counter_mods solver caches sym_tab type_tab out proc
     List.iter create_module all_indices
 
 
-let keep_local main_sym_tab v =
-    if v#proc_name = ""
-    then if is_input v
+let write_constraints solver caches sym_tab type_tab out proc
+        (in_locals: var list) (out_locals: var list) =
+    let ctr_ctx =
+        caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
+    let dom = caches#analysis#get_pia_dom in
+    let create_cons idx =
+        let valtab = ctr_ctx#unpack_from_const idx in
+        let prev_eq =
+            let f (k, v) =
+                let inp = get_input sym_tab k in
+                sprintf "%s != %d" inp#mangled_name v in
+            str_join " | " (List.map f (hashtbl_as_list valtab)) in
+        fprintf out " & (%s | %s_%dI != 0 | bymc_loc = 0)\n"
+            prev_eq ctr_ctx#get_ctr#get_name idx;
+    in
+    fprintf out "INVAR\n";
+    fprintf out " TRUE\n";
+    let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
+    List.iter create_cons all_indices
+
+
+let keep_local local_ids v =
+    if IntSet.mem v#id local_ids
+    then v#mangled_name
+    else if is_input v
         then mk_output_name v
         else sprintf "next(%s)" (mk_output_name v)
-    else v#mangled_name
 
 
 let find_proc_non_scratch caches proc =
@@ -204,8 +234,18 @@ let transform solver caches out_name intabs_prog prog =
             (str_join ", " (List.map (fun p -> p#get_name) procs));
             let _ = proc_to_symb solver caches prog proc_type_tab
             proc_sym_tab shared_and_aux hidden_idx_fun
-                (keep_local proc_sym_tab) all_stmts out "init" "INIT" in
+                (smv_name proc_sym_tab) all_stmts out "init" "INIT" in
         ()
+    in
+    let make_constraints proc =
+        let locals = find_proc_non_scratch caches proc in
+        let local_shared = bymc_loc :: locals @ orig_shared in
+        let proc_sym_tab, proc_type_tab =
+            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+        in
+        let in_locals, out_locals = get_in_out proc_sym_tab locals in
+        write_constraints solver caches proc_sym_tab proc_type_tab
+                out proc in_locals out_locals
     in
     let make_proc_trans proc =
         let locals = find_proc_non_scratch caches proc in
@@ -214,13 +254,15 @@ let transform solver caches out_name intabs_prog prog =
             intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
+        let local_ids = collect_local_ids in_locals out_locals in
 
         let vname v = v#mangled_name in
         fprintf out "MODULE %s(%s, %s, %s)\n" proc#get_name
             (str_join ", " (List.map vname in_locals))
             (str_join ", " (List.map vname out_locals))
             (str_join ", " (List.map vname (bymc_loc :: orig_shared)));
-        fprintf out "TRANS\n  FALSE\n";
+        fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1 & %s)\n"
+            (keep orig_shared);
 
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
@@ -229,7 +271,7 @@ let transform solver caches out_name intabs_prog prog =
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
         let num = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab local_shared hidden_idx_fun (keep_local proc_sym_tab)
+            proc_sym_tab local_shared hidden_idx_fun (keep_local local_ids)
             body out proc#get_name "TRANS" in
         fprintf out ")\n";
         write_counter_mods solver caches proc_sym_tab proc_type_tab
@@ -238,9 +280,11 @@ let transform solver caches out_name intabs_prog prog =
     in
     fprintf out "INIT\n";
     write_default_init new_type_tab main_sym_tab shared hidden_idx_fun out;
+    List.iter make_constraints (Program.get_procs intabs_prog);
     fprintf out "TRANS\n  FALSE\n";
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
+    fprintf out " | (bymc_loc = 0 & next(bymc_loc) = 1);\n";
 
     let no_paths = List.map make_proc_trans (Program.get_procs intabs_prog) in
     let _ = List.fold_left (+) 0 no_paths in

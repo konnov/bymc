@@ -7,6 +7,11 @@
 
 exception Not_found_msg of string
 
+module IntSet = Set.Make (struct
+ type t = int
+ let compare a b = a - b
+end)
+
 (* make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =
     if n <= 0

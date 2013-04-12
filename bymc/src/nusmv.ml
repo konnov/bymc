@@ -204,3 +204,9 @@ let expr_s var_fun e =
     in
     to_s e
 
+
+let keep vars =
+    let keep_var v =
+        sprintf "(next(%s) = %s)" v#mangled_name v#mangled_name in
+    str_join " & " (List.map keep_var vars)
+
