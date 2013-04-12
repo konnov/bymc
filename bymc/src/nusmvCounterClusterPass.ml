@@ -19,12 +19,13 @@ open SpinIrImp
 open SymbExec
 open VarRole
 
-let collect_rhs solver dom op =
+let collect_rhs solver type_tab dom ctr_ctx op =
     solver#push_ctx;
-    let x = new var "x" (fresh_id ()) in
-    let y = new var "y" (fresh_id ()) in
+    let x = ctr_ctx#get_ctr#fresh_copy "x" in
+    let y = ctr_ctx#get_ctr#fresh_copy "y" in
+    let ctr_tp = type_tab#get_type ctr_ctx#get_ctr in
     let tp = new data_type SpinTypes.TINT in
-    tp#set_range 0 dom#length; (* counters are bounded *)
+    tp#set_range_tuple ctr_tp#range;
     solver#append_var_def x tp; 
     solver#append_var_def y tp; 
     let tbl = Hashtbl.create 10 in
@@ -52,13 +53,13 @@ let mk_mod_sig proc idx myval params =
     sprintf "kntr_%s_%d(%s, %s)" proc#get_name idx ps myval
 
 
-let write_counter_mods solver caches sym_tab out proc
+let write_counter_mods solver caches sym_tab type_tab out proc
         (in_locals: var list) (out_locals: var list) =
     let ctr_ctx =
         caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
     let dom = caches#analysis#get_pia_dom in
-    let dec_tbl = collect_rhs solver dom PLUS in
-    let inc_tbl = collect_rhs solver dom MINUS in
+    let dec_tbl = collect_rhs solver type_tab dom ctr_ctx PLUS in
+    let inc_tbl = collect_rhs solver type_tab dom ctr_ctx MINUS in
     let create_module idx =
         let valtab = ctr_ctx#unpack_from_const idx in
         let mk_prev con op =
@@ -221,9 +222,10 @@ let transform solver caches out_name intabs_prog prog =
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
         let num = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab local_shared hidden_idx_fun keep_name body out proc#get_name "TRANS" in
+            proc_sym_tab local_shared hidden_idx_fun (keep_local proc_sym_tab)
+            body out proc#get_name "TRANS" in
         fprintf out ")\n";
-        write_counter_mods solver caches proc_sym_tab
+        write_counter_mods solver caches proc_sym_tab proc_type_tab
                 out proc in_locals out_locals;
         num
     in

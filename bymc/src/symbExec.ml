@@ -17,12 +17,12 @@ type var_cons_tbl = (string, int) Hashtbl.t
 
 let is_input (v: var): bool =
     let n = v#mangled_name in
-    (String.length n) > 0 && (String.get n 0) = 'i'
+    (String.length n) > 0 && (String.get n 0) = 'I'
 
 let not_input (v: var): bool = not (is_input v)
 
 let mk_input_name (v: var): string =
-    "i" ^ v#mangled_name
+    "I" ^ v#mangled_name
 
 let mk_output_name (v: var): string =
     let n = v#mangled_name in
@@ -31,7 +31,7 @@ let mk_output_name (v: var): string =
     else v#mangled_name
 
 let get_input (sym_tab: symb_tab) (v: var): var =
-    let name = "i" ^ v#mangled_name in
+    let name = "I" ^ v#mangled_name in
     let sym = sym_tab#lookup name in
     sym#as_var
 

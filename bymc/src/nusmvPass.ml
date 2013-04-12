@@ -53,6 +53,7 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
         let decl_elem_var lst i =
             let nv = var#fresh_copy (SymbExec.indexed_var var i) in
             let nt = tp#copy in
+            nt#set_range_tuple tp#range;
             nt#set_nelems 1;
             new_type_tab#set_type nv nt;
             new_sym_tab#add_symb nv#mangled_name (nv :> symb);

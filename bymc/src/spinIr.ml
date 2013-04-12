@@ -273,6 +273,7 @@ class data_type i_basetype =
         method range_list =
            let l, r = m_range in Accums.range l r
         method set_range l r = m_range <- (l, r)
+        method set_range_tuple (l, r) = m_range <- (l, r)
 
         method copy =
             let c = new data_type(m_basetype) in
