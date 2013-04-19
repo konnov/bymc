@@ -285,6 +285,13 @@ let transform solver caches out_name intabs_prog prog =
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
     fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 1);\n";
+    fprintf out "\n\n-- specifications\n";
+    let atomics = Program.get_atomics prog in
+    let _ = Program.StringMap.mapi
+        (write_ltl_spec out atomics new_type_tab main_sym_tab hidden_idx_fun)
+        (Program.get_ltl_forms prog) in
+
+    fprintf out "\n\n-- auxillary modules\n";
 
     let no_paths = List.map make_proc_trans (Program.get_procs intabs_prog) in
     let _ = List.fold_left (+) 0 no_paths in
@@ -292,10 +299,5 @@ let transform solver caches out_name intabs_prog prog =
     (*write_trans_loop vars hidden_idx_fun out;*)
 
     write_hidden_spec hidden out;
-    fprintf out "\n-- specifications\n";
-    let atomics = Program.get_atomics prog in
-    let _ = Program.StringMap.mapi
-        (write_ltl_spec out atomics new_type_tab main_sym_tab hidden_idx_fun)
-        (Program.get_ltl_forms prog) in
     close_out out
 
