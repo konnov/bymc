@@ -284,7 +284,7 @@ let transform solver caches out_name intabs_prog prog =
     fprintf out "TRANS\n  FALSE\n";
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
-    fprintf out " | (bymc_loc = 0 & next(bymc_loc) = 1);\n";
+    fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 1);\n";
 
     let no_paths = List.map make_proc_trans (Program.get_procs intabs_prog) in
     let _ = List.fold_left (+) 0 no_paths in
