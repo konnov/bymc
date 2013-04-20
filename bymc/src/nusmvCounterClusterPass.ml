@@ -10,6 +10,7 @@ open Printf
 
 open AbsBasics
 open Accums
+open Debug
 open Nusmv
 open NusmvPass
 open SkelStruc
@@ -214,6 +215,7 @@ let transform solver caches out_name intabs_prog prog =
 
     let make_init procs =
         let add_init_section accum proc =
+            log INFO (sprintf "  add init %s" proc#get_name);
             let reg_tbl = caches#struc#get_regions proc#get_name in
             (reg_tbl#get "decl" proc#get_stmts)
                 @ (reg_tbl#get "init" proc#get_stmts) @ accum
@@ -248,6 +250,7 @@ let transform solver caches out_name intabs_prog prog =
                 out proc in_locals out_locals
     in
     let make_proc_trans proc =
+        log INFO (sprintf "  add trans %s" proc#get_name);
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =

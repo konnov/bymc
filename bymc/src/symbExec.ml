@@ -295,7 +295,8 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
             let exp = 
                 try Hashtbl.find vals v#id
                 with Not_found ->
-                    raise (SymbExec_error (sprintf "%s not found" v#mangled_name))
+                    let m = sprintf "Value of %s not found" v#mangled_name in
+                    raise (SymbExec_error m)
             in
             match exp with
             | Var arg ->

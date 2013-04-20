@@ -275,16 +275,29 @@ let transform solver caches scope out_name prog =
         shared [bymc_use; bymc_loc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
+
+    let add_locals proc =
+        let _ = transform_vars prog type_tab new_type_tab new_sym_tab
+            proc#get_locals in
+        ()
+    in
+    List.iter add_locals (Program.get_procs prog);
+
     let make_init procs =
         let add_init_section accum proc =
+            log INFO (sprintf "  add mono init for %s" proc#get_name);
             let reg_tbl = caches#struc#get_regions proc#get_name in
             (reg_tbl#get "decl" proc#get_stmts)
                 @ (reg_tbl#get "init" proc#get_stmts) @ accum
         in
         (* XXX: fix the initial states formula for several processes! *)
+        (*
         let proc_sym_tab = new symb_tab "all" in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
+        *)
+        let proc_type_tab = new_type_tab in
+        let proc_sym_tab = new_sym_tab in
         (* cat all init sections in one *)
         (* XXX: it will break for tricky
            interdependencies between init sections *)
@@ -300,11 +313,16 @@ let transform solver caches scope out_name prog =
         ()
     in
     let make_mono_trans proc =
+        log INFO (sprintf "  add mono trans for %s" proc#get_name);
+        let proc_type_tab = new_type_tab in
+        let proc_sym_tab = new_sym_tab in
+        (*
         let proc_sym_tab = new symb_tab proc#get_name in
         proc_sym_tab#set_parent new_sym_tab;
         let proc_type_tab = new_type_tab#copy in
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
             proc#get_locals in
+        *)
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
         let reg_tbl = caches#struc#get_regions proc#get_name in
