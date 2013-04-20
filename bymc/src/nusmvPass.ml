@@ -77,18 +77,25 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
     List.rev unfolded
 
 
-let create_aux_vars new_type_tab new_sym_tab hidden =
+let create_aux_vars new_type_tab new_sym_tab num_procs hidden =
     let var_use = new var "bymc_use" (fresh_id ()) in
     new_sym_tab#add_symb var_use#mangled_name (var_use :> symb);
     let use_tp = new data_type SpinTypes.TINT in
     use_tp#set_range 0 (1 + (List.length hidden));
     new_type_tab#set_type var_use use_tp;
+
     let var_loc = new var "bymc_loc" (fresh_id ()) in
     new_sym_tab#add_symb var_loc#mangled_name (var_loc :> symb);
     let init_tp = new data_type SpinTypes.TINT in
     init_tp#set_range 0 2;
     new_type_tab#set_type var_loc init_tp;
-    (var_use, var_loc)
+
+    let var_typ = new var "bymc_proc" (fresh_id ()) in
+    new_sym_tab#add_symb var_typ#mangled_name (var_typ :> symb);
+    let typ_tp = new data_type SpinTypes.TINT in
+    typ_tp#set_range 0 num_procs;
+    new_type_tab#set_type var_typ typ_tp;
+    (var_use, var_loc, var_typ)
 
 
 let write_smv_header new_type_tab new_sym_tab shared hidden_idx_fun out =
@@ -266,13 +273,14 @@ let transform solver caches scope out_name prog =
         create_read_hidden new_sym_tab
         (if scope = SharedOnly then shared else [] (* no refinement *))
         (sprintf "%s-hidden.txt" out_name) in
-    let bymc_use, bymc_loc =
-        create_aux_vars new_type_tab new_sym_tab hidden in
-    let vars = bymc_loc :: bymc_use :: shared in
+    let procs = Program.get_procs prog in
+    let bymc_use, bymc_loc, bymc_proc =
+        create_aux_vars new_type_tab new_sym_tab (List.length procs) hidden in
+    let vars = bymc_loc :: bymc_use :: bymc_proc :: shared in
     let vars = if (scope = LocalShared)
         then vars @ (Program.get_all_locals prog) else vars in
     let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab)
-        shared [bymc_use; bymc_loc] in
+        shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
 

@@ -58,10 +58,10 @@ let collect_rhs solver type_tab dom ctr_ctx op =
 let mk_mod_sig proc idx myval params =
     let vname v = v#mangled_name in
     let ps = str_join ", " (List.map vname params) in
-    sprintf "kntr_%s_%d(%s, %s, bymc_loc)" proc#get_name idx ps myval
+    sprintf "kntr_%s_%d(%s, %s, bymc_loc, bymc_proc)" proc#get_name idx ps myval
 
 
-let write_counter_mods solver caches sym_tab type_tab out proc
+let write_counter_mods solver caches sym_tab type_tab out proc_num proc
         (in_locals: var list) (out_locals: var list) =
     let ctr_ctx =
         caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
@@ -89,12 +89,12 @@ let write_counter_mods solver caches sym_tab type_tab out proc
         fprintf out " next(myval) :=\n";
         fprintf out "  case\n";
         let print_next k vs =
-            fprintf out "   bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
-                prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
+            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+                proc_num prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
         in
         let print_prev k vs =
-            fprintf out "   bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
-                prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
+            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+                proc_num prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
         in
         Hashtbl.iter print_prev dec_tbl;
         Hashtbl.iter print_next inc_tbl;
@@ -199,18 +199,19 @@ let transform solver caches out_name intabs_prog prog =
         (*if scope = SharedOnly then shared else [] (* no refinement *)*)
         []
         (sprintf "%s-hidden.txt" out_name) in
-    let bymc_use, bymc_loc =
-        create_aux_vars new_type_tab main_sym_tab hidden in
+    let procs = Program.get_procs prog in
+    let bymc_use, bymc_loc, bymc_proc =
+        create_aux_vars new_type_tab main_sym_tab (List.length procs) hidden in
     let orig_shared = Program.get_shared intabs_prog in
-    let shared_and_aux = bymc_loc :: bymc_use :: shared in
+    let shared_and_aux = bymc_loc :: bymc_use :: bymc_proc :: shared in
     let vars = shared_and_aux @ (Program.get_all_locals prog) in
     let _ = List.fold_left (intro_old_copies new_type_tab main_sym_tab)
-        shared [bymc_use; bymc_loc] in
+        shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
     List.iter
         (declare_locals_and_counters caches main_sym_tab new_type_tab
-            prog (bymc_loc :: orig_shared) out)
+            prog (bymc_loc :: bymc_proc :: orig_shared) out)
         (Program.get_procs prog);
 
     let make_init procs =
@@ -249,7 +250,7 @@ let transform solver caches out_name intabs_prog prog =
         write_constraints solver caches proc_sym_tab proc_type_tab
                 out proc in_locals out_locals
     in
-    let make_proc_trans proc =
+    let make_proc_trans proc_num proc =
         log INFO (sprintf "  add trans %s" proc#get_name);
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
@@ -263,11 +264,13 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "MODULE %s(%s, %s, %s)\n" proc#get_name
             (str_join ", " (List.map vname in_locals))
             (str_join ", " (List.map vname out_locals))
-            (str_join ", " (List.map vname (bymc_loc :: orig_shared)));
+            (str_join ", " (List.map vname (bymc_loc :: bymc_proc :: orig_shared)));
+        (* TODO: allow other processes to make a step too!  *)
         fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1)\n";
+        fprintf out "  | (bymc_proc != %d & next(bymc_loc) = 1)\n" proc_num;
         (* (keep orig_shared); *)
 
-        fprintf out "-- Process: %s\n" proc#get_name;
+        fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
         fprintf out " | (FALSE\n";
         let reg_tab = extract_skel proc#get_stmts in
         let loop_prefix = reg_tab#get "loop_prefix" proc#get_stmts in
@@ -278,7 +281,7 @@ let transform solver caches out_name intabs_prog prog =
             body out proc#get_name "TRANS" in
         fprintf out ")\n";
         write_counter_mods solver caches proc_sym_tab proc_type_tab
-                out proc in_locals out_locals;
+                out proc_num proc in_locals out_locals;
         num
     in
     fprintf out "INIT\n";
@@ -296,7 +299,9 @@ let transform solver caches out_name intabs_prog prog =
 
     fprintf out "\n\n-- auxillary modules\n";
 
-    let no_paths = List.map make_proc_trans (Program.get_procs intabs_prog) in
+    let procs = Program.get_procs intabs_prog in
+    let no_paths = List.map2 make_proc_trans (range 0 (List.length procs)) procs
+    in
     let _ = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
     (*write_trans_loop vars hidden_idx_fun out;*)
