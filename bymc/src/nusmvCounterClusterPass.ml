@@ -264,8 +264,8 @@ let transform solver caches out_name intabs_prog prog =
             (str_join ", " (List.map vname in_locals))
             (str_join ", " (List.map vname out_locals))
             (str_join ", " (List.map vname (bymc_loc :: orig_shared)));
-        fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1 & %s)\n"
-            (keep orig_shared);
+        fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1)\n";
+        (* (keep orig_shared); *)
 
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
