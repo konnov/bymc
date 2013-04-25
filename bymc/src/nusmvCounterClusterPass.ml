@@ -89,11 +89,11 @@ let write_counter_mods solver caches sym_tab type_tab out proc_num proc
         fprintf out " next(myval) :=\n";
         fprintf out "  case\n";
         let print_next k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s) & myval = %d : { %s };\n"
                 proc_num prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
         in
         let print_prev k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s) & myval = %d : { %s };\n"
                 proc_num prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
         in
         Hashtbl.iter print_prev dec_tbl;
@@ -130,8 +130,11 @@ let write_constraints solver caches sym_tab type_tab out proc
 
 let keep_local local_ids v =
     if IntSet.mem v#id local_ids
-    then v#mangled_name
-    else if is_input v
+    then if is_input v
+        then v#mangled_name
+        else sprintf "next(%s)" v#mangled_name
+    else
+    if is_input v
         then mk_output_name v
         else sprintf "next(%s)" (mk_output_name v)
 
@@ -233,10 +236,11 @@ let transform solver caches out_name intabs_prog prog =
         let all_stmts = List.fold_left add_init_section [] procs in
         let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab all_locals
         in
+        let tracked_vars = bymc_use :: shared in
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
             let _ = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab shared_and_aux hidden_idx_fun
+            proc_sym_tab tracked_vars hidden_idx_fun
                 (smv_name proc_sym_tab) all_stmts out "init" "INIT" in
         ()
     in
@@ -253,7 +257,7 @@ let transform solver caches out_name intabs_prog prog =
     let make_proc_trans proc_num proc =
         log INFO (sprintf "  add trans %s" proc#get_name);
         let locals = find_proc_non_scratch caches proc in
-        let local_shared = bymc_loc :: locals @ orig_shared in
+        let local_shared = locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
         in
@@ -266,8 +270,12 @@ let transform solver caches out_name intabs_prog prog =
             (str_join ", " (List.map vname out_locals))
             (str_join ", " (List.map vname (bymc_loc :: bymc_proc :: orig_shared)));
         (* TODO: allow other processes to make a step too!  *)
-        fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1)\n";
-        fprintf out "  | (bymc_proc != %d & next(bymc_loc) = 1)\n" proc_num;
+        fprintf out "TRANS\n";
+        fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & %s))\n"
+            (keep in_locals);
+        fprintf out "  & (bymc_loc != 0 | next(bymc_loc) = 1)\n";
+        fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
+        fprintf out "  & ((bymc_proc != %d)\n" proc_num;
         (* (keep orig_shared); *)
 
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
@@ -279,7 +287,7 @@ let transform solver caches out_name intabs_prog prog =
         let num = proc_to_symb solver caches prog proc_type_tab
             proc_sym_tab local_shared hidden_idx_fun (keep_local local_ids)
             body out proc#get_name "TRANS" in
-        fprintf out ")\n";
+        fprintf out "))\n";
         write_counter_mods solver caches proc_sym_tab proc_type_tab
                 out proc_num proc in_locals out_locals;
         num
@@ -287,10 +295,13 @@ let transform solver caches out_name intabs_prog prog =
     fprintf out "INIT\n";
     write_default_init new_type_tab main_sym_tab shared hidden_idx_fun out;
     List.iter make_constraints (Program.get_procs intabs_prog);
-    fprintf out "TRANS\n  FALSE\n";
+    fprintf out "TRANS\n\n";
     (* initialization is now made as a first step! *)
+    fprintf out " (bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
     make_init (Program.get_procs prog);
-    fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 1);\n";
+    fprintf out " ))";
+    fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 2)\n";
+    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1);\n";
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
     let _ = Program.StringMap.mapi

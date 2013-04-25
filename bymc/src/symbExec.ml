@@ -222,7 +222,6 @@ let elim_array_access sym_tab exp =
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         (shared: var list) (hidden_idx_fun: var -> int)
         (name_f: var -> string)
-        (is_init: bool)
         (path: token basic_block list) (is_final: bool) =
     let get_var = function
     | Var v ->
@@ -280,17 +279,11 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     if is_final && is_sat && not is_hidden
     then begin
         print_path log;
-        let path_cons = abstract_hidden sym_tab hidden_idx_fun vals path_cons
-        in
-        let var_loc = get_loc sym_tab in
-        let init_path_cons =
-            let init_expr =
-                BinEx (EQ, Var (get_input sym_tab var_loc),
-                       Const (if is_init then 0 else 1)) in
+        let path_cons = abstract_hidden sym_tab hidden_idx_fun vals path_cons in
+        let path_s =
             if is_c_true path_cons
-            then init_expr
-            else BinEx (AND, path_cons, init_expr) in
-        let path_s = Nusmv.expr_s name_f init_path_cons in
+            then "TRUE"
+            else (Nusmv.expr_s name_f path_cons) in
         let find_changes (unchanged, changed) v =
             let exp = 
                 try Hashtbl.find vals v#id
@@ -308,8 +301,6 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
                 (unchanged, (name_f v, Nusmv.expr_s name_f exp) :: changed)
         in
 
-        (* the first step is initialization *)
-        Hashtbl.add vals var_loc#id (Const 1);
         (* nusmv syntax *)
         activate_hidden sym_tab shared hidden_idx_fun vals;
         let unchanged, changed = List.fold_left find_changes ([], []) shared in

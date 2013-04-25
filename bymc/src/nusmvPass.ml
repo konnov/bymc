@@ -87,7 +87,7 @@ let create_aux_vars new_type_tab new_sym_tab num_procs hidden =
     let var_loc = new var "bymc_loc" (fresh_id ()) in
     new_sym_tab#add_symb var_loc#mangled_name (var_loc :> symb);
     let init_tp = new data_type SpinTypes.TINT in
-    init_tp#set_range 0 2;
+    init_tp#set_range 0 3;
     new_type_tab#set_type var_loc init_tp;
 
     let var_typ = new var "bymc_proc" (fresh_id ()) in
@@ -120,8 +120,7 @@ let proc_to_symb solver caches prog
     solver#set_need_evidence false;
     log INFO (sprintf "  constructing symbolic paths...");
     let num_paths =
-        path_efun (exec_path solver out
-            new_type_tab new_sym_tab vars hidden name_f (section = "INIT"))
+        path_efun (exec_path solver out new_type_tab new_sym_tab vars hidden name_f)
     in
     Printf.printf "    enumerated %d paths\n" num_paths;
     num_paths
@@ -344,13 +343,16 @@ let transform solver caches scope out_name prog =
     in
     fprintf out "INIT\n";
     write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out;
-    fprintf out "TRANS\n  FALSE\n";
+    fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1) & (FALSE\n";
     (* initialization is now made as a first step! *)
     make_init (Program.get_procs prog);
+    fprintf out ") | \n";
+    fprintf out "(bymc_loc = 1 & next(bymc_loc) = 1) & (FALSE\n";
     let no_paths = List.map make_mono_trans (Program.get_procs prog) in
     let _ = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
     write_trans_loop vars hidden_idx_fun out;
+    fprintf out ")\n";
 
     write_hidden_spec hidden out;
     fprintf out "\n-- specifications\n";
