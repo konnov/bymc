@@ -279,7 +279,7 @@ let transform solver caches out_name intabs_prog prog =
         (* (keep orig_shared); *)
 
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
-        fprintf out " | (FALSE\n";
+        fprintf out " | (bymc_loc != 1) | (FALSE\n";
         let reg_tab = extract_skel proc#get_stmts in
         let loop_prefix = reg_tab#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
