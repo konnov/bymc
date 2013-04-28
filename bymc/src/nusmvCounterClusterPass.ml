@@ -285,11 +285,11 @@ let transform solver caches out_name intabs_prog prog =
             (keep in_locals);
         fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1))\n";
         fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
-        fprintf out "  & ((bymc_proc != %d & %s)\n"
+        fprintf out "  & (bymc_proc != %d | %s)\n"
             proc_num (keep (in_locals @ out_locals));
 
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
-        fprintf out " | (bymc_loc != 1) | (FALSE\n";
+        fprintf out " & ((bymc_loc != 1) | (FALSE\n";
         let reg_tab = extract_skel proc#get_stmts in
         let loop_prefix = reg_tab#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
