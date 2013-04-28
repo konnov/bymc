@@ -189,6 +189,13 @@ let declare_locals_and_counters caches sym_tab type_tab prog shared out proc =
     List.iter declare_mod all_indices
 
 
+let assign_default type_tab vars =
+    let eq_var v =
+        let tp = type_tab#get_type v in
+        sprintf "%s = %s" v#mangled_name (Nusmv.type_default_smv tp) in
+    str_join " & " (List.map eq_var vars)
+
+
 (* create a cluster encoding in nusmv *)
 (* XXX: TODO: XXX: this requires serious refactoring! *)
 let transform solver caches out_name intabs_prog prog =
@@ -270,13 +277,15 @@ let transform solver caches out_name intabs_prog prog =
             (str_join ", " (List.map vname out_locals))
             (str_join ", " (List.map vname (bymc_loc :: bymc_proc :: orig_shared)));
         (* TODO: allow other processes to make a step too!  *)
+        fprintf out "INIT\n";
+        fprintf out "  (%s)\n"
+            (assign_default proc_type_tab (in_locals @ out_locals));
         fprintf out "TRANS\n";
         fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & %s))\n"
             (keep in_locals);
-        fprintf out "  & (bymc_loc != 0 | next(bymc_loc) = 1)\n";
+        fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1))\n";
         fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
         fprintf out "  & ((bymc_proc != %d)\n" proc_num;
-        (* (keep orig_shared); *)
 
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
         fprintf out " | (bymc_loc != 1) | (FALSE\n";
