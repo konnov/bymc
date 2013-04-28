@@ -1,7 +1,7 @@
 #!/bin/sh
 
-DEBUG="-cflag -g -lflag -g"
+CFLAGS="-cflag -g -lflag -g"
 
-target=${1:-"./bymc.native"}
+target=${1:-"./bymc.native"} # use ./bymc.byte for debugging
 
-ocamlbuild $DEBUG -Is src -lib str -lib unix $target | ./script/ocaml-friendly
+ocamlbuild $CFLAGS -Is src -lib str -lib unix $target | ./script/ocaml-friendly

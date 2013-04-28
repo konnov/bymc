@@ -61,15 +61,20 @@ let main () =
 
 
 let _ =
+    let print_trace () =
+        fprintf stderr " -----------------------------------------------\n";
+        Printexc.print_backtrace stderr;
+        fprintf stderr " -----------------------------------------------\n"
+    in
+    (* pay the price of easier debugging *)
+    Printexc.record_backtrace true;
     try
-        (* pay the price of easier debugging *)
-        Printexc.record_backtrace true;
         main ()
     with e ->
         if Printexc.backtrace_status ()
         then begin
             fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
-            Printexc.print_backtrace stdout
+            print_trace ()
         end else begin
             fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
             fprintf stdout "(Trace is not available. Compile with -g?\n"
