@@ -107,7 +107,7 @@ let write_counter_mods solver caches sym_tab type_tab out proc_num proc
     List.iter create_module all_indices
 
 
-let write_constraints solver caches sym_tab type_tab out proc
+let write_constraints solver caches sym_tab type_tab out proc_num proc
         (in_locals: var list) (out_locals: var list) =
     let ctr_ctx =
         caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
@@ -119,8 +119,8 @@ let write_constraints solver caches sym_tab type_tab out proc
                 let inp = get_input sym_tab k in
                 sprintf "%s != %d" inp#mangled_name v in
             str_join " | " (List.map f (hashtbl_as_list valtab)) in
-        fprintf out " & (%s | %s_%dI != 0 | bymc_loc = 0)\n"
-            prev_eq ctr_ctx#get_ctr#get_name idx;
+        fprintf out " & (bymc_proc != %d | %s | %s_%dI != 0 | bymc_loc = 0)\n"
+            proc_num prev_eq ctr_ctx#get_ctr#get_name idx;
     in
     fprintf out "INVAR\n";
     fprintf out " TRUE\n";
@@ -251,7 +251,7 @@ let transform solver caches out_name intabs_prog prog =
                 (smv_name proc_sym_tab) all_stmts out "init" "INIT" in
         ()
     in
-    let make_constraints proc =
+    let make_constraints proc_num proc =
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
@@ -259,7 +259,7 @@ let transform solver caches out_name intabs_prog prog =
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         write_constraints solver caches proc_sym_tab proc_type_tab
-                out proc in_locals out_locals
+                out proc_num proc in_locals out_locals
     in
     let make_proc_trans proc_num proc =
         log INFO (sprintf "  add trans %s" proc#get_name);
@@ -280,18 +280,16 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "INIT\n";
         fprintf out "  (%s)\n"
             (assign_default proc_type_tab (in_locals @ out_locals));
+        fprintf out "INVAR\n\n";
+        fprintf out "  (bymc_proc = %d | (bymc_proc != %d & (%s)))\n"
+            proc_num proc_num
+            (assign_default proc_type_tab (in_locals @ out_locals));
         fprintf out "TRANS\n";
         fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & next(bymc_proc) = bymc_proc & (%s)))\n"
             (keep in_locals);
         fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1) & (%s))\n"
             (keep out_locals);
         fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
-        fprintf out "  & (bymc_proc = %d | bymc_loc = 2 | (%s))\n"
-            proc_num (keep (in_locals @ out_locals));
-
-        fprintf out " & ((bymc_loc != 2) | (bymc_proc = %d) | ((bymc_loc = 2) & (bymc_proc != %d) & %s))\n"
-            proc_num proc_num
-            (assign_default proc_type_tab (in_locals @ out_locals));
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
         fprintf out " & ((bymc_loc != 1) | (bymc_proc != %d) | ((bymc_loc = 1) & (bymc_proc = %d) & (FALSE\n"
             proc_num proc_num;
@@ -308,8 +306,11 @@ let transform solver caches out_name intabs_prog prog =
         num
     in
     fprintf out "INIT\n";
-    write_default_init new_type_tab main_sym_tab shared hidden_idx_fun out;
-    List.iter make_constraints (Program.get_procs intabs_prog);
+    write_default_init new_type_tab main_sym_tab
+        (bymc_proc :: shared) hidden_idx_fun out;
+    List.iter2 make_constraints
+        (range 0 (List.length procs)) (Program.get_procs intabs_prog);
+
     fprintf out "TRANS\n\n";
     (* initialization is now made as a first step! *)
     fprintf out " (bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
@@ -317,7 +318,7 @@ let transform solver caches out_name intabs_prog prog =
     fprintf out " ))";
     fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 2)\n";
     fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1) & %s;\n"
-        (keep shared);
+        (keep orig_shared);
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
     let _ = Program.StringMap.mapi
