@@ -192,7 +192,7 @@ let declare_locals_and_counters caches sym_tab type_tab prog shared out proc =
 let assign_default type_tab vars =
     let eq_var v =
         let tp = type_tab#get_type v in
-        sprintf "%s = %s" v#mangled_name (Nusmv.type_default_smv tp) in
+        sprintf "(%s = %s)" v#mangled_name (Nusmv.type_default_smv tp) in
     str_join " & " (List.map eq_var vars)
 
 
@@ -281,15 +281,20 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "  (%s)\n"
             (assign_default proc_type_tab (in_locals @ out_locals));
         fprintf out "TRANS\n";
-        fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & %s))\n"
+        fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & next(bymc_proc) = bymc_proc & (%s)))\n"
             (keep in_locals);
-        fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1))\n";
+        fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1) & (%s))\n"
+            (keep out_locals);
         fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
-        fprintf out "  & (bymc_proc != %d | %s)\n"
+        fprintf out "  & (bymc_proc = %d | bymc_loc = 2 | (%s))\n"
             proc_num (keep (in_locals @ out_locals));
 
+        fprintf out " & ((bymc_loc != 2) | (bymc_proc = %d) | ((bymc_loc = 2) & (bymc_proc != %d) & %s))\n"
+            proc_num proc_num
+            (assign_default proc_type_tab (in_locals @ out_locals));
         fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
-        fprintf out " & ((bymc_loc != 1) | (FALSE\n";
+        fprintf out " & ((bymc_loc != 1) | (bymc_proc != %d) | ((bymc_loc = 1) & (bymc_proc = %d) & (FALSE\n"
+            proc_num proc_num;
         let reg_tab = extract_skel proc#get_stmts in
         let loop_prefix = reg_tab#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
@@ -297,7 +302,7 @@ let transform solver caches out_name intabs_prog prog =
         let num = proc_to_symb solver caches prog proc_type_tab
             proc_sym_tab local_shared hidden_idx_fun (keep_local local_ids)
             body out proc#get_name "TRANS" in
-        fprintf out "))\n";
+        fprintf out ")))\n";
         write_counter_mods solver caches proc_sym_tab proc_type_tab
                 out proc_num proc in_locals out_locals;
         num
@@ -311,7 +316,8 @@ let transform solver caches out_name intabs_prog prog =
     make_init (Program.get_procs prog);
     fprintf out " ))";
     fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 2)\n";
-    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1);\n";
+    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1) & %s;\n"
+        (keep shared);
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
     let _ = Program.StringMap.mapi

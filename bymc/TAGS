@@ -79,11 +79,11 @@ src/abstract.ml,340
 Abstract1,0
 let write_to_filewrite_to_file26,281
 let do_abstractiondo_abstraction47,1095
-let make_vass_xducersmake_vass_xducers103,3443
-let check_invariantcheck_invariant137,4843
-let check_all_invariantscheck_all_invariants168,6313
-let filter_good_fairnessfilter_good_fairness178,6682
-let do_refinementdo_refinement192,7241
+let make_vass_xducersmake_vass_xducers105,3465
+let check_invariantcheck_invariant139,4865
+let check_all_invariantscheck_all_invariants170,6335
+let filter_good_fairnessfilter_good_fairness180,6704
+let do_refinementdo_refinement194,7263
 
 src/accums.ml,1580
 Accums1,0
@@ -335,19 +335,20 @@ let embed_fairnessembed_fairness143,4697
 let is_invariant_atomicis_invariant_atomic154,5199
 let find_invariantsfind_invariants158,5282
 
-src/nusmvCounterClusterPass.ml,522
+src/nusmvCounterClusterPass.ml,565
 NusmvCounterClusterPass1,0
-let collect_local_idscollect_local_ids22,353
-let collect_rhscollect_rhs29,552
-let mk_mod_sigmk_mod_sig57,1508
-let write_counter_modswrite_counter_mods63,1709
-let write_constraintswrite_constraints109,3806
-let keep_localkeep_local130,4635
-let find_proc_non_scratchfind_proc_non_scratch138,4827
-let get_in_outget_in_out143,4997
-let intro_in_out_varsintro_in_out_vars149,5149
-let declare_locals_and_countersdeclare_locals_and_counters157,5446
-let transformtransform190,6906
+let collect_local_idscollect_local_ids23,364
+let collect_rhscollect_rhs30,563
+let mk_mod_sigmk_mod_sig58,1519
+let write_counter_modswrite_counter_mods64,1731
+let write_constraintswrite_constraints110,3889
+let keep_localkeep_local131,4718
+let find_proc_non_scratchfind_proc_non_scratch142,4988
+let get_in_outget_in_out147,5158
+let intro_in_out_varsintro_in_out_vars153,5310
+let declare_locals_and_countersdeclare_locals_and_counters161,5607
+let assign_defaultassign_default192,6969
+let transformtransform201,7277
 
 src/nusmv.ml,206
 Nusmv1,0
@@ -358,7 +359,7 @@ let token_stoken_s42,1224
 let expr_sexpr_s174,4629
 let keepkeep208,5876
 
-src/nusmvPass.ml,791
+src/nusmvPass.ml,792
 NusmvPass1,0
 exception Bdd_errorBdd_error22,263
 module StringMapStringMap24,294
@@ -370,14 +371,14 @@ type scope_vars_t = LocalShared | SharedOnlySharedOnly36,483
 let intro_old_copiesintro_old_copies42,680
 let transform_varstransform_vars52,1105
 let create_aux_varscreate_aux_vars80,2131
-let write_smv_headerwrite_smv_header94,2710
-let proc_to_symbproc_to_symb105,3121
-let write_trans_loopwrite_trans_loop123,3743
-let create_read_hiddencreate_read_hidden137,4242
-let write_default_initwrite_default_init178,5667
-let write_hidden_specwrite_hidden_spec190,6119
-let write_ltl_specwrite_ltl_spec197,6290
-let transformtransform259,8495
+let write_smv_headerwrite_smv_header101,2976
+let proc_to_symbproc_to_symb112,3387
+let write_trans_loopwrite_trans_loop129,3978
+let create_read_hiddencreate_read_hidden143,4477
+let write_default_initwrite_default_init184,5902
+let write_hidden_specwrite_hidden_spec196,6354
+let write_ltl_specwrite_ltl_spec203,6525
+let transformtransform265,8730
 
 src/options.ml,1073
 Options1,0
