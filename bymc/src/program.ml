@@ -189,5 +189,7 @@ let run_smt_solver prog =
     solver#start;
     (* solver#set_debug true; *) (* see yices.log *)
     List.iter solver#append smt_exprs;
+    if not solver#check
+    then raise (Program_error "Basic assertions are incompatible");
     solver
 
