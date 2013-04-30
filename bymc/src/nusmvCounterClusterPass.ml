@@ -284,6 +284,8 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "  (bymc_proc = %d | (bymc_proc != %d & (%s)))\n"
             proc_num proc_num
             (assign_default proc_type_tab (in_locals @ out_locals));
+        fprintf out "  (bymc_loc != 1 | (bymc_loc = 1 & (%s)))\n"
+            (assign_default proc_type_tab (out_locals));
         fprintf out "TRANS\n";
         fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & next(bymc_proc) = bymc_proc & (%s)))\n"
             (keep in_locals);
