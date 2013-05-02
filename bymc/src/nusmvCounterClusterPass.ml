@@ -315,12 +315,16 @@ let transform solver caches out_name intabs_prog prog =
 
     fprintf out "TRANS\n\n";
     (* initialization is now made as a first step! *)
-    fprintf out " (bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
+    fprintf out " ((bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
     make_init (Program.get_procs prog);
     fprintf out " ))";
     fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 2)\n";
-    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1) & %s;\n"
+    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1) & %s);\n"
         (keep orig_shared);
+    (* XXX: doubtful...
+    fprintf out "\n-- prevent stuttering (safety only)\n";
+    fprintf out " & (bymc_loc != 2 | %s);\n" (nostuttering shared);
+    *)
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
     let _ = Program.StringMap.mapi

@@ -210,3 +210,8 @@ let keep vars =
         sprintf "(next(%s) = %s)" v#mangled_name v#mangled_name in
     str_join " & " (List.map keep_var vars)
 
+let nostuttering vars =
+    let change_var v =
+        sprintf "(next(%s) != %s)" v#mangled_name v#mangled_name in
+    str_join " | " (List.map change_var vars)
+
