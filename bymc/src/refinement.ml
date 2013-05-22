@@ -10,6 +10,8 @@ open SpinIrImp
 open Smt
 open Debug
 
+exception Refinement_error of string
+
 let pred_reach = "p"
 let pred_recur = "r"
 
@@ -143,10 +145,13 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
     match expr_stmt with
     | Expr (id, e) ->
         let smt_id = solver#append_expr e in
-        (* bind ids from the solver with reverse mapping on
-           concrete expressions *)
-        if id >= 0 then begin
-            let s, abs_expr = (Hashtbl.find rev_map id) in
+        (* Bind ids assigned to expressions by the solver to the ids
+           of constraints retrieved from the model checker.
+           Not all expressions correspond to the counter-example,
+           thus, we add only those which do.
+           *)
+        if id >= 0 && (Hashtbl.mem rev_map id) then begin
+            let s, abs_expr = Hashtbl.find rev_map id in
             log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
             if solver#get_collect_asserts
             then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
@@ -460,8 +465,7 @@ let is_loop_state_fair_by_step solver prog ctr_ctx_tbl rev_map fairness
 
     (* simulate one step *)
     let res, smt_rev_map =
-        (simulate_in_smt solver prog ctr_ctx_tbl
-            step_asserts rev_map 1) in
+        (simulate_in_smt solver prog ctr_ctx_tbl step_asserts rev_map 1) in
 
     (* collect unsat cores if there is no step *)
     let _, core_exprs =
