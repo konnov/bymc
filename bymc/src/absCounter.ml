@@ -480,13 +480,14 @@ class vass_funcs dom prog solver =
     end
 
 
-let create_fairness ctr_ctx_tbl =
+let create_fairness type_tab ctr_ctx_tbl =
     (* add formulas saying that unfair predicates can't occur forever *)
     let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
     (* a lollipop is the same as a lasso, but it sounds nice! *)
     let out_of_lollipop i =
-        let r_var = Var (new_var (sprintf "bymc_%s%d" pred_recur i)) in
-        UnEx (NEG, r_var)
+        let r_var = new_var (sprintf "bymc_%s%d" pred_recur i) in
+        type_tab#set_type r_var (new data_type SpinTypes.TBIT);
+        UnEx (NEG, Var r_var)
     in
     let leave_unfair_lollipops =
         let indices = (range 0 recur_preds_cnt) in
@@ -652,10 +653,11 @@ let do_counter_abstraction funcs solver caches prog =
     let new_decls =
         ctr_ctx_tbl#get_spur
             :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
-    let new_ltl_forms =
-        Program.StringMap.add "fairness_ctr" (create_fairness ctr_ctx_tbl)
-        (Program.get_ltl_forms prog) in
     let new_type_tab = (Program.get_type_tab prog)#copy in
+    let new_ltl_forms =
+        Program.StringMap.add "fairness_ctr"
+        (create_fairness new_type_tab ctr_ctx_tbl)
+        (Program.get_ltl_forms prog) in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
     let new_prog =
         (Program.set_params []
