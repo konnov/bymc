@@ -15,7 +15,7 @@ BYMC_HOME=`dirname $0`
 
 SPIN=${SPIN:-spin}
 LTL2BA="$BYMC_HOME/../deps/ltl2ba-1.1/ltl2ba"
-PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC"}
+PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
 PAN_FLAGS=${PAN_FLAGS:-"-m100000"}
 SPIN_OUT="spin.out"
 cmd=""
@@ -71,9 +71,11 @@ while [ "$cmd" != "q" ]; do
     #$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
     $LTL2BA -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
     echo "Generating pan..."
+    set -x # echo on
     $SPIN -a -N $PROP.never abs-counter.prm || exit 2
     (gcc $rand $PANCC_FLAGS -o ./pan pan.c \
         && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT) || exit 3
+    set +x # echo off
 
     if egrep -q "errors: +0" $SPIN_OUT; then
         echo "The property is verified in $step refinement steps"
@@ -82,6 +84,7 @@ while [ "$cmd" != "q" ]; do
     else
         ./pan -S | grep -v MSC | egrep '(^[A-Za-z0-9]*:GS{|START OF CYCLE)' > spin.trace \
         && CAMLRUNPARAM="b" $TOOL -t spin.trace $PROG 2>&1 | tee refinement.out
+
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0
         tail -n '+2' spin.trace | cat -n | head -n 30
