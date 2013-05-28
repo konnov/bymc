@@ -116,31 +116,38 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
         out proc_num proc (in_locals: var list) (out_locals: var list) =
     let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
     let vname v = v#mangled_name in
-    let ps = str_join ", " (List.map vname out_locals) in
+    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
     fprintf out "MODULE track_counters(use, bymc_proc, bymc_loc, %s)\n" ps;
     fprintf out " ASSIGN\n";
     fprintf out " next(use) :=\n";
     fprintf out "  case\n";
     let create_module idx =
         let valtab = ctr_ctx#unpack_from_const idx in
+        let mk_prev con op =
+            let f (k, v) =
+                let inp = get_input sym_tab k in
+                sprintf "%s %s %d" inp#mangled_name op v in
+            str_join con (List.map f (hashtbl_as_list valtab))
+        in
         let mk_next con op =
             let f (k, v) =
                 let out = get_output sym_tab k in
                 sprintf "%s %s %d" out#mangled_name op v in
             str_join con (List.map f (hashtbl_as_list valtab))
         in
+        let prev_ne = mk_prev " | " "!=" in
         let next_eq = mk_next " & " "=" in
         let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name idx in
         let myval_var = (sym_tab#lookup myval)#as_var in
         let var_idx = hidden_idx_fun myval_var in
         if var_idx <> 0 then begin
-            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) : { %d };\n"
-                proc_num next_eq var_idx
+            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s): { %d };\n"
+                proc_num prev_ne next_eq var_idx
         end
     in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
     List.iter create_module all_indices;
-    fprintf out "   bymc_loc = 0 : { %s };\n"
+    fprintf out "   bymc_loc = 0 : { 0, %s };\n"
         (str_join ", " (List.map string_of_int (List.map hidden_idx_fun hidden)));
     fprintf out "   TRUE : use;\n";
     fprintf out "  esac;\n"
@@ -162,7 +169,15 @@ let write_constraints solver caches sym_tab type_tab hidden_idx_fun
                 let inp = get_input sym_tab k in
                 sprintf "%s != %d" inp#mangled_name v in
             str_join " | " (List.map f (hashtbl_as_list valtab)) in
-        if not (is_visible idx) then fprintf out "-- ";
+        let next_eq =
+            let f (k, v) =
+                let out = get_output sym_tab k in
+                sprintf "%s = %d" out#mangled_name v in
+            str_join " & " (List.map f (hashtbl_as_list valtab)) in
+        if not (is_visible idx) then begin
+            fprintf out " & (%s | (%s) | bymc_loc != 2)\n" prev_eq next_eq;
+            fprintf out "-- "
+        end;
         fprintf out " & (bymc_proc != %d | %s | %s_%dI != 0 | bymc_loc = 0)\n"
             proc_num prev_eq ctr_ctx#get_ctr#get_name idx;
     in
@@ -239,7 +254,7 @@ let declare_locals_and_counters caches sym_tab type_tab
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
     List.iter declare_mod all_indices;
     let vname v = v#mangled_name in
-    let ps = str_join ", " (List.map vname out_locals) in
+    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
     fprintf out "  mod_ctrs_use: track_counters(bymc_use, bymc_proc, bymc_loc, %s);\n" ps
 
 
