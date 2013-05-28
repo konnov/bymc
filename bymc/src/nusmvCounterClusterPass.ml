@@ -61,10 +61,9 @@ let mk_mod_sig proc idx myval params =
     sprintf "kntr_%s_%d(%s, %s, bymc_loc, bymc_proc)" proc#get_name idx ps myval
 
 
-let write_counter_mods solver caches sym_tab type_tab out proc_num proc
-        (in_locals: var list) (out_locals: var list) =
-    let ctr_ctx =
-        caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
+let write_counter_mods solver caches sym_tab type_tab hidden_idx_fun
+        out proc_num proc (in_locals: var list) (out_locals: var list) =
+    let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
     let dom = caches#analysis#get_pia_dom in
     let dec_tbl = collect_rhs solver type_tab dom ctr_ctx PLUS in
     let inc_tbl = collect_rhs solver type_tab dom ctr_ctx MINUS in
@@ -104,14 +103,65 @@ let write_counter_mods solver caches sym_tab type_tab out proc_num proc
         fprintf out "  esac;\n";
     in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-    List.iter create_module all_indices
+    let is_visible i =
+        let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name i in
+        let myval_var = (sym_tab#lookup myval)#as_var in
+        0 = (hidden_idx_fun myval_var)
+    in
+    let visible = List.filter is_visible all_indices in
+    List.iter create_module visible
 
 
-let write_constraints solver caches sym_tab type_tab out proc_num proc
-        (in_locals: var list) (out_locals: var list) =
+let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
+        out proc_num proc (in_locals: var list) (out_locals: var list) =
+    let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
+    let vname v = v#mangled_name in
+    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
+    fprintf out "MODULE track_counters(use, bymc_proc, bymc_loc, %s)\n" ps;
+    fprintf out " ASSIGN\n";
+    fprintf out " next(use) :=\n";
+    fprintf out "  case\n";
+    let create_module idx =
+        let valtab = ctr_ctx#unpack_from_const idx in
+        let mk_prev con op =
+            let f (k, v) =
+                let inp = get_input sym_tab k in
+                sprintf "%s %s %d" inp#mangled_name op v in
+            str_join con (List.map f (hashtbl_as_list valtab))
+        in
+        let mk_next con op =
+            let f (k, v) =
+                let out = get_output sym_tab k in
+                sprintf "%s %s %d" out#mangled_name op v in
+            str_join con (List.map f (hashtbl_as_list valtab))
+        in
+        let prev_ne = mk_prev " | " "!=" in
+        let next_eq = mk_next " & " "=" in
+        let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name idx in
+        let myval_var = (sym_tab#lookup myval)#as_var in
+        let var_idx = hidden_idx_fun myval_var in
+        if var_idx <> 0 then begin
+            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s): { %d };\n"
+                proc_num prev_ne next_eq var_idx
+        end
+    in
+    let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
+    List.iter create_module all_indices;
+    fprintf out "   bymc_loc = 0 : { 0, %s };\n"
+        (str_join ", " (List.map string_of_int (List.map hidden_idx_fun hidden)));
+    fprintf out "   TRUE : use;\n";
+    fprintf out "  esac;\n"
+
+
+let write_constraints solver caches sym_tab type_tab hidden_idx_fun
+        out proc_num proc (in_locals: var list) (out_locals: var list) =
     let ctr_ctx =
         caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
-    let dom = caches#analysis#get_pia_dom in
+    let is_visible i =
+        let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name i in
+        let myval_var = (sym_tab#lookup myval)#as_var in
+        0 = (hidden_idx_fun myval_var)
+    in
     let create_cons idx =
         let valtab = ctr_ctx#unpack_from_const idx in
         let prev_eq =
@@ -119,6 +169,15 @@ let write_constraints solver caches sym_tab type_tab out proc_num proc
                 let inp = get_input sym_tab k in
                 sprintf "%s != %d" inp#mangled_name v in
             str_join " | " (List.map f (hashtbl_as_list valtab)) in
+        let next_eq =
+            let f (k, v) =
+                let out = get_output sym_tab k in
+                sprintf "%s = %d" out#mangled_name v in
+            str_join " & " (List.map f (hashtbl_as_list valtab)) in
+        if not (is_visible idx) then begin
+            fprintf out " & (%s | (%s) | bymc_loc != 2)\n" prev_eq next_eq;
+            fprintf out "-- "
+        end;
         fprintf out " & (bymc_proc != %d | %s | %s_%dI != 0 | bymc_loc = 0)\n"
             proc_num prev_eq ctr_ctx#get_ctr#get_name idx;
     in
@@ -158,7 +217,8 @@ let intro_in_out_vars sym_tab type_tab prog proc vars =
     proc_sym_tab, proc_type_tab
 
 
-let declare_locals_and_counters caches sym_tab type_tab prog shared out proc =
+let declare_locals_and_counters caches sym_tab type_tab
+        prog shared hidden_idx_fun out proc =
     let locals = find_proc_non_scratch caches proc in
     let proc_sym_tab, proc_type_tab =
         intro_in_out_vars sym_tab type_tab prog proc locals in
@@ -179,14 +239,23 @@ let declare_locals_and_counters caches sym_tab type_tab prog shared out proc =
         (str_join ", " (List.map vname shared));
 
     let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
+    let is_visible i =
+        let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name i in
+        let myval_var = (sym_tab#lookup myval)#as_var in
+        0 = (hidden_idx_fun myval_var)
+    in
     let declare_mod idx =
         (* XXX: magic encoding *)
         let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name idx in
         let signature = mk_mod_sig proc idx myval (in_locals @ out_locals) in
+        if not (is_visible idx) then fprintf out "-- ";
         fprintf out "  mod%s_k%d: %s;\n" proc#get_name idx signature
     in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-    List.iter declare_mod all_indices
+    List.iter declare_mod all_indices;
+    let vname v = v#mangled_name in
+    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
+    fprintf out "  mod_ctrs_use: track_counters(bymc_use, bymc_proc, bymc_loc, %s);\n" ps
 
 
 let assign_default type_tab vars =
@@ -202,12 +271,14 @@ let transform solver caches out_name intabs_prog prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let main_sym_tab = new symb_tab "main" in
-    let shared = transform_vars prog type_tab new_type_tab main_sym_tab
-        ((Program.get_shared prog) @ (Program.get_instrumental prog)) in
+    let instr = transform_vars prog type_tab new_type_tab main_sym_tab
+        (Program.get_instrumental prog) in
+    let shared = instr @ (transform_vars prog type_tab new_type_tab
+        main_sym_tab (Program.get_shared prog)) in
+    let scope = SharedOnly in
     let hidden, hidden_idx_fun =
         create_read_hidden main_sym_tab
-        (*if scope = SharedOnly then shared else [] (* no refinement *)*)
-        []
+        (if scope = SharedOnly then instr else []) (* no refinement *)
         (sprintf "%s-hidden.txt" out_name) in
     let procs = Program.get_procs prog in
     let bymc_use, bymc_loc, bymc_proc =
@@ -221,7 +292,7 @@ let transform solver caches out_name intabs_prog prog =
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
     List.iter
         (declare_locals_and_counters caches main_sym_tab new_type_tab
-            prog (bymc_loc :: bymc_proc :: orig_shared) out)
+            prog (bymc_loc :: bymc_proc :: orig_shared) hidden_idx_fun out)
         (Program.get_procs prog);
 
     let make_init procs =
@@ -259,7 +330,7 @@ let transform solver caches out_name intabs_prog prog =
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         write_constraints solver caches proc_sym_tab proc_type_tab
-                out proc_num proc in_locals out_locals
+            hidden_idx_fun out proc_num proc in_locals out_locals
     in
     let make_proc_trans proc_num proc =
         log INFO (sprintf "  add trans %s" proc#get_name);
@@ -304,7 +375,9 @@ let transform solver caches out_name intabs_prog prog =
             body out proc#get_name "TRANS" in
         fprintf out ")))\n";
         write_counter_mods solver caches proc_sym_tab proc_type_tab
-                out proc_num proc in_locals out_locals;
+                hidden_idx_fun out proc_num proc in_locals out_locals;
+        write_counter_use solver caches proc_sym_tab proc_type_tab
+                hidden hidden_idx_fun out proc_num proc in_locals out_locals;
         num
     in
     fprintf out "INIT\n";
@@ -331,6 +404,8 @@ let transform solver caches out_name intabs_prog prog =
         (write_ltl_spec out atomics new_type_tab main_sym_tab hidden_idx_fun)
         (Program.get_ltl_forms prog) in
 
+    write_hidden_spec hidden out;
+
     fprintf out "\n\n-- auxillary modules\n";
 
     let procs = Program.get_procs intabs_prog in
@@ -339,7 +414,5 @@ let transform solver caches out_name intabs_prog prog =
     let _ = List.fold_left (+) 0 no_paths in
     (* the receive-compute-update block *)
     (*write_trans_loop vars hidden_idx_fun out;*)
-
-    write_hidden_spec hidden out;
     close_out out
 
