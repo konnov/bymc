@@ -195,7 +195,7 @@ let write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out =
 
 let write_hidden_spec hidden out =
     let write n =
-        fprintf out "SPEC AG (bymc_use != %d);\n" (1 + n)
+        fprintf out "INVARSPEC (bymc_use != %d);\n" (1 + n)
     in
     List.iter write (range 0 (List.length hidden))
 
