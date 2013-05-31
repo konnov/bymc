@@ -6,7 +6,7 @@ import sys
 
 def collect_excluded(filename):
     excluded = []
-    spec_re = re.compile('^.*spec.*bymc_use != ([0-9]*) *is false.*$')
+    spec_re = re.compile('^.*invariant.*bymc_use != ([0-9]*) *is false.*$')
     fin = open(filename, "r")
     try:
         for line in fin:
