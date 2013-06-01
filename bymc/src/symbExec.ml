@@ -245,6 +245,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         Hashtbl.replace vals v#id new_rhs;
         path_cons
 
+    | Assume (_, e)
     | Expr (_, e) ->
         let ne =
             try sub_vars vals (elim_array_access sym_tab (sub_vars vals e))
