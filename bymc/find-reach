@@ -62,8 +62,8 @@ if __name__ == '__main__':
             print "Abnormal termination of %s" % tool
             sys.exit(1)
 
-        status = os.system("%s -dcx -df -v 3 -reorder main.smv >nusmv.out" % nusmv)
-        #status = os.system("%s -dcx -df -bmc -bmc_length 1000 -v 3 -reorder main.smv >nusmv.out" % nusmv)
+        status = os.system("%s -dcx -df -ils -is -v 3 -reorder main.smv >nusmv.out" % nusmv)
+        #status = os.system("%s -dcx -df -ils -is -bmc -bmc_length 1000 -v 3 -reorder main.smv >nusmv.out" % nusmv)
         if status != 0:
             print "Abnormal termination of %s" % nusmv
             sys.exit(1)
