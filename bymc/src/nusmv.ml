@@ -177,7 +177,7 @@ let expr_s var_fun e =
     | Const i -> string_of_int i
     | Var v -> var_fun v
     | UnEx (CARD, f) -> sprintf "card(%s)" (to_s f)
-    | UnEx (tok, f) -> sprintf "(%s%s)" (token_s tok) (to_s f)
+    | UnEx (tok, f) -> sprintf "(%s(%s))" (token_s tok) (to_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (to_s arr) (to_s idx)
     (* XXX: not well defined *)
@@ -203,6 +203,11 @@ let expr_s var_fun e =
         sprintf "bymc_loc = 1"
     in
     to_s e
+
+
+let form_s = function
+    | Const 1 -> "TRUE"
+    | _ as e -> expr_s (fun v -> v#get_name) e
 
 
 let keep vars =

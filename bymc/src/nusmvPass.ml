@@ -233,22 +233,22 @@ let write_ltl_spec out atomics type_tab sym_tab hidden_idx_fun name ltl_form =
         match hidden_masked with
         | UnEx (ALWAYS, f) as tf ->
             if Ltl.is_propositional type_tab f
-            then (* try a chance to use a faster algorithm *)
-                fprintf out " -- INVARSPEC NAME %s := (%s);\n\n"
-                    name (Nusmv.expr_s (fun v -> v#get_name) f)
-            else fprintf out " -- LTLSPEC NAME %s := (%s);\n\n"
-                name (Nusmv.expr_s (fun v -> v#get_name) tf)
+            then (* use a faster algorithm *)
+                fprintf out " INVARSPEC NAME %s := (%s);\n\n"
+                    name (Nusmv.form_s f)
+            else fprintf out " LTLSPEC NAME %s := (%s);\n\n"
+                name (Nusmv.form_s tf)
 
         | _ as tf ->
-            fprintf out "LTLSPEC NAME %s := (%s);\n\n"
-                name (Nusmv.expr_s (fun v -> v#get_name) tf)
+            fprintf out " LTLSPEC NAME %s := (%s);\n\n"
+                name (Nusmv.form_s tf)
 
     end else begin
         let write = function
         | UnEx (ALWAYS, UnEx (EVENTUALLY, f)) as ff ->
             if Ltl.is_propositional type_tab f
-            then fprintf out "JUSTICE (%s);\n\n"
-                    (Nusmv.expr_s (fun v -> v#get_name) f)
+            then fprintf out " JUSTICE (%s);\n\n"
+                    (Nusmv.form_s f)
             else raise (Bdd_error ("Unsupported fairness: " ^ (expr_s ff)))
 
         | _ as ff ->

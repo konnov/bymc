@@ -4,6 +4,8 @@
  * the program more complicated. Usually, one needs such a transformation
  * to do a SAT/BDD encoding.
  *
+ * DEPRECATED: this simplication proved to produce really dumb results.
+ *
  * Igor Konnov, 2013
  *)
 
