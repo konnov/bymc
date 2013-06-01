@@ -36,14 +36,21 @@ def exclude_lines(in_filename, out_filename, excluded):
 HIDDEN_FILENAME = 'main-hidden.txt'
 
 if __name__ == '__main__':
+    clean = True
     try:
-        tool, nusmv, prog = sys.argv[1:4]
+        args = sys.argv[1:]
+        if args[0] == "-c":
+            clean = False
+            args = args[1:]
+
+        tool, nusmv, prog = args 
     except ValueError:
-        print "Use: find-reach tool nusmv program"
+        print "Use: find-reach -c tool nusmv program"
         sys.exit(99)
 
-    if os.access(HIDDEN_FILENAME, os.F_OK):
-        os.remove(HIDDEN_FILENAME)
+    if clean:
+        if os.access(HIDDEN_FILENAME, os.F_OK):
+            os.remove(HIDDEN_FILENAME)
 
     step = 1
     excluded = [1]
@@ -56,6 +63,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         status = os.system("%s -dcx -df -v 3 -reorder main.smv >nusmv.out" % nusmv)
+        #status = os.system("%s -dcx -df -bmc -bmc_length 1000 -v 3 -reorder main.smv >nusmv.out" % nusmv)
         if status != 0:
             print "Abnormal termination of %s" % nusmv
             sys.exit(1)
