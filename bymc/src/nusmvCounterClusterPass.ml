@@ -88,11 +88,11 @@ let write_counter_mods solver caches sym_tab type_tab hidden_idx_fun
         fprintf out " next(myval) :=\n";
         fprintf out "  case\n";
         let print_next k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
                 proc_num prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
         in
         let print_prev k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s) & myval = %d : { %s };\n"
+            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
                 proc_num prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
         in
         Hashtbl.iter print_prev dec_tbl;
@@ -117,10 +117,6 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
     let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
     let vname v = v#mangled_name in
     let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
-    fprintf out "MODULE track_counters(use, bymc_proc, bymc_loc, %s)\n" ps;
-    fprintf out " ASSIGN\n";
-    fprintf out " next(use) :=\n";
-    fprintf out "  case\n";
     let create_module idx =
         let valtab = ctr_ctx#unpack_from_const idx in
         let mk_prev con op =
@@ -141,16 +137,25 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
         let myval_var = (sym_tab#lookup myval)#as_var in
         let var_idx = hidden_idx_fun myval_var in
         if var_idx <> 0 then begin
-            fprintf out "   bymc_proc = %d & bymc_loc = 2 & (%s) & (%s): { %d };\n"
+            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s): { %d };\n"
                 proc_num prev_ne next_eq var_idx
         end
     in
-    let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-    List.iter create_module all_indices;
-    fprintf out "   bymc_loc = 0 : { 0, %s };\n"
-        (str_join ", " (List.map string_of_int (List.map hidden_idx_fun hidden)));
-    fprintf out "   TRUE : use;\n";
-    fprintf out "  esac;\n"
+    let hid = List.map hidden_idx_fun hidden in
+    fprintf out "MODULE track_counters(use, bymc_proc, bymc_loc, %s)\n" ps;
+    if hid <> []
+    then begin
+        fprintf out " ASSIGN\n";
+        fprintf out " next(use) :=\n";
+        fprintf out "  case\n";
+        let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
+        List.iter create_module all_indices;
+        fprintf out "   bymc_loc = 0 : { %s };\n"
+            (str_join ", " (List.map string_of_int (0 :: hid)));
+        fprintf out "   TRUE : use;\n";
+        fprintf out "  esac;\n"
+    end else
+        fprintf out " TRANS TRUE;\n"
 
 
 let write_constraints solver caches sym_tab type_tab hidden_idx_fun
@@ -175,7 +180,7 @@ let write_constraints solver caches sym_tab type_tab hidden_idx_fun
                 sprintf "%s = %d" out#mangled_name v in
             str_join " & " (List.map f (hashtbl_as_list valtab)) in
         if not (is_visible idx) then begin
-            fprintf out " & (%s | (%s) | bymc_loc != 2)\n" prev_eq next_eq;
+            fprintf out " & (%s | (%s) | bymc_loc != 1)\n" prev_eq next_eq;
             fprintf out "-- "
         end;
         fprintf out " & (bymc_proc != %d | %s | %s_%dI != 0 | bymc_loc = 0)\n"
@@ -192,6 +197,17 @@ let keep_local local_ids v =
     then if is_input v
         then v#mangled_name
         else sprintf "next(%s)" v#mangled_name
+    else
+    if is_input v
+        then mk_output_name v
+        else sprintf "next(%s)" (mk_output_name v)
+
+
+let local_one_step local_ids v =
+    if IntSet.mem v#id local_ids
+    then if is_input v
+        then v#mangled_name
+        else mk_output_name v
     else
     if is_input v
         then mk_output_name v
@@ -351,31 +367,39 @@ let transform solver caches out_name intabs_prog prog =
         fprintf out "INIT\n";
         fprintf out "  (%s)\n"
             (assign_default proc_type_tab (in_locals @ out_locals));
-        fprintf out "INVAR\n\n";
-        fprintf out "  (bymc_proc = %d | (bymc_proc != %d & (%s)))\n"
-            proc_num proc_num
-            (assign_default proc_type_tab (in_locals @ out_locals));
-        fprintf out "  & (bymc_loc != 1 | (bymc_loc = 1 & (%s)))\n"
-            (assign_default proc_type_tab (out_locals));
-        fprintf out "TRANS\n";
-        fprintf out "  (bymc_loc != 1 | (next(bymc_loc) = 2 & next(bymc_proc) = bymc_proc & (%s)))\n"
-            (keep in_locals);
-        fprintf out "  & (bymc_loc != 0 | (next(bymc_loc) = 1) & (%s))\n"
-            (keep out_locals);
-        fprintf out "  & (bymc_loc != 2 | next(bymc_loc) = 1)\n";
-        fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
-        fprintf out " & ((bymc_loc != 1) | (bymc_proc != %d) | ((bymc_loc = 1) & (bymc_proc = %d) & (FALSE\n"
-            proc_num proc_num;
+
+        (* generate the invariant without globals *)
         let reg_tab = extract_skel proc#get_stmts in
         let loop_prefix = reg_tab#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tab#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
-        let num = proc_to_symb solver caches prog proc_type_tab
-            proc_sym_tab local_shared hidden_idx_fun (keep_local local_ids)
+        fprintf out "INVAR\n";
+        fprintf out "  (bymc_loc != 0 | (bymc_loc = 0) & (%s))\n"
+            (assign_default proc_type_tab (in_locals @ out_locals));
+        fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
+        fprintf out " & ((bymc_loc != 1) | (bymc_proc != %d) | ((bymc_loc = 1) & (bymc_proc = %d) & (FALSE\n"
+            proc_num proc_num;
+        let _ = proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab locals hidden_idx_fun (local_one_step local_ids)
             body out proc#get_name "TRANS" in
         fprintf out ")))\n";
+
+        (* and the transition relation with globals *)
+        fprintf out "TRANS\n";
+        fprintf out "  (bymc_loc != 0 | (next(bymc_loc) = 1) & (%s))\n"
+            (assign_default proc_type_tab (in_locals @ out_locals));
+        fprintf out "-- Process %d: %s\n" proc_num proc#get_name;
+        fprintf out " & ((bymc_loc != 1) | (bymc_proc != %d) | ((bymc_loc = 1) & (bymc_proc = %d) & (FALSE\n"
+            proc_num proc_num;
+        let num = proc_to_symb solver caches prog proc_type_tab
+            proc_sym_tab local_shared hidden_idx_fun (local_one_step local_ids)
+            body out proc#get_name "TRANS" in
+        fprintf out ")))\n";
+
+        (* now write modules specific to each counter *)
         write_counter_mods solver caches proc_sym_tab proc_type_tab
                 hidden_idx_fun out proc_num proc in_locals out_locals;
+        (* and the module to track the used variables *)
         write_counter_use solver caches proc_sym_tab proc_type_tab
                 hidden hidden_idx_fun out proc_num proc in_locals out_locals;
         num
@@ -391,12 +415,10 @@ let transform solver caches out_name intabs_prog prog =
     fprintf out " ((bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
     make_init (Program.get_procs prog);
     fprintf out " ))";
-    fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 2)\n";
-    fprintf out " | (bymc_loc = 2 & next(bymc_loc) = 1) & %s);\n"
-        (keep orig_shared);
+    fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 1));\n";
     (* XXX: doubtful...
     fprintf out "\n-- prevent stuttering (safety only)\n";
-    fprintf out " & (bymc_loc != 2 | %s);\n" (nostuttering shared);
+    fprintf out " & (bymc_loc != 1 | %s);\n" (nostuttering shared);
     *)
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
