@@ -142,20 +142,8 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
         end
     in
     let hid = List.map hidden_idx_fun hidden in
-    fprintf out "MODULE track_counters(use, bymc_proc, bymc_loc, %s)\n" ps;
-    if hid <> []
-    then begin
-        fprintf out " ASSIGN\n";
-        fprintf out " next(use) :=\n";
-        fprintf out "  case\n";
-        let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-        List.iter create_module all_indices;
-        fprintf out "   bymc_loc = 0 : { %s };\n"
-            (str_join ", " (List.map string_of_int (0 :: hid)));
-        fprintf out "   TRUE : use;\n";
-        fprintf out "  esac;\n"
-    end else
-        fprintf out " TRANS TRUE;\n"
+    let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
+    List.iter create_module all_indices
 
 
 let write_constraints solver caches sym_tab type_tab hidden_idx_fun
@@ -234,7 +222,7 @@ let intro_in_out_vars sym_tab type_tab prog proc vars =
 
 
 let declare_locals_and_counters caches sym_tab type_tab
-        prog shared hidden_idx_fun out proc =
+        prog shared all_locals hidden_idx_fun out proc =
     let locals = find_proc_non_scratch caches proc in
     let proc_sym_tab, proc_type_tab =
         intro_in_out_vars sym_tab type_tab prog proc locals in
@@ -268,10 +256,7 @@ let declare_locals_and_counters caches sym_tab type_tab
         fprintf out "  mod%s_k%d: %s;\n" proc#get_name idx signature
     in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-    List.iter declare_mod all_indices;
-    let vname v = v#mangled_name in
-    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
-    fprintf out "  mod_ctrs_use: track_counters(bymc_use, bymc_proc, bymc_loc, %s);\n" ps
+    List.iter declare_mod all_indices
 
 
 let assign_default type_tab vars =
@@ -306,10 +291,6 @@ let transform solver caches out_name intabs_prog prog =
         shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
-    List.iter
-        (declare_locals_and_counters caches main_sym_tab new_type_tab
-            prog (bymc_loc :: bymc_proc :: orig_shared) hidden_idx_fun out)
-        (Program.get_procs prog);
 
     let make_init procs =
         let add_init_section accum proc =
@@ -399,11 +380,53 @@ let transform solver caches out_name intabs_prog prog =
         (* now write modules specific to each counter *)
         write_counter_mods solver caches proc_sym_tab proc_type_tab
                 hidden_idx_fun out proc_num proc in_locals out_locals;
+        num
+    in
+    let make_trackers proc_num proc =
+        let locals = find_proc_non_scratch caches proc in
+        let local_shared = bymc_loc :: locals @ orig_shared in
+        let proc_sym_tab, proc_type_tab =
+            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+        in
+        let in_locals, out_locals = get_in_out proc_sym_tab locals in
         (* and the module to track the used variables *)
         write_counter_use solver caches proc_sym_tab proc_type_tab
                 hidden hidden_idx_fun out proc_num proc in_locals out_locals;
-        num
     in
+    let write_trackers all_locals =
+        let vname v = v#mangled_name in
+        let hid = List.map hidden_idx_fun hidden in
+        let ps = str_join ", " (List.map vname all_locals) in
+        fprintf out "MODULE trackers(use, bymc_proc, bymc_loc, %s)\n" ps;
+        fprintf out " ASSIGN\n";
+        fprintf out " next(use) :=\n";
+        fprintf out "  case\n";
+        List.iter2 make_trackers (range 0 (List.length procs)) procs;
+        fprintf out "   bymc_loc = 0 : { %s };\n"
+            (str_join ", " (List.map string_of_int (0 :: hid)));
+        fprintf out "   TRUE : use;\n";
+        fprintf out "  esac;\n"
+
+    in
+    let collect_locals lst proc_num proc =
+        let locals = find_proc_non_scratch caches proc in
+        let local_shared = bymc_loc :: locals @ orig_shared in
+        let proc_sym_tab, proc_type_tab =
+            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+        in
+        let in_locals, out_locals = get_in_out proc_sym_tab locals in
+        in_locals @ out_locals @ lst
+    in
+    let all_locals =
+        List.fold_left2 collect_locals [] (range 0 (List.length procs)) procs
+    in
+    List.iter
+        (declare_locals_and_counters caches main_sym_tab new_type_tab
+            prog (bymc_loc :: bymc_proc :: orig_shared) all_locals
+            hidden_idx_fun out)
+        (Program.get_procs prog);
+    let ps = str_join ", " (List.map (fun v -> v#mangled_name) all_locals) in
+    fprintf out "  mod_ctrs_use: trackers(bymc_use, bymc_proc, bymc_loc, %s);\n" ps;
     fprintf out "INIT\n";
     write_default_init new_type_tab main_sym_tab
         (bymc_proc :: shared) hidden_idx_fun out;
@@ -434,6 +457,8 @@ let transform solver caches out_name intabs_prog prog =
     let no_paths = List.map2 make_proc_trans (range 0 (List.length procs)) procs
     in
     let _ = List.fold_left (+) 0 no_paths in
+    write_trackers all_locals;
+
     (* the receive-compute-update block *)
     (*write_trans_loop vars hidden_idx_fun out;*)
     close_out out
