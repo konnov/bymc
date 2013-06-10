@@ -13,6 +13,7 @@ open Refinement
 open Simplif
 open Smt
 open Spin
+open SpinCmd
 open SpinIr
 open SpinIrImp
 open VarRole
