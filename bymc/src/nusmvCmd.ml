@@ -10,6 +10,7 @@ open Str
 
 open Accums
 open Debug
+open RevTrans
 open Spin
 open SpinIr
 open SpinIrImp
