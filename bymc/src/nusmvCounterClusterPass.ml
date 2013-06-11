@@ -13,6 +13,7 @@ open Accums
 open Debug
 open Nusmv
 open NusmvPass
+open RevTrans
 open SkelStruc
 open Spin
 open SpinIr
@@ -213,19 +214,19 @@ let get_in_out sym_tab vars =
     (ins, outs)
 
 
-let intro_in_out_vars sym_tab type_tab prog proc vars =
+let intro_in_out_vars sym_tab type_tab rev_tab prog proc vars =
     let proc_sym_tab = new symb_tab proc#get_name in
     proc_sym_tab#set_parent sym_tab;
     let proc_type_tab = type_tab#copy in
-    let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab vars in
+    let _ = transform_vars type_tab proc_type_tab proc_sym_tab rev_tab vars in
     proc_sym_tab, proc_type_tab
 
 
-let declare_locals_and_counters caches sym_tab type_tab
+let declare_locals_and_counters caches sym_tab type_tab rev_tab
         prog shared all_locals hidden_idx_fun out proc =
     let locals = find_proc_non_scratch caches proc in
     let proc_sym_tab, proc_type_tab =
-        intro_in_out_vars sym_tab type_tab prog proc locals in
+        intro_in_out_vars sym_tab type_tab rev_tab prog proc locals in
     let decl_var v = 
         let tp = proc_type_tab#get_type v in
         fprintf out "  %s: %s;\n" v#mangled_name (Nusmv.var_type_smv tp)
@@ -272,10 +273,11 @@ let transform solver caches out_name intabs_prog prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let main_sym_tab = new symb_tab "main" in
-    let instr = transform_vars prog type_tab new_type_tab main_sym_tab
+    let rev_tab = new retrans_tab in
+    let instr = transform_vars type_tab new_type_tab main_sym_tab rev_tab
         (Program.get_instrumental prog) in
-    let shared = instr @ (transform_vars prog type_tab new_type_tab
-        main_sym_tab (Program.get_shared prog)) in
+    let shared = instr @ (transform_vars type_tab new_type_tab
+        main_sym_tab rev_tab (Program.get_shared prog)) in
     let scope = SharedOnly in
     let hidden, hidden_idx_fun =
         create_read_hidden main_sym_tab
@@ -287,7 +289,7 @@ let transform solver caches out_name intabs_prog prog =
     let orig_shared = Program.get_shared intabs_prog in
     let shared_and_aux = bymc_loc :: bymc_use :: bymc_proc :: shared in
     let vars = shared_and_aux @ (Program.get_all_locals prog) in
-    let _ = List.fold_left (intro_old_copies new_type_tab main_sym_tab)
+    let _ = List.fold_left (intro_old_copies new_type_tab main_sym_tab rev_tab)
         shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
@@ -309,7 +311,8 @@ let transform solver caches out_name intabs_prog prog =
         let all_locals =
             List.fold_left (fun a p -> p#get_locals @ a) [] procs in
         let all_stmts = List.fold_left add_init_section [] procs in
-        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab all_locals
+        let _ =
+            transform_vars type_tab proc_type_tab proc_sym_tab rev_tab all_locals
         in
         let tracked_vars = bymc_use :: shared in
         fprintf out "-- Processes: %s\n"
@@ -323,7 +326,7 @@ let transform solver caches out_name intabs_prog prog =
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
-            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+            intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         write_constraints solver caches proc_sym_tab proc_type_tab
@@ -334,7 +337,7 @@ let transform solver caches out_name intabs_prog prog =
         let locals = find_proc_non_scratch caches proc in
         let local_shared = locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
-            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+            intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         let local_ids = collect_local_ids in_locals out_locals in
@@ -386,7 +389,7 @@ let transform solver caches out_name intabs_prog prog =
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
-            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+            intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         (* and the module to track the used variables *)
@@ -412,7 +415,7 @@ let transform solver caches out_name intabs_prog prog =
         let locals = find_proc_non_scratch caches proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
-            intro_in_out_vars main_sym_tab new_type_tab prog proc local_shared
+            intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
         in
         let in_locals, out_locals = get_in_out proc_sym_tab locals in
         in_locals @ out_locals @ lst
@@ -421,7 +424,7 @@ let transform solver caches out_name intabs_prog prog =
         List.fold_left2 collect_locals [] (range 0 (List.length procs)) procs
     in
     List.iter
-        (declare_locals_and_counters caches main_sym_tab new_type_tab
+        (declare_locals_and_counters caches main_sym_tab new_type_tab rev_tab
             prog (bymc_loc :: bymc_proc :: orig_shared) all_locals
             hidden_idx_fun out)
         (Program.get_procs prog);

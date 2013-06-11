@@ -77,13 +77,13 @@ let do_interval_abstractiondo_interval_abstraction444,16316
 
 src/abstract.ml,340
 Abstract1,0
-let write_to_filewrite_to_file26,281
-let do_abstractiondo_abstraction47,1095
-let make_vass_xducersmake_vass_xducers105,3465
-let check_invariantcheck_invariant139,4865
-let check_all_invariantscheck_all_invariants170,6335
-let filter_good_fairnessfilter_good_fairness180,6704
-let do_refinementdo_refinement194,7263
+let write_to_filewrite_to_file27,294
+let do_abstractiondo_abstraction48,1108
+let make_vass_xducersmake_vass_xducers106,3478
+let check_invariantcheck_invariant140,4878
+let check_all_invariantscheck_all_invariants171,6348
+let filter_good_fairnessfilter_good_fairness181,6717
+let do_refinementdo_refinement195,7276
 
 src/accums.ml,1580
 Accums1,0
@@ -335,52 +335,58 @@ let embed_fairnessembed_fairness143,4697
 let is_invariant_atomicis_invariant_atomic154,5199
 let find_invariantsfind_invariants158,5282
 
-src/nusmvCounterClusterPass.ml,616
+src/nusmvCmd.ml,61
+NusmvCmd1,0
+let parse_nusmv_traceparse_nusmv_trace18,213
+
+src/nusmvCounterClusterPass.ml,658
 NusmvCounterClusterPass1,0
 let collect_local_idscollect_local_ids23,364
 let collect_rhscollect_rhs30,563
 let mk_mod_sigmk_mod_sig58,1519
 let write_counter_modswrite_counter_mods64,1731
 let write_counter_usewrite_counter_use115,4141
-let write_constraintswrite_constraints156,5959
-let keep_localkeep_local190,7372
-let find_proc_non_scratchfind_proc_non_scratch201,7642
-let get_in_outget_in_out206,7812
-let intro_in_out_varsintro_in_out_vars212,7964
-let declare_locals_and_countersdeclare_locals_and_counters220,8261
-let assign_defaultassign_default261,10094
-let transformtransform270,10404
+let write_constraintswrite_constraints149,5642
+let keep_localkeep_local183,7055
+let local_one_steplocal_one_step194,7325
+let find_proc_non_scratchfind_proc_non_scratch205,7582
+let get_in_outget_in_out210,7752
+let intro_in_out_varsintro_in_out_vars216,7904
+let declare_locals_and_countersdeclare_locals_and_counters224,8217
+let assign_defaultassign_default262,9878
+let transformtransform271,10188
 
-src/nusmv.ml,245
+src/nusmv.ml,272
 Nusmv1,0
 exception Smv_errorSmv_error9,78
 let var_type_smvvar_type_smv11,109
 let type_default_smvtype_default_smv29,766
 let token_stoken_s42,1224
 let expr_sexpr_s174,4629
-let keepkeep208,5876
-let nostutteringnostuttering213,6025
+let form_sform_s208,5878
+let keepkeep213,5973
+let nostutteringnostuttering218,6122
 
 src/nusmvPass.ml,792
 NusmvPass1,0
-exception Bdd_errorBdd_error22,263
-module StringMapStringMap24,294
-module IntMapIntMap26,331
-let intmap_valsintmap_vals32,410
-type scope_vars_tscope_vars_t36,483
-type scope_vars_t = LocalSharedLocalShared36,483
-type scope_vars_t = LocalShared | SharedOnlySharedOnly36,483
-let intro_old_copiesintro_old_copies42,680
-let transform_varstransform_vars52,1105
-let create_aux_varscreate_aux_vars80,2131
-let write_smv_headerwrite_smv_header101,2976
-let proc_to_symbproc_to_symb112,3387
-let write_trans_loopwrite_trans_loop129,3978
-let create_read_hiddencreate_read_hidden143,4477
-let write_default_initwrite_default_init184,5902
-let write_hidden_specwrite_hidden_spec196,6354
-let write_ltl_specwrite_ltl_spec203,6527
-let transformtransform265,8720
+exception Bdd_errorBdd_error23,277
+module StringMapStringMap25,308
+module IntMapIntMap27,345
+let intmap_valsintmap_vals33,424
+type scope_vars_tscope_vars_t37,497
+type scope_vars_t = LocalSharedLocalShared37,497
+type scope_vars_t = LocalShared | SharedOnlySharedOnly37,497
+let intro_old_copiesintro_old_copies43,694
+let transform_varstransform_vars53,1099
+let create_aux_varscreate_aux_vars82,2244
+let write_smv_headerwrite_smv_header103,3089
+let proc_to_symbproc_to_symb114,3500
+let write_trans_loopwrite_trans_loop131,4091
+let create_read_hiddencreate_read_hidden145,4590
+let write_default_initwrite_default_init186,6015
+let write_hidden_specwrite_hidden_spec198,6467
+let write_ltl_specwrite_ltl_spec205,6640
+let transformtransform267,8729
 
 src/options.ml,1073
 Options1,0
@@ -523,30 +529,29 @@ let program_of_unitsprogram_of_units126,3545
 let units_of_programunits_of_program156,4767
 let run_smt_solverrun_smt_solver177,5648
 
-src/refinement.ml,981
+src/refinement.ml,924
 Refinement1,0
 exception Refinement_errorRefinement_error13,142
 let pred_reachpred_reach15,180
 let pred_recurpred_recur16,201
-let parse_spin_trailparse_spin_trail18,223
-let map_to_inmap_to_in93,3612
-let map_to_outmap_to_out94,3690
-let map_to_stepmap_to_step95,3770
-let stick_varstick_var101,3880
-let connect_stepsconnect_steps103,3923
-let skip_stepskip_step112,4235
-let create_pathcreate_path120,4472
-let smt_append_bindsmt_append_bind144,5376
-let simulate_in_smtsimulate_in_smt166,6324
-let parse_smt_evidenceparse_smt_evidence227,8950
-let pretty_print_exprspretty_print_exprs332,13605
-let find_max_predfind_max_pred370,14848
-let intro_new_predintro_new_pred393,15549
-let retrieve_unsat_coresretrieve_unsat_cores406,16023
-let refine_spurious_steprefine_spurious_step418,16571
-let print_vass_traceprint_vass_trace436,17258
-let is_loop_state_fair_by_stepis_loop_state_fair_by_step448,17652
-let check_loop_unfaircheck_loop_unfair491,19168
+let map_to_inmap_to_in20,290
+let map_to_outmap_to_out21,368
+let map_to_stepmap_to_step22,448
+let stick_varstick_var28,558
+let connect_stepsconnect_steps30,601
+let skip_stepskip_step39,913
+let create_pathcreate_path47,1150
+let smt_append_bindsmt_append_bind71,2054
+let simulate_in_smtsimulate_in_smt93,3002
+let parse_smt_evidenceparse_smt_evidence154,5628
+let pretty_print_exprspretty_print_exprs259,10283
+let find_max_predfind_max_pred297,11526
+let intro_new_predintro_new_pred320,12227
+let retrieve_unsat_coresretrieve_unsat_cores333,12701
+let refine_spurious_steprefine_spurious_step345,13249
+let print_vass_traceprint_vass_trace363,13936
+let is_loop_state_fair_by_stepis_loop_state_fair_by_step375,14330
+let check_loop_unfaircheck_loop_unfair418,15846
 
 src/regions.ml,296
 Regions1,0
@@ -557,6 +562,14 @@ class region_tblregion_tbl93,2961
         val mutable m_regionsm_regions96,3016
         method addadd99,3109
         method getget107,3466
+
+src/revTrans.ml,199
+RevTrans1,0
+exception NoReverseErrorNoReverseError10,184
+class retrans_tabretrans_tab12,217
+        val mutable m_tabm_tab14,254
+        method bindbind16,330
+        method getget19,423
 
 src/sat.ml,1661
 Sat1,0
@@ -606,21 +619,21 @@ let collect_varscollect_vars387,12063
 
 src/simplif.ml,743
 Simplif1,0
-module VarMapVarMap18,364
-module StringSetStringSet23,448
-exception Simplif_errorSimplif_error25,485
-let compute_constscompute_consts27,520
-let mk_expr_bindingsmk_expr_bindings74,2418
-let prop_constprop_const102,3384
-let prop_const_in_stmtprop_const_in_stmt111,3571
-let binding_to_eqsbinding_to_eqs120,3768
-let expand_array_accessexpand_array_access128,4049
-let expand_array_access_strucexpand_array_access_struc192,6251
-let replace_arr_elem_with_varreplace_arr_elem_with_var289,9845
-let replace_arr_elem_with_var_in_stmtreplace_arr_elem_with_var_in_stmt308,10290
-let flatten_array_declflatten_array_decl327,10787
-let eliminate_arrayseliminate_arrays358,11742
-let simplify_progsimplify_prog383,12615
+module VarMapVarMap20,439
+module StringSetStringSet25,523
+exception Simplif_errorSimplif_error27,560
+let compute_constscompute_consts29,595
+let mk_expr_bindingsmk_expr_bindings76,2493
+let prop_constprop_const104,3459
+let prop_const_in_stmtprop_const_in_stmt113,3646
+let binding_to_eqsbinding_to_eqs122,3843
+let expand_array_accessexpand_array_access130,4124
+let expand_array_access_strucexpand_array_access_struc194,6326
+let replace_arr_elem_with_varreplace_arr_elem_with_var291,9920
+let replace_arr_elem_with_var_in_stmtreplace_arr_elem_with_var_in_stmt310,10365
+let flatten_array_declflatten_array_decl329,10862
+let eliminate_arrayseliminate_arrays360,11817
+let simplify_progsimplify_prog385,12690
 
 src/skelStruc.ml,113
 SkelStruc1,0
@@ -678,6 +691,10 @@ src/smtXducerPass.ml,119
 let write_exprswrite_exprs17,208
 let to_xducerto_xducer35,920
 let do_xducersdo_xducers52,1683
+
+src/spinCmd.ml,58
+SpinCmd1,0
+let parse_spin_trailparse_spin_trail18,212
 
 src/spinIrEval.ml,191
 SpinIrEval1,0

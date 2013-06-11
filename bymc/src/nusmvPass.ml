@@ -11,6 +11,7 @@ open Accums
 open Cfg
 open CfgSmt
 open Debug
+open RevTrans
 open Simplif
 open Spin
 open SpinIr
@@ -39,17 +40,17 @@ type scope_vars_t = LocalShared | SharedOnly
 (* ======= The new symbolic implementation. ===========================
            It is much more efficient than that one above.                 *)
 
-let intro_old_copies new_type_tab new_sym_tab collected var =
+let intro_old_copies new_type_tab new_sym_tab rev_tab collected var =
     let nv = new var (SymbExec.mk_input_name var) (fresh_id ()) in
     (* this will not work as we need a flat name, i.e., one without
-       process name:
-    let nv = var#fresh_copy (SymbExec.mk_input_name var) in*)
+       process name: *)
     let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
     new_sym_tab#add_symb nv#mangled_name (nv :> symb);
+    rev_tab#bind nv (Var var);
     nv :: collected
 
 
-let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
+let transform_vars old_type_tab new_type_tab new_sym_tab rev_tab vars =
 (* XXX: similar to Simplif.flatten_array_decl *)
     let flatten_array_var collected var =
         let tp = old_type_tab#get_type var in
@@ -60,6 +61,7 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
             nt#set_nelems 1;
             new_type_tab#set_type nv nt;
             new_sym_tab#add_symb nv#mangled_name (nv :> symb);
+            rev_tab#bind nv (BinEx (ARR_ACCESS, Var var, Const i));
             nv :: lst
         in
         if tp#is_array
@@ -67,13 +69,13 @@ let transform_vars prog old_type_tab new_type_tab new_sym_tab vars =
         else begin
             new_type_tab#set_type var (old_type_tab#get_type var);
             new_sym_tab#add_symb var#mangled_name (var :> symb);
+            rev_tab#bind var (Var var);
             var :: collected
         end
     in
     let unfolded = List.fold_left flatten_array_var [] vars in
-    let _ =
-        List.fold_left (intro_old_copies new_type_tab new_sym_tab) [] unfolded
-    in
+    let _ = List.fold_left
+            (intro_old_copies new_type_tab new_sym_tab rev_tab) [] unfolded in
     List.rev unfolded
 
 
@@ -266,7 +268,8 @@ let transform solver caches scope out_name prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let new_sym_tab = new symb_tab "main" in
-    let shared = transform_vars prog type_tab new_type_tab new_sym_tab
+    let rev_tab = new retrans_tab in
+    let shared = transform_vars type_tab new_type_tab new_sym_tab rev_tab
         ((Program.get_shared prog) @ (Program.get_instrumental prog)) in
     let hidden, hidden_idx_fun =
         create_read_hidden new_sym_tab
@@ -278,14 +281,14 @@ let transform solver caches scope out_name prog =
     let vars = bymc_loc :: bymc_use :: bymc_proc :: shared in
     let vars = if (scope = LocalShared)
         then vars @ (Program.get_all_locals prog) else vars in
-    let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab)
+    let _ = List.fold_left (intro_old_copies new_type_tab new_sym_tab rev_tab)
         shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab new_sym_tab vars hidden_idx_fun out; 
 
     let add_locals proc =
-        let _ = transform_vars prog type_tab new_type_tab new_sym_tab
-            proc#get_locals in
+        let _ = transform_vars type_tab new_type_tab new_sym_tab
+            rev_tab proc#get_locals in
         ()
     in
     List.iter add_locals (Program.get_procs prog);
@@ -311,7 +314,7 @@ let transform solver caches scope out_name prog =
         let all_locals =
             List.fold_left (fun a p -> p#get_locals @ a) [] procs in
         let all_stmts = List.fold_left add_init_section [] procs in
-        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab all_locals
+        let _ = transform_vars type_tab proc_type_tab proc_sym_tab rev_tab all_locals
         in
         fprintf out "-- Processes: %s\n"
             (str_join ", " (List.map (fun p -> p#get_name) procs));
@@ -323,13 +326,6 @@ let transform solver caches scope out_name prog =
         log INFO (sprintf "  add mono trans for %s" proc#get_name);
         let proc_type_tab = new_type_tab in
         let proc_sym_tab = new_sym_tab in
-        (*
-        let proc_sym_tab = new symb_tab proc#get_name in
-        proc_sym_tab#set_parent new_sym_tab;
-        let proc_type_tab = new_type_tab#copy in
-        let _ = transform_vars prog type_tab proc_type_tab proc_sym_tab
-            proc#get_locals in
-        *)
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
         let reg_tbl = caches#struc#get_regions proc#get_name in
