@@ -6,6 +6,7 @@ open AbsInterval
 open AbsCounter
 open Infra
 open Ltl
+open NusmvCmd
 open PiaDataCtx
 open PiaCtrCtx
 open Program

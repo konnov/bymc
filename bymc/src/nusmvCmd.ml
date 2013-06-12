@@ -10,13 +10,19 @@ open Str
 
 open Accums
 open Debug
+open PiaDom
+open PiaDataCtx
+open PiaCtrCtx
+open Program
 open RevTrans
 open Spin
 open SpinIr
 open SpinIrImp
 open Smt
 
-let parse_nusmv_trace filename dom data_ctx ctr_ctx_tbl prog =
+let parse_nusmv_trace (filename: string) (dom: pia_domain) (data_ctx: pia_data_ctx)
+        (ctr_ctx_tbl: ctr_abs_ctx_tbl) (rev_tab: retrans_tab)
+        (prog: Program.program) =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
     let assignment = Hashtbl.create 10 in (* current state mapping *)
@@ -36,7 +42,7 @@ let parse_nusmv_trace filename dom data_ctx ctr_ctx_tbl prog =
                 then
                     let name = Str.matched_group 1 line in
                     let value = int_of_string (Str.matched_group 2 line) in
-                    if may_log DEBUG then printf "%s = %d\n";
+                    if may_log DEBUG then printf "%s = %d\n" name value;
                     Hashtbl.replace assignment name value
                 else if Str.string_match state_re line 0
                 then rev_rows := (Hashtbl.copy assignment) :: !rev_rows
@@ -51,40 +57,38 @@ let parse_nusmv_trace filename dom data_ctx ctr_ctx_tbl prog =
     let num_rows = List.length rows in
     loop_pos := !loop_pos - 1;
 
-    (* TODO: finish it! *)
-
-    let int_to_expr c_ctx name value =
+    let sym_tab = Program.get_sym_tab prog in
+    let conc_expr c_ctx name value =
         let id = !last_id in
         last_id := !last_id + 1;
-        if pos < c_ctx#get_ctr_dim
-        then
-            let arr_ctr_elem = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const pos) in
-            let e = dom#expr_is_concretization arr_ctr_elem value in
-            (* constraint no, concrete expression,
-               abstract expression d_l <= v < d_u *)
-            (id, e, BinEx (EQ, arr_ctr_elem, Const value))
-        else let shared_no = pos - c_ctx#get_ctr_dim in
-            let shared = (Program.get_shared prog) in
-            let v = Var (List.nth shared shared_no) in
+        let v = (sym_tab#lookup name)#as_var in
+        match rev_tab#get v with
+        | Var w ->
             let e =
-                if data_ctx#must_keep_concrete v
-                then dom#expr_is_concretization v value (* d_l <= v < d_u *)
-                else BinEx (EQ, v, Const value) (* keep abstract, v = d *)
+                if data_ctx#must_keep_concrete (Var w)
+                then dom#expr_is_concretization (Var w) value (* d_l <= v < d_u *)
+                else BinEx (EQ, Var w, Const value) (* keep abstract, v = d *)
             in
             (* constraint no, concrete expression, abstract expression *)
-            (id, e, BinEx (EQ, v, Const value))
+            (id, e, BinEx (EQ, Var v, Const value))
+
+        | _ as lhs ->
+            let e = dom#expr_is_concretization lhs value in
+            (* constraint no, concrete expression,
+               abstract expression d_l <= v < d_u *)
+            (id, e, BinEx (EQ, lhs, Const value))
     in
-    let row_to_exprs (state_no: int) (row: (string * int) Hashtbl.t list)
+    let row_to_exprs (state_no: int) (row: (string, int) Hashtbl.t)
             : string * token stmt list =
         let proc_num = Hashtbl.find row "bymc_proc" in
-        let proc = List.get (Program.get_procs prog) proc_num in
-        let c_ctx = ctr_ctx_tbl#get_ctx proc in
-        let map_one name value =
-            let id, conc_ex, abs_ex = int_to_expr c_ctx name value in
+        let proc = List.nth (Program.get_procs prog) proc_num in
+        let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
+        let map_one name value lst =
+            let id, conc_ex, abs_ex = conc_expr c_ctx name value in
             Hashtbl.add rev_map id (state_no, abs_ex);
-            Expr (id, conc_ex) in
+            (Expr (id, conc_ex)) :: lst in
         (* a list of concrete constraints on each column of the row *)
-        (proc, List.map2 map_one (range 0 (List.length row)) row)
+        (proc#get_name, Hashtbl.fold map_one row [])
     in
     let prefix_asserts = List.map2 row_to_exprs (range 0 num_rows) rows in
     let loop_asserts = list_sub prefix_asserts !loop_pos (num_rows - !loop_pos) in
