@@ -116,8 +116,6 @@ let write_counter_mods solver caches sym_tab type_tab hidden_idx_fun
 let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
         out proc_num proc (in_locals: var list) (out_locals: var list) =
     let ctr_ctx = caches#analysis#get_pia_ctr_ctx_tbl#get_ctx proc#get_name in
-    let vname v = v#mangled_name in
-    let ps = str_join ", " (List.map vname (in_locals @ out_locals)) in
     let create_module idx =
         let valtab = ctr_ctx#unpack_from_const idx in
         let mk_prev con op =
@@ -142,7 +140,6 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
                 proc_num prev_ne next_eq var_idx
         end
     in
-    let hid = List.map hidden_idx_fun hidden in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
     List.iter create_module all_indices
 
@@ -267,6 +264,28 @@ let assign_default type_tab vars =
     str_join " & " (List.map eq_var vars)
 
 
+let mk_rev_trans_tab caches intabs_prog prog =
+    let type_tab = Program.get_type_tab prog in
+    let new_type_tab = type_tab#copy in
+    let main_sym_tab = new symb_tab "main" in
+    let rev_tab = new retrans_tab in
+    let _ = transform_vars type_tab new_type_tab main_sym_tab rev_tab
+        (Program.get_instrumental prog) in
+    let _ = transform_vars type_tab new_type_tab
+        main_sym_tab rev_tab (Program.get_shared prog) in
+    let orig_shared = Program.get_shared intabs_prog in
+    let on_proc proc_num proc =
+        let locals = find_proc_non_scratch caches proc in
+        let local_shared = locals @ orig_shared in
+        let _, _ =
+            intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
+        in ()
+    in
+    let procs = Program.get_procs prog in
+    List.iter2 on_proc (range 0 (List.length procs)) procs;
+    rev_tab
+
+
 (* create a cluster encoding in nusmv *)
 (* XXX: TODO: XXX: this requires serious refactoring! *)
 let transform solver caches out_name intabs_prog prog =
@@ -288,12 +307,12 @@ let transform solver caches out_name intabs_prog prog =
         create_aux_vars new_type_tab main_sym_tab (List.length procs) hidden in
     let orig_shared = Program.get_shared intabs_prog in
     let shared_and_aux = bymc_loc :: bymc_use :: bymc_proc :: shared in
-    let vars = shared_and_aux @ (Program.get_all_locals prog) in
     let _ = List.fold_left (intro_old_copies new_type_tab main_sym_tab rev_tab)
         shared [bymc_use; bymc_loc; bymc_proc] in
     let out = open_out (out_name ^ ".smv") in
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
 
+    (* TODO: create a new program and keep symbols and type tables there *)
     let make_init procs =
         let add_init_section accum proc =
             log INFO (sprintf "  add init %s" proc#get_name);
