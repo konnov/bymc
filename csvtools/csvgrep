@@ -2,7 +2,9 @@
 #
 # A filter on CSV that is similar to SELECT * FROM CSV WHERE... in SQL.
 #
-# Igor Konnov
+# For instance, csvgrep "param~=.*F=3.*" -a "foo=bar" <my.csv
+#
+# Igor Konnov, 2013
 
 import argparse
 import csv

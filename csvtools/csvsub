@@ -1,8 +1,10 @@
 #!/usr/bin/python
 #
-# Replace the value of a column, probably using a regular expression.
+# Replace the value of a column, optionally, using a regular expression.
 #
-# Igor Konnov
+# For instance, csvsub param 'N=([0-9]+);.*' '\1'
+#
+# Igor Konnov, 2013
 
 import argparse
 import csv

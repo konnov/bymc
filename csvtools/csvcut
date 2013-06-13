@@ -2,7 +2,7 @@
 #
 # A filter on CSV that is similar to SELECT name1, .., name_k FROM CSV in SQL.
 #
-# Igor Konnov
+# Igor Konnov, 2013
 
 import argparse
 import csv
