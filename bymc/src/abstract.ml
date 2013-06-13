@@ -6,6 +6,7 @@ open AbsInterval
 open AbsCounter
 open Infra
 open Ltl
+open NusmvCmd
 open PiaDataCtx
 open PiaCtrCtx
 open Program
@@ -13,6 +14,7 @@ open Refinement
 open Simplif
 open Smt
 open Spin
+open SpinCmd
 open SpinIr
 open SpinIrImp
 open VarRole
@@ -204,7 +206,10 @@ let do_refinement caches solver trail_filename prog =
     let inv_forms = find_invariants aprops in
     log INFO "> Reading trail...";
     let trail_asserts, loop_asserts, rev_map =
-        parse_spin_trail trail_filename dom ctx ctr_ctx_tbl xducers_prog in
+        if caches#options.Options.mc_tool = Options.ToolSpin
+        then parse_spin_trail trail_filename dom ctx ctr_ctx_tbl xducers_prog
+        else raise Not_found
+    in
     let total_steps = (List.length trail_asserts) - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     (* FIXME: deal somehow with this stupid message *)
