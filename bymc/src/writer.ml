@@ -74,15 +74,15 @@ let hflag_promela f =
 let rec write_atomic_expr ff = function
     | PropAll e ->
         Format.fprintf ff "ALL(";
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ")"
     | PropSome e ->
         Format.fprintf ff "SOME(";
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ")"
     | PropGlob e ->
         Format.fprintf ff "(";
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ")"
     | PropAnd (l, r) ->
         Format.pp_print_string ff "(";
@@ -107,7 +107,7 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
 
     | MExpr (_, e) ->
         openb ff lvl indent_first;
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ";";
         closeb ff
 
@@ -126,7 +126,8 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
             with Not_found ->
                 raise (Failure ("No type for the variable " ^ v#get_name))
         in
-        Format.fprintf ff "%s@ %s" (var_type_promela var_tp) v#get_name;
+        Format.fprintf ff "%s@ " (var_type_promela var_tp);
+        fprint_expr_mangled ff (Var v);
         if var_tp#is_array then Format.fprintf ff "[%d]" var_tp#nelems;
         let bit_width = find_bit_width var_tp in
         if bit_width <> 0
@@ -134,7 +135,7 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
 
         if not_nop e then begin
             Format.fprintf ff "@ =@ ";
-            fprint_expr ff e
+            fprint_expr_mangled ff e
         end;
         Format.pp_print_string ff ";"; 
         if var_tp#has_range then begin
@@ -211,14 +212,14 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
     | MAssert (_, e) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "assert(";
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ");";
         closeb ff
 
     | MAssume (_, e) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "assume(";
-        fprint_expr ff e;
+        fprint_expr_mangled ff e;
         Format.pp_print_string ff ");";
         closeb ff
 
@@ -235,7 +236,7 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
     | MPrint (_, s, es) ->
         openb ff lvl indent_first;
         Format.fprintf ff "printf(\"%s\"" s;
-        List.iter (fun e -> Format.fprintf ff ",@ "; fprint_expr ff e) es;
+        List.iter (fun e -> Format.fprintf ff ",@ "; fprint_expr_mangled ff e) es;
         Format.pp_print_string ff ");";
         closeb ff
 
@@ -286,7 +287,7 @@ let write_unit type_tab cout lvl u =
     | Ltl (name, exp) ->
         openb ff lvl true;
         Format.fprintf ff "ltl@ %s@ {@ " name;
-        fprint_expr ff exp;
+        fprint_expr_mangled ff exp;
         Format.pp_print_string ff "}";
         closeb ff
     | _ -> ();

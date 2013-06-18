@@ -229,12 +229,19 @@ class symb_tab i_tab_name =
 
         method find_or_error name = Hashtbl.find tab name
 
-        method get_symbs = Accums.hashtbl_as_list tab
+        method get_symb_pairs = Accums.hashtbl_as_list tab
 
-        method get_symbs_rec: ((string * symb) list) =
+        method get_symbs = Accums.hashtbl_vals tab
+
+        method get_symb_pairs_rec: ((string * symb) list) =
             match parent with
-            | Some p -> (Accums.hashtbl_as_list tab) @ p#get_symbs_rec
+            | Some p -> (Accums.hashtbl_as_list tab) @ p#get_symb_pairs_rec
             | None -> Accums.hashtbl_as_list tab
+
+        method get_symbs_rec: symb list =
+            match parent with
+            | Some p -> (Accums.hashtbl_vals tab) @ p#get_symbs_rec
+            | None -> Accums.hashtbl_vals tab
 
         method set_parent p = parent <- Some p
         method get_parent = parent
@@ -552,6 +559,13 @@ class ['t] proc name_i active_expr_i =
         (* a provided clause if any *)
         val mutable m_provided_expr: 't expr = Nop ""
 
+        method copy new_name =
+            let new_p = new proc new_name m_active_expr in
+            new_p#set_args m_args;
+            new_p#set_stmts m_stmts;
+            new_p#set_provided m_provided_expr;
+            (new_p :> symb_tab)#add_all_symb self#get_symbs;
+            new_p
 
         method set_args a = m_args <- a
         method get_args = m_args
@@ -559,7 +573,9 @@ class ['t] proc name_i active_expr_i =
         method set_stmts stmts =
             m_stmts <- stmts;
             let to_symb v = (v :> symb) in
-            parent#set_syms (List.map to_symb self#get_locals)
+            let not_var s = (s#get_sym_type <> SymVar) in
+            let other_syms = List.filter not_var self#get_symbs in
+            parent#set_syms ((List.map to_symb self#get_locals) @ other_syms)
 
         method get_stmts = m_stmts
 
@@ -572,7 +588,7 @@ class ['t] proc name_i active_expr_i =
         method labels_as_hash =
             let symbs = List.filter
                 (fun (_, s) -> SymLab = s#get_sym_type)
-                self#get_symbs in
+                self#get_symb_pairs in
             let tbl = Hashtbl.create (List.length symbs) in
             let add_label (_, s) = Hashtbl.add tbl s#get_name s#as_label in
             List.iter add_label symbs;
@@ -591,7 +607,7 @@ let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
     let new_p = new proc p#get_name p#get_active_expr in
     new_p#set_args p#get_args;
     new_p#set_stmts new_body;
-    (new_p :> symb_tab)#add_all_symb (List.map (fun (_, s) -> s) p#get_symbs);
+    (new_p :> symb_tab)#add_all_symb p#get_symbs;
     new_p
 
 

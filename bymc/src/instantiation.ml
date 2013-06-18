@@ -10,30 +10,27 @@ open Accums
 open Spin
 open SpinIr
 open SpinIrImp
+open SpinIrEval
 
-(* TODO: replace by Simplif.compute_consts *)
-let try_eval = function
-    | BinEx(PLUS, Const li, Const ri) ->
-            Const (li + ri)
-    | BinEx(MINUS, Const li, Const ri) ->
-            Const (li - ri)
-    | BinEx(MULT, Const li, Const ri) ->
-            Const (li * ri)
-    | BinEx(DIV, Const li, Const ri) ->
-            Const (li / ri)
-    | _ as e -> e
+let try_eval e =
+    try begin
+        match eval_expr (fun v -> raise (Eval_error "")) e with
+        | Int i -> Const i
+        | _ -> e
+    end with Eval_error _ ->
+        e
+
+let find_var pa name =
+    try StringMap.find name pa
+    with Not_found -> raise (Failure ("Parameter not found: " ^ name))
 
 let rec conc_expr pa exp =
-    let find_var name =
-        try StringMap.find name pa
-        with Not_found -> raise (Failure ("Parameter not found: " ^ name))
-    in
     match exp with
     | Var v ->
             if not v#is_symbolic
             then Var v
             else 
-                let value = find_var v#get_name in
+                let value = find_var pa v#get_name in
                 Const value
     | UnEx (t, l) -> UnEx (t, conc_expr pa l)
     | BinEx (t, l, r) ->
@@ -59,12 +56,11 @@ let conc_prop pa pmap prop =
     let rec mk_inst e idx =
         match e with
         | Var v ->
-                let name = if v#proc_name = ""
-                then v#get_name
-                else sprintf "%s[%d]:%s" v#proc_name idx v#get_name in
-                Var (v#copy name)
+                let nv = v#copy v#get_name in
+                if v#proc_name <> "" then nv#set_proc_index idx;
+                Var nv
         | LabelRef (proc_name, lab) ->
-                LabelRef (sprintf "%s[%d]" proc_name idx, lab)
+                LabelRef (sprintf "%s%d" proc_name idx, lab)
         | UnEx (tok, l) -> UnEx (tok, mk_inst l idx)
         | BinEx (tok, l, r) -> BinEx (tok, mk_inst l idx, mk_inst r idx)
         | _ -> e
@@ -124,17 +120,16 @@ let conc_prop pa pmap prop =
     in
     tr_ae prop
 
+
 let rec concretize_stmt pa pmap stmt =
-    let find_var name =
-        try StringMap.find name pa
-        with Not_found -> raise (Failure ("Parameter not found: " ^ name))
-    in
     match stmt with
-    | MDecl (id, v, e) as d ->
+    | MDecl (id, v, _) as d ->
             if v#is_symbolic
             then let n = v#get_name in
-                MUnsafe (id, (sprintf "/* %s = %d */" n (find_var n)))
-            else d
+                MUnsafe (id, (sprintf "/* %s = %d */" n (find_var pa n)))
+            else if v#proc_name <> "" (* local *)
+            then MUnsafe (id, (sprintf "/* globalized %s */" v#get_name))
+            else d (* global *)
     | MExpr (id, e) ->
             MExpr (id, conc_expr pa e)
     | MDeclProp (id, v, e) ->
@@ -156,7 +151,19 @@ and
         | MOptElse seq -> MOptElse (conc_seq cfun seq)
 and
     conc_seq cfun seq = (List.map cfun seq)
-;;
+
+
+let extract_locals proc_id (ren_map, decls) = function
+    | MDecl (id, v, e) ->
+        if not v#is_symbolic
+        then let nv = v#copy v#get_name in
+            nv#set_proc_index proc_id;
+            let new_map = IntMap.add v#id nv ren_map in
+            (new_map, (Stmt (MDecl (id, nv, e))) :: decls)
+        else (ren_map, decls)
+
+    | _ -> (ren_map, decls)
+
 
 let concretize_proc pa pmap p =
     let new_seq = (List.map (concretize_stmt pa pmap) p#get_stmts) in
@@ -167,10 +174,10 @@ let concretize_proc pa pmap p =
     in
     new_p#set_active_expr (Const count);
     new_p
-;;
 
-let concretize_unit param_vals pmap lmap = function
-    | EmptyUnit -> EmptyUnit
+
+let concretize_unit param_vals pmap lmap accum = function
+    | EmptyUnit -> accum
     | Ltl (name, form) ->
             let fairness = StringMap.find "fairness" lmap in
             let embedded = BinEx (IMPLIES, fairness, form) in
@@ -180,12 +187,47 @@ let concretize_unit param_vals pmap lmap = function
                 fprintf out "%s\n" (expr_s embedded);
                 close_out out
             end;
-            EmptyUnit
+            accum
     | Stmt s ->
-            Stmt (concretize_stmt param_vals pmap s)
+            (Stmt (concretize_stmt param_vals pmap s)) :: accum
     | Proc p ->
-            Proc (concretize_proc param_vals pmap p)
-;;
+        let count =
+            try (StringMap.find p#get_name pmap)
+            with Not_found ->
+                raise (Failure ("No process count for " ^ p#get_name)) in
+        let copy_proc lst idx =
+            (*
+              Copy the process and assign the process index to local variables.
+              As remoterefs in spin work like a hack when having multiple
+              proctypes, we instantiate processes directly to avoid remoterefs
+              and local variables.
+            *)
+            let (ren_map, with_locals) =
+                List.fold_left (extract_locals idx) (IntMap.empty, lst) p#get_stmts
+            in
+            let rename v =
+                if IntMap.mem v#id ren_map
+                then Var (IntMap.find v#id ren_map)
+                else Var v
+            in
+            let rename_stmt = function
+                | MExpr (id, e) ->
+                        MExpr (id, map_vars rename e)
+                | MPrint (id, s, es) ->
+                        MPrint(id, s, List.map (map_vars rename) es)
+                | _ as s -> s
+            in
+            let renamed_stmts =
+                List.map (replace_basic_stmts rename_stmt) p#get_stmts in
+            let new_seq =
+                (List.map (concretize_stmt param_vals pmap) renamed_stmts) in
+            let new_p = p#copy (sprintf "%s%d" p#get_name idx) in
+            new_p#set_stmts new_seq;
+            new_p#set_active_expr (Const 1);
+            (Proc new_p) :: with_locals
+        in
+        List.fold_left copy_proc accum (range 0 count)
+
 
 let do_substitution (param_vals: int StringMap.t)
         (units: 't prog_unit list) : ('t prog_unit list) =
@@ -204,5 +246,5 @@ let do_substitution (param_vals: int StringMap.t)
         | _ -> fmap
     in
     let lmap = List.fold_left collect_ltl StringMap.empty units in
-    List.map (concretize_unit param_vals pmap lmap) units
-;;
+    List.rev (List.fold_left (concretize_unit param_vals pmap lmap) [] units)
+

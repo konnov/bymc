@@ -197,58 +197,58 @@ let rec expr_tree_s e =
 
 
 (* as expr_s but instead of assemblying a string, it prints using Format.fprintf *)
-let rec fprint_expr ff e =
+let rec fprint_expr var_fun ff e =
     match e with
     | Nop comment ->
         Format.fprintf ff "skip@ /*@ %s@ */" comment
     | Const i ->
         Format.fprintf ff "%d" i
     | Var v ->
-        Format.fprintf ff "%s" v#get_name
+        Format.fprintf ff "%s" (var_fun v)
     | UnEx (CARD, f) ->
         Format.fprintf ff "card(";
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff ")"
     | UnEx (tok, f) ->
         Format.fprintf ff "(%s" (token_s tok);
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff ")"
     | BinEx (ARR_ACCESS, arr, idx) ->
         Format.fprintf ff "%s[" (expr_s arr);
-        fprint_expr ff idx;
+        fprint_expr var_fun ff idx;
         Format.fprintf ff "]"
     | BinEx (ASGN, Var arr,
                 BinEx (ARR_UPDATE, BinEx (ARR_ACCESS, Var old_arr, idx), rhs)) ->
         Format.fprintf ff "%s<-%s[" arr#get_name old_arr#get_name;
-        fprint_expr ff idx;
+        fprint_expr var_fun ff idx;
         Format.fprintf ff " =@ ";
-        fprint_expr ff rhs;
+        fprint_expr var_fun ff rhs;
         Format.fprintf ff "]"
     | BinEx (AND, f, g) ->
         Format.fprintf ff "(";
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff "@ &&@ ";
-        fprint_expr ff g;
+        fprint_expr var_fun ff g;
         Format.fprintf ff ")"
     | BinEx (OR, f, g) ->
         Format.fprintf ff "(";
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff "@ ||@ ";
-        fprint_expr ff g;
+        fprint_expr var_fun ff g;
         Format.fprintf ff ")"
     | BinEx (ASGN, f, g) ->
         Format.fprintf ff "";
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff "@ =@ ";
-        fprint_expr ff g;
+        fprint_expr var_fun ff g;
         Format.fprintf ff ""
     | BinEx (AT, proc, lab) ->
         Format.fprintf ff "%s%%@%s" (expr_s proc) (expr_s lab)
     | BinEx (tok, f, g) ->
         Format.fprintf ff "(";
-        fprint_expr ff f;
+        fprint_expr var_fun ff f;
         Format.fprintf ff "@ %s@ " (token_s tok);
-        fprint_expr ff g;
+        fprint_expr var_fun ff g;
         Format.fprintf ff ")"
     | Phi (lhs, rhs) ->
         let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
@@ -260,6 +260,11 @@ let rec fprint_expr ff e =
         Format.fprintf ff "%s" proc_name;
         Format.pp_print_string ff "@";
         Format.fprintf ff "%s" lab_name
+
+
+let fprint_expr_mangled ff e = fprint_expr (fun v -> v#mangled_name) ff e        
+
+let fprint_expr_name ff e = fprint_expr (fun v -> v#get_name) ff e        
 
 
 let op_of_expr e =
