@@ -676,3 +676,43 @@ let replace_basic_stmts
     in
     trav m_stmt
 
+
+let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)
+        : 'a mir_stmt =
+    let rec map_atomic = function
+    | PropAll e -> PropAll (map_expr e)
+    | PropSome e -> PropSome (map_expr e)
+    | PropGlob e -> PropGlob (map_expr e)
+    | PropAnd (l, r) -> PropAnd (map_atomic l, map_atomic r)
+    | PropOr (l, r) -> PropOr (map_atomic l, map_atomic r)
+    in
+    let rec trav = function
+    | MIf (id, opts) ->
+        MIf (id, (List.map trav_opt opts))
+    | MAtomic (id, body) ->
+        MAtomic (id, List.map trav body)
+    | MD_step (id, body) ->
+        MD_step (id, List.map trav body)
+
+    | MExpr (id, e) ->
+        MExpr (id, map_expr e)
+    | MDecl (id, v, e) ->
+        MDecl (id, v, map_expr e)
+    | MAssert (id, e) ->
+        MAssert (id, map_expr e)
+    | MAssume (id, e) ->
+        MAssume (id, map_expr e)
+    | MPrint (id, str, es) ->
+        MPrint (id, str, List.map map_expr es)
+    | MDeclProp (id, v, ae) ->
+        MDeclProp (id, v, map_atomic ae)
+    | _ as s -> s
+
+    and trav_opt = function
+    | MOptGuarded body ->
+        MOptGuarded (List.map trav body)
+    | MOptElse body ->
+        MOptElse (List.map trav body)
+    in
+    trav stmt
+

@@ -165,17 +165,6 @@ let extract_locals proc_id (ren_map, decls) = function
     | _ -> (ren_map, decls)
 
 
-let concretize_proc pa pmap p =
-    let new_seq = (List.map (concretize_stmt pa pmap) p#get_stmts) in
-    let new_p = proc_replace_body p new_seq in
-    let count =
-        try (StringMap.find p#get_name pmap)
-        with Not_found -> raise (Failure ("No process count for " ^ p#get_name))
-    in
-    new_p#set_active_expr (Const count);
-    new_p
-
-
 let concretize_unit param_vals pmap lmap accum = function
     | EmptyUnit -> accum
     | Ltl (name, form) ->
@@ -198,7 +187,7 @@ let concretize_unit param_vals pmap lmap accum = function
         let copy_proc lst idx =
             (*
               Copy the process and assign the process index to local variables.
-              As remoterefs in spin work like a hack when having multiple
+              As spin's remoterefs work odd when having multiple
               proctypes, we instantiate processes directly to avoid remoterefs
               and local variables.
             *)
@@ -210,15 +199,8 @@ let concretize_unit param_vals pmap lmap accum = function
                 then Var (IntMap.find v#id ren_map)
                 else Var v
             in
-            let rename_stmt = function
-                | MExpr (id, e) ->
-                        MExpr (id, map_vars rename e)
-                | MPrint (id, s, es) ->
-                        MPrint(id, s, List.map (map_vars rename) es)
-                | _ as s -> s
-            in
             let renamed_stmts =
-                List.map (replace_basic_stmts rename_stmt) p#get_stmts in
+                List.map (map_expr_in_stmt (map_vars rename)) p#get_stmts in
             let new_seq =
                 (List.map (concretize_stmt param_vals pmap) renamed_stmts) in
             let new_p = p#copy (sprintf "%s%d" p#get_name idx) in
