@@ -7,13 +7,19 @@ trap "exit 255" SIGINT SIGTERM
 if [ "$#" -lt 3 ]; then
     echo "Not enough arguments"
     echo ""
-    echo "Use: run-concrete param1=value1,param2=value2 promela_system property"
+    echo "Use: run-concrete [--dry-run] param1=value1,param2=value2 promela_system property"
     echo ""
     echo "  Set GEN_SCRIPT=1 to generate a compilation and execution script"
     exit 1
 fi
 
 trap "killall pan; exit 99" SIGHUP SIGINT SIGTERM
+
+if [ "$1" == "--dry-run" ]; then
+    dry=1; shift
+else
+    dry=0
+fi
 
 PROG=$2
 PROG_FULL=`dirname $2`; PROG_FULL=`cd $PROG_FULL; pwd`/`basename $PROG`
@@ -63,6 +69,12 @@ $BYMC_HOME/bymc.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
 
 cd $CUR_DIR
 
+if [ $dry -eq 1 ]; then
+  EPAN_FLAGS="$PAN_FLAGS -Q1"
+else
+  EPAN_FLAGS="$PAN_FLAGS"
+fi
+
 cat >>"$SCRIPT" <<EOF
 echo "Changed directory to $INSTANCE"
 cd "$INSTANCE"
@@ -78,12 +90,12 @@ fi
 START_TIME=\$(date +%s)
 
 echo "+ gcc $rand $PANCC_FLAGS -o ./pan pan.c"
-echo "+ ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT"
+echo "+ ./pan $EPAN_FLAGS -a 2>&1 | tee $SPIN_OUT"
 gcc $rand $PANCC_FLAGS -o ./pan pan.c || (echo "gcc failed"; exit 3)
 if [ "$PROP" != "safety" ]; then
-  ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT
+  ./pan $EPAN_FLAGS -a 2>&1 | tee $SPIN_OUT
 else
-  ./pan $PAN_FLAGS 2>&1 | tee $SPIN_OUT
+  ./pan $EPAN_FLAGS 2>&1 | tee $SPIN_OUT
 fi
 
 if egrep -q "errors: +0" $SPIN_OUT; then
