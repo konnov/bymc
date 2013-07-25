@@ -9,11 +9,11 @@ Prerequisites:
  * gcc
 
 # building (you need ocaml and ocamlbuild)
-cd theta/tools/bymc
+cd bymc # (the directory with HOWTO)
 ./make.sh
 
 # checking models for concrete parameters
-../tools/bymc/run-concrete 'N=3,T=1,F=1' cond-consensus.pml termination
+./run-concrete 'N=3,T=1,F=1' cond-consensus.pml termination
 
 # the automatic CEGAR loop
 
