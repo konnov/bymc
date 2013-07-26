@@ -15,7 +15,8 @@ BYMC_HOME=`dirname $0`
 
 SPIN=${SPIN:-spin}
 LTL2BA="$BYMC_HOME/../deps/ltl2ba-1.1/ltl2ba"
-PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
+#PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
+PANCC_FLAGS=${PANCC_FLAGS:-"-DCOLLAPSE -DNOREDUCE"}
 PAN_FLAGS=${PAN_FLAGS:-"-m100000"}
 SPIN_OUT="spin.out"
 cmd=""
@@ -49,13 +50,20 @@ fi
 
 CUR_DIR=`pwd`
 cd $BYMC_HOME
-if [ "x$DEBUG" == "x" ]; then
-    ./make.sh || (cd $CUR_DIR; exit 1)
-    TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
+if [ -d "src" ]; then
+    # source distribution, compile the latest version
+    if [ "x$DEBUG" == "x" ]; then
+        ./make.sh || (cd $CUR_DIR; exit 1)
+        TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
+    else
+        BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
+        TOOL="ocamldebug $BYMC_HOME/bymc.byte "
+    fi
 else
-    BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
-    TOOL="ocamldebug $BYMC_HOME/bymc.byte "
+    # binary distribution
+    TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
 fi
+
 cd $CUR_DIR
 
 START_TIME=$(date +%s)
