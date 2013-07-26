@@ -120,8 +120,12 @@ let prop_const_in_stmt stmt binding =
 
 
 let binding_to_eqs binding =
-    let eq (var, value) = BinEx (EQ, Var var, Const value) in
-    List.map eq (VarMap.bindings binding)
+    let eq var value = BinEx (EQ, Var var, Const value) in
+    (* backport to ocaml 3.10.2: *)
+    VarMap.fold (fun k v a -> (eq k v) :: a) binding []
+    (* the new code:
+    List.map eq (VarMap.bindings binding) *)
+
 
 
 (* replace array accesses like  a[x+y] == i by a conjunction:

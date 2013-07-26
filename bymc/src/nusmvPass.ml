@@ -31,7 +31,10 @@ end)
 
 
 let intmap_vals m =
-    List.map (fun (k, v) -> v) (IntMap.bindings m)
+    (* backport to 3.10.2 *)
+    IntMap.fold (fun _ v a -> v :: a) m []
+    (* the new code, which is no better:
+    List.map (fun (k, v) -> v) (IntMap.bindings m) *)
 
 
 type scope_vars_t = LocalShared | SharedOnly

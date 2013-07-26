@@ -29,7 +29,11 @@ let update_sym_tab prog =
     let proc_to_symb p = (p :> symb) in (* can we reuse var_to_symb? *)
     let string_to_symb s = new symb(s) in
     let map_to_symb m =
-        List.map (fun (k, _) -> string_to_symb k) (StringMap.bindings m) in
+        (* backport to 3.10.2 *)
+        StringMap.fold (fun k _ a -> (string_to_symb k) :: a) m []
+        (* the new code:
+        List.map (fun (k, _) -> string_to_symb k) (StringMap.bindings m) *)
+    in
     let syms =
         (List.map var_to_symb prog.f_params)
         @ (List.map var_to_symb prog.f_shared)
