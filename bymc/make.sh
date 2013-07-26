@@ -1,8 +1,8 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Igor Konnov, 2012-2013
 
-function check_version () {
+function check_version {
   # primitive version check to do conditional compilation
   if [ "$1" -lt "3" -o "$2" -lt "11" ]; then
       # slitaz does have ocaml 3.10.2
