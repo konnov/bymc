@@ -10,11 +10,20 @@
     let strip_last_n s n = String.sub s 0 ((String.length s) - n) ;;
     let pp_word s = String.sub s 1 ((String.length s) - 1) ;;
     let strip_leading s = Str.global_replace (Str.regexp "^[ \t]+") "" s;;
+
+    let new_line lexbuf =
+        (* backport of Lexing.new_line to ocaml 3.10.2 *)
+        (* this function is copied from the implementation found in 3.12.1 *)
+        let lcp = lexbuf.Lexing.lex_curr_p in
+        lexbuf.Lexing.lex_curr_p <- { lcp with
+          Lexing.pos_lnum = lcp.Lexing.pos_lnum + 1;
+          Lexing.pos_bol = lcp.Lexing.pos_cnum;
+        }
 }
 
 rule token = parse
    [' ' '\t']+           { token lexbuf } (* skip spaces *)
- | '\n'                  { Lexing.new_line lexbuf; token lexbuf }
+ | '\n'                  { new_line lexbuf; token lexbuf }
  | "/*"                  { comment lexbuf }
  | "!="                  { NE }
  | "!!"                  { O_SND }
@@ -171,7 +180,7 @@ and parse_name = parse
 
 and comment = parse
  | "*/"                 { token lexbuf }
- | '\n'                 { Lexing.new_line lexbuf; comment lexbuf }
+ | '\n'                 { new_line lexbuf; comment lexbuf }
  | _                    { comment lexbuf }
  | eof                  { raise End_of_file }
 
@@ -191,13 +200,13 @@ and parse_define = parse
  [' ' '\t']+      { parse_define lexbuf } (* skip spaces *)
  | [^ '\n']* '\\' '\n'
     {
-        Lexing.new_line lexbuf;
+        new_line lexbuf;
         let line = (Lexing.lexeme lexbuf) in
         (strip_last_n line 2) ^ (parse_define lexbuf)
     }
  | [^ '\n' '\\']* '\n'
     {
-        Lexing.new_line lexbuf;
+        new_line lexbuf;
         (strip_last_n (Lexing.lexeme lexbuf) 1)
     }
  | eof            { raise End_of_file }
