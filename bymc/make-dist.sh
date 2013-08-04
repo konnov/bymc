@@ -1,3 +1,3 @@
 #!/bin/sh
 
-git archive --output ../../bymc-`date '+%Y%m%d'`.tgz master
+git archive --output ../../bymc-`date '+%Y%m%d'`.tar master

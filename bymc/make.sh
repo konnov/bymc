@@ -17,5 +17,5 @@ target=${1:-"./bymc.native"} # use ./bymc.byte for debugging
 ocamlver=`ocaml -version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+'`
 check_version `echo ${ocamlver} | sed 's/\./ /g'`
 
-ocamlbuild $CFLAGS -Is src -lib str -lib unix $target \
+ocamlbuild -use-ocamlfind $CFLAGS $target \
     | ./script/ocaml-friendly

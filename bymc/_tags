@@ -1,0 +1,8 @@
+# ocamlbuild tags
+
+<src> or <test>: include
+
+<src/*.native> or <src/*.byte>: use_unix, use_str
+
+<test/*.ml>: package(oUnit)
+<test/*.byte>: package(oUnit)
