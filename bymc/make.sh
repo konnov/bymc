@@ -17,5 +17,19 @@ target=${1:-"./bymc.native"} # use ./bymc.byte for debugging
 ocamlver=`ocaml -version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+'`
 check_version `echo ${ocamlver} | sed 's/\./ /g'`
 
-ocamlbuild -use-ocamlfind $CFLAGS $target \
-    | ./script/ocaml-friendly
+case $1 in
+  test)
+    ocamlbuild -use-ocamlfind $CFLAGS ./unitTests.byte | ./script/ocaml-friendly;
+    ./unitTests.byte
+    ;;
+
+  dist)
+    ver=`date '+%Y%m%d'`
+    git archive --prefix=bymc-src-${ver}/ master \
+        | bzip2 > bymc-src-${ver}.tar.bz2
+    ;;
+
+  *)
+    ocamlbuild -use-ocamlfind $CFLAGS $target | ./script/ocaml-friendly
+    ;;
+esac
