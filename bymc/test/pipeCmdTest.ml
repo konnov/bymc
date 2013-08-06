@@ -9,15 +9,17 @@ let test_create _ =
 
 
 let test_create_non_existent _ =
+    let s = PipeCmd.create "this-file-does-not-exist" [| |] "cmd.log" in
     let crt _ =
-        let s = PipeCmd.create "this-file-does-not-exist" [| |] "cmd.log" in
         (* we can detect the premature termination only by enquiring channels *)
         PipeCmd.writeline s "a";
         let _ = PipeCmd.readline s in
         ()
     in
     assert_raises
-        (Comm_error "Process terminated prematurely, see: cmd.log") crt
+        (Comm_error "Process terminated prematurely, see: cmd.log") crt;
+    (* close it properly, otherwise it will terminate the execution abruptly *)
+    let _ = PipeCmd.destroy s in ()
 
 
 let test_destroy _ =
@@ -61,7 +63,7 @@ let test_writeline_readline_100000 _ =
     for i = 0 to 100000 do
         PipeCmd.writeline s "abc";
     done;
-    for i = 0 to 10000 do
+    for i = 0 to 100000 do
         let str = PipeCmd.readline s in
         assert_equal "abc" str
     done
@@ -70,10 +72,8 @@ let test_writeline_readline_100000 _ =
 let suite = "pipeCmd-suite" >:::
     ["test_create" >:: test_create;
      "test_create_non_existent" >:: test_create_non_existent;
-     (*
      "test_destroy" >:: test_destroy;
      "test_destroy_twice" >:: test_destroy_twice;
-     *)
      "test_writeline" >:: test_writeline;
      "test_writeline_readline" >:: test_writeline_readline;
      "test_writeline_readline_10000" >:: test_writeline_readline_10000;

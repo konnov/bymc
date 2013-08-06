@@ -67,9 +67,10 @@ let write_handler (wts, fdout) =
                     let _ = Unix.write fdout ln 0 (String.length ln) in ()
                 with Unix.Unix_error (e, op, msg) ->
                 begin
-                    fprintf stderr "[writer thread] %s: on '%s'"
-                        (Unix.error_message e) ln;
-                    Pervasives.exit 3
+                    let uem = Unix.error_message e in
+                    fprintf stderr
+                        "[writer thread] %s: on '%s'. Terminated." uem ln;
+                    Thread.exit ()
                 end
             in
             List.iter writeln lines
@@ -135,13 +136,12 @@ let create prog args err_filename =
         state = ref Running; dirty = ref false;
         mutex = Mutex.create (); pending_writes = ref []
     } in
-    let writer_thread = Thread.create write_handler (writer_state, out_pipe_o)
-    in
+    let writer_thread =
+        Thread.create write_handler (writer_state, out_pipe_o) in
     let cin = Unix.in_channel_of_descr in_pipe_i in
     set_binary_mode_in cin false;
     {
-        pid = pid; (*fdin = in_pipe_i;*) cin = cin; fdout = out_pipe_o;
-        err_filename = err_filename;
+        pid = pid; cin = cin; fdout = out_pipe_o; err_filename = err_filename;
         writer_st = writer_state; writer_thr = writer_thread
     }
 
