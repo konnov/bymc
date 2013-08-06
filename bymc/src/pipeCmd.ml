@@ -12,6 +12,7 @@ type writer_thread_state = {
     state: state_t ref;
     mutex: Mutex.t;
     pending_writes: string list ref;
+    dirty: bool ref;
 }
 
 type cmd_stat = {
@@ -26,52 +27,66 @@ type cmd_stat = {
 
 (* the writes are handled by a separate thread, all writes are non-blocking *)
 let write_handler (wts, fdout) =
-    let tries = ref 0 in
+    let sleep_tm = 0.001 in
+    (* measure how many thread yields we can do in 1 msec *)
+    let utime _ = (Unix.times ()).Unix.tms_utime in
+    let start_tm = utime () in
+    let max_yields = ref 1 in
+    while (((utime ()) -. start_tm) < sleep_tm) && (!max_yields < max_int / 2)
+    do
+        for i = 1 to !max_yields do
+            Thread.yield ()
+        done;
+        max_yields := !max_yields * 2
+    done;
+    printf "[writer thread]: about %d yields in 1 msec\n" !max_yields;
+    (* process the input lines *)
+    let yields = ref 0 in
     while !(wts.state) <> Stopping do
         (* fprintf stderr ".\n"; flush stderr; *)
-        Mutex.lock wts.mutex;
-        let line =
-            match !(wts.pending_writes) with
-            | hd :: tl ->
-                begin
-                    wts.pending_writes := tl;
-                    hd
-                end
-            | [] ->
-                ""
-        in
-        Mutex.unlock wts.mutex;
-        if line <> ""
+        if !(wts.dirty) (* don't bother CPU with redundant mutex locks *)
         then begin
-            tries := 0; (* maximum processing speed again *)
+            Mutex.lock wts.mutex;
+            let lines =
+                match !(wts.pending_writes) with
+                | _ :: _ as l ->
+                    begin
+                        wts.pending_writes := [];
+                        List.rev l (* the insertion was in the inverse order *)
+                    end
+                | [] -> []
+            in
+            Mutex.unlock wts.mutex;
+            wts.dirty := false;
+            yields := 0; (* maximum processing speed again *)
             (* now write the line to the output, might be blocked *)
             (*fprintf stderr "write: %s\n" line; flush stderr;*)
-            let linen = line ^ "\n" in
-            let written =
-                Unix.write fdout linen 0 (String.length linen) in
-            if written < 0
-            then begin
-                fprintf stderr "write_handler: write error!\n";
-                exit 3
-            end
-        end else begin
-            (* no actual data to write, idle a little bit an then sleep *)
-            tries := !tries + 1;
-            if !tries > 100
-            then Thread.delay 0.1  (* sleep for 100 msec *)
-            else if !tries > 10
-            then Thread.delay 0.01 (* sleep for 10 msec *)
-            (* else busy waiting *)
-        end
+            let writeln l = 
+                let ln = l ^ "\n" in
+                try
+                    let _ = Unix.write fdout ln 0 (String.length ln) in ()
+                with Unix.Unix_error (e, op, msg) ->
+                begin
+                    fprintf stderr "[writer thread] %s: on '%s'"
+                        (Unix.error_message e) ln;
+                    Pervasives.exit 3
+                end
+            in
+            List.iter writeln lines
+        end;
+        (* idle a little bit an then sleep *)
+        yields := !yields + 1;
+        if !yields > !max_yields
+        then Thread.delay sleep_tm  (* sleep for 1 msec *)
+        else Thread.yield () (* else busy waiting several times *)
     done;
     wts.state := Stopped
 
 
 let writeline st s =
     Mutex.lock st.writer_st.mutex;
-    st.writer_st.pending_writes :=
-        (* TODO: use two lists: one for writing, one for reading? *)
-        List.rev (s :: (List.rev !(st.writer_st.pending_writes)));
+    st.writer_st.dirty := true;
+    st.writer_st.pending_writes := s :: !(st.writer_st.pending_writes);
     Mutex.unlock st.writer_st.mutex
 
 
@@ -117,7 +132,7 @@ let create prog args err_filename =
         Unix.close fderr
     end;
     let writer_state = {
-        state = ref Running;
+        state = ref Running; dirty = ref false;
         mutex = Mutex.create (); pending_writes = ref []
     } in
     let writer_thread = Thread.create write_handler (writer_state, out_pipe_o)
@@ -132,10 +147,10 @@ let create prog args err_filename =
 
 
 let destroy st =
+    st.writer_st.state := Stopping;
+    Thread.join st.writer_thr;
     close_in st.cin;
     Unix.close st.fdout;
     let _ = Unix.waitpid [] st.pid in
-    st.writer_st.state := Stopping;
-    Thread.join st.writer_thr;
     true
 

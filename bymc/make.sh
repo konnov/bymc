@@ -29,6 +29,10 @@ case $1 in
         | bzip2 > bymc-src-${ver}.tar.bz2
     ;;
 
+  clean)
+    ocamlbuild -clean
+    ;;
+
   *)
     ocamlbuild -use-ocamlfind $CFLAGS $target | ./script/ocaml-friendly
     ;;

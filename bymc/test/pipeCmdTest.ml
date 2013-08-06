@@ -1,4 +1,5 @@
 open OUnit
+open Printf
 
 open PipeCmd
 
@@ -43,12 +44,39 @@ let test_writeline_readline _ =
     assert_equal "bcde" str
 
 
+let test_writeline_readline_10000 _ =
+    let s = PipeCmd.create "cat" [| |] "cmd.log" in
+    let mk_s n = String.make (1 + n) 'z' in
+    for i = 0 to 10000 do
+        PipeCmd.writeline s (mk_s i);
+    done;
+    for i = 0 to 10000 do
+        let str = PipeCmd.readline s in
+        assert_equal (mk_s i) str
+    done
+
+
+let test_writeline_readline_100000 _ =
+    let s = PipeCmd.create "cat" [| |] "cmd.log" in
+    for i = 0 to 100000 do
+        PipeCmd.writeline s "abc";
+    done;
+    for i = 0 to 10000 do
+        let str = PipeCmd.readline s in
+        assert_equal "abc" str
+    done
+
+
 let suite = "pipeCmd-suite" >:::
     ["test_create" >:: test_create;
      "test_create_non_existent" >:: test_create_non_existent;
+     (*
      "test_destroy" >:: test_destroy;
      "test_destroy_twice" >:: test_destroy_twice;
+     *)
      "test_writeline" >:: test_writeline;
      "test_writeline_readline" >:: test_writeline_readline;
+     "test_writeline_readline_10000" >:: test_writeline_readline_10000;
+     "test_writeline_readline_100000" >:: test_writeline_readline_100000;
     ]
 

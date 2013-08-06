@@ -1,13 +1,14 @@
 (* utility functions to integrate with Yices *)
 
-open Printf;;
-open Str;;
+open Printf
+open Str
 
-open SpinTypes;;
-open Spin;;
-open SpinIr;;
-open SpinIrImp;;
-open Debug;;
+open Debug
+open PipeCmd
+open SpinTypes
+open Spin
+open SpinIr
+open SpinIrImp
 
 exception Smt_error of string;;
 exception Communication_failure of string;;
@@ -90,157 +91,33 @@ class yices_smt =
         (* for how long we wait for output from yices if another command is issued*)
         val timeout_sec = 10.0
         val mutable pid = 0
-        val mutable cin = stdin
-        val mutable cout = stdout
-        val mutable cerr = stdin
         val mutable clog = stdout
-        val mutable cerrlog = stdout
+        val m_pipe_cmd: PipeCmd.cmd_stat =
+            PipeCmd.create "yices" [||] "yices.err"
         val mutable debug = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
 
         method start =
-            let pin, pout, perr =
-                Unix.open_process_full "yices" (Unix.environment ()) in
-            cin <- pin;
-            cout <- pout;
-            cerr <- perr;
             clog <- open_out "yices.log";
-            cerrlog <- open_out "yices.err";
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =
             close_out clog;
-            close_out cerrlog;
-            Unix.close_process_full (cin, cout, cerr)
+            PipeCmd.destroy m_pipe_cmd
 
-        method poll poll_i poll_o =
-            let read_err = ref true in
-            let rs = ref [] in
-            let ws = ref [] in
-            let log_input_to_errlog fd = 
-                let buf_len = 50 in
-                let buf = String.create buf_len in
-                let stop = ref false in
-                while not !stop do
-                    let read = Unix.read fd buf 0 buf_len in
-                    if read > 0 then begin
-                        fprintf cerrlog "%s" (String.sub buf 0 read);
-                        flush cerrlog;
-                    end;
-                    stop := (read < buf_len);
-                done
-            in
-            let fdin = Unix.descr_of_in_channel cin
-                and fdout = Unix.descr_of_out_channel cout
-                and fderr = Unix.descr_of_in_channel cerr in
-            let selin = if poll_i then [fdin; fderr] else [fderr]
-                and selout = if poll_o then [fdout] else [] in
-
-            (* read the error input first as it can block other chans *)
-            while !read_err do
-                let ins, outs, errs = Unix.select selin selout [] poll_tm_sec
-                in
-                match ins with
-                | [_; _] -> (* one of these is err *)
-                    log_input_to_errlog fderr
-                | [fd] ->
-                    if fd = fderr
-                    then log_input_to_errlog fderr
-                    else begin
-                        read_err := false;
-                        rs := ins;
-                        ws := outs
-                    end
-                | [] ->
-                    read_err := false;
-                    rs := ins;
-                    ws := outs
-                | _ -> raise (Failure "More than three input descriptors?")
-            done;
-            (!rs, !ws)
-
-        method consume_errors =
-            let _, _ = self#poll false false in
-            ()
-
-        method poll_read = 
-            let rs, _ = self#poll true false in
-            if rs = []
-            then raise (Communication_failure "Yices output is blocked")
-            else List.hd rs
-
-        method poll_write = 
-            let _, ws = self#poll false true in
-            if ws = []
-            then raise (Communication_failure "Yices input is blocked")
-            else List.hd ws
-
-        (* as we communicate with yices via pipes, the program can be blocked
-           if there is pending input/output on another channel.
-           Thus, use select before an input/output.
-
-           Did I started using OCaml to do low-level programming???
-         *)
         method write_line s =
-            let fd = self#poll_write in
-            let len = String.length s in
-            let pos = ref 0 in
-            while !pos < len do
-                let written = Unix.write fd s !pos (len - !pos) in
-                if written = 0
-                then raise (Communication_failure "Written 0 chars to the yices input");
-                pos := !pos + written
-            done
+            writeline m_pipe_cmd s
 
         method read_line =
-            fprintf clog ";; polling...\n"; flush clog;
-            let start_tm = Unix.time () in (* raise the watchdog time *)
-            let fd = self#poll_read in
-            (* too inefficient??? *)
-            let collected = ref [] in
-            let collected_str () = String.concat "" (List.rev !collected) in
-            let small_len = 100 in
-            let small_buf = String.create small_len in
-            let stop = ref false in
-            while not !stop do
-                let pos = ref 0 in
-                let read = ref 1 in
-                while not !stop && !read <> 0 && !pos < small_len do
-                    begin
-                        try read := Unix.read fd small_buf !pos 1;
-                        with Invalid_argument s ->
-                            self#consume_errors;
-                            fprintf stderr "Read so far: %s\n" (collected_str ());
-                            raise (Communication_failure "Yices output closed?")
-                    end;
-                    if !read > 0
-                    then begin
-                        let c = String.get small_buf !pos in
-                        pos := !pos + 1;
-                        if c == '\n'
-                        then begin
-                            stop := true;
-                            pos := !pos - 1 (* strip '\n' *)
-                        end
-                    end
-                done;
-                if !pos > 0
-                then collected := (String.sub small_buf 0 !pos) :: !collected;
-                if not !stop
-                then
-                    let _ = self#poll_read in
-                    if ((Unix.time ()) -. start_tm) > poll_tm_sec
-                    then raise (Communication_failure "Yices is not responding")
-            done;
-            let out = collected_str () in
+            let out = PipeCmd.readline m_pipe_cmd in
             fprintf clog ";; READ: %s\n" out; flush clog;
-            log TRACE (sprintf "YICES: ^^^%s$$$\n" out);
+            log Debug.TRACE (sprintf "YICES: ^^^%s$$$\n" out);
             out
 
         method append cmd =
             if debug then printf "%s\n" cmd;
-            self#write_line (sprintf "%s\n" cmd);
+            self#write_line (sprintf "%s" cmd);
             fprintf clog "%s\n" cmd; flush clog
 
         method append_assert s =
@@ -289,16 +166,12 @@ class yices_smt =
         method check =
             self#sync;
             self#append "(status)"; (* it can be unsat already *)
-            flush cout;
             if not (self#is_out_sat true)
             then false
             else begin
                 self#sync;
                 self#append "(check)";
-                (*poll_tm_sec <- check_timeout_sec;*)
-                flush cout;
                 let res = self#is_out_sat false in
-                (*poll_tm_sec <- timeout_sec;*)
                 res
             end
 
@@ -310,7 +183,7 @@ class yices_smt =
         method get_evidence =
             (* same as sync but the lines are collected *)
             let lines = ref [] in
-            self#append "(echo \"EOEV\\n\")"; flush cout;
+            self#append "(echo \"EOEV\\n\")";
             let stop = ref false in
             while not !stop do
                 let line = self#read_line in
@@ -354,8 +227,6 @@ class yices_smt =
                 then false
                 else raise (Smt_error (sprintf "yices: %s" l))
 
-        method get_cin = cin
-        method get_cout = cout
         method set_debug flag = debug <- flag
     end
 ;;
