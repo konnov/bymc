@@ -11,7 +11,7 @@ function check_version {
   fi
 }
 
-CFLAGS="-cflag -g -lflag -g"
+CFLAGS="-cflag -g -lflag -g -lflag -thread" # the last options fixes a bug
 
 target=${1:-"./bymc.native"} # use ./bymc.byte for debugging
 ocamlver=`ocaml -version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+'`

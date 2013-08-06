@@ -3,7 +3,7 @@
 # check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
 
 <src> or <test>: include
-<src/*.native> or <src/*.byte> or <test/*.byte>: use_str, thread, package(threads)
+<**/*.native> or <**/*.byte>: use_str, package(threads), thread
 
 <src/pipeCmd.ml>: thread
 <test/*.ml>: package(oUnit)
