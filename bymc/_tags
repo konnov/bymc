@@ -1,8 +1,11 @@
 # ocamlbuild tags
+#
+# check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
 
 <src> or <test>: include
 
-<src/*.native> or <src/*.byte>: use_unix, use_str
+<src/*.native> or <src/*.byte> or <test/*.byte>: use_unix, use_str, thread
 
+<src/pipeCmd.ml>: thread
 <test/*.ml>: package(oUnit)
 <test/*.byte>: package(oUnit)

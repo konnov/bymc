@@ -12,7 +12,7 @@ type cmd_stat
 
 (* create a new process using Unix.create_process, connect it with a pipe
   and associate a communicating thread with it *)
-val create: string -> string array -> cmd_stat
+val create: string -> string array -> string -> cmd_stat
 
 (* terminate the child process and the associated thread *)
 val destroy: cmd_stat -> bool
