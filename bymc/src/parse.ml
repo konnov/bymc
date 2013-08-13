@@ -1,18 +1,18 @@
-open Lexing;;
-open Printf;;
+open Lexing
+open Printf
 
-open Spinlex;;
-open Spin;;
-open SpinTypes;;
-open SpinIr;;
-open SpinIrImp;;
-open Debug;;
+open Spinlex
+open Spin
+open SpinTypes
+open SpinIr
+open SpinIrImp
+open Debug
 
-open Cfg;;
+open Cfg
 
-let debug = false;;
+let debug = false
 
-let prev_tok = ref EOF;; (* we have to remember the previous token *)
+let prev_tok = ref EOF (* we have to remember the previous token *)
 
 (* XXX: why is aux_bufs a reference? *)
 (* lexer function decorated by a preprocessor *)
@@ -71,7 +71,7 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
     in
     prev_tok := new_tok;
     new_tok
-;;
+
 
 let postprocess all_units u =
     let rec bind_var = function
@@ -126,7 +126,7 @@ let postprocess all_units u =
             (List.map (replace_basic_stmts sub) p#get_stmts))
 
     | _ as u -> u
-;;
+
 
 let parse_promela filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
