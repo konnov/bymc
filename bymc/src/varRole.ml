@@ -58,7 +58,7 @@ class var_role_tbl (i_roles: (var, var_role) Hashtbl.t) =
         method get_role (v: var) =
             try Hashtbl.find m_tbl v#id
             with Not_found ->
-                raise (Var_not_found (sprintf "%s (id=%d)" v#get_name v#id))
+                raise (Var_not_found (sprintf "%s (id=%d)" v#qual_name v#id))
 
         method add (v: var) (r: var_role) = Hashtbl.replace m_tbl v#id r
     end
@@ -102,31 +102,31 @@ let identify_var_roles prog =
             | VarUsesUndef -> 
                 raise (Analysis_error ("No rhs for scratch " ^ v#get_name))
         in
+        let refine_role v r =
+            let is_const = match Hashtbl.find loc_roles v with
+                | IntervalInt (a, b) -> a = b   (* const *)
+                | _ -> false                    (* mutating *)
+            in
+            if is_const
+            then Scratch (get_used_var v)
+            else match Hashtbl.find int_body_sum v with
+                | IntervalInt (a, b) -> BoundedInt (a, b)
+                | UnboundedInt -> LocalUnbounded
+                | Undefined ->
+                    raise (Role_error
+                        (sprintf "Undefined type for %s" v#get_name))
+        in
         Hashtbl.iter
-            (fun v r ->
-                let is_const = match Hashtbl.find loc_roles v with
-                    | IntervalInt (a, b) -> a = b   (* const *)
-                    | _ -> false                    (* mutating *)
-                in
-                let new_role = if is_const
-                then Scratch (get_used_var v)
-                else match Hashtbl.find int_body_sum v with
-                    | IntervalInt (a, b) -> BoundedInt (a, b)
-                    | UnboundedInt -> LocalUnbounded
-                    | Undefined ->
-                        raise (Role_error
-                            (sprintf "Undefined type for %s" v#get_name))
-                in
-                Hashtbl.replace roles v new_role (* XXX: can we lose types? *)
+            (fun v r -> (* XXX: can we lose types? *)
+                Hashtbl.replace roles v (refine_role v r)
             ) int_body_sum;
     in
     List.iter fill_roles (Program.get_procs prog);
 
     let replace_global v =
         if LocalUnbounded <> (Hashtbl.find roles v)
-        then raise (Role_error
-            (sprintf "Shared variable %s is bounded" v#get_name))
-        else Hashtbl.replace roles v SharedUnbounded
+        then log WARN (sprintf "Shared variable %s is bounded" v#get_name);
+        Hashtbl.replace roles v SharedUnbounded
     in
     List.iter replace_global (Program.get_shared prog);
 
