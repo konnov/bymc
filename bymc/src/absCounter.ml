@@ -195,6 +195,26 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     tr_atomic atomic_expr
 
 
+(* a hack around trans_prop_decl *)
+let trans_quantifiers solver ctr_ctx_tbl prog stmt =
+    let omit_glob = function
+    | PropGlob e -> e
+    | _ -> raise (Abstraction_error "Expected PropGlob")
+    in
+    let rec map = function
+    | UnEx (ALL, e) ->
+        omit_glob (trans_prop_decl solver ctr_ctx_tbl prog (PropAll e))
+    | UnEx (SOME, e) ->
+        omit_glob (trans_prop_decl solver ctr_ctx_tbl prog (PropSome e))
+    | UnEx (t, e) ->
+        UnEx (t, map e)
+    | BinEx (t, l, r) ->
+        BinEx (t, map l, map r)
+    | _ as e -> e
+    in           
+    map_expr_in_stmt map stmt
+
+
 (* TODO: find out the values at the end of the init_stmts,
    not the accumulated values
    *)
@@ -591,7 +611,8 @@ let do_counter_abstraction funcs solver caches prog =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        List.map hack_nsnt (List.map (replace_assume atomics) stmts)
+        List.map (replace_basic_stmts (trans_quantifiers solver ctr_ctx_tbl prog))
+            (List.map hack_nsnt (List.map (replace_assume atomics) stmts))
     in
     let mk_assume e = MAssume (fresh_id (), e) in
     let abstract_proc atomics p =
