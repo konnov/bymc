@@ -97,10 +97,10 @@ let identify_var_roles prog =
                 then List.hd vs
                 else begin
                     print_var_uses ("Uses for " ^ v#get_name) use_body_sum;
-                    raise (Analysis_error ("No rhs for scratch " ^ v#get_name))
+                    raise (Analysis_error ("No rhs for scratch " ^ v#qual_name))
                 end
             | VarUsesUndef -> 
-                raise (Analysis_error ("No rhs for scratch " ^ v#get_name))
+                raise (Analysis_error ("No rhs for scratch " ^ v#qual_name))
         in
         let refine_role v r =
             let is_const = match Hashtbl.find loc_roles v with
@@ -114,7 +114,7 @@ let identify_var_roles prog =
                 | UnboundedInt -> LocalUnbounded
                 | Undefined ->
                     raise (Role_error
-                        (sprintf "Undefined type for %s" v#get_name))
+                        (sprintf "Undefined type for %s" v#qual_name))
         in
         Hashtbl.iter
             (fun v r -> (* XXX: can we lose types? *)
@@ -125,7 +125,7 @@ let identify_var_roles prog =
 
     let replace_global v =
         if LocalUnbounded <> (Hashtbl.find roles v)
-        then log WARN (sprintf "Shared variable %s is bounded" v#get_name);
+        then log WARN (sprintf "Shared variable %s is bounded" v#qual_name);
         Hashtbl.replace roles v SharedUnbounded
     in
     List.iter replace_global (Program.get_shared prog);
