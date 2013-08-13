@@ -316,8 +316,12 @@ class data_type_tab =
     end
 
 
-type 't expr = Nop of string (* a comment *) | Const of int | Var of var
-    | UnEx of 't * 't expr | BinEx of 't * 't expr * 't expr
+type 't expr =
+    | Nop of string (* a comment *)
+    | Const of int
+    | Var of var
+    | UnEx of 't * 't expr
+    | BinEx of 't * 't expr * 't expr
     | Phi of var * var list (* a phi function for SSA purposes *)
     | LabelRef of string * string (* a reference to a process label *)
 

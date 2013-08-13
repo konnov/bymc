@@ -869,6 +869,44 @@ aname	: NAME		{ $1 }
 	| PNAME			{ $1 }
 	;
 
+/* should we use full_expr here and then check the tree? */
+prop_expr   :
+      LPAREN prop_expr RPAREN       { $2 }
+    | prop_expr AND prop_expr       { BinEx(AND, $1, $3) }
+    | prop_expr OR prop_expr        { BinEx(OR, $1, $3) }
+    | NEG prop_expr                 { UnEx(NEG, $2) }
+    | NAME AT NAME                  { LabelRef ($1, $3) }
+	| prop_arith_expr GT prop_arith_expr		{ BinEx(GT, $1, $3) }
+	| prop_arith_expr LT prop_arith_expr		{ BinEx(LT, $1, $3) }
+	| prop_arith_expr GE prop_arith_expr		{ BinEx(GE, $1, $3) }
+	| prop_arith_expr LE prop_arith_expr		{ BinEx(LE, $1, $3) }
+	| prop_arith_expr EQ prop_arith_expr		{ BinEx(EQ, $1, $3) }
+	| prop_arith_expr NE prop_arith_expr		{ BinEx(NE, $1, $3) }
+    ;
+
+prop_arith_expr    : 
+	  LPAREN prop_arith_expr RPAREN		{ $2 }
+	| prop_arith_expr PLUS prop_arith_expr		{ BinEx(PLUS, $1, $3) }
+	| prop_arith_expr MINUS prop_arith_expr		{ BinEx(MINUS, $1, $3) }
+	| prop_arith_expr MULT prop_arith_expr		{ BinEx(MULT, $1, $3) }
+	| prop_arith_expr DIV prop_arith_expr		{ BinEx(DIV, $1, $3) }
+	| CARD LPAREN prop_expr	RPAREN	{ UnEx(CARD, $3) }
+    | NAME /* proctype */ COLON NAME
+        {
+            let v = new_var $3 in
+            v#set_proc_name $1;
+            Var (v)
+        }
+	| NAME
+        {
+            try
+                Var (global_scope#find_or_error $1)#as_var
+            with Not_found ->
+                fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
+        }
+	| CONST { Const $1 }
+    ;
+
 expr    : LPAREN expr RPAREN		{ $2 }
 	| expr PLUS expr		{ BinEx(PLUS, $1, $3) }
 	| expr MINUS expr		{ BinEx(MINUS, $1, $3) }
@@ -891,6 +929,10 @@ expr    : LPAREN expr RPAREN		{ $2 }
 	| BITNOT expr		    { UnEx(BITNOT, $2) }
 	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2) }
 	| NEG expr	            { UnEx(NEG, $2) }
+    /* our extensions */
+    | ALL LPAREN prop_expr RPAREN { UnEx (ALL, $3)  }
+    | SOME LPAREN prop_expr RPAREN { UnEx (SOME, $3)  }
+    /* not implemented yet */
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")
                  (*
@@ -992,44 +1034,6 @@ atomic_prop:
     | LPAREN prop_expr RPAREN { PropGlob ($2) }
     | LPAREN atomic_prop PAND atomic_prop RPAREN { PropAnd($2, $4) }
     | LPAREN atomic_prop POR atomic_prop RPAREN { PropOr($2, $4) }
-    ;
-
-/* should we use full_expr here and then check the tree? */
-prop_expr   :
-      LPAREN prop_expr RPAREN       { $2 }
-    | prop_expr AND prop_expr       { BinEx(AND, $1, $3) }
-    | prop_expr OR prop_expr        { BinEx(OR, $1, $3) }
-    | NEG prop_expr                 { UnEx(NEG, $2) }
-    | NAME AT NAME                  { LabelRef ($1, $3) }
-	| prop_arith_expr GT prop_arith_expr		{ BinEx(GT, $1, $3) }
-	| prop_arith_expr LT prop_arith_expr		{ BinEx(LT, $1, $3) }
-	| prop_arith_expr GE prop_arith_expr		{ BinEx(GE, $1, $3) }
-	| prop_arith_expr LE prop_arith_expr		{ BinEx(LE, $1, $3) }
-	| prop_arith_expr EQ prop_arith_expr		{ BinEx(EQ, $1, $3) }
-	| prop_arith_expr NE prop_arith_expr		{ BinEx(NE, $1, $3) }
-    ;
-
-prop_arith_expr    : 
-	  LPAREN prop_arith_expr RPAREN		{ $2 }
-	| prop_arith_expr PLUS prop_arith_expr		{ BinEx(PLUS, $1, $3) }
-	| prop_arith_expr MINUS prop_arith_expr		{ BinEx(MINUS, $1, $3) }
-	| prop_arith_expr MULT prop_arith_expr		{ BinEx(MULT, $1, $3) }
-	| prop_arith_expr DIV prop_arith_expr		{ BinEx(DIV, $1, $3) }
-	| CARD LPAREN prop_expr	RPAREN	{ UnEx(CARD, $3) }
-    | NAME /* proctype */ COLON NAME
-        {
-            let v = new_var $3 in
-            v#set_proc_name $1;
-            Var (v)
-        }
-	| NAME
-        {
-            try
-                Var (global_scope#find_or_error $1)#as_var
-            with Not_found ->
-                fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
-        }
-	| CONST { Const $1 }
     ;
 
 Opt_priority:	/* none */	{(*  $$ = ZN;  *)}

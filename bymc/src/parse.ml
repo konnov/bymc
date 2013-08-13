@@ -116,6 +116,15 @@ let postprocess all_units u =
     match u with
     | Stmt (MDeclProp (id, v, ae)) ->
         Stmt (MDeclProp (id, v, on_atomic ae))
+
+    | Proc p ->
+        let sub = function
+        | MExpr (id, e) -> MExpr (id, bind_var e)
+        | _ as s -> s
+        in
+        Proc (proc_replace_body p
+            (List.map (replace_basic_stmts sub) p#get_stmts))
+
     | _ as u -> u
 ;;
 

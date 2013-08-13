@@ -10,11 +10,13 @@ open SpinIr
 open SpinIrImp
 
 type var_role =
-    BoundedInt of int * int | SharedUnbounded | LocalUnbounded | Scratch of var
+    | BoundedInt of int * int | SharedBoundedInt of int * int
+    | SharedUnbounded | LocalUnbounded | Scratch of var
 
 let var_role_s r =
     match r with
     | BoundedInt (a, b) -> Printf.sprintf "bounded[%d, %d]" a b
+    | SharedBoundedInt (a, b) -> Printf.sprintf "shared-bounded[%d, %d]" a b
     | SharedUnbounded -> "shared-unbounded"
     | LocalUnbounded -> "local-unbounded"
     | Scratch v -> sprintf "scratch(%s)" v#get_name
@@ -26,6 +28,7 @@ let is_unbounded = function
 
 let is_bounded = function
     | BoundedInt (_, _) -> true
+    | SharedBoundedInt (_, _) -> true
     | _ -> false
 
 let is_scratch = function
@@ -90,17 +93,13 @@ let identify_var_roles prog =
                 raise (Failure m)
         in
         let get_used_var v =
-            match Hashtbl.find use_body_sum v with
-            | VarUses vset ->
-                let vs = VarSet.elements vset in
-                if List.length vs = 1
-                then List.hd vs
-                else begin
-                    print_var_uses ("Uses for " ^ v#get_name) use_body_sum;
-                    raise (Analysis_error ("No rhs for scratch " ^ v#qual_name))
-                end
-            | VarUsesUndef -> 
+            let vs = VarSet.elements (var_used_by use_body_sum v) in
+            if List.length vs = 1
+            then List.hd vs
+            else begin
+                print_var_uses ("Uses for " ^ v#qual_name) use_body_sum;
                 raise (Analysis_error ("No rhs for scratch " ^ v#qual_name))
+            end
         in
         let refine_role v r =
             let is_const = match Hashtbl.find loc_roles v with
@@ -124,9 +123,14 @@ let identify_var_roles prog =
     List.iter fill_roles (Program.get_procs prog);
 
     let replace_global v =
-        if LocalUnbounded <> (Hashtbl.find roles v)
-        then log WARN (sprintf "Shared variable %s is bounded" v#qual_name);
-        Hashtbl.replace roles v SharedUnbounded
+        let new_role = match (Hashtbl.find roles v) with
+        | LocalUnbounded -> SharedUnbounded
+        | BoundedInt (a, b) -> SharedBoundedInt (a, b)
+        | _ as r ->
+            raise (Role_error
+                (sprintf "Wrong role %s for %s" (var_role_s r) v#qual_name))
+        in
+        Hashtbl.replace roles v new_role
     in
     List.iter replace_global (Program.get_shared prog);
 

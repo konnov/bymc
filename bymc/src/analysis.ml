@@ -206,6 +206,16 @@ let transfer_var_use stmt input =
     output
 
 
+let var_used_by uses target =
+    let check_use host host_uses set =
+        match host_uses with
+        | VarUses s ->
+            if VarSet.mem target s then VarSet.add host set else set
+        | _ -> set
+    in
+    Hashtbl.fold check_use uses VarSet.empty
+
+
 (*
   Find assignments like: x = y.
  *)

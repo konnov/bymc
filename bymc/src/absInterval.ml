@@ -98,13 +98,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
 
 
 let over_dom (roles: var_role_tbl) = function
-    | Var v ->
-        begin
-            try v#is_symbolic || (is_unbounded (roles#get_role v))
-            with Not_found ->
-                raise (Abstraction_error (sprintf "No role for %s" v#get_name))
-        end
-
+    | Var v -> v#is_symbolic || (is_unbounded (roles#get_role v))
     | _ -> false
 
 
@@ -123,6 +117,7 @@ let refine_var_type ctx dom roles type_tab new_type_tab theVar =
             | Scratch v ->
                     new_type v
 
+            | SharedBoundedInt (l, r)
             | BoundedInt (l, r) ->
                     let tp = new data_type SpinTypes.TINT in
                     tp#set_range l (r + 1);
@@ -247,6 +242,12 @@ let translate_expr ctx dom solver atype expr =
             then (not_of_arith_rel (op_of_expr e))
             else (op_of_expr e) in
             abstract_arith_rel ctx dom solver atype eff_op lhs rhs
+
+        | UnEx  (ALL, lhs) ->
+            UnEx (ALL, trans_e neg_sign lhs)
+
+        | UnEx  (SOME, lhs) ->
+            UnEx (SOME, trans_e neg_sign lhs)
 
         | _ -> raise (Abstraction_error
             (sprintf "No abstraction for: %s" (expr_s expr)))
