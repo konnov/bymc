@@ -208,6 +208,9 @@ unit	: proc	/* proctype        */    { [Proc $1] }
         {
             [Stmt (MAssume (fresh_id (), $2))]
         }
+    | PROVIDED NAME LPAREN prargs RPAREN {
+        let args = list_to_binex COMMA $4 in
+        [Stmt (MExpr (fresh_id (), BinEx (PROVIDED, Var (new_var $2), args)))] }
 	| error { fatal "Unexpected top-level statement" ""}
 	;
 
@@ -1106,19 +1109,8 @@ margs   : arg			{ (*  $$ = $1;  *)}
 				}
 	;
 
-    arg     : expr	{ [$1]
-                 (* if ($1->ntyp == ',')
-					$$ = $1;
-				  else
-				  	$$ = nn(ZN, ',', $1, ZN); *)
-				}
-	| expr COMMA arg {
-                $1 :: $3
-                (* if ($1->ntyp == ',')
-					$$ = tail_add($1, $3);
-				  else
-				  	$$ = nn(ZN, ',', $1, $3); *)
-				}
+arg : expr	{ [$1] }
+    | expr COMMA arg { $1 :: $3 }
 	;
 
 rarg	: varref		{ (* $$ = $1; trackvar($1, $1);
