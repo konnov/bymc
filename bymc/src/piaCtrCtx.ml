@@ -116,6 +116,18 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         method all_indices_for check_val_fun =
             let has_v i = (check_val_fun (self#unpack_from_const i)) in
             List.filter has_v (range 0 self#get_ctr_dim)
+
+        method dump (out: out_channel) =
+            let print_kv k v =
+                Printf.fprintf out "%s = %d; " k#qual_name v in
+            let print_index i =
+                let vals = self#unpack_from_const i in
+                Printf.fprintf out "%s[%d] -> " ctr_var#qual_name i;
+                Hashtbl.iter print_kv vals;
+                Printf.fprintf out "\n"
+            in
+            List.iter print_index (range 0 self#get_ctr_dim)
+
     end
 
 
@@ -137,7 +149,10 @@ class ctr_abs_ctx_tbl dom role_tbl prog =
                 Hashtbl.add tbl pname c_ctx;
                 Hashtbl.add abbrev_tbl abbrev c_ctx
             in
-            List.iter mk (Program.get_procs prog)
+            List.iter mk (Program.get_procs prog);
+            let o = open_out "pia_ctr.txt" in
+            self#dump o;
+            close_out o
 
         method get_ctx name =
             try Hashtbl.find tbl name
@@ -153,5 +168,8 @@ class ctr_abs_ctx_tbl dom role_tbl prog =
         method all_ctxs = hashtbl_vals tbl
 
         method get_spur = spur_var
+
+        method dump out =
+            List.iter (fun c -> c#dump out) self#all_ctxs
     end
 
