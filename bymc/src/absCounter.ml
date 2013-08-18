@@ -520,6 +520,10 @@ let create_fairness type_tab ctr_ctx_tbl =
     list_to_binex AND (spur :: leave_unfair_lollipops)
 
 
+let mk_comment text =
+    MExpr (fresh_id (), Nop text)
+
+
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struct_cache#regions.
  *)
@@ -585,9 +589,11 @@ let do_counter_abstraction funcs solver caches prog =
         let ctr_update = funcs#mk_counter_update c_ctx
             c_ctx#prev_next_pairs prev_idx_ex next_idx_ex in
         pre_asserts
+        @ [mk_comment "decrement/increment process counters"]
         @ ctr_update
         @ [MUnsafe (fresh_id (), "#include \"cegar_post.inc\"")]
         @ post_asserts
+
         @ new_update
     in
     let replace_comp atomics stmts =
@@ -633,14 +639,22 @@ let do_counter_abstraction funcs solver caches prog =
             (reg_tab#get "update" body) atomics body in
         let new_comp = replace_comp atomics (reg_tab#get "comp" body) in
         let new_comp_upd =
-            MAtomic (fresh_id (), new_comp @ new_update @ invs) in
+            new_comp @ new_update @ invs
+                @ [mk_comment (p#get_name ^ ": end step")]
+        in
         let new_loop_body =
-            [MUnsafe (fresh_id (), "#include \"cegar_pre.inc\"")]
-            @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
-            @ invs
-            @ counter_guard c_ctx
-            @ [MIf (fresh_id (), [MOptGuarded ([new_comp_upd])]);
-               MGoto (fresh_id (), main_lab)] in
+            let in_atomic =
+                [ MUnsafe (fresh_id (), "#include \"cegar_pre.inc\"")]
+                @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
+                @ invs
+                @ [mk_comment (p#get_name ^ ": pick a process")]
+                @ counter_guard c_ctx
+                @ [mk_comment (p#get_name ^ ": begin step")]
+                @ new_comp_upd
+            in
+            [ (MAtomic (fresh_id (), in_atomic));
+              (MGoto (fresh_id (), main_lab)) ]
+        in
         let new_prefix =
             (MLabel (fresh_id (), main_lab)) ::
                 (reg_tab#get "loop_prefix" body) in
