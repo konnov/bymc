@@ -123,7 +123,13 @@ let identify_var_roles prog =
     List.iter fill_roles (Program.get_procs prog);
 
     let replace_global v =
-        let new_role = match (Hashtbl.find roles v) with
+        let find_role v =
+            try
+                Hashtbl.find roles v
+            with Not_found ->
+                raise (Role_error ("No role for " ^ v#qual_name))
+        in
+        let new_role = match find_role v with
         | LocalUnbounded -> SharedUnbounded
         | BoundedInt (a, b) -> SharedBoundedInt (a, b)
         | _ as r ->
