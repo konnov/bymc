@@ -29,6 +29,12 @@ case $1 in
         | bzip2 > bymc-src-${ver}.tar.bz2
     ;;
 
+  release)
+    tag="$2"
+    git archive --prefix=bymc-src-${tag}/ "$tag" \
+        | bzip2 > bymc-src-${tag}.tar.bz2
+    ;;
+
   clean)
     ocamlbuild -clean
     ;;
