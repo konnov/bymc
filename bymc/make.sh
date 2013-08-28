@@ -29,6 +29,12 @@ case $1 in
         | bzip2 > bymc-src-${ver}.tar.bz2
     ;;
 
+  dist-bin)
+    ver=`date '+%Y%m%d'`
+    FILES='bymc.native cegar run-concrete script/ LICENSE'
+    tar jhcf bymc-bin-${ver}.tar.bz2 $FILES
+    ;;
+
   release)
     tag="$2"
     git archive --prefix=bymc-src-${tag}/ "$tag" \
