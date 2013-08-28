@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #
 # Convert verdict.txt to a CSV file with a header 
+#
+# Igor Konnov, 2012
 
 import sys
 

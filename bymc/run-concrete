@@ -1,6 +1,8 @@
 #!/bin/bash
 #
-# Run experiments on concrete instances
+# Run experiments with fixed parameters using Spin.
+#
+# Igor Konnov, 2012
 
 trap "exit 255" SIGINT SIGTERM
 

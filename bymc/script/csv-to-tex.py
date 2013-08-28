@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #
 # Generate a LaTeX table out of CSV
+#
+# Igor Konnov, 2012
 
 import csv
 import re

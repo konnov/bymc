@@ -1,4 +1,8 @@
 #!/bin/bash
+#
+# Run the abstraction-model checking-refinement loop.
+#
+# Igor Konnov, 2012-2013
 
 if [ "$#" -lt 2 ]; then
     echo "Not enough arguments"

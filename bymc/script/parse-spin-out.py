@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #
 # parse the Spin output
+#
+# Igor Konnov, 2012
 
 import re
 import sys

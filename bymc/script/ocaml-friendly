@@ -1,6 +1,8 @@
 #!/usr/bin/python
 #
 # Translate OCaml error messages into readable form
+#
+# Igor Konnov, 2013
 
 import re
 import sys
