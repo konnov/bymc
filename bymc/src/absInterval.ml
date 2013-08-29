@@ -352,7 +352,10 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
     | MDecl (id, v, e) ->
         refine_var_type ctx dom roles type_tab new_type_tab v;
 
-        MDecl (id, v, (dom#map_concrete solver e))
+        let ne = if is_unbounded (roles#get_role v)
+            then dom#map_concrete solver e
+            else e in
+        MDecl (id, v, ne)
 
     | _ as s -> s
     in
