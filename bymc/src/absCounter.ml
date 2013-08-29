@@ -632,8 +632,10 @@ let do_counter_abstraction funcs solver caches prog =
         let reg_tab = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init =
-            funcs#mk_init c_ctx p#get_active_expr
-            (reg_tab#get "decl" body) (reg_tab#get "init" body) in
+            (funcs#mk_init c_ctx p#get_active_expr
+                (reg_tab#get "decl" body) (reg_tab#get "init" body))
+            @ [mk_comment (p#get_name ^ ": end init")]
+        in
         let new_update =
             replace_update c_ctx p#get_active_expr
             (reg_tab#get "update" body) atomics body in
