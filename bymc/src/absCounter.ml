@@ -699,7 +699,7 @@ let do_counter_abstraction funcs solver caches prog =
     let new_prog =
         (Program.set_params []
         (Program.set_assumes []
-        (Program.set_shared (Program.get_shared prog)
+        (Program.set_shared_with_init (Program.get_shared_with_init prog)
         (Program.set_instrumental new_decls
         (Program.set_type_tab new_type_tab
         (Program.set_atomics new_atomics

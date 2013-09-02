@@ -24,7 +24,12 @@ val set_params: var list -> program -> program
 
 (* shared (global) variables *)
 val get_shared: program -> var list
+(* @deprecated this function sets initialization expression to NOP *)
 val set_shared: var list -> program -> program
+
+(* shared variables with the initialization expressions *)
+val get_shared_with_init: program -> (var * expr_t) list
+val set_shared_with_init: (var * expr_t) list -> program -> program
 
 (* extract all local variables declared in processes (may be slow!) *)
 val get_all_locals: program -> var list

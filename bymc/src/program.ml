@@ -7,7 +7,8 @@ type expr_t = Spin.token expr
 exception Program_error of string
 
 type program = {
-    f_params: var list; f_shared: var list; f_instrumental: var list;
+    f_params: var list; f_instrumental: var list;
+    f_shared: (var * expr_t) list; 
     f_sym_tab: symb_tab; (* kept internally *)
     f_type_tab: data_type_tab;
     f_assumes: expr_t list; f_unsafes: string list;
@@ -34,9 +35,10 @@ let update_sym_tab prog =
         (* the new code:
         List.map (fun (k, _) -> string_to_symb k) (StringMap.bindings m) *)
     in
+    let take1 lst = List.map (fun (a1, _) -> a1) lst in
     let syms =
         (List.map var_to_symb prog.f_params)
-        @ (List.map var_to_symb prog.f_shared)
+        @ (List.map var_to_symb (take1 prog.f_shared))
         @ (List.map var_to_symb prog.f_instrumental)
         @ (List.map proc_to_symb prog.f_procs)
         @ (map_to_symb prog.f_atomics)
@@ -54,11 +56,21 @@ let get_params prog =
 let set_params new_params prog =
     update_sym_tab { prog with f_params = new_params }
 
-let get_shared prog =
+let get_shared_with_init prog =
     prog.f_shared
 
+let set_shared_with_init new_shared_pairs prog =
+    update_sym_tab {
+        prog with f_shared = new_shared_pairs
+    }
+
+let get_shared prog =
+    List.map (fun (v, _) -> v) prog.f_shared
+
 let set_shared new_shared prog =
-    update_sym_tab { prog with f_shared = new_shared }
+    update_sym_tab {
+        prog with f_shared = (List.map (fun v -> (v, Nop "")) new_shared)
+    }
 
 let get_instrumental prog =
     prog.f_instrumental
@@ -110,7 +122,7 @@ let get_ltl_forms_as_hash prog =
     h
 
 let is_global prog v =
-    try v = (List.find ((=) v) (prog.f_params @ prog.f_shared))
+    try v = List.find ((=) v) (prog.f_params @ (get_shared prog))
     with Not_found -> false
 
 let is_not_global prog v =
@@ -129,12 +141,12 @@ let get_all_locals prog =
 
 let program_of_units type_tab units =
     let fold_u prog = function
-    | Stmt (MDecl(_, v, _)) ->
+    | Stmt (MDecl(_, v, e)) ->
             if v#is_symbolic
             then { prog with f_params = (v :: prog.f_params) }
             else if v#is_instrumental
             then { prog with f_instrumental = (v :: prog.f_instrumental) }
-            else { prog with f_shared = (v :: prog.f_shared) }
+            else { prog with f_shared = ((v, e) :: prog.f_shared) }
     | Stmt (MDeclProp(_, v, e)) ->
             let new_ap = (StringMap.add v#get_name e prog.f_atomics) in
             { prog with f_atomics = new_ap }
@@ -160,6 +172,8 @@ let program_of_units type_tab units =
 let units_of_program program =
     let var_to_decl v =
         Stmt (MDecl (fresh_id (), v, (Nop ""))) in
+    let var_init_to_decl (v, e) =
+        Stmt (MDecl (fresh_id (), v, e)) in
     let atomic_to_decl name expr accum =
         (Stmt (MDeclProp(fresh_id (), new_var name, expr))) :: accum in
     let form_to_ltl name expr accum =
@@ -169,7 +183,7 @@ let units_of_program program =
     let to_proc p = Proc p in
     (List.concat
         [(List.map var_to_decl program.f_params);
-         (List.map var_to_decl program.f_shared);
+         (List.map var_init_to_decl program.f_shared);
          (List.map var_to_decl program.f_instrumental);
          (StringMap.fold atomic_to_decl program.f_atomics []);
          (List.map to_assume program.f_assumes);

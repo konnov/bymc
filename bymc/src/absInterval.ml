@@ -476,15 +476,21 @@ let do_interval_abstraction solver caches prog =
     in
     let new_forms = Program.StringMap.mapi
         (trans_ltl_form new_type_tab) (Program.get_ltl_forms prog) in
-    let abs_shared shared_var =
+    let abs_shared (shared_var, init_expr) =
         let ctx = caches#analysis#get_pia_data_ctx in
         let dom = caches#analysis#get_pia_dom in
         let roles = caches#analysis#get_var_roles in
         refine_var_type ctx dom roles type_tab new_type_tab shared_var;
-        shared_var
+        let new_init =
+            if over_dom roles (Var shared_var)
+            then dom#map_concrete solver init_expr
+            else init_expr
+        in
+        (shared_var, new_init)
     in
-    let new_shared = List.map abs_shared (Program.get_shared prog) in
-    (Program.set_shared new_shared
+    let new_shared =
+        List.map abs_shared (Program.get_shared_with_init prog) in
+    (Program.set_shared_with_init new_shared
         (Program.set_type_tab new_type_tab
         (Program.set_ltl_forms new_forms
         (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))))
