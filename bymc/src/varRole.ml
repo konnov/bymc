@@ -122,23 +122,31 @@ let identify_var_roles prog =
     in
     List.iter fill_roles (Program.get_procs prog);
 
-    let replace_global v =
+    (* extract it to somewhere *)
+    let replace_global (v, init_expr) =
         let find_role v =
-            try
-                Hashtbl.find roles v
+            try Hashtbl.find roles v
             with Not_found ->
                 raise (Role_error ("No role for " ^ v#qual_name))
         in
+        let init_int = match init_expr with
+        | Nop _ -> 0
+        | Const i -> i
+        | _ -> raise (Role_error
+            (sprintf "Initializer of %s is not int" v#qual_name))
+        in
         let new_role = match find_role v with
-        | LocalUnbounded -> SharedUnbounded
-        | BoundedInt (a, b) -> SharedBoundedInt (a, b)
+        | LocalUnbounded ->
+            SharedUnbounded
+        | BoundedInt (a, b) ->
+            SharedBoundedInt ((min a init_int), (max b init_int))
         | _ as r ->
             raise (Role_error
                 (sprintf "Wrong role %s for %s" (var_role_s r) v#qual_name))
         in
         Hashtbl.replace roles v new_role
     in
-    List.iter replace_global (Program.get_shared prog);
+    List.iter replace_global (Program.get_shared_with_init prog);
 
     log INFO " # Variable roles:";
     let sorted = List.sort cmp_qual_vars (hashtbl_keys roles) in
