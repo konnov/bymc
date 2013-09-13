@@ -44,7 +44,9 @@ fi
 
 CUR_DIR=`pwd`; CUR_DIR=`cd $CUR_DIR; pwd`
 cd $BYMC_HOME
-./make.sh || (cd $CUR_DIR; exit 1)
+if [ -d "src" ]; then
+    ./make.sh || (cd $CUR_DIR; exit 1)
+fi
 cd $CUR_DIR
 
 INSTANCE="spin-`basename $PROG .pml`-$PROP-$PARAM"
