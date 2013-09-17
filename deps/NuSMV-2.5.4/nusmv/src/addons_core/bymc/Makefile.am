@@ -43,13 +43,13 @@ CUDD_DIR = ../$(CUDD_NAME)
 
 INCLUDES = -I$(top_srcdir)/src -I$(top_srcdir)/$(CUDD_DIR)/include
 
-PKG_SOURCES = import.h importCmd.c importPkg.c importImpl.h importImpl.c
+PKG_SOURCES = bymc.h bymcCmd.c bymcPkg.c bymcImpl.h bymcImpl.c
 
-importdir = $(includedir)/nusmv/addons_core/import
-import_HEADERS = import.h
+bymcdir = $(includedir)/nusmv/addons_core/bymc
+bymc_HEADERS = bymc.h
 
 # -------------------------------------------------------
 
-noinst_LTLIBRARIES = libimport.la
-libimport_la_SOURCES = $(PKG_SOURCES)
-libimport_la_LIBADD = 
+noinst_LTLIBRARIES = libbymc.la
+libbymc_la_SOURCES = $(PKG_SOURCES)
+libbymc_la_LIBADD = 

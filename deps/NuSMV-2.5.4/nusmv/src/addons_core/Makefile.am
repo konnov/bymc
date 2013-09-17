@@ -49,8 +49,15 @@ else
  import_libs = 
 endif
 
+if HAVE_BYMC
+ bymc_libs = bymc/libbymc.la
+ _BYMC = bymc
+else
+ bymc_libs = 
+endif
+
 ## -------------------------------------------------------
-SUBDIRS = $(_COMPASS) $(_IMPORT) 
+SUBDIRS = $(_COMPASS) $(_IMPORT) $(_BYMC) 
 
 #SUBDIRS = $(ADDONS_PKGS)
 # This is done to force distribution of only configured addons
@@ -72,4 +79,4 @@ addons_HEADERS = addonsCore.h
 noinst_LTLIBRARIES = libaddonscore.la
 libaddonscore_la_SOURCES = $(PKG_SOURCES)
 libaddonscore_la_LIBADD =  \
-	$(compass_libs) $(import_libs)      
+	$(compass_libs) $(import_libs) $(bymc_libs)
