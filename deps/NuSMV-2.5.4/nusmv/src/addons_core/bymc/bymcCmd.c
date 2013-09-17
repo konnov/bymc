@@ -131,7 +131,7 @@ int CommandBymcReach(int argc, char **argv)
 
 static int UsageBymcReach()
 {
-  fprintf(nusmv_stderr, "usage: bymc-reach [-h] [-f <bdd-fname>]\n");
+  fprintf(nusmv_stderr, "usage: bymc_reach [-h] [-f <bdd-fname>]\n");
   fprintf(nusmv_stderr, "  -h \t\t Prints the command usage.\n");
   fprintf(nusmv_stderr, "  -f <fname>\t Read INIT and TRANS BDDs saved with dddmp.\n");
 
