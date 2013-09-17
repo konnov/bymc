@@ -10,6 +10,9 @@
 #undef FUNCATTR_NORETURN
 
 /* Enables the named addon */
+#undef HAVE_BYMC
+
+/* Enables the named addon */
 #undef HAVE_COMPASS
 
 /* Have preprocessor */

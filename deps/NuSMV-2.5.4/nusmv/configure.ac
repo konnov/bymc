@@ -49,7 +49,7 @@ extra_pkgs=
 
 
 # default addons
-def_addons="compass import"
+def_addons="compass import bymc"
 AC_ARG_ENABLE(addons, 
   [  --enable-addons  Builds given addons. Enabled addon names must be colon-separated (:)],
   [ if test "x$enableval" = "xno"; then 
@@ -631,7 +631,7 @@ AC_SUBST(cudd_mkf)
 AC_MSG_CHECKING(for Addons)
 
 # The list of all available addons
-all_addons="compass import"
+all_addons="compass import bymc"
 
 # The list of addons that when required should be configured but
 # not built. This rules does not apply when the addon is required
@@ -653,6 +653,7 @@ meta_addons=""
 # Dependencies among addons:
 compass_deps=
 import_deps=
+bymc_deps=
 # ----------------------------------
 
 
@@ -711,6 +712,7 @@ for addon in $found_addons $dep_addons $alias_addons; do
   case $addon in
   compass) ;;
   import) ;;
+  bymc) ;;
   *) 
     AC_MSG_ERROR("Addon $addon is not supported");;
   esac
@@ -765,6 +767,13 @@ for addon in $all_addons; do
     fi
     AC_DEFINE_UNQUOTED(HAVE_IMPORT, $_have_addon, Enables the named addon)
     AM_CONDITIONAL(HAVE_IMPORT, test $_have_addon = 1);;
+
+  bymc) 
+    if test $_have_addon == 1; then 
+       AC_CONFIG_FILES([src/addons_core/bymc/Makefile]) 
+    fi
+    AC_DEFINE_UNQUOTED(HAVE_BYMC, $_have_addon, Enables the named addon)
+    AM_CONDITIONAL(HAVE_BYMC, test $_have_addon = 1);;
 
   *) 
     AC_MSG_ERROR("Addon $addon is not supported");;
