@@ -48,7 +48,9 @@ case $1 in
   *)
     ocamlbuild -use-ocamlfind $CFLAGS $target | ./script/ocaml-friendly
     find _build -regex '.*\.cm\(i\|o\)'\
-        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//' >./bymc.mltop
+        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
+        >./bymc.mltop
+
     ocamlbuild -use-ocamlfind $CFLAGS ./bymc.top
     ;;
 esac
