@@ -3,6 +3,7 @@
 open Printf
 
 open Accums
+open Serialize
 open SpinIr
 open SpinIrImp
 open SpinTypes
