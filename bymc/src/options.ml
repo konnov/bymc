@@ -22,6 +22,11 @@ type options_t =
         mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool
     }
 
+let empty =
+    { action = OptNone; trail_name = ""; filename = "";
+      inv_name = ""; param_assignments = StringMap.empty;
+      mc_tool = ToolSpin; bdd_pass = false; verbose = false; }
+
 let parse_key_values str =
     let parse_pair map s =
         if string_match (regexp "\\([a-zA-Z0-9]+\\)=\\([0-9]+\\)") s 0
