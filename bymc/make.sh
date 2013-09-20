@@ -51,6 +51,6 @@ case $1 in
         | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
         >./bymc.mltop
 
-    ocamlbuild -use-ocamlfind $CFLAGS ./bymc.top
+    ocamlbuild -use-ocamlfind $CFLAGS ./bymc.top $target
     ;;
 esac
