@@ -92,8 +92,8 @@ class pass_caches (i_options: options_t)
 
 
 type analysis_fun =
-    pass_caches -> Program.program -> pass_caches
+    pass_caches -> Program.program_t -> pass_caches
 
 type translation_fun =
-    pass_caches -> Program.program -> (pass_caches * Program.program)
+    pass_caches -> Program.program_t -> (pass_caches * Program.program_t)
 

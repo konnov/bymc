@@ -6,7 +6,7 @@ type expr_t = Spin.token expr
 
 exception Program_error of string
 
-type program = {
+type program_t = {
     f_params: var list; f_instrumental: var list;
     f_shared: (var * expr_t) list; 
     f_sym_tab: symb_tab; (* kept internally *)

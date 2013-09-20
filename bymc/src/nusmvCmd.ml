@@ -22,7 +22,7 @@ open Smt
 
 let parse_nusmv_trace (filename: string) (dom: pia_domain) (data_ctx: pia_data_ctx)
         (ctr_ctx_tbl: ctr_abs_ctx_tbl) (rev_tab: retrans_tab)
-        (prog: Program.program) =
+        (prog: Program.program_t) =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)
     let assignment = Hashtbl.create 10 in (* current state mapping *)

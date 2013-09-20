@@ -14,6 +14,7 @@ module StringMap: Map.S with type key = string
 type program
 
 type expr_t = Spin.token expr
+type path_t = expr_t list list
 
 val program_of_units: data_type_tab -> Spin.token prog_unit list -> program
 val units_of_program: program -> Spin.token prog_unit list

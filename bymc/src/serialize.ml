@@ -34,9 +34,11 @@ let global_state_fmt prog =
     let exprs = List.rev (List.fold_left ref_var [] vars) in
     (sprintf "S{%s}" (str_join "," strs), exprs)
 
+    
 let global_state_re fmt =
     let re_s = Str.global_replace (Str.regexp_string "%d") "\\([0-9]+\\)" fmt in
     Str.regexp re_s
+
 
 let parse_global_state prog text =
     let fmt, es = global_state_fmt prog in
