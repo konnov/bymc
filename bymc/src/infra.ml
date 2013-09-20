@@ -10,6 +10,7 @@ open VarRole
 open PiaDataCtx
 open PiaDom
 open PiaCtrCtx
+open Program
 open Regions
 
 exception CacheStateError of string
@@ -92,8 +93,8 @@ class pass_caches (i_options: options_t)
 
 
 type analysis_fun =
-    pass_caches -> Program.program_t -> pass_caches
+    pass_caches -> program_t -> pass_caches
 
 type translation_fun =
-    pass_caches -> Program.program_t -> (pass_caches * Program.program_t)
+    pass_caches -> program_t -> (pass_caches * program_t)
 

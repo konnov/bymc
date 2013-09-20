@@ -10,6 +10,7 @@ open NusmvCmd
 open PiaDataCtx
 open PiaCtrCtx
 open Program
+open Plugin
 open Refinement
 open Simplif
 open Smt

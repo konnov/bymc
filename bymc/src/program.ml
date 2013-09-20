@@ -3,6 +3,7 @@ open SpinIr
 module StringMap = Map.Make (String)
 
 type expr_t = Spin.token expr
+type path_t = expr_t list list
 
 exception Program_error of string
 

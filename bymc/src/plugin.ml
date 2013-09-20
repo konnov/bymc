@@ -11,14 +11,14 @@ exception Plugin_error of string
 
 class plugin_t =
     object
-        val mutable m_ready
+        val mutable m_ready = false
 
         method is_ready = m_ready
         method set_ready = m_ready <- true
     end
 
 
-class transform_plugin_t =
+class virtual transform_plugin_t =
     object
         inherit plugin_t
 
@@ -31,7 +31,7 @@ class transform_plugin_t =
     end
 
 
-class analysis_plugin_t =
+class virtual analysis_plugin_t =
     object
         inherit plugin_t
 
