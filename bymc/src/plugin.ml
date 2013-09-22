@@ -10,25 +10,49 @@ open SpinIr
 
 exception Plugin_error of string
 
-class plugin_t =
+class type plugin_t =
     object
+        method is_ready: bool
+        method set_ready: unit
+        method get_plugin: string -> plugin_t
+    end
+
+
+(* the actual plugin container type *)
+class virtual plugin_container_t =
+    object
+        method virtual find_plugin: string -> plugin_t
+    end
+
+(* the default implementation *)
+class empty_container =
+    object
+        inherit plugin_container_t
+
+        method find_plugin (name: string): plugin_t =
+            raise (Plugin_error "No plugin container")
+    end
+
+
+(* the generic plugin *)
+class plugin_impl =
+    object
+        val mutable m_container: plugin_container_t = new empty_container
+
         val mutable m_ready = false
 
         method is_ready = m_ready
         method set_ready = m_ready <- true
-    end
 
-
-class empty_container =
-    object
+        method set_container ctr = m_container <- ctr
         method get_plugin (name: string): plugin_t =
-            raise (Plugin_error "No plugin container")
+            m_container#find_plugin name
     end
 
 
 class virtual transform_plugin_t =
     object
-        inherit plugin_t
+        inherit plugin_impl
 
         val mutable m_in = Program.empty
         val mutable m_out = Program.empty
@@ -57,19 +81,25 @@ class virtual analysis_plugin_t =
 
 class plugin_chain_t =
     object(self)
-        inherit transform_plugin_t
+        inherit plugin_container_t
 
         val mutable m_plugins: (string * transform_plugin_t) list = []
+        val mutable m_in = Program.empty
+        val mutable m_out = Program.empty
+
+        method get_input = m_in
+        method get_output = m_out
 
         method add_plugin name plugin =
+            plugin#set_container (self :> plugin_container_t);
             m_plugins <- List.rev ((name, plugin) :: (List.rev m_plugins))
 
-        method get_plugin name =
+        method find_plugin name =
             try
                 let _, p = List.find (fun (n, _) -> name = n) m_plugins in
                 if not p#is_ready
                 then raise (Plugin_error ("Plugin " ^ name ^ " is not ready"));
-                (p :> plugin_t)
+                ((p :> plugin_impl) :> plugin_t)
             with Not_found ->
                 raise (Plugin_error ("Not found " ^ name))
 
@@ -77,9 +107,9 @@ class plugin_chain_t =
             let apply input (_, plugin) =
                 plugin#transform rtm input
             in
-            self#set_input prog;
-            self#set_output (List.fold_left apply prog m_plugins);
-            self#get_output
+            m_in <- prog;
+            m_out <- (List.fold_left apply prog m_plugins);
+            m_out
 
         method refine rtm path =
             let do_refine (status, path_cons) (_, plugin) =
@@ -88,8 +118,5 @@ class plugin_chain_t =
                 else plugin#refine rtm path_cons
             in
             List.fold_left do_refine (false, path) (List.rev m_plugins)
-
-        method decode_trail rtm _ =
-            raise (Plugin_error "Not supported: decode_trail")
 
     end
