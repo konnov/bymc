@@ -1,5 +1,12 @@
 (*
  Analysis and transformation infrastructure.
+ 
+ The analysis results can be used across different modules and plugins.
+ The caches are not persistent in the sense that at some point of time ---
+ e.g., when restoring from disk --- the system may reset the caches and
+ then fill them in with the help of the plugins.
+
+ The plugins MUST NOT overwrite the caches provided by the other plugins.
 
  Igor Konnov, 2012
  *)

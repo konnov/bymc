@@ -1,7 +1,10 @@
+open Infra
 open Smt
 
-class runtime_t (i_solver: yices_smt) =
+class runtime_t (i_solver: yices_smt) (i_caches: pass_caches) =
     object
-        method get_solver = i_solver
+        method solver = i_solver
+
+        method caches = i_caches
     end
 

@@ -9,9 +9,10 @@ open Ltl
 open NusmvCmd
 open PiaDataCtx
 open PiaCtrCtx
-open Program
 open Plugin
+open Program
 open Refinement
+open Runtime
 open Simplif
 open Smt
 open Spin
@@ -57,11 +58,17 @@ let do_abstraction caches solver is_first_run prog =
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
     end;
-    let roles = identify_var_roles prog in
-    caches#analysis#set_var_roles roles;
-    let dom = PiaDom.create solver roles prog in
-    caches#analysis#set_pia_dom dom;
-    let pia_data = new pia_data_ctx roles in
+    let rtm = new runtime_t solver caches in
+    let chain = new plugin_chain_t in
+    chain#add_plugin (new VarRolePlugin.var_role_plugin_t) "var_roles";
+    chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t) "pia_dom";
+    let _ = chain#transform rtm prog in
+
+    (* TODO: remove these two definitions when the other code becomes plugins *)
+    let dom = caches#analysis#get_pia_dom in
+    let roles = caches#analysis#get_var_roles in
+
+    let pia_data = new pia_data_ctx caches#analysis#get_var_roles in
     caches#analysis#set_pia_data_ctx pia_data;
 
     log INFO "> Constructing interval abstraction";
