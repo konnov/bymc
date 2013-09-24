@@ -294,3 +294,23 @@ let write_unit type_tab cout lvl u =
     | _ -> ();
     Format.pp_print_flush ff ()
 
+
+let write_to_file externalize_ltl name units type_tab =
+    let fo = open_out name in
+    let save_unit = function
+        | Ltl (form_name, form) as u->
+            (* Spin 6.2 supports inline formulas no longer than 1024 chars.
+               It produces arbitrary compilation errors for those longer than
+               its authors expected. We thus save the formula into a file. *)
+            if externalize_ltl
+            then begin
+                let out = open_out (sprintf "%s.ltl" form_name) in
+                fprintf out "%s\n" (expr_s form);
+                close_out out
+            end else
+                write_unit type_tab fo 0 u
+        | _ as u -> write_unit type_tab fo 0 u
+    in
+    List.iter save_unit units;
+    close_out fo
+

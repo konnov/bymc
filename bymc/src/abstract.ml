@@ -27,25 +27,6 @@ open NusmvCounterClusterPass
 
 open Debug
 
-let write_to_file externalize_ltl name units type_tab =
-    let fo = open_out name in
-    let save_unit = function
-        | Ltl (form_name, form) as u->
-            (* Spin 6.2 supports inline formulas no longer than 1024 chars.
-               It produces arbitrary compilation errors for those longer than
-               its authors expected. We thus save the formula into a file. *)
-            if externalize_ltl
-            then begin
-                let out = open_out (sprintf "%s.ltl" form_name) in
-                fprintf out "%s\n" (expr_s form);
-                close_out out
-            end else
-                write_unit type_tab fo 0 u
-        | _ as u -> write_unit type_tab fo 0 u
-    in
-    List.iter save_unit units;
-    close_out fo
-
 
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction caches solver is_first_run prog =
@@ -62,20 +43,12 @@ let do_abstraction caches solver is_first_run prog =
     let chain = new plugin_chain_t in
     chain#add_plugin (new VarRolePlugin.var_role_plugin_t) "var_roles";
     chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t) "pia_dom";
-    let _ = chain#transform rtm prog in
+    chain#add_plugin (new PiaDataPlugin.pia_data_plugin_t) "pia_data";
+    let intabs_prog = chain#transform rtm prog in
 
     (* TODO: remove these two definitions when the other code becomes plugins *)
     let dom = caches#analysis#get_pia_dom in
     let roles = caches#analysis#get_var_roles in
-
-    let pia_data = new pia_data_ctx caches#analysis#get_var_roles in
-    caches#analysis#set_pia_data_ctx pia_data;
-
-    log INFO "> Constructing interval abstraction";
-    let intabs_prog = do_interval_abstraction solver caches prog in
-    write_to_file false "abs-interval.prm"
-        (units_of_program intabs_prog) (get_type_tab intabs_prog);
-    log INFO "[DONE]";
     if caches#options.Options.mc_tool = Options.ToolNusmv
     then begin
         log INFO "> Constructing NuSMV interval abstraction...";
