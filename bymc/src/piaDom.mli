@@ -5,7 +5,7 @@ open SpinIr
 open Smt
 open VarRole
 
-class type pia_domain =
+class pia_domain: Spin.token expr list ->
     object
         method print: unit
 

@@ -5,9 +5,9 @@ open Plugin
 open Program
 open Writer
 
-class spin_plugin_t (out_name: string) =
+class spin_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         method transform rtm prog =
             if rtm#caches#options.Options.mc_tool <> Options.ToolSpin

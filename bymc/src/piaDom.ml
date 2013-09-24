@@ -255,21 +255,10 @@ let sort_thresholds solver conds =
 
 let create solver var_roles prog =
     log INFO "> Extracting the abstract domain...";
-    (* XXX: a hackish way to turn on (0,1,inf)-abstraction
-        by Pnueli, Xu, Zuck 2002 *)
-    let pxz02 =
-        try let _ = Unix.getenv "PXZ02" in
-            printf "     forced (0, 1, \\infty) by Pnueli, Xu, Zuck 2002\n";
-            true
-        with Not_found -> false
-    in
     let collect_stmts l p = p#get_stmts @ l in
-    let all_stmts = List.fold_left collect_stmts [] (Program.get_procs prog) in
-    let conds =
-        if not pxz02
-        then identify_conditions var_roles (mir_to_lir all_stmts)
-        else [Const 0; Const 1; Const 2]
+    let all_stmts = List.fold_left collect_stmts [] (Program.get_procs prog)
     in
+    let conds = identify_conditions var_roles (mir_to_lir all_stmts) in
     let sorted_conds = sort_thresholds solver conds in
     let dom = new pia_domain sorted_conds in
     dom#print;

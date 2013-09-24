@@ -27,6 +27,9 @@ open NusmvCounterClusterPass
 
 open Debug
 
+(* the file where the state is saved to *)
+let serialization_filename = "bymc.ser"
+
 
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction caches solver is_first_run prog =
@@ -41,19 +44,20 @@ let do_abstraction caches solver is_first_run prog =
     end;
     let rtm = new runtime_t solver caches in
     let chain = new plugin_chain_t in
-    chain#add_plugin (new VarRolePlugin.var_role_plugin_t) "var_roles";
-    chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t) "pia_dom";
-    let pia_data_p = new PiaDataPlugin.pia_data_plugin_t in
-    chain#add_plugin pia_data_p "pia_data";
-    chain#add_plugin (new NusmvPlugin.nusmv_plugin_t "main-int") "nusmv";
-    chain#add_plugin (new PiaCounterPlugin.pia_counter_plugin_t) "pia_counter";
-    let nusmv_ctr_p =
-        new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t "main" pia_data_p
-    in
-    chain#add_plugin nusmv_ctr_p "nusmv-ctr";
-    chain#add_plugin (new SpinPlugin.spin_plugin_t "abs-counter") "spin";
+    chain#add_plugin (new VarRolePlugin.var_role_plugin_t "varRoles");
+    chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t "piaDom");
+    let pia_data_p = new PiaDataPlugin.pia_data_plugin_t "piaData" in
+    chain#add_plugin pia_data_p;
+    chain#add_plugin (new NusmvPlugin.nusmv_plugin_t "nusmv" "main-int");
+    chain#add_plugin (new PiaCounterPlugin.pia_counter_plugin_t "piaCounter");
+    chain#add_plugin (new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t
+            "nusmvCounter" "main" pia_data_p);
+    chain#add_plugin (new SpinPlugin.spin_plugin_t "spin" "abs-counter");
     let _ = chain#transform rtm prog in
     solver#pop_ctx;
+    let outc = open_out_bin serialization_filename in
+    Marshal.to_channel outc chain [Marshal.Closures];
+    close_out outc;
     chain#get_output
 
 

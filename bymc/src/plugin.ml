@@ -11,18 +11,32 @@ open SpinIr
 exception Plugin_error of string
 
 (* the generic plugin *)
-class plugin_t =
+class plugin_t (plugin_name: string) =
     object
         val mutable m_ready = false
 
         method is_ready = m_ready
         method set_ready = m_ready <- true
+
+        method name = plugin_name
+
+        method has_opt (rtm: runtime_t) (name: string) =
+            let fullname = plugin_name ^ "." ^ name in
+            let options = (rtm#caches#options).Options.plugin_opts in
+            Options.StringMap.mem fullname options
+
+        method get_opt (rtm: runtime_t) (name: string) =
+            let fullname = plugin_name ^ "." ^ name in
+            let options = (rtm#caches#options).Options.plugin_opts in
+            try Options.StringMap.find fullname options
+            with Not_found ->
+                raise (Plugin_error ("Plugin option " ^ fullname ^ " not found"))
     end
 
 
-class virtual transform_plugin_t =
+class virtual transform_plugin_t (plugin_name: string) =
     object
-        inherit plugin_t
+        inherit plugin_t plugin_name
 
         val mutable m_in = Program.empty
         val mutable m_out = Program.empty
@@ -40,9 +54,9 @@ class virtual transform_plugin_t =
     end
 
 
-class virtual analysis_plugin_t =
+class virtual analysis_plugin_t (plugin_name: string) =
     object
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         method decode_trail _ path = path
 
@@ -52,21 +66,21 @@ class virtual analysis_plugin_t =
 
 class plugin_chain_t =
     object(self)
-        val mutable m_plugins: (string * transform_plugin_t) list = []
+        val mutable m_plugins: transform_plugin_t list = []
         val mutable m_in = Program.empty
         val mutable m_out = Program.empty
 
         method get_input = m_in
         method get_output = m_out
 
-        method add_plugin: 'a  . (#transform_plugin_t as 'a) -> string -> unit =
-            fun plugin name ->
+        method add_plugin: 'a  . (#transform_plugin_t as 'a) -> unit =
+            fun plugin ->
                 let tp = (plugin :> transform_plugin_t) in
-                m_plugins <- List.rev ((name, tp) :: (List.rev m_plugins))
+                m_plugins <- List.rev (tp :: (List.rev m_plugins))
 
         method find_plugin name =
             try
-                let _, p = List.find (fun (n, _) -> name = n) m_plugins in
+                let p = List.find (fun p -> p#name = name) m_plugins in
                 if not p#is_ready
                 then raise (Plugin_error ("Plugin " ^ name ^ " is not ready"));
                 (p :> plugin_t)
@@ -74,7 +88,7 @@ class plugin_chain_t =
                 raise (Plugin_error ("Not found " ^ name))
 
         method transform rtm prog =
-            let apply input (_, plugin) =
+            let apply input plugin =
                 let out = plugin#transform rtm input in
                 plugin#update_runtime rtm;
                 out
@@ -84,7 +98,7 @@ class plugin_chain_t =
             m_out
 
         method refine rtm path =
-            let do_refine (status, path_cons) (_, plugin) =
+            let do_refine (status, path_cons) plugin =
                 if status
                 then (true, path_cons)
                 else plugin#refine rtm path_cons

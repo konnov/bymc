@@ -5,9 +5,9 @@ open Plugin
 open Program
 open Writer
 
-class pia_counter_plugin_t =
+class pia_counter_plugin_t (plugin_name: string) =
     object(self)
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         val mutable m_ctr_abs_ctx_tbl: ctr_abs_ctx_tbl option = None
 

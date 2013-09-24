@@ -1,9 +1,9 @@
 open Plugin
 open VarRole
 
-class var_role_plugin_t =
+class var_role_plugin_t (plugin_name: string) =
     object
-        inherit analysis_plugin_t
+        inherit analysis_plugin_t plugin_name
 
         val mutable m_roles: var_role_tbl option =  None
         

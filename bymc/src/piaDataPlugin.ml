@@ -4,9 +4,9 @@ open PiaDataCtx
 open Plugin
 open Program
 
-class pia_data_plugin_t =
+class pia_data_plugin_t (plugin_name: string) =
     object(self)
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         val mutable m_pia_data_ctx: pia_data_ctx option = None
 

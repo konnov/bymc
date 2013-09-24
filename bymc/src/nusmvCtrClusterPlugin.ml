@@ -4,11 +4,11 @@ open Debug
 open PiaDataPlugin
 open Plugin
 
-class nusmv_ctr_cluster_plugin_t
+class nusmv_ctr_cluster_plugin_t (plugin_name: string)
         (out_name: string) (pia_data_plugin: pia_data_plugin_t) =
 
     object(self)
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         method transform rtm prog =
             let caches = rtm#caches in

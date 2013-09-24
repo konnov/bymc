@@ -3,9 +3,9 @@ open Printf
 open Debug
 open Plugin
 
-class nusmv_plugin_t (out_name: string) =
+class nusmv_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
-        inherit transform_plugin_t
+        inherit transform_plugin_t plugin_name
 
         method transform rtm prog =
             let caches = rtm#caches in

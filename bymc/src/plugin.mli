@@ -1,13 +1,17 @@
 exception Plugin_error of string
 
-class type plugin_t =
+class plugin_t: string ->
     object
         method is_ready: bool
         method set_ready: unit
+        method name: string
+
+        method has_opt: Runtime.runtime_t -> string -> bool
+        method get_opt: Runtime.runtime_t -> string -> string
     end
 
 
-class virtual transform_plugin_t:
+class virtual transform_plugin_t: string ->
     object
         inherit plugin_t
 
@@ -36,7 +40,7 @@ class virtual transform_plugin_t:
     end
 
 
-class virtual analysis_plugin_t:
+class virtual analysis_plugin_t: string ->
     object
         inherit transform_plugin_t
 
@@ -49,7 +53,7 @@ class virtual analysis_plugin_t:
 
 class plugin_chain_t:
     object
-        method add_plugin: (#transform_plugin_t as 'a) -> string -> unit
+        method add_plugin: (#transform_plugin_t as 'a) -> unit
 
         method find_plugin: string -> plugin_t
 

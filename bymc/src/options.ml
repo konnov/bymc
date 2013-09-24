@@ -19,13 +19,17 @@ type options_t =
     {
         action: action_opt_t; trail_name: string; filename: string;
         inv_name: string; param_assignments: int StringMap.t;
-        mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool
+        mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool;
+        plugin_opts: string StringMap.t
     }
 
 let empty =
     { action = OptNone; trail_name = ""; filename = "";
       inv_name = ""; param_assignments = StringMap.empty;
-      mc_tool = ToolSpin; bdd_pass = false; verbose = false; }
+      mc_tool = ToolSpin; bdd_pass = false; verbose = false;
+      plugin_opts = StringMap.empty
+    }
+
 
 let parse_key_values str =
     let parse_pair map s =
@@ -37,12 +41,15 @@ let parse_key_values str =
     List.fold_left parse_pair StringMap.empty pairs
 
 
+let parse_plugin_opt str =
+    let re = regexp "\\([a-zA-Z0-9]+\\.[a-zA-Z0-9]+\\)=\\(.*\\)" in
+    if string_match re str 0
+    then (matched_group 1 str, matched_group 2 str)
+    else raise (Arg.Bad ("Syntax for plugin options: plugin.attr=int_val"))
+
+
 let parse_options =
-    let opts = ref {
-        action = OptNone; trail_name = ""; filename = ""; inv_name = "";
-        param_assignments = StringMap.empty; bdd_pass = false;
-        mc_tool = ToolSpin; verbose = false
-    } in
+    let opts = ref {empty with filename = ""} in
     let parse_mc_tool = function
     | "spin" -> ToolSpin
     | "nusmv" -> ToolNusmv
@@ -63,6 +70,12 @@ let parse_options =
                 (fun s -> opts := {!opts with mc_tool = (parse_mc_tool s)}))),
                 " choose a model checker from the list (default: spin)."
             );
+            ("--plugin-opt", Arg.String (fun s ->
+                let name, value = parse_plugin_opt s in
+                opts := {!opts with plugin_opts =
+                    (StringMap.add name value !opts.plugin_opts); }
+                ),
+             "P.X=Y set option X of plugin P to Z.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "produce lots of verbose output (you are warned).");
         ]
