@@ -16,13 +16,17 @@ class pia_counter_plugin_t (plugin_name: string) =
             let solver = rtm#solver in
             let dom = caches#analysis#get_pia_dom in
             let roles = caches#analysis#get_var_roles in
-            let ctx = new ctr_abs_ctx_tbl dom roles prog in
+            let proc_names = 
+                if self#has_opt rtm "procs"
+                then Str.split (Str.regexp_string ",") (self#get_opt rtm "procs")
+                else List.map (fun p -> p#get_name) (Program.get_procs prog)
+            in
+            let is_included p = List.mem p#get_name proc_names in
+            let procs = List.filter is_included (Program.get_procs prog) in
+
+            let ctx = new ctr_abs_ctx_tbl dom roles prog procs in
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
-            let proc_names = if self#has_opt rtm "procs"
-            then Str.split (Str.regexp_string ",") (self#get_opt rtm "procs")
-            else List.map (fun p -> p#get_name) (Program.get_procs prog)
-            in
             let funcs = new abs_ctr_funcs dom prog solver in
             log INFO "> Constructing counter abstraction";
             let ctrabs_prog =

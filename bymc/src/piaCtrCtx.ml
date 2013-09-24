@@ -132,12 +132,12 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
 
 
 (* Collection of counter abstraction contexts: one for a process prototype. *)
-class ctr_abs_ctx_tbl dom role_tbl prog =
+class ctr_abs_ctx_tbl dom role_tbl prog procs =
     object(self)
         val mutable tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length (Program.get_procs prog))
+            = Hashtbl.create (List.length procs)
         val mutable abbrev_tbl: (string, ctr_abs_ctx) Hashtbl.t
-            = Hashtbl.create (List.length (Program.get_procs prog))
+            = Hashtbl.create (List.length procs)
         val spur_var = new_var "bymc_spur"
         
         initializer
@@ -149,7 +149,7 @@ class ctr_abs_ctx_tbl dom role_tbl prog =
                 Hashtbl.add tbl pname c_ctx;
                 Hashtbl.add abbrev_tbl abbrev c_ctx
             in
-            List.iter mk (Program.get_procs prog);
+            List.iter mk procs;
             let o = open_out "pia_ctr.txt" in
             self#dump o;
             close_out o
