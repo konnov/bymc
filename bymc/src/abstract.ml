@@ -43,46 +43,18 @@ let do_abstraction caches solver is_first_run prog =
     let chain = new plugin_chain_t in
     chain#add_plugin (new VarRolePlugin.var_role_plugin_t) "var_roles";
     chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t) "pia_dom";
-    chain#add_plugin (new PiaDataPlugin.pia_data_plugin_t) "pia_data";
-    let intabs_prog = chain#transform rtm prog in
-
-    (* TODO: remove these two definitions when the other code becomes plugins *)
-    let dom = caches#analysis#get_pia_dom in
-    let roles = caches#analysis#get_var_roles in
-    if caches#options.Options.mc_tool = Options.ToolNusmv
-    then begin
-        log INFO "> Constructing NuSMV interval abstraction...";
-        let _ = SkelStruc.pass caches intabs_prog in
-        NusmvPass.transform solver caches NusmvPass.LocalShared "main-int" intabs_prog;
-        log INFO "[DONE]";
-    end;
-    log INFO "> Constructing counter abstraction";
-    caches#analysis#set_pia_ctr_ctx_tbl
-        (new ctr_abs_ctx_tbl dom roles intabs_prog);
-    let funcs = new abs_ctr_funcs dom intabs_prog solver in
-    let ctrabs_prog = do_counter_abstraction funcs solver caches intabs_prog
+    let pia_data_p = new PiaDataPlugin.pia_data_plugin_t in
+    chain#add_plugin pia_data_p "pia_data";
+    chain#add_plugin (new NusmvPlugin.nusmv_plugin_t "main-int") "nusmv";
+    chain#add_plugin (new PiaCounterPlugin.pia_counter_plugin_t) "pia_counter";
+    let nusmv_ctr_p =
+        new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t "main" pia_data_p
     in
-    write_to_file false "abs-counter-general.prm"
-        (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
-    log INFO "[DONE]";
-    if caches#options.Options.mc_tool = Options.ToolNusmv
-    then begin
-        log INFO "> Constructing NuSMV processes...";
-        (*
-        NusmvPass.transform solver caches NusmvPass.SharedOnly "main-alt" ctrabs_prog;
-        *)
-        NusmvCounterClusterPass.transform solver caches "main" intabs_prog ctrabs_prog;
-        log INFO "[DONE]";
-    end else if caches#options.Options.mc_tool = Options.ToolSpin
-    then begin
-        log INFO "> Embedding fairness...";
-        let f_prog = Ltl.embed_fairness ctrabs_prog in
-        (* TODO: give it a better name like target-spin? *)
-        write_to_file true "abs-counter.prm"
-            (units_of_program f_prog) (get_type_tab f_prog);
-    end;
+    chain#add_plugin nusmv_ctr_p "nusmv-ctr";
+    chain#add_plugin (new SpinPlugin.spin_plugin_t "abs-counter") "spin";
+    let _ = chain#transform rtm prog in
     solver#pop_ctx;
-    ctrabs_prog
+    chain#get_output
 
 
 let make_vass_xducers caches solver embed_inv prog =
