@@ -527,7 +527,7 @@ let mk_comment text =
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struct_cache#regions.
  *)
-let do_counter_abstraction funcs solver caches prog =
+let do_counter_abstraction funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let extract_atomic_prop atomics name =
@@ -685,7 +685,11 @@ let do_counter_abstraction funcs solver caches prog =
     let new_atomics =
         Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
     let new_procs =
-        List.map (abstract_proc new_atomics) (Program.get_procs prog) in
+        let trp p =
+            if not (List.mem p#get_name proc_names)
+            then p
+            else abstract_proc new_atomics p in
+        List.map trp (Program.get_procs prog) in
     let new_unsafes = ["#include \"cegar_decl.inc\""] in
     let new_decls =
         ctr_ctx_tbl#get_spur

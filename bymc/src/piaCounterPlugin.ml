@@ -19,9 +19,14 @@ class pia_counter_plugin_t (plugin_name: string) =
             let ctx = new ctr_abs_ctx_tbl dom roles prog in
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
+            let proc_names = if self#has_opt rtm "procs"
+            then Str.split (Str.regexp_string ",") (self#get_opt rtm "procs")
+            else List.map (fun p -> p#get_name) (Program.get_procs prog)
+            in
             let funcs = new abs_ctr_funcs dom prog solver in
             log INFO "> Constructing counter abstraction";
-            let ctrabs_prog = do_counter_abstraction funcs solver caches prog
+            let ctrabs_prog =
+                do_counter_abstraction funcs solver caches prog proc_names
             in
             write_to_file false "abs-counter-general.prm"
                 (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);

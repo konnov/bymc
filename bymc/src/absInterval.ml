@@ -445,21 +445,25 @@ let trans_ltl_form new_type_tab name f =
     else tr_f UnivAbs f
 
 
-let do_interval_abstraction solver caches prog = 
+let do_interval_abstraction solver caches prog proc_names = 
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let abstract_proc p =
         let add_def v =
             solver#append_var_def v (type_tab#get_type v) in
-        solver#push_ctx;
-        List.iter add_def p#get_locals;
-        List.iter add_def (Program.get_shared prog);
-        let body = List.map
-            (translate_stmt solver caches type_tab new_type_tab) p#get_stmts in
-        log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
-        List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
-        solver#pop_ctx;
-        proc_replace_body p body
+        if not (List.mem p#get_name proc_names)
+        then p
+        else begin
+            solver#push_ctx;
+            List.iter add_def p#get_locals;
+            List.iter add_def (Program.get_shared prog);
+            let body = List.map
+                (translate_stmt solver caches type_tab new_type_tab) p#get_stmts in
+            log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
+            List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
+            solver#pop_ctx;
+            proc_replace_body p body
+        end
     in
     let abstract_atomic name ae map =
         let univ = trans_prop_decl solver caches prog UnivAbs ae in

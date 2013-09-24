@@ -17,8 +17,13 @@ class pia_data_plugin_t (plugin_name: string) =
             m_pia_data_ctx <- Some ctx;
             caches#analysis#set_pia_data_ctx ctx;
 
+            let proc_names = if self#has_opt rtm "procs"
+            then Str.split (Str.regexp_string ",") (self#get_opt rtm "procs")
+            else List.map (fun p -> p#get_name) (Program.get_procs prog)
+            in
             log INFO "> Constructing interval abstraction";
-            let intabs_prog = do_interval_abstraction solver caches prog in
+            let intabs_prog =
+                do_interval_abstraction solver caches prog proc_names in
             Writer.write_to_file false "abs-interval.prm"
                 (units_of_program intabs_prog) (get_type_tab intabs_prog);
             log INFO "[DONE]";

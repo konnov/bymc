@@ -70,7 +70,7 @@ let parse_options =
                 (fun s -> opts := {!opts with mc_tool = (parse_mc_tool s)}))),
                 " choose a model checker from the list (default: spin)."
             );
-            ("--plugin-opt", Arg.String (fun s ->
+            ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =
                     (StringMap.add name value !opts.plugin_opts); }

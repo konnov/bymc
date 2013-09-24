@@ -73,7 +73,8 @@ let make_vass_xducers caches solver embed_inv prog =
     caches#analysis#set_pia_data_ctx pia_data;
 
     log INFO "> Constructing interval abstraction...";
-    let intabs_prog = do_interval_abstraction solver caches prog in
+    let proc_names = List.map (fun p -> p#get_name) (Program.get_procs prog) in
+    let intabs_prog = do_interval_abstraction solver caches prog proc_names in
     write_to_file false "abs-interval.prm"
         (units_of_program intabs_prog) (get_type_tab intabs_prog);
     log INFO "  [DONE]";
@@ -83,7 +84,8 @@ let make_vass_xducers caches solver embed_inv prog =
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_prog =
-        do_counter_abstraction vass_funcs solver caches intabs_prog in
+        do_counter_abstraction vass_funcs solver caches intabs_prog proc_names
+    in
     write_to_file false "abs-vass.prm"
         (units_of_program vass_prog) (get_type_tab vass_prog);
     log INFO "> Constructing SMT transducers...";
