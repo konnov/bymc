@@ -80,7 +80,8 @@ let make_vass_xducers caches solver embed_inv prog =
     log INFO "  [DONE]";
     log INFO "> Constructing VASS...";
     caches#analysis#set_pia_ctr_ctx_tbl
-        (new ctr_abs_ctx_tbl dom roles intabs_prog (Program.get_procs prog));
+        (new ctr_abs_ctx_tbl dom roles intabs_prog
+            (Program.get_procs intabs_prog));
     let vass_funcs = new vass_funcs dom intabs_prog solver in
     vass_funcs#set_embed_inv embed_inv;
     let vass_prog =
