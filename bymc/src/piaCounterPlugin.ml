@@ -50,6 +50,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 in
                 log INFO "  check the invariants";
                 check_all_invariants rtm vass;
+                m_vass <-
+                    self#make_vass solver dom caches int_prog proc_names true;
                 caches#analysis#set_pia_data_ctx old_pia_data
             end;
 
