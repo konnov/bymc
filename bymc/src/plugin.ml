@@ -89,7 +89,9 @@ class plugin_chain_t =
 
         method transform rtm prog =
             let apply input plugin =
+                plugin#set_input input;
                 let out = plugin#transform rtm input in
+                plugin#set_output out;
                 plugin#update_runtime rtm;
                 out
             in

@@ -41,7 +41,6 @@ let main () =
         match opts.action with
         | OptAbstract ->
             let solver = Program.run_smt_solver prog in (* one solver log! *)
-            check_all_invariants caches solver prog;
             let _ = do_abstraction caches solver true prog in
             let _ = solver#stop in ()
         | OptRefine ->

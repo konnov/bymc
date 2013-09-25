@@ -1,16 +1,21 @@
+open AbsInterval
 open AbsCounter
 open Debug
+open Invariant
 open PiaCtrCtx
+open PiaDataCtx
+open PiaDataPlugin
 open Plugin
 open Program
 open Writer
 
-class pia_counter_plugin_t (plugin_name: string) =
+class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
     object(self)
         inherit transform_plugin_t plugin_name
 
         val mutable m_ctr_abs_ctx_tbl: ctr_abs_ctx_tbl option = None
         val mutable m_ref_step = 0 (* refinement step *)
+        val mutable m_vass = Program.empty
 
         method transform rtm prog =
             let caches = rtm#caches in
@@ -30,7 +35,23 @@ class pia_counter_plugin_t (plugin_name: string) =
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
 
             (* construct VASS *)
-            let _ = self#make_vass solver dom caches prog proc_names false in
+            if m_ref_step = 0
+            then begin
+                let old_pia_data = caches#analysis#get_pia_data_ctx in
+                (* we need data abstraction with a hack,
+                   don't abstract shared *)
+                let pia_data = new pia_data_ctx roles in
+                pia_data#set_hack_shared true;
+                caches#analysis#set_pia_data_ctx pia_data;
+                let int_prog = do_interval_abstraction solver caches
+                        data_p#get_input proc_names in
+                let vass =
+                    self#make_vass solver dom caches int_prog proc_names false
+                in
+                log INFO "  check the invariants";
+                check_all_invariants rtm vass;
+                caches#analysis#set_pia_data_ctx old_pia_data
+            end;
 
             (* construct counter abstraction *)
             let funcs = new abs_ctr_funcs dom prog solver in
