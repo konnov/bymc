@@ -20,14 +20,16 @@ class plugin_t (plugin_name: string) =
 
         method name = plugin_name
 
-        method has_opt (rtm: runtime_t) (name: string) =
+        method is_disabled (rt: runtime_t) = false
+
+        method has_opt (rt: runtime_t) (name: string) =
             let fullname = plugin_name ^ "." ^ name in
-            let options = (rtm#caches#options).Options.plugin_opts in
+            let options = (rt#caches#options).Options.plugin_opts in
             Options.StringMap.mem fullname options
 
-        method get_opt (rtm: runtime_t) (name: string) =
+        method get_opt (rt: runtime_t) (name: string) =
             let fullname = plugin_name ^ "." ^ name in
-            let options = (rtm#caches#options).Options.plugin_opts in
+            let options = (rt#caches#options).Options.plugin_opts in
             try Options.StringMap.find fullname options
             with Not_found ->
                 raise (Plugin_error ("Plugin option " ^ fullname ^ " not found"))
@@ -87,23 +89,25 @@ class plugin_chain_t =
             with Not_found ->
                 raise (Plugin_error ("Not found " ^ name))
 
-        method transform rtm prog =
+        method transform rt prog =
             let apply input plugin =
                 plugin#set_input input;
-                let out = plugin#transform rtm input in
+                let out = if plugin#is_disabled rt
+                    then input
+                    else plugin#transform rt input in
                 plugin#set_output out;
-                plugin#update_runtime rtm;
+                if not (plugin#is_disabled rt) then plugin#update_runtime rt;
                 out
             in
             m_in <- prog;
             m_out <- (List.fold_left apply prog m_plugins);
             m_out
 
-        method refine rtm path =
+        method refine rt path =
             let do_refine (status, path_cons) plugin =
                 if status
                 then (true, path_cons)
-                else plugin#refine rtm path_cons
+                else plugin#refine rt path_cons
             in
             List.fold_left do_refine (false, path) (List.rev m_plugins)
 

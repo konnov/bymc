@@ -6,6 +6,8 @@ class plugin_t: string ->
         method set_ready: unit
         method name: string
 
+        method is_disabled: Runtime.runtime_t -> bool
+
         method has_opt: Runtime.runtime_t -> string -> bool
         method get_opt: Runtime.runtime_t -> string -> string
     end

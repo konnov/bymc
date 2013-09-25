@@ -32,9 +32,10 @@ let serialization_filename = "bymc.ser"
 
 
 (* units -> interval abstraction -> counter abstraction *)
-let do_abstraction caches solver is_first_run prog =
-    solver#push_ctx;
-    solver#comment "do_abstraction";
+let do_abstraction rt =
+    rt#solver#push_ctx;
+    rt#solver#comment "do_abstraction";
+    (*
     if is_first_run
     then begin 
         (* wipe out the files left from previous refinement sessions *)
@@ -42,8 +43,10 @@ let do_abstraction caches solver is_first_run prog =
         close_out (open_out "cegar_pre.inc");
         close_out (open_out "cegar_post.inc")
     end;
-    let rtm = new runtime_t solver caches in
+    *)
     let chain = new plugin_chain_t in
+    chain#add_plugin
+        (new PromelaParserPlugin.promela_parser_plugin_t "promelaParser");
     chain#add_plugin (new VarRolePlugin.var_role_plugin_t "varRoles");
     chain#add_plugin (new PiaDomPlugin.pia_dom_plugin_t "piaDom");
     let pia_data_p = new PiaDataPlugin.pia_data_plugin_t "piaData" in
@@ -54,8 +57,8 @@ let do_abstraction caches solver is_first_run prog =
     chain#add_plugin (new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t
             "nusmvCounter" "main" pia_data_p);
     chain#add_plugin (new SpinPlugin.spin_plugin_t "spin" "abs-counter");
-    let _ = chain#transform rtm prog in
-    solver#pop_ctx;
+    let _ = chain#transform rt Program.empty in
+    rt#solver#pop_ctx;
     let outc = open_out_bin serialization_filename in
     Marshal.to_channel outc chain [Marshal.Closures];
     close_out outc;
@@ -233,7 +236,9 @@ let do_refinement caches solver trail_filename prog =
     solver#pop_ctx;
     if !refined
     then begin
-        log INFO "  Regenerating the counter abstraction";
+        log INFO "  Regenerating the counter abstraction"
         (* formulas must be regenerated *)
+        (*
         let _ = do_abstraction caches solver false prog in ()
+        *)
     end

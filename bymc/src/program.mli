@@ -9,6 +9,8 @@ open SpinIr
 
 module StringMap: Map.S with type key = string
 
+exception Program_error of string
+
 (* a program under analysis and transformation.  *)
 
 type program_t
@@ -68,7 +70,5 @@ val set_ltl_forms: (expr_t) StringMap.t -> program_t -> program_t
 
 val is_global: program_t -> var -> bool
 val is_not_global: program_t -> var -> bool
-
-val run_smt_solver: program_t -> Smt.yices_smt
 
 

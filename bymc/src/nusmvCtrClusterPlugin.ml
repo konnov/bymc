@@ -10,20 +10,19 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
     object(self)
         inherit transform_plugin_t plugin_name
 
+        method is_disabled rtm =
+            rtm#caches#options.Options.mc_tool <> Options.ToolNusmv
+
         method transform rtm prog =
             let caches = rtm#caches in
             let solver = rtm#solver in
-            if caches#options.Options.mc_tool <> Options.ToolNusmv
-            then prog
-            else begin
-                log INFO (sprintf
-                    "> writing clusterized NuSMV model to %s.smv..." out_name);
-                let intabs_prog = pia_data_plugin#get_output in
-                NusmvCounterClusterPass.transform
-                    solver caches out_name intabs_prog prog;
-                log INFO "[DONE]";
-                prog
-            end
+            log INFO (sprintf
+                "> writing clusterized NuSMV model to %s.smv..." out_name);
+            let intabs_prog = pia_data_plugin#get_output in
+            NusmvCounterClusterPass.transform
+                solver caches out_name intabs_prog prog;
+            log INFO "[DONE]";
+            prog
 
         method update_runtime _ =
             ()

@@ -17,14 +17,14 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
         val mutable m_ref_step = 0 (* refinement step *)
         val mutable m_vass = Program.empty
 
-        method transform rtm prog =
-            let caches = rtm#caches in
-            let solver = rtm#solver in
+        method transform rt prog =
+            let caches = rt#caches in
+            let solver = rt#solver in
             let dom = caches#analysis#get_pia_dom in
             let roles = caches#analysis#get_var_roles in
             let proc_names = 
-                if self#has_opt rtm "procs"
-                then Str.split (Str.regexp_string ",") (self#get_opt rtm "procs")
+                if self#has_opt rt "procs"
+                then Str.split (Str.regexp_string ",") (self#get_opt rt "procs")
                 else List.map (fun p -> p#get_name) (Program.get_procs prog)
             in
             let is_included p = List.mem p#get_name proc_names in
@@ -49,7 +49,7 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                     self#make_vass solver dom caches int_prog proc_names false
                 in
                 log INFO "  check the invariants";
-                check_all_invariants rtm vass;
+                check_all_invariants rt vass;
                 m_vass <-
                     self#make_vass solver dom caches int_prog proc_names true;
                 caches#analysis#set_pia_data_ctx old_pia_data
@@ -82,9 +82,9 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             log INFO "  [DONE]"; flush stdout;
             xducer_prog
 
-        method update_runtime rtm =
+        method update_runtime rt =
             match m_ctr_abs_ctx_tbl with
-            | Some c -> rtm#caches#analysis#set_pia_ctr_ctx_tbl c
+            | Some c -> rt#caches#analysis#set_pia_ctr_ctx_tbl c
             | _ -> ()
 
         (* we don't know yet how to refine the data abstraction *)

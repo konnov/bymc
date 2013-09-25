@@ -11,7 +11,7 @@ open Accums
 module StringMap = Map.Make(String)
 
 type action_opt_t =
-    OptAbstract | OptRefine | OptCheckInv | OptSubstitute | OptNone
+    OptAbstract | OptRefine | OptSubstitute | OptNone
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv
 
