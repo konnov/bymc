@@ -3,14 +3,13 @@ open Str
 open Map
 
 open Infra
-open Options
-open Parse
-open Program
-
 open Abstract
-open Instantiation
-open Writer
 open Debug
+open InstantiationPlugin
+open Options
+open PromelaParserPlugin
+open Plugin
+open Program
 
 
 let main () =
@@ -32,12 +31,14 @@ let main () =
             let _ = do_refinement caches solver opts.trail_name prog in
             let _ = solver#stop in ()
             *)
-        | OptSubstitute -> ()
-                (*
-            let units = units_of_program prog in
-            let new_units = do_substitution opts.param_assignments units in
-            write_to_file "concrete.prm" new_units (get_type_tab prog);
-            *)
+        | OptSubstitute ->
+            let chain = new plugin_chain_t in
+            chain#add_plugin
+                (new promela_parser_plugin_t "promelaParser");
+            chain#add_plugin
+                (new instantiation_plugin_t "inst");
+            let _ = chain#transform rt Program.empty in ()
+
         | _ -> printf "No options given. Bye.\n"
     with End_of_file ->
         log ERROR "Premature end of file";
