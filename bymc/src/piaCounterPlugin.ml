@@ -10,6 +10,7 @@ class pia_counter_plugin_t (plugin_name: string) =
         inherit transform_plugin_t plugin_name
 
         val mutable m_ctr_abs_ctx_tbl: ctr_abs_ctx_tbl option = None
+        val mutable m_ref_step = 0 (* refinement step *)
 
         method transform rtm prog =
             let caches = rtm#caches in
@@ -27,6 +28,11 @@ class pia_counter_plugin_t (plugin_name: string) =
             let ctx = new ctr_abs_ctx_tbl dom roles prog procs in
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
+
+            (* construct VASS *)
+            let _ = self#make_vass solver dom caches prog proc_names false in
+
+            (* construct counter abstraction *)
             let funcs = new abs_ctr_funcs dom prog solver in
             log INFO "> Constructing counter abstraction";
             let ctrabs_prog =
@@ -36,6 +42,22 @@ class pia_counter_plugin_t (plugin_name: string) =
                 (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
             log INFO "[DONE]";
             ctrabs_prog
+
+        method private make_vass solver dom caches prog proc_names embed_inv =
+            log INFO "> Constructing VASS...";
+            let vass_funcs = new vass_funcs dom prog solver in
+            vass_funcs#set_embed_inv embed_inv;
+            let vass_prog =
+                do_counter_abstraction vass_funcs solver caches prog proc_names
+            in
+            write_to_file false "abs-vass.prm"
+                (units_of_program vass_prog) (get_type_tab vass_prog);
+            log INFO "> Constructing SMT transducers...";
+            let xducer_prog = SmtXducerPass.do_xducers caches vass_prog in
+            write_to_file false "abs-xducers.prm"
+                (units_of_program xducer_prog) (get_type_tab xducer_prog);
+            log INFO "  [DONE]"; flush stdout;
+            xducer_prog
 
         method update_runtime rtm =
             match m_ctr_abs_ctx_tbl with
