@@ -89,6 +89,13 @@ class plugin_chain_t =
             with Not_found ->
                 raise (Plugin_error ("Not found " ^ name))
 
+        method update_runtime rt =
+            let update p =
+                if not (p#is_disabled rt)
+                then p#update_runtime rt
+            in
+            List.iter update m_plugins
+
         method transform rt prog =
             let apply input plugin =
                 plugin#set_input input;
@@ -104,10 +111,13 @@ class plugin_chain_t =
             m_out
 
         method refine rt path =
-            let do_refine (status, path_cons) plugin =
+            let do_refine (status, trail) p =
                 if status
-                then (true, path_cons)
-                else plugin#refine rt path_cons
+                then (true, trail)
+                else if not (p#is_disabled rt)
+                    then let new_trail = p#decode_trail rt trail in
+                        p#refine rt new_trail
+                    else (false, trail)
             in
             List.fold_left do_refine (false, path) (List.rev m_plugins)
 

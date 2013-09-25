@@ -59,10 +59,25 @@ let do_abstraction rt =
     chain#add_plugin (new SpinPlugin.spin_plugin_t "spin" "abs-counter");
     let _ = chain#transform rt Program.empty in
     rt#solver#pop_ctx;
-    let outc = open_out_bin serialization_filename in
-    Marshal.to_channel outc chain [Marshal.Closures];
-    close_out outc;
+    log INFO "saving game...";
+    let cout = open_out_bin serialization_filename in
+    Marshal.to_channel cout chain [Marshal.Closures];
+    close_out cout;
     chain#get_output
+
+
+let new_refine rt =
+    log INFO "loading game...";
+    let cin = open_in_bin serialization_filename in
+    let (chain: plugin_chain_t) = Marshal.from_channel cin in
+    close_in cin;
+    chain#update_runtime rt;
+    (* TODO: read trail *)
+    let (status, _) = chain#refine rt [] in
+    if not status
+    then log INFO "Unsuccessful refinement"
+    else log INFO "Successful refinement"
+
 
 
 let make_vass_xducers caches solver embed_inv prog =

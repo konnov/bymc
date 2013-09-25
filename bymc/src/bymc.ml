@@ -22,24 +22,27 @@ let main () =
         solver#start;
         let rt = new Runtime.runtime_t solver caches
         in
-        match opts.action with
-        | OptAbstract ->
-            let _ = do_abstraction rt in
-            let _ = solver#stop in ()
-        | OptRefine -> ()
-            (*
-            let _ = do_refinement caches solver opts.trail_name prog in
-            let _ = solver#stop in ()
-            *)
-        | OptSubstitute ->
-            let chain = new plugin_chain_t in
-            chain#add_plugin
-                (new promela_parser_plugin_t "promelaParser");
-            chain#add_plugin
-                (new instantiation_plugin_t "inst");
-            let _ = chain#transform rt Program.empty in ()
+        begin
+            match opts.action with
+            | OptAbstract ->
+                let _ = do_abstraction rt in ()
+            | OptRefine ->
+                new_refine rt
+                (*
+                let _ = do_refinement caches solver opts.trail_name prog in
+                let _ = solver#stop in ()
+                *)
+            | OptSubstitute ->
+                let chain = new plugin_chain_t in
+                chain#add_plugin
+                    (new promela_parser_plugin_t "promelaParser");
+                chain#add_plugin
+                    (new instantiation_plugin_t "inst");
+                let _ = chain#transform rt Program.empty in ()
 
-        | _ -> printf "No options given. Bye.\n"
+            | _ -> printf "No options given. Bye.\n"
+        end;
+        let _ = solver#stop in ()
     with End_of_file ->
         log ERROR "Premature end of file";
         exit 1

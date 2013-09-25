@@ -62,6 +62,10 @@ class plugin_chain_t:
         method transform:
             Runtime.runtime_t -> Program.program_t -> Program.program_t
 
+        (* update the caches with the computed results *)
+        method update_runtime:
+            Runtime.runtime_t -> unit
+
         method refine:
             Runtime.runtime_t -> Program.path_t -> bool * Program.path_t            
         method get_input: Program.program_t
