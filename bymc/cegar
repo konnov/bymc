@@ -94,7 +94,7 @@ while [ "$cmd" != "q" ]; do
         out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
         cmd="q"
     else
-        ./pan -S | grep -v MSC | egrep '(^[A-Za-z0-9]*:GS\{|START OF CYCLE)' > spin.trace \
+        ./pan -S | grep -v MSC | egrep '(^S\{|^X\{|START OF CYCLE)' > spin.trace \
         && CAMLRUNPARAM="b" $TOOL -t spin.trace $PROG 2>&1 | tee refinement.out
 
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"

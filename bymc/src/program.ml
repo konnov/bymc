@@ -1,9 +1,14 @@
+open Accums
 open SpinIr
 
-module StringMap = Map.Make (String)
-
 type expr_t = Spin.token expr
-type path_t = expr_t list list
+
+type path_elem_t =
+    | State of expr_t list (* a state as a set of variable constraints *)
+    | Intrinsic of string StringMap.t (* intrinsic data: key=value *)
+
+type path_t = path_elem_t list
+type lasso_t = path_t * path_t (* (prefix, cycle) *)
 
 exception Program_error of string
 

@@ -49,6 +49,14 @@ let str_join (sep: string) (strs: string list) =
 
 let str_nempty (s: string): bool = s <> ""
 
+(* create a text representation of StringMap *)
+let str_map_s elem_fun map =
+    let f k v a =
+        Printf.sprintf "%s=%s%s"
+            k (elem_fun v) (if a <> "" then ", " ^ a else "")
+    in
+    StringMap.fold f map ""
+
 (* separate a list into three parts:
     before a matching element, the matching element, the tail.
     If an element is not found, then two last resulting lists are empty.

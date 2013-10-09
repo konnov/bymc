@@ -33,12 +33,12 @@ class virtual transform_plugin_t: string ->
 
         (* decode a counter-example *)
         method virtual decode_trail:
-            Runtime.runtime_t -> Program.path_t -> Program.path_t
+            Runtime.runtime_t -> Program.lasso_t -> Program.lasso_t
 
         (* refine the current program using the decoded path,
            return true if successful *)
         method virtual refine:
-            Runtime.runtime_t -> Program.path_t -> bool * Program.path_t
+            Runtime.runtime_t -> Program.lasso_t -> bool * Program.lasso_t
     end
 
 
@@ -47,9 +47,9 @@ class virtual analysis_plugin_t: string ->
         inherit transform_plugin_t
 
         method decode_trail:
-            Runtime.runtime_t -> Program.path_t -> Program.path_t
+            Runtime.runtime_t -> Program.lasso_t -> Program.lasso_t
         method refine:
-            Runtime.runtime_t -> Program.path_t -> bool * Program.path_t
+            Runtime.runtime_t -> Program.lasso_t -> bool * Program.lasso_t
     end
 
 
@@ -67,7 +67,7 @@ class plugin_chain_t:
             Runtime.runtime_t -> unit
 
         method refine:
-            Runtime.runtime_t -> Program.path_t -> bool * Program.path_t            
+            Runtime.runtime_t -> Program.lasso_t -> bool * Program.lasso_t            
         method get_input: Program.program_t
 
         method get_output: Program.program_t

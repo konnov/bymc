@@ -5,9 +5,8 @@
   Igor Konnov, 2012
  *)
 
+open Accums
 open SpinIr
-
-module StringMap: Map.S with type key = string
 
 exception Program_error of string
 
@@ -16,7 +15,13 @@ exception Program_error of string
 type program_t
 
 type expr_t = Spin.token expr
-type path_t = expr_t list list
+
+type path_elem_t =
+    | State of expr_t list (* a state as a set of variable constraints *)
+    | Intrinsic of string StringMap.t (* intrinsic data: key=value *)
+
+type path_t = path_elem_t list
+type lasso_t = path_t * path_t (* (prefix, cycle) *)
 
 val program_of_units: data_type_tab -> Spin.token prog_unit list -> program_t
 val units_of_program: program_t -> Spin.token prog_unit list

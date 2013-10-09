@@ -469,16 +469,16 @@ let do_interval_abstraction solver caches prog proc_names =
         let univ = trans_prop_decl solver caches prog UnivAbs ae in
         let ex = trans_prop_decl solver caches prog ExistAbs ae in
         if Ltl.is_invariant_atomic name
-        then Program.StringMap.add name ex map
-        else Program.StringMap.add (name ^ "_exst") ex
-                (Program.StringMap.add (name ^ "_univ") univ map)
+        then Accums.StringMap.add name ex map
+        else Accums.StringMap.add (name ^ "_exst") ex
+                (Accums.StringMap.add (name ^ "_univ") univ map)
     in
     let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_atomics =
-        Program.StringMap.fold
-            abstract_atomic (Program.get_atomics prog) Program.StringMap.empty
+        Accums.StringMap.fold
+            abstract_atomic (Program.get_atomics prog) Accums.StringMap.empty
     in
-    let new_forms = Program.StringMap.mapi
+    let new_forms = Accums.StringMap.mapi
         (trans_ltl_form new_type_tab) (Program.get_ltl_forms prog) in
     let abs_shared (shared_var, init_expr) =
         let ctx = caches#analysis#get_pia_data_ctx in

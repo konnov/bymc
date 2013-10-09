@@ -12,7 +12,7 @@ let check_invariant rtm xducers_prog inv_name =
     let solver = rtm#solver and caches = rtm#caches in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let aprops = Program.get_atomics xducers_prog in
-    let inv_expr = match Program.StringMap.find inv_name aprops with
+    let inv_expr = match Accums.StringMap.find inv_name aprops with
     | PropGlob e -> e
     | _ -> raise (Failure ("Invariant must be a global expression: " ^ inv_name))
     in
@@ -46,7 +46,7 @@ let check_all_invariants rtm prog =
     let fold_invs name ae lst =
         if is_invariant_atomic name then name :: lst else lst
     in
-    let invs = Program.StringMap.fold fold_invs (Program.get_atomics prog) []
+    let invs = Accums.StringMap.fold fold_invs (Program.get_atomics prog) []
     in
     rtm#solver#push_ctx;
     rtm#solver#comment "check_all_invariants";

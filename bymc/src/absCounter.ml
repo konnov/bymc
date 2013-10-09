@@ -22,6 +22,7 @@ open Debug
 open AbsBasics
 open VarRole
 open AbsInterval
+open Program
 open Refinement
 open Regions
 open Ltl
@@ -276,6 +277,8 @@ let omit_local_assignments prog init_stmts =
 (* abstraction of functions different in VASS and our counter abstraction *)
 class virtual ctr_funcs =
     object
+        val mutable m_print = MExpr (fresh_id(), Nop "")
+
         method virtual introduced_vars:
             var list
 
@@ -303,6 +306,7 @@ class virtual ctr_funcs =
         method virtual set_embed_inv: bool -> unit
 
         method virtual register_new_vars: ctr_abs_ctx_tbl -> data_type_tab -> unit
+        method set_print (s: token mir_stmt) = m_print <- s 
     end
 
 
@@ -319,6 +323,7 @@ class abs_ctr_funcs dom prog solver =
             []
 
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
+            (* old impl 
             let n = c_ctx#get_ctr_dim in
             let m = List.length (Program.get_shared prog) in
             let str = sprintf "%s:GS{%%d->%%d:{%s},%s}\\n"
@@ -328,8 +333,16 @@ class abs_ctr_funcs dom prog solver =
             let mk_deref i = self#deref_ctr c_ctx (Const i) in
             let es = (List.map mk_deref (range 0 n))
                 @ (List.map (fun v -> Var v) (Program.get_shared prog)) in
-            
+
             [ MPrint (fresh_id (), str, prev_idx :: next_idx :: es)]
+            *)
+            let fmt =
+                sprintf "X{proc=%s,from=%%d,to=%%d}\\n" c_ctx#proctype_name in
+            let intr = MPrint (fresh_id (), fmt, [prev_idx; next_idx]) in
+            if prev_idx <> (Const (-1))
+            then [ intr; replace_m_stmt_id (fresh_id ()) m_print ]
+            else [ replace_m_stmt_id (fresh_id ()) m_print ]
+
 
         method mk_init c_ctx active_expr decls init_stmts =
             let init_locals = find_init_local_vals c_ctx decls init_stmts in
@@ -532,7 +545,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let extract_atomic_prop atomics name =
         try
-            match (Program.StringMap.find name atomics) with
+            match (Accums.StringMap.find name atomics) with
             | PropGlob e -> e
             | _ -> raise (Abstraction_error ("Cannot extract " ^ name))
         with Not_found ->
@@ -683,20 +696,14 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (trans_prop_decl solver ctr_ctx_tbl prog ae)
     in
     let new_atomics =
-        Program.StringMap.map abstract_atomic (Program.get_atomics prog) in
-    let new_procs =
-        let trp p =
-            if not (List.mem p#get_name proc_names)
-            then p
-            else abstract_proc new_atomics p in
-        List.map trp (Program.get_procs prog) in
+        Accums.StringMap.map abstract_atomic (Program.get_atomics prog) in
     let new_unsafes = ["#include \"cegar_decl.inc\""] in
     let new_decls =
         ctr_ctx_tbl#get_spur
             :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let new_ltl_forms =
-        Program.StringMap.add "fairness_ctr"
+        Accums.StringMap.add "fairness_ctr"
         (create_fairness new_type_tab ctr_ctx_tbl)
         (Program.get_ltl_forms prog) in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
@@ -709,6 +716,15 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (Program.set_atomics new_atomics
         (Program.set_unsafes new_unsafes
         (Program.set_ltl_forms new_ltl_forms
-        (Program.set_procs new_procs prog))))))))) in
-    new_prog
+        Program.empty)))))))) in
+    let fmt, es = Serialize.global_state_fmt new_prog in
+    funcs#set_print (MPrint (fresh_id (), fmt ^ "\\n", es));
+    let new_procs =
+        let trp p =
+            if not (List.mem p#get_name proc_names)
+            then p
+            else abstract_proc new_atomics p in
+        List.map trp (Program.get_procs prog)
+    in
+    Program.set_procs new_procs new_prog
 

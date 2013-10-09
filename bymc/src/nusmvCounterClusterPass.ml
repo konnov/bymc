@@ -467,7 +467,7 @@ let transform solver caches out_name intabs_prog prog =
     *)
     fprintf out "\n\n-- specifications\n";
     let atomics = Program.get_atomics prog in
-    let _ = Program.StringMap.mapi
+    let _ = Accums.StringMap.mapi
         (write_ltl_spec out atomics new_type_tab main_sym_tab hidden_idx_fun)
         (Program.get_ltl_forms prog) in
 

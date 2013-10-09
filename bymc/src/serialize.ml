@@ -51,3 +51,18 @@ let parse_global_state prog text =
     then List.map2 bind (range 0 (List.length es)) es
     else []
 
+
+let parse_intrinsic text =
+    let parse_key_val map s =
+        match Str.bounded_split (Str.regexp_string "=") s 2 with
+        | [key; value] -> StringMap.add key value map
+        | _ -> raise (Failure ("Expected key=value, found: " ^ s))
+    in
+    let kv = "[A-Za-z0-9]+=[A-Za-z0-9]+" in
+    let re = Str.regexp (sprintf "X{\\(\\(%s\\|,%s\\)+\\)}" kv kv) in
+    if Str.string_match re text 0
+    then List.fold_left parse_key_val StringMap.empty
+        (List.rev
+            (Str.split (Str.regexp_string ",") (Str.matched_group 1 text)))
+    else StringMap.empty
+

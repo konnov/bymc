@@ -51,8 +51,8 @@ class virtual transform_plugin_t (plugin_name: string) =
 
         method virtual transform: runtime_t -> program_t -> program_t
         method virtual update_runtime: runtime_t -> unit
-        method virtual decode_trail: runtime_t -> path_t -> path_t
-        method virtual refine: runtime_t -> path_t -> bool * path_t
+        method virtual decode_trail: runtime_t -> lasso_t -> lasso_t
+        method virtual refine: runtime_t -> lasso_t -> bool * lasso_t
     end
 
 

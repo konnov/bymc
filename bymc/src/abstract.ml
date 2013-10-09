@@ -73,7 +73,7 @@ let new_refine rt =
     close_in cin;
     chain#update_runtime rt;
     (* TODO: read trail *)
-    let (status, _) = chain#refine rt [] in
+    let (status, _) = chain#refine rt ([], []) in
     if not status
     then log INFO "Unsuccessful refinement"
     else log INFO "Successful refinement"

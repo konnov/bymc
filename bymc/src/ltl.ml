@@ -79,7 +79,7 @@ let normalize_form form =
 let embed_atomics type_tab aprops form =
     let get_atomic name =
         try
-            match Program.StringMap.find name aprops with
+            match Accums.StringMap.find name aprops with
             | PropGlob e -> e
             | _ ->
                 fprintf stderr "WARN: skipped atomic expression: %s\n" name;
@@ -144,10 +144,10 @@ let embed_fairness prog =
     let ltl_forms = Program.get_ltl_forms_as_hash prog in
     let fairness = list_to_binex AND (collect_fairness_forms ltl_forms) in
     let embed map (name, form) =
-        Program.StringMap.add name (BinEx (IMPLIES, fairness, form)) map in
+        Accums.StringMap.add name (BinEx (IMPLIES, fairness, form)) map in
     let other_fs = List.filter
         (fun (n, _) -> not (is_fairness_form n)) (hashtbl_as_list ltl_forms) in
-    let new_forms = List.fold_left embed Program.StringMap.empty other_fs in
+    let new_forms = List.fold_left embed Accums.StringMap.empty other_fs in
     (Program.set_ltl_forms new_forms prog)
 
 
@@ -155,7 +155,7 @@ let is_invariant_atomic name =
     Str.string_match (Str.regexp ".*_inv") name 0
 
 
-let find_invariants (aprops: Spin.token atomic_expr Program.StringMap.t):
+let find_invariants (aprops: Spin.token atomic_expr Accums.StringMap.t):
         Spin.token expr list =
     let collect_invariants name prop inv_props =
         let form = match prop with
@@ -166,6 +166,6 @@ let find_invariants (aprops: Spin.token atomic_expr Program.StringMap.t):
         in
         if is_invariant_atomic name then form :: inv_props else inv_props
     in
-    Program.StringMap.fold collect_invariants aprops []
+    Accums.StringMap.fold collect_invariants aprops []
 
 
