@@ -15,6 +15,7 @@ open SpinIr
 open SpinIrImp
 open Smt
 
+(* to be removed, use SpinPlugin instead *)
 let parse_spin_trail filename dom data_ctx ctr_ctx_tbl prog =
     let last_id = ref 0 in
     let rev_map = Hashtbl.create 10 in (* from ids to abstract states *)

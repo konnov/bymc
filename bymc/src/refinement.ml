@@ -4,6 +4,8 @@ open Printf
 open Str
 
 open Accums
+open Ltl
+open Program
 open Spin
 open SpinIr
 open SpinIrImp
@@ -68,8 +70,7 @@ let create_path proc xducer local_vars shared_vars when_moving n_steps =
     xducers @ connections
 
 
-let smt_append_bind solver rev_map smt_rev_map expr_stmt =
-    match expr_stmt with
+let smt_append_bind solver rev_map smt_rev_map = function
     | Expr (id, e) ->
         let smt_id = solver#append_expr e in
         (* Bind ids assigned to expressions by the solver to the ids
@@ -81,7 +82,7 @@ let smt_append_bind solver rev_map smt_rev_map expr_stmt =
             let s, abs_expr = Hashtbl.find rev_map id in
             log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
             if solver#get_collect_asserts
-            then Hashtbl.add smt_rev_map smt_id (Hashtbl.find rev_map id);
+            then Hashtbl.add smt_rev_map smt_id (s, abs_expr);
         end
 
     | _ -> ()
@@ -439,3 +440,105 @@ let check_loop_unfair solver prog ctr_abs_tbl
         not sat
     in
     List.fold_left (||) false (List.map check_one fair_forms)
+
+
+let filter_good_fairness type_tab aprops fair_forms =
+    let err_fun f =
+        printf "Fairness formula not supported by refinement (ignored): %s\n" 
+            (expr_s f);
+        Nop ""
+    in
+    let fair_atoms = List.map (find_fair_atoms err_fun type_tab aprops) fair_forms in
+    let filtered = List.filter not_nop fair_atoms in
+    printf "added %d fairness constraints\n" (List.length filtered);
+    filtered
+
+
+let is_state = function
+    | State _ -> true
+    | _ -> false
+
+
+(* FIXME: refactor it, the decisions must be clear and separated *)
+(* units -> interval abstraction -> vector addition state systems *)
+let do_refinement rt ctr_prog xducer_prog (prefix, loop) =
+    let type_tab = Program.get_type_tab xducer_prog in
+      let ctx = rt#caches#analysis#get_pia_data_ctx in
+      let dom = rt#caches#analysis#get_pia_dom in
+      let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
+    let aprops = Program.get_atomics xducer_prog in
+    let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
+    let inv_forms = find_invariants aprops in
+    let total_steps =
+        (List.length (List.filter is_state (prefix @ loop))) - 1 in
+    log INFO (sprintf "  %d step(s)" total_steps);
+    if total_steps = 0
+    then raise (Failure
+        "All processes idle forever at the initial state");
+    log INFO "  [DONE]"; flush stdout;
+    log INFO "> Simulating counter example in VASS..."; flush stdout;
+    false
+
+    (*
+    let check_trans st = 
+        let step_asserts = list_sub trail_asserts st 2 in
+        solver#append
+            (sprintf ";; Checking the transition %d -> %d" st (st + 1));
+        solver#set_collect_asserts true;
+        let res, smt_rev_map =
+            (simulate_in_smt solver xducer_prog ctr_ctx_tbl step_asserts rev_map 1)
+        in
+        solver#set_collect_asserts false;
+        if not res
+        then begin
+            log INFO (sprintf "  The transition %d -> %d is spurious."
+                    st (st + 1));
+            flush stdout;
+            refine_spurious_step solver smt_rev_map st;
+            true
+        end else begin
+            log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
+                    st (st + 1) total_steps);
+            flush stdout;
+            (*print_vass_trace ctx solver 2;*)
+            false
+        end
+    in
+    let num_states = (List.length trail_asserts) in
+    let refined = ref false in
+    (* Try to detect spurious transitions and unfair paths
+       (discussed in the TACAS submission) *)
+    log INFO "  Trying to find a spurious transition...";
+    flush stdout;
+    solver#set_need_evidence true; (* needed for refinement! *)
+    let sp_st =
+        try List.find check_trans (range 0 (num_states - 1))
+        with Not_found -> -1
+    in
+    let refined = if sp_st <> -1
+    then begin
+        log INFO "(status trace-refined)";
+        true
+    end else begin
+        let fairness =
+            filter_good_fairness type_tab aprops
+                (collect_fairness_forms ltl_forms) in
+        let spur_loop =
+            check_loop_unfair solver xducer_prog ctr_ctx_tbl
+                rev_map fairness inv_forms loop_asserts in
+        if spur_loop
+        then begin
+            log INFO "The loop is unfair. Refined.";
+            true
+        end else begin
+            log INFO "The loop is fair";
+
+            log INFO "This counterexample does not have spurious transitions or states.";
+            log INFO "If it does not show a real problem, provide me with an invariant.";
+            false
+        end
+    end
+    in
+    (* introduce the predicates in the counter abstraction *)
+    refined
+    *)

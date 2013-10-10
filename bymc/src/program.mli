@@ -21,7 +21,7 @@ type path_elem_t =
     | Intrinsic of string StringMap.t (* intrinsic data: key=value *)
 
 type path_t = path_elem_t list
-type lasso_t = path_t * path_t (* (prefix, cycle) *)
+type lasso_t = path_t * path_t (* (prefix, loop) *)
 
 val program_of_units: data_type_tab -> Spin.token prog_unit list -> program_t
 val units_of_program: program_t -> Spin.token prog_unit list

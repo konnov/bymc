@@ -7,6 +7,10 @@ open PiaDataCtx
 open PiaDataPlugin
 open Plugin
 open Program
+open Refinement
+open Spin
+open SpinIr
+open SpinIrImp
 open Writer
 
 class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
@@ -87,9 +91,42 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             | Some c -> rt#caches#analysis#set_pia_ctr_ctx_tbl c
             | _ -> ()
 
-        (* we don't know yet how to refine the data abstraction *)
-        method decode_trail _ path = path
+        (* for a counter or shared variable x,
+           replace x = d_j with g_j <= x < g_{j+1} *)
+        method decode_trail rt (prefix, loop) =
+            let dom = rt#caches#analysis#get_pia_dom in
+            let data_ctx = rt#caches#analysis#get_pia_data_ctx in
 
-        method refine _ path = (false, path)
+            let concretize_ex = function
+            | BinEx(EQ, BinEx(ARR_ACCESS, Var a, Const i), Const v) ->
+                (* TODO: check, whether "a" is a counter array? *)
+                let el = BinEx(ARR_ACCESS, Var a, Const i) in
+                let conc_ex = dom#expr_is_concretization el v in
+                conc_ex
+
+            | BinEx(EQ, Var x, Const v) as e ->
+                if data_ctx#must_keep_concrete (Var x)
+                then dom#expr_is_concretization (Var x) v
+                else e
+
+            | _ as e ->
+                raise (Refinement.Refinement_error
+                    ("Don't know how to decode: " ^ (expr_s e)))
+            in
+            let conc_row = function
+                | State path_elem ->
+                    State (List.map concretize_ex path_elem)
+
+                | _ as o -> o
+            in
+            let prefix_asrt = List.map conc_row prefix in
+            let loop_asrt = List.map conc_row loop in
+            (List.rev prefix_asrt, List.rev loop_asrt)
+
+
+        method refine rt lasso =
+            if do_refinement rt self#get_output m_vass lasso
+            then (true, lasso)
+            else (false, lasso)
     end
 

@@ -157,6 +157,16 @@ let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
 
 
 (* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
+
+(* TODO: this is a superficial implementation.
+   One can first replace concrete variables with dummies, then make a pointwise
+   abstraction over an expression with "&&", "||", and arithmetics
+   and then replace the dummies with the constraints on concrete variables back.
+
+   If we do it as said, then (d_i <= x < d_{i+1}) will be abstracted to
+   x = I_i, not to
+   (x = I_i || ... || x = I_max) && (x = I_0 || ... || x = I_{i-1})
+*)
 let abstract_arith_rel ctx dom solver atype tok lhs rhs =
     let orig_expr = BinEx (tok, lhs, rhs) in
     let ltrait = get_abs_trait (var_trait ctx) lhs in
@@ -318,7 +328,7 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
     | MIf (id, opts) as if_s ->
         (* Abstraction of options may lead to non-deterministic choices, even if
             the original options were mutually exclusive. Else option must be
-            translated into the explicit negation of other guards and then
+            translated into the explicit negation of the other guards and then
             abstracted. Otherwise, the abstract relation does not simulate the
             original program (the abstract conditions are not overapproximations).
          *)
