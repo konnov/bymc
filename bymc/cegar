@@ -99,7 +99,7 @@ while [ "$cmd" != "q" ]; do
 
         echo -e "The trace in the ABSTRACT system (produced by spin):\n"
         echo -n "     0  "; head -n 1 spin.trace # start with 0
-        tail -n '+2' spin.trace | $BYMC_HOME/script/nl.py | head -n 30
+        tail -n '+2' spin.trace | $BYMC_HOME/script/nl.py -n 30
         echo ""
         
         if grep "trace-no-refinement" refinement.out; then
