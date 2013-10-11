@@ -30,6 +30,11 @@ out=""
 
 START_TIME=0
 
+function report_and_quit {
+    echo "$1" 1>&2
+    exit 1
+}
+
 function appendToVerdict() {
     if [ "$out" == "" ]; then
         out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
@@ -73,20 +78,22 @@ cd $CUR_DIR
 START_TIME=$(date +%s)
 
 if [ "$CONTINUE" == "" ]; then
-    CAMLRUNPARAM="b" $TOOL -a $PROG || exit 1
+    CAMLRUNPARAM="b" $TOOL -a $PROG \
+        || report_and_quit "Failure: $TOOL -a $PROG"
 fi
 
 rm -rf $SPIN_OUT spin.trace refinement.out
 
 while [ "$cmd" != "q" ]; do
     echo "Converting the spec: !`head $PROP.ltl`..."
-    #$SPIN -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
-    $LTL2BA -f "!`head $PROP.ltl`" >$PROP.never || (cat $PROP.never; exit 1)
+    $LTL2BA -f "!`head $PROP.ltl`" >$PROP.never \
+        || (report_and_quit "`cat $PROP.never`")
     echo "Generating pan..."
     set -x # echo on
-    $SPIN -a -N $PROP.never abs-counter.prm || exit 2
+    $SPIN -a -N $PROP.never abs-counter.prm || report_and_quit "spin failed"
     (gcc $rand $PANCC_FLAGS -o ./pan pan.c \
-        && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT) || exit 3
+        && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT) \
+        || report_and_quit "pan failed"
     set +x # echo off
 
     if egrep -q "errors: +0" $SPIN_OUT; then

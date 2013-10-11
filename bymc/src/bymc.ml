@@ -62,8 +62,10 @@ let _ =
         if Printexc.backtrace_status ()
         then begin
             fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
-            print_trace ()
+            print_trace ();
+            Pervasives.exit 1
         end else begin
             fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
-            fprintf stdout "(Trace is not available. Compile with -g?\n"
+            fprintf stdout "(Trace is not available. Compile with -g?\n";
+            Pervasives.exit 1
         end

@@ -120,9 +120,10 @@ let create prog args err_filename =
         Unix.close in_pipe_i; Unix.close in_pipe_o; 
         Unix.dup2 out_pipe_i Unix.stdin;
         Unix.close out_pipe_i; Unix.close out_pipe_o; 
-        Unix.dup2 fderr Unix.stderr;
+        Unix.dup2 fderr Unix.stderr; Unix.close fderr;
         let exec _ =
             let _ = Unix.execvp prog (Array.append [|prog|] args) in
+            Unix.close Unix.stderr;
             () in
         (* exit, if an error occurs *)
         let _ = Unix.handle_unix_error exec () in ()
