@@ -3,6 +3,7 @@
 open Printf
 open Str
 
+open AbsBasics
 open Accums
 open Ltl
 open Program
@@ -59,10 +60,11 @@ let create_path proc xducer local_vars shared_vars when_moving n_steps =
         then map_xducer step
         else [skip_step local_vars step]
     in
-    let xducers = List.concat
-        (* the first element of when_moving represents a dummy element,
-           showing the initial state. Skip it. *)
-        (List.map2 move_or_skip (List.tl when_moving) (range 0 n_steps)) in
+    (* the last element of when_moving is always false, as no process
+       is moving from the last state. Skip it. *)
+    let my_steps = List.rev (List.tl (List.rev when_moving)) in
+    let xducers =
+        List.concat (List.map2 move_or_skip my_steps (range 0 n_steps)) in
     let connections =
         List.map
             (connect_steps tracked_vars)
@@ -70,65 +72,57 @@ let create_path proc xducer local_vars shared_vars when_moving n_steps =
     xducers @ connections
 
 
-let smt_append_bind solver rev_map smt_rev_map = function
-    | Expr (id, e) ->
-        let smt_id = solver#append_expr e in
-        (* Bind ids assigned to expressions by the solver to the ids
-           of constraints retrieved from the model checker.
-           Not all expressions correspond to the counter-example,
-           thus, we add only those which do.
-           *)
-        if id >= 0 && (Hashtbl.mem rev_map id) then begin
-            let s, abs_expr = Hashtbl.find rev_map id in
-            log DEBUG (sprintf "map: %d -> %d %s\n" smt_id s (expr_s abs_expr));
-            if solver#get_collect_asserts
-            then Hashtbl.add smt_rev_map smt_id (s, abs_expr);
-        end
-
-    | _ -> ()
+let smt_append_bind solver smt_rev_map state_no orig_expr mapped_expr =
+    let smt_id = solver#append_expr mapped_expr in
+    (* bind ids assigned to expressions by the solver *)
+    if smt_id >= 0
+    then begin
+        log DEBUG (sprintf "map: %d -> %d, %s\n"
+            smt_id state_no (expr_s mapped_expr));
+        if solver#get_collect_asserts
+        then Hashtbl.add smt_rev_map smt_id (state_no, orig_expr)
+    end
 
 
 (* TODO: optimize it for the case of checking one transition only! *)
 (* TODO: mark the case of replaying a path (not a transition) as experimental
          and remove it out from here, it is heavy *)
-let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts rev_map n_steps =
-    let shared_vars = (Program.get_shared prog) in
-    let type_tab = (Program.get_type_tab prog) in
-    let smt_rev_map = Hashtbl.create (Hashtbl.length rev_map) in
+let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
+    let shared_vars = Program.get_shared prog in
+    let type_tab = Program.get_type_tab prog in
+    let smt_rev_map = Hashtbl.create 10 in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
-    let append_one_assert proc shared state_no asrt =
-        match asrt with
-        | Expr (id, e) ->
-            let new_e =
-                if state_no = 0
-                then map_vars
-                    (fun v -> Var (map_to_step 0 (map_to_in v))) e
-                else map_vars
-                    (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) e
-            in
-            smt_append_bind solver rev_map smt_rev_map (Expr (id, new_e))
-
-        | _ -> ()
+    let is_proc_moving proc (_, annot) =
+        try proc#get_name = (StringMap.find "proc" annot)
+        with Not_found -> false
     in
-    let append_trail_asserts state_no (proc, asserts) =
-        List.iter (append_one_assert proc shared_vars state_no) asserts
+    let append_one_assert state_no asrt =
+        let new_e =
+            if state_no = 0
+            then map_vars (fun v -> Var (map_to_step 0 (map_to_in v))) asrt
+            else map_vars
+                (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) asrt
+        in
+        smt_append_bind solver smt_rev_map state_no asrt new_e
+    in
+    let append_trail_asserts state_no (asserts, _) =
+        List.iter (append_one_assert state_no) asserts
     in
     solver#push_ctx;
-    (* project the trace to the names of processes taking steps *)
-    let moving_procs = List.map (fun (p, _) -> p) trail_asserts in
     (* put asserts from the control flow graph *)
     log INFO (sprintf 
-        "    collecting declarations and xducer asserts (%d xducers)..."
+        "    collecting declarations and assertions of transition relation (%d xducers)..."
         (List.length (Program.get_procs prog)));
     flush stdout;
     let proc_asserts proc =
         let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
         let proc_xd = proc#get_stmts in
-        let when_moving = List.map (fun p -> p = c_ctx#abbrev_name) moving_procs
-        in
+        let when_moving = List.map (is_proc_moving proc) trail_asserts in
         let local_vars = [c_ctx#get_ctr] in
-        create_path c_ctx#abbrev_name proc_xd local_vars shared_vars when_moving n_steps in
+        create_path c_ctx#abbrev_name proc_xd local_vars shared_vars
+            when_moving n_steps
+    in
     let xducer_asserts =
         List.concat (List.map proc_asserts (Program.get_procs prog)) in
     let decls = expr_list_used_vars xducer_asserts in
@@ -331,25 +325,36 @@ let intro_new_pred prefix (* pred_reach or pred_recur *) =
    partition the constraints into two categories:
        before the transition, after the transition
  *)
-let retrieve_unsat_cores solver smt_rev_map src_state_no =
-    let core_ids = solver#get_unsat_cores in
-    log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
-    let filtered = List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids
+let retrieve_unsat_cores rt smt_rev_map src_state_no =
+    let leaf_fun = function
+        | BinEx (ARR_ACCESS, Var _, _) -> true
+        | _ -> false
     in
+    let abstract ((s, e): int * expr_t): int * expr_t =
+        let dom = rt#caches#analysis#get_pia_dom in
+        let data_ctx = rt#caches#analysis#get_pia_data_ctx in
+        (s, AbsInterval.translate_expr data_ctx dom rt#solver ExistAbs e)
+    in
+    let core_ids = rt#solver#get_unsat_cores in
+    log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
+    let filtered =
+        List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids in
     let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
-    let pre, post = List.partition (fun (s, e) -> s = src_state_no) mapped in
-    let b2 (s, e) = sprintf "(%s)" (expr_s e) in
+    let aes = List.map abstract mapped in
+    let pre, post = List.partition (fun (s, _) -> s = src_state_no) aes in
+    let b2 (_, e) = sprintf "(%s)" (expr_s e) in
     let pre, post = List.map b2 pre, List.map b2 post in
     (pre, post)
 
 
-let refine_spurious_step solver smt_rev_map src_state_no =
-    let pre, post = retrieve_unsat_cores solver smt_rev_map src_state_no in
+let refine_spurious_step rt smt_rev_map src_state_no =
+    let pre, post = retrieve_unsat_cores rt smt_rev_map src_state_no in
     let pred_no = intro_new_pred pred_reach in
 
     if pre = [] && post = []
     then raise (Failure "Cannot refine: unsat core is empty");
 
+    (* TODO: abstract the expressions in pre and post *)
     let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
     let preex = if pre = [] then "1" else (String.concat " && " pre) in
     fprintf cout "bymc_p%d = (%s);\n" pred_no preex;
@@ -373,6 +378,7 @@ let print_vass_trace prog solver num_states =
     List.iter (print_st) (range 0 num_states)
 
 
+    (*
 let is_loop_state_fair_by_step solver prog ctr_ctx_tbl rev_map fairness
         (proc_abbrev, state_asserts) state_num =
     solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
@@ -440,6 +446,7 @@ let check_loop_unfair solver prog ctr_abs_tbl
         not sat
     in
     List.fold_left (||) false (List.map check_one fair_forms)
+    *)
 
 
 let filter_good_fairness type_tab aprops fair_forms =
@@ -454,67 +461,77 @@ let filter_good_fairness type_tab aprops fair_forms =
     filtered
 
 
-let is_state = function
-    | State _ -> true
-    | _ -> false
+(* translate the Program.path_t format to the list of
+    assertions annotated with intrinsics
+ *)
+let annotate_path path =
+    let f accum elem =
+        match (elem, accum) with
+        | (State es, l) ->
+            (* new state, no annotations *)
+            (es, StringMap.empty) :: l
+
+        | (Intrinsic i, (es, map) :: tl) ->
+            (* merge annotations *)
+            (es, StringMap.merge map_merge_fst i map) :: tl
+
+        | (Intrinsic i, []) ->
+            raise (Failure "Intrinsic met before State")
+    in
+    List.rev (List.fold_left f [] path)
 
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
 let do_refinement rt ctr_prog xducer_prog (prefix, loop) =
     let type_tab = Program.get_type_tab xducer_prog in
-      let ctx = rt#caches#analysis#get_pia_data_ctx in
-      let dom = rt#caches#analysis#get_pia_dom in
-      let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
     let aprops = Program.get_atomics xducer_prog in
     let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
     let inv_forms = find_invariants aprops in
-    let total_steps =
-        (List.length (List.filter is_state (prefix @ loop))) - 1 in
+    let apath = annotate_path (prefix @ loop) in
+    let num_states = List.length apath in
+    let total_steps = num_states - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     if total_steps = 0
-    then raise (Failure
-        "All processes idle forever at the initial state");
+    then raise (Failure "All processes idle forever at the initial state");
     log INFO "  [DONE]"; flush stdout;
     log INFO "> Simulating counter example in VASS..."; flush stdout;
-    false
 
-    (*
     let check_trans st = 
-        let step_asserts = list_sub trail_asserts st 2 in
-        solver#append
+        let step_asserts = list_sub apath st 2 in
+        rt#solver#append
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
-        solver#set_collect_asserts true;
+        rt#solver#set_collect_asserts true;
+        let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
         let res, smt_rev_map =
-            (simulate_in_smt solver xducer_prog ctr_ctx_tbl step_asserts rev_map 1)
-        in
-        solver#set_collect_asserts false;
+            simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl step_asserts 1 in
+        rt#solver#set_collect_asserts false;
         if not res
         then begin
-            log INFO (sprintf "  The transition %d -> %d is spurious."
-                    st (st + 1));
+            log INFO
+                (sprintf "  The transition %d -> %d is spurious." st (st + 1));
             flush stdout;
-            refine_spurious_step solver smt_rev_map st;
+            refine_spurious_step rt smt_rev_map st;
             true
         end else begin
             log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st (st + 1) total_steps);
             flush stdout;
-            (*print_vass_trace ctx solver 2;*)
             false
         end
     in
-    let num_states = (List.length trail_asserts) in
     let refined = ref false in
     (* Try to detect spurious transitions and unfair paths
-       (discussed in the TACAS submission) *)
+       (discussed in the FMCAD13 paper) *)
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
-    solver#set_need_evidence true; (* needed for refinement! *)
+    rt#solver#set_need_evidence true; (* needed for refinement! *)
     let sp_st =
         try List.find check_trans (range 0 (num_states - 1))
         with Not_found -> -1
     in
+    false
+    (*
     let refined = if sp_st <> -1
     then begin
         log INFO "(status trace-refined)";

@@ -2,7 +2,7 @@ open Plugin
 open VarRole
 
 class var_role_plugin_t (plugin_name: string) =
-    object
+    object(self)
         inherit analysis_plugin_t plugin_name
 
         val mutable m_roles: var_role_tbl option =  None
@@ -12,13 +12,15 @@ class var_role_plugin_t (plugin_name: string) =
             | Some r -> r
             | None -> raise (Plugin_error "No result computed")
 
-        method transform rtm prog =
-            m_roles <- Some (identify_var_roles prog);
+        method transform rt prog =
+            let r = identify_var_roles prog in
+            m_roles <- Some r;
             prog
 
-        method update_runtime rtm =
+        method update_runtime rt =
             match m_roles with
-            | Some r -> rtm#caches#analysis#set_var_roles r
+            | Some r ->
+                rt#caches#analysis#set_var_roles self#get_output r
             | _ -> ()
     end
 

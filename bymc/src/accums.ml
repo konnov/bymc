@@ -229,6 +229,13 @@ let hashtbl_find_str (tbl: (string, 'b) Hashtbl.t) (a: string): 'b =
     hashtbl_find (fun s -> s) tbl a
 
 
+let map_merge_fst key aopt bopt =
+    match aopt, bopt with
+    | _, None -> aopt
+    | Some a, Some _ -> aopt
+    | None, Some _ -> bopt
+
+
 let n_copies n e =
     let rec gen = function
     | 0 -> []

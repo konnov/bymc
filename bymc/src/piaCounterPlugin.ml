@@ -25,7 +25,7 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             let caches = rt#caches in
             let solver = rt#solver in
             let dom = caches#analysis#get_pia_dom in
-            let roles = caches#analysis#get_var_roles in
+            let roles = caches#analysis#get_var_roles data_p#get_input in
             let proc_names = 
                 if self#has_opt rt "procs"
                 then Str.split (Str.regexp_string ",") (self#get_opt rt "procs")
@@ -47,8 +47,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 let pia_data = new pia_data_ctx roles in
                 pia_data#set_hack_shared true;
                 caches#analysis#set_pia_data_ctx pia_data;
-                let int_prog = do_interval_abstraction solver caches
-                        data_p#get_input proc_names in
+                let int_prog =
+                    do_interval_abstraction rt data_p#get_input proc_names in
                 let vass =
                     self#make_vass solver dom caches int_prog proc_names false
                 in
@@ -119,8 +119,10 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
 
                 | _ as o -> o
             in
+            data_ctx#set_hack_shared true; (* concretize shared *)
             let prefix_asrt = List.map conc_row prefix in
             let loop_asrt = List.map conc_row loop in
+            data_ctx#set_hack_shared false; (* reset *)
             (List.rev prefix_asrt, List.rev loop_asrt)
 
 

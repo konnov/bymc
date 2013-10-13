@@ -14,7 +14,11 @@ class pia_data_ctx roles =
 
         method must_keep_concrete (e: token expr) = 
             match e with
-            | Var v -> m_hack_shared && is_shared_unbounded (roles#get_role v)
+            | Var v ->
+              begin
+                try m_hack_shared && is_shared_unbounded (roles#get_role v)
+                with VarRole.Var_not_found _ -> false
+              end
             | _ -> false
 
         method var_needs_abstraction (v: var) =

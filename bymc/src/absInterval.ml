@@ -19,7 +19,7 @@ open VarRole
   Abstraction of an expression over a variable and symbolic parameters.
   is_leaf_fun evaluates an expression to true if no further expansion of
   expr must be performed. Such an expression is replaced by a variable _argX
-  and after abstraction restored back.
+  and after abstraction is restored back.
   
   XXX: the _res variable looks ad hoc.
  *)
@@ -265,9 +265,8 @@ let translate_expr ctx dom solver atype expr =
     trans_e false expr
 
 
-let abstract_expr solver caches id e =
+let abstract_expr solver caches roles id e =
     let ctx = caches#analysis#get_pia_data_ctx in
-    let roles = caches#analysis#get_var_roles in
     let dom = caches#analysis#get_pia_dom in
     if not (expr_exists (over_dom roles) e)
     then MExpr(id, e) (* no domain variables, keep as it is *)
@@ -301,24 +300,23 @@ let abstract_expr solver caches id e =
 
 (* The first phase of the abstraction takes place here *)
 (* TODO: refactor it, should be simplified *)
-let translate_stmt solver caches type_tab new_type_tab stmt =
-    let ctx = caches#analysis#get_pia_data_ctx in
-    let roles = caches#analysis#get_var_roles in
-    let dom = caches#analysis#get_pia_dom in
+let translate_stmt rt roles type_tab new_type_tab stmt =
+    let ctx = rt#caches#analysis#get_pia_data_ctx in
+    let dom = rt#caches#analysis#get_pia_dom in
     let rec abs_seq seq = List.fold_right (fun s l -> (abs_stmt s) :: l) seq [] 
     and abs_stmt = function
-    | MExpr (id, e) -> abstract_expr solver caches id e
+    | MExpr (id, e) -> abstract_expr rt#solver rt#caches roles id e
 
     | MAssert (id, e) -> 
-        solver#push_ctx;
-        let out = MAssert (id, translate_expr ctx dom solver ExistAbs e) in
-        solver#pop_ctx;
+        rt#solver#push_ctx;
+        let out = MAssert (id, translate_expr ctx dom rt#solver ExistAbs e) in
+        rt#solver#pop_ctx;
         out
 
     | MAssume (id, e) -> 
-        solver#push_ctx;
-        let out = MAssume (id, translate_expr ctx dom solver ExistAbs e) in
-        solver#pop_ctx;
+        rt#solver#push_ctx;
+        let out = MAssume (id, translate_expr ctx dom rt#solver ExistAbs e) in
+        rt#solver#pop_ctx;
         out
 
     | MAtomic (id, seq) -> MAtomic (id, (abs_seq seq))
@@ -363,7 +361,7 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
         refine_var_type ctx dom roles type_tab new_type_tab v;
 
         let ne = if is_unbounded (roles#get_role v)
-            then dom#map_concrete solver e
+            then dom#map_concrete rt#solver e
             else e in
         MDecl (id, v, ne)
 
@@ -379,7 +377,7 @@ let translate_stmt solver caches type_tab new_type_tab stmt =
 let rec trans_prop_decl solver caches prog atype atomic_expr =
     let ctx = caches#analysis#get_pia_data_ctx in
     let dom = caches#analysis#get_pia_dom in
-    let roles = caches#analysis#get_var_roles in
+    let roles = caches#analysis#get_var_roles prog in
     let tr_e e =
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
@@ -455,29 +453,30 @@ let trans_ltl_form new_type_tab name f =
     else tr_f UnivAbs f
 
 
-let do_interval_abstraction solver caches prog proc_names = 
+let do_interval_abstraction rt prog proc_names = 
+    let roles = rt#caches#analysis#get_var_roles prog in
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let abstract_proc p =
         let add_def v =
-            solver#append_var_def v (type_tab#get_type v) in
+            rt#solver#append_var_def v (type_tab#get_type v) in
         if not (List.mem p#get_name proc_names)
         then p
         else begin
-            solver#push_ctx;
+            rt#solver#push_ctx;
             List.iter add_def p#get_locals;
             List.iter add_def (Program.get_shared prog);
             let body = List.map
-                (translate_stmt solver caches type_tab new_type_tab) p#get_stmts in
+                (translate_stmt rt roles type_tab new_type_tab) p#get_stmts in
             log DEBUG (sprintf " -> Abstract skel of proctype %s\n" p#get_name);
             List.iter (fun s -> log DEBUG (mir_stmt_s s)) body;
-            solver#pop_ctx;
+            rt#solver#pop_ctx;
             proc_replace_body p body
         end
     in
     let abstract_atomic name ae map =
-        let univ = trans_prop_decl solver caches prog UnivAbs ae in
-        let ex = trans_prop_decl solver caches prog ExistAbs ae in
+        let univ = trans_prop_decl rt#solver rt#caches prog UnivAbs ae in
+        let ex = trans_prop_decl rt#solver rt#caches prog ExistAbs ae in
         if Ltl.is_invariant_atomic name
         then Accums.StringMap.add name ex map
         else Accums.StringMap.add (name ^ "_exst") ex
@@ -491,13 +490,12 @@ let do_interval_abstraction solver caches prog proc_names =
     let new_forms = Accums.StringMap.mapi
         (trans_ltl_form new_type_tab) (Program.get_ltl_forms prog) in
     let abs_shared (shared_var, init_expr) =
-        let ctx = caches#analysis#get_pia_data_ctx in
-        let dom = caches#analysis#get_pia_dom in
-        let roles = caches#analysis#get_var_roles in
+        let ctx = rt#caches#analysis#get_pia_data_ctx in
+        let dom = rt#caches#analysis#get_pia_dom in
         refine_var_type ctx dom roles type_tab new_type_tab shared_var;
         let new_init =
             if over_dom roles (Var shared_var)
-            then dom#map_concrete solver init_expr
+            then dom#map_concrete rt#solver init_expr
             else init_expr
         in
         (shared_var, new_init)

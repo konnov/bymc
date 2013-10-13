@@ -27,6 +27,8 @@ val program_of_units: data_type_tab -> Spin.token prog_unit list -> program_t
 val units_of_program: program_t -> Spin.token prog_unit list
 val empty: program_t
 
+val prog_uid: program_t -> int
+
 val get_params: program_t -> var list
 val set_params: var list -> program_t -> program_t
 

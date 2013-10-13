@@ -200,8 +200,7 @@ let local_one_step local_ids v =
         else sprintf "next(%s)" (mk_output_name v)
 
 
-let find_proc_non_scratch caches proc =
-    let roles = caches#analysis#get_var_roles in
+let find_proc_non_scratch caches roles proc =
     List.filter (fun v -> not (is_scratch (roles#get_role v))) proc#get_locals
 
 
@@ -219,9 +218,9 @@ let intro_in_out_vars sym_tab type_tab rev_tab prog proc vars =
     proc_sym_tab, proc_type_tab
 
 
-let declare_locals_and_counters caches sym_tab type_tab rev_tab
+let declare_locals_and_counters caches roles sym_tab type_tab rev_tab
         prog shared all_locals hidden_idx_fun out proc =
-    let locals = find_proc_non_scratch caches proc in
+    let locals = find_proc_non_scratch caches roles proc in
     let proc_sym_tab, proc_type_tab =
         intro_in_out_vars sym_tab type_tab rev_tab prog proc locals in
     let decl_var v = 
@@ -264,7 +263,8 @@ let assign_default type_tab vars =
     str_join " & " (List.map eq_var vars)
 
 
-let mk_rev_trans_tab caches intabs_prog prog =
+    (* unused???*)
+let mk_rev_trans_tab caches roles intabs_prog prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let main_sym_tab = new symb_tab "main" in
@@ -275,7 +275,7 @@ let mk_rev_trans_tab caches intabs_prog prog =
         main_sym_tab rev_tab (Program.get_shared prog) in
     let orig_shared = Program.get_shared intabs_prog in
     let on_proc proc_num proc =
-        let locals = find_proc_non_scratch caches proc in
+        let locals = find_proc_non_scratch caches roles proc in
         let local_shared = locals @ orig_shared in
         let _, _ =
             intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
@@ -288,7 +288,7 @@ let mk_rev_trans_tab caches intabs_prog prog =
 
 (* create a cluster encoding in nusmv *)
 (* XXX: TODO: XXX: this requires serious refactoring! *)
-let transform solver caches out_name intabs_prog prog =
+let transform solver caches roles out_name intabs_prog prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let main_sym_tab = new symb_tab "main" in
@@ -342,7 +342,7 @@ let transform solver caches out_name intabs_prog prog =
         ()
     in
     let make_constraints proc_num proc =
-        let locals = find_proc_non_scratch caches proc in
+        let locals = find_proc_non_scratch caches roles proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
@@ -353,7 +353,7 @@ let transform solver caches out_name intabs_prog prog =
     in
     let make_proc_trans proc_num proc =
         log INFO (sprintf "  add trans %s" proc#get_name);
-        let locals = find_proc_non_scratch caches proc in
+        let locals = find_proc_non_scratch caches roles proc in
         let local_shared = locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
@@ -405,7 +405,7 @@ let transform solver caches out_name intabs_prog prog =
         num
     in
     let make_trackers proc_num proc =
-        let locals = find_proc_non_scratch caches proc in
+        let locals = find_proc_non_scratch caches roles proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
@@ -431,7 +431,7 @@ let transform solver caches out_name intabs_prog prog =
 
     in
     let collect_locals lst proc_num proc =
-        let locals = find_proc_non_scratch caches proc in
+        let locals = find_proc_non_scratch caches roles proc in
         let local_shared = bymc_loc :: locals @ orig_shared in
         let proc_sym_tab, proc_type_tab =
             intro_in_out_vars main_sym_tab new_type_tab rev_tab prog proc local_shared
@@ -443,8 +443,8 @@ let transform solver caches out_name intabs_prog prog =
         List.fold_left2 collect_locals [] (range 0 (List.length procs)) procs
     in
     List.iter
-        (declare_locals_and_counters caches main_sym_tab new_type_tab rev_tab
-            prog (bymc_loc :: bymc_proc :: orig_shared) all_locals
+        (declare_locals_and_counters caches roles main_sym_tab new_type_tab
+            rev_tab prog (bymc_loc :: bymc_proc :: orig_shared) all_locals
             hidden_idx_fun out)
         (Program.get_procs prog);
     let ps = str_join ", " (List.map (fun v -> v#mangled_name) all_locals) in

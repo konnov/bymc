@@ -12,13 +12,15 @@
  *)
 
 open Options
+open Printf
 
-open VarRole
+open Accums
 open PiaDataCtx
 open PiaDom
 open PiaCtrCtx
 open Program
 open Regions
+open VarRole
 
 exception CacheStateError of string
 
@@ -29,18 +31,20 @@ exception CacheStateError of string
  *)
 class analysis_cache =
     object(self)
-        val mutable m_var_roles: var_role_tbl option = None
+        val mutable m_var_roles: var_role_tbl IntMap.t = IntMap.empty
         val mutable m_pia_dom: pia_domain option = None
         val mutable m_pia_data_ctx: pia_data_ctx option = None
         val mutable m_pia_ctr_ctx_tbl: ctr_abs_ctx_tbl option = None
         
-        method get_var_roles =
-            match m_var_roles with
-            | None -> raise (CacheStateError "var_roles is not set")
-            | Some r -> r
+        method get_var_roles prog =
+            let pid = prog_uid prog in
+            try IntMap.find pid m_var_roles
+            with Not_found ->
+                raise (CacheStateError
+                    (sprintf "No var_roles for program id %d" pid))
 
-        method set_var_roles r =
-            m_var_roles <- Some r
+        method set_var_roles prog r =
+            m_var_roles <- IntMap.add (prog_uid prog) r m_var_roles
 
         method get_pia_dom =
             match m_pia_dom with
@@ -99,6 +103,7 @@ class pass_caches (i_options: options_t)
     end
 
 
+(* deprecated *)
 type analysis_fun =
     pass_caches -> program_t -> pass_caches
 

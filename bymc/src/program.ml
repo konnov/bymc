@@ -12,7 +12,15 @@ type lasso_t = path_t * path_t (* (prefix, cycle) *)
 
 exception Program_error of string
 
+let next_id = ref 1
+
+let fresh_id () =
+    let new_id = !next_id in
+    next_id := new_id + 1;
+    new_id
+
 type program_t = {
+    f_uid: int; (* unique identifier of every program *)
     f_params: var list; f_instrumental: var list;
     f_shared: (var * expr_t) list; 
     f_sym_tab: symb_tab; (* kept internally *)
@@ -24,12 +32,17 @@ type program_t = {
 }
 
 let empty = {
+    f_uid = 0;
     f_params = []; f_shared = []; f_instrumental = [];
     f_sym_tab = new symb_tab ""; (* global scope *)
     f_type_tab = new data_type_tab;
     f_assumes = []; f_procs = []; f_unsafes = [];
     f_atomics = StringMap.empty; f_ltl_forms = StringMap.empty
 }
+
+let prog_uid prog =
+    prog.f_uid
+
 
 let update_sym_tab prog =
     let var_to_symb v = (v :> symb) in
@@ -60,14 +73,14 @@ let get_params prog =
     prog.f_params
 
 let set_params new_params prog =
-    update_sym_tab { prog with f_params = new_params }
+    update_sym_tab { prog with f_uid = fresh_id (); f_params = new_params }
 
 let get_shared_with_init prog =
     prog.f_shared
 
 let set_shared_with_init new_shared_pairs prog =
     update_sym_tab {
-        prog with f_shared = new_shared_pairs
+        prog with f_uid = fresh_id (); f_shared = new_shared_pairs
     }
 
 let get_shared prog =
@@ -75,14 +88,15 @@ let get_shared prog =
 
 let set_shared new_shared prog =
     update_sym_tab {
-        prog with f_shared = (List.map (fun v -> (v, Nop "")) new_shared)
+        prog with f_uid = fresh_id ();
+            f_shared = (List.map (fun v -> (v, Nop "")) new_shared)
     }
 
 let get_instrumental prog =
     prog.f_instrumental
 
 let set_instrumental new_instr prog =
-    update_sym_tab { prog with f_instrumental = new_instr }
+    update_sym_tab { prog with f_uid = fresh_id (); f_instrumental = new_instr }
 
 let get_type prog variable =
     try prog.f_type_tab#get_type variable
@@ -90,7 +104,7 @@ let get_type prog variable =
         raise (Program_error ("No data type for variable " ^ variable#get_name))
 
 let set_type_tab type_tab prog =
-    { prog with f_type_tab = type_tab }
+    { prog with f_uid = fresh_id(); f_type_tab = type_tab }
 
 let get_type_tab prog =
     prog.f_type_tab
@@ -100,26 +114,30 @@ let get_sym_tab prog =
     prog.f_sym_tab
 
 let get_assumes prog = prog.f_assumes
-let set_assumes new_assumes prog = {prog with f_assumes = new_assumes}
+let set_assumes new_assumes prog =
+    {prog with f_uid = fresh_id (); f_assumes = new_assumes}
 
 let get_unsafes prog = prog.f_unsafes
-let set_unsafes new_unsafes prog = {prog with f_unsafes = new_unsafes}
+let set_unsafes new_unsafes prog =
+    {prog with f_uid = fresh_id (); f_unsafes = new_unsafes}
 
 let get_procs prog = prog.f_procs
 
 let set_procs new_procs prog =
-    update_sym_tab { prog with f_procs = new_procs }
+    update_sym_tab { prog with f_uid = fresh_id (); f_procs = new_procs }
 
 let get_atomics prog = prog.f_atomics
 
 let set_atomics new_atomics prog =
-    update_sym_tab { prog with f_atomics = new_atomics }
+    update_sym_tab { prog with f_uid = fresh_id (); f_atomics = new_atomics }
 
 let get_ltl_forms prog =
     prog.f_ltl_forms
 
 let set_ltl_forms new_ltl_forms prog =
-    update_sym_tab { prog with f_ltl_forms = new_ltl_forms }
+    update_sym_tab {
+        prog with f_uid = fresh_id (); f_ltl_forms = new_ltl_forms
+    }
 
 let get_ltl_forms_as_hash prog =
     let h = Hashtbl.create 10 in
@@ -172,7 +190,7 @@ let program_of_units type_tab units =
             prog
     in
     let prog = List.fold_left fold_u empty (List.rev units) in
-    update_sym_tab { prog with f_type_tab = type_tab }
+    update_sym_tab { prog with f_uid = fresh_id (); f_type_tab = type_tab }
 
 
 let units_of_program program =
