@@ -356,15 +356,15 @@ let refine_spurious_step rt smt_rev_map src_state_no =
     if pre = [] && post = []
     then raise (Failure "Cannot refine: unsat core is empty");
 
-    (* TODO: abstract the expressions in pre and post *)
     let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
     let preex = if pre = [] then "1" else (String.concat " && " pre) in
     fprintf cout "bymc_p%d = (%s);\n" pred_no preex;
     close_out cout;
 
     let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
-    fprintf cout "bymc_spur = (bymc_p%d && (%s)) || bymc_spur;\n"
-        pred_no (String.concat " && " post);
+    let p = sprintf "bymc_p%d" pred_no in
+    fprintf cout "bymc_spur = (%s) || bymc_spur;\n"
+        (String.concat " && " (p :: post));
     close_out cout
 
 
