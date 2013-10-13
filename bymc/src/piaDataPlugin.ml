@@ -12,7 +12,6 @@ class pia_data_plugin_t (plugin_name: string) =
 
         method transform rt prog =
             let caches = rt#caches in
-            let solver = rt#solver in
             let ctx = new pia_data_ctx (caches#analysis#get_var_roles prog) in
             m_pia_data_ctx <- Some ctx;
             caches#analysis#set_pia_data_ctx ctx;

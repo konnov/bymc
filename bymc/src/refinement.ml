@@ -328,12 +328,14 @@ let intro_new_pred prefix (* pred_reach or pred_recur *) =
 let retrieve_unsat_cores rt smt_rev_map src_state_no =
     let leaf_fun = function
         | BinEx (ARR_ACCESS, Var _, _) -> true
+        | Var _ as e -> not (is_symbolic e)
         | _ -> false
     in
     let abstract ((s, e): int * expr_t): int * expr_t =
         let dom = rt#caches#analysis#get_pia_dom in
-        let data_ctx = rt#caches#analysis#get_pia_data_ctx in
-        (s, AbsInterval.translate_expr data_ctx dom rt#solver ExistAbs e)
+        let abse = AbsInterval.abstract_pointwise_exprs
+            dom rt#solver AbsBasics.ExistAbs leaf_fun e in
+        (s, abse)
     in
     let core_ids = rt#solver#get_unsat_cores in
     log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
@@ -483,7 +485,7 @@ let annotate_path path =
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
-let do_refinement rt ctr_prog xducer_prog (prefix, loop) =
+let do_refinement (rt: Runtime.runtime_t) ctr_prog xducer_prog (prefix, loop) =
     let type_tab = Program.get_type_tab xducer_prog in
     let aprops = Program.get_atomics xducer_prog in
     let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in

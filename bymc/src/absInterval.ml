@@ -16,12 +16,14 @@ open VarRole
 
 
 (*
-  Abstraction of an expression over a variable and symbolic parameters.
-  is_leaf_fun evaluates an expression to true if no further expansion of
-  expr must be performed. Such an expression is replaced by a variable _argX
-  and after abstraction is restored back.
+  Abstraction of a function over a variable and symbolic parameters.  The
+  variables _res stores the function output.  is_leaf_fun evaluates an
+  expression to true if no further expansion of expr must be performed. Such an
+  expression is replaced by a variable _argX and after abstraction is restored
+  back.
   
   XXX: the _res variable looks ad hoc.
+  TODO: use abstract_pointwise_exprs instead?
  *)
 let mk_expr_abstraction solver dom is_leaf_fun expr =
     (* replace leaf expressions with a variable _argI *)
@@ -145,7 +147,7 @@ let refine_var_type ctx dom roles type_tab new_type_tab theVar =
  Create a disjunction of conjunctions enumerating abstract values:
     (vx == 0) && (vy == 1) || (vx == 2) && (vy == 0)
 *)
-let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
+let abstract_pointwise dom solver atype coord_point_fun symb_expr =
     solver#comment ("abstract_pointwise: " ^ (expr_s symb_expr));
     let mk_eq (var, abs_val) = coord_point_fun var abs_val in
     let mk_point point_tuple = list_to_binex AND (List.map mk_eq point_tuple)
@@ -154,6 +156,40 @@ let abstract_pointwise ctx dom solver atype coord_point_fun symb_expr =
     if points_lst <> []
     then list_to_binex OR (List.map mk_point points_lst)
     else Const 0 (* false *)
+
+
+let abstract_pointwise_exprs dom solver atype leaf_fun expr =
+    (* this function has many similarities to mk_expr_abstraction *)
+    let mapping = Hashtbl.create 1 in
+    let rec sub e =
+        if leaf_fun e
+        then if Hashtbl.mem mapping e
+            then Var (Hashtbl.find mapping e)
+            else begin
+                let v = new_var (sprintf "_a%d" (Hashtbl.length mapping)) in
+                Hashtbl.add mapping e v;
+                Var v
+            end
+        else match e with
+            | UnEx (t, l) -> UnEx (t, sub l)
+            | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+            | _ as e -> e
+    in
+    let expr_w_args = sub expr in
+    let inv_map = hashtbl_inverse mapping in
+    let map_vars_back left abs_val =
+        if Hashtbl.mem inv_map left
+        then BinEx (EQ, Hashtbl.find inv_map left, Const abs_val)
+        else BinEx (EQ, Var left, Const abs_val)
+    in
+    solver#push_ctx;
+    (* introduce the variables to the SMT solver *)
+    let append_def v =
+        solver#append_var_def v (new data_type SpinTypes.TINT) in
+    List.iter append_def (expr_used_vars expr_w_args);
+    let abse = abstract_pointwise dom solver atype map_vars_back expr_w_args in
+    solver#pop_ctx;
+    abse
 
 
 (* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
@@ -181,17 +217,17 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
         (*if is_var rhs
         then BinEx (tok, (dom#map_concrete solver lhs), rhs)
         else*)
-        abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        abstract_pointwise dom solver atype mk_eq orig_expr
 
     | AbsExpr, ConstExpr ->
         (*if is_var lhs
         then BinEx (tok, lhs, (dom#map_concrete solver rhs))
         else*)
-        abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        abstract_pointwise dom solver atype mk_eq orig_expr
 
     | AbsExpr, AbsExpr ->
         (* general abstraction *)
-        abstract_pointwise ctx dom solver atype mk_eq orig_expr
+        abstract_pointwise dom solver atype mk_eq orig_expr
 
     | ConcExpr, AbsExpr ->
         (* do abstract_pointwise general abstraction, then concretize lhs *)
@@ -203,7 +239,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
             then dom#expr_is_concretization lhs abs_val
             else BinEx (EQ, Var v, Const abs_val)
         in
-        abstract_pointwise ctx dom solver atype restore_lhs new_expr
+        abstract_pointwise dom solver atype restore_lhs new_expr
 
     | AbsExpr, ConcExpr ->
         let tmp_var = new_var "_concX" in
@@ -214,7 +250,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
             then dom#expr_is_concretization rhs abs_val
             else BinEx (EQ, Var v, Const abs_val)
         in
-        abstract_pointwise ctx dom solver atype restore_rhs new_expr
+        abstract_pointwise dom solver atype restore_rhs new_expr
 
     | ConcExpr, ConcExpr
     | ConcExpr, ConstExpr
