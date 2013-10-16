@@ -29,7 +29,7 @@ let global_state_fmt prog =
         then List.fold_left add_elem_ref lst (range 0 tp#nelems)
         else (Var v) :: lst
     in
-    let vars = (Program.get_instrumental prog) @ (Program.get_shared prog) in
+    let vars = Program.get_shared prog in
     let strs = List.map format_var vars in
     let exprs = List.rev (List.fold_left ref_var [] vars) in
     (sprintf "S{%s}" (str_join "," strs), exprs)

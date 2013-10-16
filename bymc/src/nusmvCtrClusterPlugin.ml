@@ -32,6 +32,6 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
         (* we don't know yet how to refine the data abstraction *)
         method decode_trail _ path = path
 
-        method refine _ path = (false, path)
+        method refine _ path = (false, self#get_output)
     end
 

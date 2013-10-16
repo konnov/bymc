@@ -12,13 +12,6 @@ type lasso_t = path_t * path_t (* (prefix, cycle) *)
 
 exception Program_error of string
 
-let next_id = ref 1
-
-let fresh_id () =
-    let new_id = !next_id in
-    next_id := new_id + 1;
-    new_id
-
 type program_t = {
     f_uid: int; (* unique identifier of every program *)
     f_params: var list; f_instrumental: var list;

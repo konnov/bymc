@@ -123,12 +123,16 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             let prefix_asrt = List.map conc_row prefix in
             let loop_asrt = List.map conc_row loop in
             data_ctx#set_hack_shared false; (* reset *)
-            (List.rev prefix_asrt, List.rev loop_asrt)
+            (prefix_asrt, loop_asrt)
 
 
         method refine rt lasso =
-            if do_refinement rt self#get_output m_vass lasso
-            then (true, lasso)
-            else (false, lasso)
+            let res, new_prog =
+                do_refinement rt m_ref_step self#get_output m_vass lasso in
+            if res
+            then begin
+                m_ref_step <- m_ref_step + 1;
+                (true, new_prog)
+            end else (false, self#get_output)
     end
 

@@ -74,6 +74,6 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             (prefix, lasso)
 
 
-        method refine _ path = (false, path)
+        method refine _ path = (false, self#get_output)
     end
 

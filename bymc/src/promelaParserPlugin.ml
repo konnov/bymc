@@ -48,6 +48,6 @@ class promela_parser_plugin_t (plugin_name: string) =
 
         method decode_trail _ path = path
 
-        method refine _ path = (false, path)
+        method refine _ path = (false, self#get_output)
     end
 

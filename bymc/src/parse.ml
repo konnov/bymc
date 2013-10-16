@@ -123,7 +123,7 @@ let postprocess all_units u =
         | _ as s -> s
         in
         Proc (proc_replace_body p
-            (List.map (replace_basic_stmts sub) p#get_stmts))
+            (List.map (sub_basic_stmt sub) p#get_stmts))
 
     | _ as u -> u
 

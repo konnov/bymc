@@ -304,7 +304,10 @@ class data_type_tab =
                 raise (Type_not_found (sprintf "Type of %s not found" v#get_name))
 
         method set_type (v: var) (dtp: data_type) =
+            printf "set_type: %s %d -> %s\n"
+                v#get_name v#id (var_type_s dtp#basetype);
             Hashtbl.replace m_tab v#id dtp
+
         method set_all_types hash_tbl = m_tab <- hash_tbl
 
         method length = Hashtbl.length m_tab
@@ -677,7 +680,7 @@ let list_to_binex tok lst =
     List.fold_left join_e (Nop "") lst
 
 
-let replace_basic_stmts
+let sub_basic_stmt
         (trav_fun: 'a mir_stmt -> 'a mir_stmt) (m_stmt: 'a mir_stmt)
         : 'a mir_stmt =
     let rec trav = function
@@ -696,6 +699,30 @@ let replace_basic_stmts
         MOptElse (List.map trav body)
     in
     trav m_stmt
+
+
+let sub_basic_stmt_with_list
+        (trav_fun: 'a mir_stmt -> 'a mir_stmt list) (stmts: 'a mir_stmt list)
+        : 'a mir_stmt list =
+    let rec fold lst s =
+        lst @ (trav s)
+
+    and trav = function
+        | MIf (id, opts) ->
+            [ MIf (id, List.map trav_opt opts) ]
+        | MAtomic (id, body) ->
+            [ MAtomic (id, List.fold_left fold [] body) ]
+        | MD_step (id, body) ->
+            [ MD_step (id, List.fold_left fold [] body) ]
+        | _ as s -> trav_fun s
+
+    and trav_opt = function
+        | MOptGuarded body ->
+            MOptGuarded (List.fold_left fold [] body)
+        | MOptElse body ->
+            MOptElse (List.fold_left fold [] body)
+    in
+    List.fold_left fold [] stmts
 
 
 let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)

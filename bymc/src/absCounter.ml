@@ -604,7 +604,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         pre_asserts
         @ [mk_comment "decrement/increment process counters"]
         @ ctr_update
-        @ [MUnsafe (fresh_id (), "#include \"cegar_post.inc\"")]
+        @ [MExpr (fresh_id (), Nop "assume(post_cond)")]
         @ post_asserts
 
         @ new_update
@@ -630,7 +630,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
                 MIf (id, (List.map on_opt opts))
             | _ as s -> s
         in
-        List.map (replace_basic_stmts (trans_quantifiers solver ctr_ctx_tbl prog))
+        List.map (sub_basic_stmt (trans_quantifiers solver ctr_ctx_tbl prog))
             (List.map hack_nsnt (List.map (replace_assume atomics) stmts))
     in
     let mk_assume e = MAssume (fresh_id (), e) in
@@ -659,7 +659,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         in
         let new_loop_body =
             let in_atomic =
-                [ MUnsafe (fresh_id (), "#include \"cegar_pre.inc\"")]
+                [ MExpr (fresh_id (), Nop ("assume(pre_cond)"))]
                 @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
                 @ invs
                 @ [mk_comment (p#get_name ^ ": pick a process")]
@@ -697,10 +697,9 @@ let do_counter_abstraction funcs solver caches prog proc_names =
     in
     let new_atomics =
         Accums.StringMap.map abstract_atomic (Program.get_atomics prog) in
-    let new_unsafes = ["#include \"cegar_decl.inc\""] in
-    let new_decls =
-        ctr_ctx_tbl#get_spur
-            :: ctr_ctx_tbl#all_counters @ funcs#introduced_vars in
+    let new_decls = ctr_ctx_tbl#get_spur :: funcs#introduced_vars in
+    let counters =
+        List.map (fun v -> (v, Const 0)) ctr_ctx_tbl#all_counters in
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let new_ltl_forms =
         Accums.StringMap.add "fairness_ctr"
@@ -710,13 +709,13 @@ let do_counter_abstraction funcs solver caches prog proc_names =
     let new_prog =
         (Program.set_params []
         (Program.set_assumes []
-        (Program.set_shared_with_init (Program.get_shared_with_init prog)
+        (Program.set_shared_with_init
+            (counters @ (Program.get_shared_with_init prog))
         (Program.set_instrumental new_decls
         (Program.set_type_tab new_type_tab
         (Program.set_atomics new_atomics
-        (Program.set_unsafes new_unsafes
         (Program.set_ltl_forms new_ltl_forms
-        Program.empty)))))))) in
+        Program.empty))))))) in
     let fmt, es = Serialize.global_state_fmt new_prog in
     funcs#set_print (MPrint (fresh_id (), fmt ^ "\\n", es));
     let new_procs =

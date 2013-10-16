@@ -30,20 +30,27 @@ open Debug
 (* the file where the state is saved to *)
 let serialization_filename = "bymc.ser"
 
+let load_game rt =
+    log INFO "loading game...";
+    let cin = open_in_bin serialization_filename in
+    let (seq_id: int) = Marshal.from_channel cin in
+    let (chain: plugin_chain_t) = Marshal.from_channel cin in
+    close_in cin;
+    SpinIr.uniq_id_next := seq_id; (* unique id sequence used everywhere *)
+    chain#update_runtime rt;
+    chain
+
+let save_game chain =
+    log INFO "saving game...";
+    let cout = open_out_bin serialization_filename in
+    Marshal.to_channel cout !SpinIr.uniq_id_next []; (* keep the id sequence *)
+    Marshal.to_channel cout chain [Marshal.Closures];
+    close_out cout
 
 (* units -> interval abstraction -> counter abstraction *)
 let do_abstraction rt =
     rt#solver#push_ctx;
     rt#solver#comment "do_abstraction";
-    (*
-    if is_first_run
-    then begin 
-        (* wipe out the files left from previous refinement sessions *)
-        close_out (open_out "cegar_decl.inc");
-        close_out (open_out "cegar_pre.inc");
-        close_out (open_out "cegar_post.inc")
-    end;
-    *)
     let chain = new plugin_chain_t in
     chain#add_plugin
         (new PromelaParserPlugin.promela_parser_plugin_t "promelaParser");
@@ -59,20 +66,14 @@ let do_abstraction rt =
     chain#add_plugin (new SpinPlugin.spin_plugin_t "spin" "abs-counter");
     let _ = chain#transform rt Program.empty in
     rt#solver#pop_ctx;
-    log INFO "saving game...";
-    let cout = open_out_bin serialization_filename in
-    Marshal.to_channel cout chain [Marshal.Closures];
-    close_out cout;
+    save_game chain;
     chain#get_output
 
 
 let new_refine rt =
-    log INFO "loading game...";
-    let cin = open_in_bin serialization_filename in
-    let (chain: plugin_chain_t) = Marshal.from_channel cin in
-    close_in cin;
-    chain#update_runtime rt;
+    let chain = load_game rt in
     let (status, _) = chain#refine rt ([], []) in
+    save_game chain;
     log INFO (if status
         then "(status trace-refined)"
         else "(status trace-no-refinement)")

@@ -312,13 +312,11 @@ let find_max_pred prefix =
     with Sys_error _ -> (-1)
 
 
-let intro_new_pred prefix (* pred_reach or pred_recur *) =
-    let max_no = find_max_pred prefix in
-    let pred_no = 1 + max_no in
-    let cout = open_out_gen [Open_append] 0666 "cegar_decl.inc" in
-    fprintf cout "bit bymc_%s%d = 0;\n" prefix pred_no;
-    close_out cout;
-    pred_no
+let intro_new_pred new_type_tab prefix step_no (* pred_reach or pred_recur *) =
+    let pred = new var (sprintf "bymc_%s%d" prefix step_no) (fresh_id ()) in
+    new_type_tab#set_type pred (new data_type SpinTypes.TBIT);
+    pred#set_instrumental;
+    pred
 
 
 (* retrieve unsat cores, map back corresponding constraints on abstract values,
@@ -344,28 +342,44 @@ let retrieve_unsat_cores rt smt_rev_map src_state_no =
     let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
     let aes = List.map abstract mapped in
     let pre, post = List.partition (fun (s, _) -> s = src_state_no) aes in
-    let b2 (_, e) = sprintf "(%s)" (expr_s e) in
+    let b2 (_, e) = e in
     let pre, post = List.map b2 pre, List.map b2 post in
     (pre, post)
 
 
-let refine_spurious_step rt smt_rev_map src_state_no =
+let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
+    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let sym_tab = Program.get_sym_tab prog in
+    let bymc_spur = (sym_tab#lookup "bymc_spur")#as_var in
     let pre, post = retrieve_unsat_cores rt smt_rev_map src_state_no in
-    let pred_no = intro_new_pred pred_reach in
+    let pred = intro_new_pred new_type_tab pred_reach ref_step in
+
 
     if pre = [] && post = []
     then raise (Failure "Cannot refine: unsat core is empty");
 
-    let cout = open_out_gen [Open_append] 0666 "cegar_pre.inc" in
-    let preex = if pre = [] then "1" else (String.concat " && " pre) in
-    fprintf cout "bymc_p%d = (%s);\n" pred_no preex;
-    close_out cout;
+    let asgn_spur e =
+        MExpr (fresh_id (),
+            BinEx (ASGN, Var bymc_spur,
+                BinEx (OR, Var bymc_spur, e)))
+    in
+    let or_true e = if not_nop e then e else (Const 1) in
+    let sub = function
+        | MExpr (id, Nop ("assume(pre_cond)")) as s ->
+            [ s; MExpr(fresh_id (),
+                BinEx (ASGN, Var pred, or_true (list_to_binex AND pre))) ]
 
-    let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
-    let p = sprintf "bymc_p%d" pred_no in
-    fprintf cout "bymc_spur = (%s) || bymc_spur;\n"
-        (String.concat " && " (p :: post));
-    close_out cout
+        | MExpr (id, Nop ("assume(post_cond)")) as s ->
+            [ s; asgn_spur (list_to_binex AND ((Var pred) :: post)) ]
+
+        | _ as s -> [ s ]
+    in
+    let sub_proc proc = 
+        proc_replace_body proc (sub_basic_stmt_with_list sub proc#get_stmts)
+    in
+    Program.set_type_tab new_type_tab
+        (Program.set_instrumental (pred :: (Program.get_instrumental prog))
+        (Program.set_procs (List.map sub_proc (Program.get_procs prog)) prog))
 
 
 let print_vass_trace prog solver num_states = 
@@ -485,11 +499,8 @@ let annotate_path path =
 
 (* FIXME: refactor it, the decisions must be clear and separated *)
 (* units -> interval abstraction -> vector addition state systems *)
-let do_refinement (rt: Runtime.runtime_t) ctr_prog xducer_prog (prefix, loop) =
-    let type_tab = Program.get_type_tab xducer_prog in
-    let aprops = Program.get_atomics xducer_prog in
-    let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
-    let inv_forms = find_invariants aprops in
+let do_refinement (rt: Runtime.runtime_t) ref_step
+        ctr_prog xducer_prog (prefix, loop) =
     let apath = annotate_path (prefix @ loop) in
     let num_states = List.length apath in
     let total_steps = num_states - 1 in
@@ -513,27 +524,35 @@ let do_refinement (rt: Runtime.runtime_t) ctr_prog xducer_prog (prefix, loop) =
             log INFO
                 (sprintf "  The transition %d -> %d is spurious." st (st + 1));
             flush stdout;
-            refine_spurious_step rt smt_rev_map st;
-            true
+            let new_prog =
+                refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
+            (true, new_prog)
         end else begin
             log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st (st + 1) total_steps);
             flush stdout;
-            false
+            (false, ctr_prog)
         end
     in
-    let refined = ref false in
+    let find_first (res, prog) step_no =
+        if res
+        then (true, prog)
+        else check_trans step_no
+    in
     (* Try to detect spurious transitions and unfair paths
        (discussed in the FMCAD13 paper) *)
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
     rt#solver#set_need_evidence true; (* needed for refinement! *)
-    let sp_st =
-        try List.find check_trans (range 0 (num_states - 1))
-        with Not_found -> -1
+    let (res, new_prog) =
+        List.fold_left find_first (false, ctr_prog) (range 0 (num_states - 1))
     in
-    false
+    (res, new_prog)
     (*
+    let refined = ref false in
+    let aprops = Program.get_atomics xducer_prog in
+    let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
+    let inv_forms = find_invariants aprops in
     let refined = if sp_st <> -1
     then begin
         log INFO "(status trace-refined)";

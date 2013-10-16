@@ -32,7 +32,6 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         initializer
             self#init_next_vars;
 
-            ctr_var#set_instrumental;
             let collect_locals filter_fun =
                 let rec collect lst = function
                 | MDecl (_, v, _) ->

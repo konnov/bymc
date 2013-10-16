@@ -116,7 +116,7 @@ let prop_const_in_stmt stmt binding =
         MExpr (id, prop_const e binding)
     | _ as s -> s
     in
-    replace_basic_stmts propagate stmt
+    sub_basic_stmt propagate stmt
 
 
 let binding_to_eqs binding =
@@ -327,7 +327,7 @@ let replace_arr_elem_with_var_in_stmt sym_tab m_stmt =
 
     | _ as s -> s
     in
-    replace_basic_stmts sub_var m_stmt
+    sub_basic_stmt sub_var m_stmt
 
 
 let flatten_array_decl type_tab new_type_tab stmts =
