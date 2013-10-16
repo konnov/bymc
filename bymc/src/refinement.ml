@@ -84,9 +84,6 @@ let smt_append_bind solver smt_rev_map state_no orig_expr mapped_expr =
     end
 
 
-(* TODO: optimize it for the case of checking one transition only! *)
-(* TODO: mark the case of replaying a path (not a transition) as experimental
-         and remove it out from here, it is heavy *)
 let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     let shared_vars = Program.get_shared prog in
     let type_tab = Program.get_type_tab prog in
@@ -354,7 +351,6 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
     let pre, post = retrieve_unsat_cores rt smt_rev_map src_state_no in
     let pred = intro_new_pred new_type_tab pred_reach ref_step in
 
-
     if pre = [] && post = []
     then raise (Failure "Cannot refine: unsat core is empty");
 
@@ -394,75 +390,100 @@ let print_vass_trace prog solver num_states =
     List.iter (print_st) (range 0 num_states)
 
 
-    (*
-let is_loop_state_fair_by_step solver prog ctr_ctx_tbl rev_map fairness
-        (proc_abbrev, state_asserts) state_num =
-    solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
-    let new_rev_map = Hashtbl.copy rev_map in
-    let next_id = 1 + (List.fold_left max 0 (hashtbl_keys rev_map)) in
-    (* add the assumption that state 0 is fair! *)
-    Hashtbl.add new_rev_map next_id (0, fairness);
-    solver#push_ctx;
-    solver#set_collect_asserts true;
-    solver#set_need_evidence true;
+let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
+        state_asserts state_num =
+    rt#solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
+    rt#solver#push_ctx;
+    rt#solver#set_collect_asserts true;
+    rt#solver#set_need_evidence true;
 
     (* State 0 is fair and it is a concretization of the abstract state
-       kept in state_asserts. State 1 is anything we can go to via
-       the transducer. *)
-    let step_asserts =
-        [(proc_abbrev, state_asserts @ [Expr(fresh_id (), fairness)]);
-            (proc_abbrev, [])] in
-
+       kept in state_asserts. State 1 is restricted only by the transition
+       relation, which also carries the invariants. *)
+    let asserts, annot = state_asserts in
+    let step_asserts = [(asserts @ [fairness], annot); ([], StringMap.empty)]
+    in
     (* simulate one step *)
     let res, smt_rev_map =
-        (simulate_in_smt solver prog ctr_ctx_tbl step_asserts rev_map 1) in
+        simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1 in
 
-    (* collect unsat cores if there is no step *)
-    let _, core_exprs =
+    (* collect unsat cores if the assertions contradict fairness,
+       or fairness + the state assertions lead to a deadlock
+     *)
+    let core_exprs, _ =
         if not res
-        then retrieve_unsat_cores solver smt_rev_map (-1)
+        then retrieve_unsat_cores rt smt_rev_map 0
         else [], []
     in
-    let core_exprs_s = (String.concat " && " core_exprs) in
+    let core_exprs_and = list_to_binex AND core_exprs in
 
     if res then begin
-        log INFO (sprintf
-            "State %d in the loop is fair. See trace below." state_num);
-        print_vass_trace prog solver 2;
+        log INFO
+            (sprintf "State %d of the loop is fair. See the trace." state_num);
+        print_vass_trace prog rt#solver 2;
     end else 
-        printf "core_exprs_s: %s\n" core_exprs_s;
+        printf "core_exprs_s: %s\n" (expr_s core_exprs_and);
 
-    solver#set_collect_asserts false;
-    solver#set_need_evidence false;
-    solver#pop_ctx;
-    res, core_exprs_s
+    rt#solver#set_collect_asserts false;
+    rt#solver#set_need_evidence false;
+    rt#solver#pop_ctx;
+    res, core_exprs_and
 
 
-let check_loop_unfair solver prog ctr_abs_tbl
-        rev_map fair_forms inv_forms loop_asserts =
-    let check_one ff = 
+(* TODO: this looks ugly, make a refactoring pass *)
+let check_fairness_supression rt fair_forms
+        loop_asserts ref_step vass_prog prog =
+    let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
+    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let check_one (res, cur_prog) ff = 
         log INFO ("  Checking if the loop is fair..."); flush stdout;
-        let check_and_collect_cores (all_sat, all_core_exprs_s, num) state_asserts =
-            let sat, core_exprs_s =
-                is_loop_state_fair_by_step solver prog ctr_abs_tbl
-                    rev_map ff state_asserts num
+        let check_and_collect_cores (all_sat, all_core_exprs, num) state_asserts =
+            let sat, core_exprs =
+                is_loop_state_fair_by_step rt
+                    vass_prog ctr_ctx_tbl ff state_asserts num
             in
-            (all_sat || sat, core_exprs_s :: all_core_exprs_s, (num + 1))
+            (all_sat || sat, core_exprs :: all_core_exprs, (num + 1))
         in
         let sat, exprs, _ =
             List.fold_left check_and_collect_cores (false, [], 0) loop_asserts
         in
         if not sat
         then begin
-            let pred_no = intro_new_pred pred_recur in
-            let cout = open_out_gen [Open_append] 0666 "cegar_post.inc" in
-            fprintf cout "bymc_r%d = (%s);\n" pred_no (String.concat " || " exprs);
-            close_out cout;
-        end;
-        not sat
+            (* introduce a new predicate *)
+            let pred = intro_new_pred new_type_tab pred_recur ref_step in
+            let sub = function
+                | MExpr (id, Nop ("assume(post_cond)")) as s ->
+                    [ s; MExpr (fresh_id(),
+                        BinEx (EQ, Var pred, (list_to_binex AND exprs))) ]
+
+                | _ as s -> [ s ]
+            in
+            let sub_proc p = 
+                proc_replace_body p (sub_basic_stmt_with_list sub p#get_stmts)
+            in
+            let fairness =
+                StringMap.find "fairness_ctr" (Program.get_ltl_forms cur_prog)
+            in
+            let forbid_unfair_loop =
+                (* the unfair predicate can't appear forever *)
+                UnEx(ALWAYS, UnEx(EVENTUALLY, UnEx (NEG, Var pred))) in
+            (* extend the fairness constraint with "no supression" *)
+            let new_fairness =
+                BinEx (AND, fairness, forbid_unfair_loop) in
+            (* embed the predicate into the program and
+               add the fairness constraint *)
+            let new_i = pred :: (Program.get_instrumental cur_prog) in
+            let new_p = List.map sub_proc (Program.get_procs cur_prog) in
+            let new_f = StringMap.add "fairness_ctr" new_fairness
+                (Program.get_ltl_forms cur_prog) in
+            let new_prog =
+                Program.set_ltl_forms new_f
+                    (Program.set_instrumental new_i
+                        (Program.set_procs new_p cur_prog)) in
+            (not sat, new_prog)
+        end else (res || not sat, cur_prog)
     in
-    List.fold_left (||) false (List.map check_one fair_forms)
-    *)
+    List.fold_left check_one (false, prog) fair_forms
 
 
 let filter_good_fairness type_tab aprops fair_forms =
@@ -544,39 +565,35 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
     rt#solver#set_need_evidence true; (* needed for refinement! *)
-    let (res, new_prog) =
+    let (refined, new_prog) =
         List.fold_left find_first (false, ctr_prog) (range 0 (num_states - 1))
     in
-    (res, new_prog)
-    (*
-    let refined = ref false in
-    let aprops = Program.get_atomics xducer_prog in
-    let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
-    let inv_forms = find_invariants aprops in
-    let refined = if sp_st <> -1
+    if refined
     then begin
         log INFO "(status trace-refined)";
-        true
+        (true, new_prog)
     end else begin
+        (* try to detect fairness supression *)
+        let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
+        let type_tab = Program.get_type_tab xducer_prog in
         let fairness =
-            filter_good_fairness type_tab aprops
+            filter_good_fairness type_tab (Program.get_atomics xducer_prog)
                 (collect_fairness_forms ltl_forms) in
-        let spur_loop =
-            check_loop_unfair solver xducer_prog ctr_ctx_tbl
-                rev_map fairness inv_forms loop_asserts in
-        if spur_loop
+        let aloop = annotate_path loop in
+        let (refined, new_prog) =
+            check_fairness_supression rt fairness aloop ref_step
+                xducer_prog ctr_prog
+        in
+        if refined
         then begin
             log INFO "The loop is unfair. Refined.";
-            true
+            (true, new_prog)
         end else begin
             log INFO "The loop is fair";
 
             log INFO "This counterexample does not have spurious transitions or states.";
             log INFO "If it does not show a real problem, provide me with an invariant.";
-            false
+            (false, ctr_prog)
         end
     end
-    in
-    (* introduce the predicates in the counter abstraction *)
-    refined
-    *)
+

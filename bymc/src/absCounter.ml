@@ -513,26 +513,6 @@ class vass_funcs dom prog solver =
     end
 
 
-let create_fairness type_tab ctr_ctx_tbl =
-    (* add formulas saying that unfair predicates can't occur forever *)
-    let recur_preds_cnt = (1 + (find_max_pred pred_recur)) in
-    (* a lollipop is the same as a lasso, but it sounds nice! *)
-    let out_of_lollipop i =
-        let r_var = new_var (sprintf "bymc_%s%d" pred_recur i) in
-        type_tab#set_type r_var (new data_type SpinTypes.TBIT);
-        UnEx (NEG, Var r_var)
-    in
-    let leave_unfair_lollipops =
-        let indices = (range 0 recur_preds_cnt) in
-        let conj = list_to_binex AND (List.map out_of_lollipop indices) in
-        if recur_preds_cnt > 0
-        then [UnEx(ALWAYS, UnEx(EVENTUALLY, conj))]
-        else []
-    in
-    let spur = UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)) in
-    list_to_binex AND (spur :: leave_unfair_lollipops)
-
-
 let mk_comment text =
     MExpr (fresh_id (), Nop text)
 
@@ -701,9 +681,9 @@ let do_counter_abstraction funcs solver caches prog proc_names =
     let counters =
         List.map (fun v -> (v, Const 0)) ctr_ctx_tbl#all_counters in
     let new_type_tab = (Program.get_type_tab prog)#copy in
-    let new_ltl_forms =
+    let new_ltl_forms = (* exclude computations containing spurious states *)
         Accums.StringMap.add "fairness_ctr"
-        (create_fairness new_type_tab ctr_ctx_tbl)
+        (UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)))
         (Program.get_ltl_forms prog) in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
     let new_prog =
