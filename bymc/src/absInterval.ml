@@ -529,6 +529,7 @@ let do_interval_abstraction rt prog proc_names =
         let ctx = rt#caches#analysis#get_pia_data_ctx in
         let dom = rt#caches#analysis#get_pia_dom in
         refine_var_type ctx dom roles type_tab new_type_tab shared_var;
+        let init_expr = if not_nop init_expr then init_expr else Const 0 in
         let new_init =
             if over_dom roles (Var shared_var)
             then dom#map_concrete rt#solver init_expr
