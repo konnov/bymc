@@ -82,7 +82,6 @@ class pia_domain conds_i =
                 if not_nop r
                 then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
             in
-            solver#push_ctx;
             let has_concretization intervals =
                 solver#push_ctx;
                 List.iter2 put_interval_constraint used intervals;
@@ -93,6 +92,7 @@ class pia_domain conds_i =
                 solver#pop_ctx;
                 if (at = ExistAbs) then result else (not result)
             in
+            solver#push_ctx;
             let all_interval_tuples =
                 (Accums.mk_product cond_intervals n_used) in
             let matching_interval_tuples =
@@ -209,12 +209,13 @@ let sort_thresholds solver conds =
             let asrt =
                 sprintf "(not (%s %s %s))" op (expr_to_smt c1) (expr_to_smt c2)
             in
+            solver#push_ctx;
             solver#append_assert asrt;
             let res = not solver#check in
             if res
             then (Hashtbl.add cmp_tbl
                 ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
-            solver#pop_ctx; solver#push_ctx;
+            solver#pop_ctx; 
             res
         end
         else false

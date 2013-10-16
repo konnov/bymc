@@ -79,11 +79,8 @@ let var_to_smt var tp =
     sprintf "(define %s :: %s)" var#get_name complex_type
 
 
-(*
-  The wrapper of an SMT solver (yices).
-  XXX: if yices dies accidentally, the parent (OCaml) dies as well.
-  Do something to notify the user.
- *)
+(* The interface to the SMT solver (yices).
+   We are using the text interface, as it is way easier to debug. *)
 class yices_smt =
     object(self)
         (* for how long we wait for output from yices if check is issued *)
@@ -97,6 +94,7 @@ class yices_smt =
         val mutable debug = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
+        val mutable m_pushes = 0
 
         method start =
             clog <- open_out "yices.log";
@@ -151,9 +149,15 @@ class yices_smt =
                 !eid
             end else -1
 
-        method push_ctx = self#append "(push)"
+        method push_ctx =
+            m_pushes <- m_pushes + 1;
+            self#append "(push)"
 
-        method pop_ctx = self#append "(pop)"
+        method pop_ctx =
+            if m_pushes = 0
+            then raise (Failure ("pop: yices stack is empty!"));
+            m_pushes <- m_pushes - 1;
+            self#append "(pop)"
 
         method sync =
             (* the solver can print more messages, thus, sync! *)

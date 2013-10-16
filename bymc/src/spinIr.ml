@@ -304,8 +304,6 @@ class data_type_tab =
                 raise (Type_not_found (sprintf "Type of %s not found" v#get_name))
 
         method set_type (v: var) (dtp: data_type) =
-            printf "set_type: %s %d -> %s\n"
-                v#get_name v#id (var_type_s dtp#basetype);
             Hashtbl.replace m_tab v#id dtp
 
         method set_all_types hash_tbl = m_tab <- hash_tbl
