@@ -25,8 +25,8 @@ let check_invariant rtm xducers_prog inv_name =
     let inv, not_inv = inv_expr, UnEx (NEG, inv_expr) in
     let check_proc_step proctype (* for a step by each proctype *) =
         let step_asserts =
-            [([inv], (StringMap.singleton "proc" proctype));
-             ([not_inv], StringMap.empty)] in
+            [([inv], [], (StringMap.singleton "proc" proctype));
+             ([not_inv], [], StringMap.empty)] in
         solver#set_collect_asserts true;
         solver#set_need_evidence true;
         let res, smt_rev_map =

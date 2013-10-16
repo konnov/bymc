@@ -90,26 +90,29 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     let smt_rev_map = Hashtbl.create 10 in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
-    let is_proc_moving proc (_, annot) =
+    let is_proc_moving proc (_, _, annot) =
         try proc#get_name = (StringMap.find "proc" annot)
         with Not_found -> false
     in
-    let append_one_assert state_no asrt =
+    let append_one_assert state_no is_traceable asrt =
         let new_e =
             if state_no = 0
             then map_vars (fun v -> Var (map_to_step 0 (map_to_in v))) asrt
             else map_vars
                 (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) asrt
         in
-        smt_append_bind solver smt_rev_map state_no asrt new_e
+        if is_traceable
+        then smt_append_bind solver smt_rev_map state_no asrt new_e
+        else let _ = solver#append_expr new_e in ()
     in
-    let append_trail_asserts state_no (asserts, _) =
-        List.iter (append_one_assert state_no) asserts
+    let append_trail_asserts state_no (asserts, assumes, _) =
+        List.iter (append_one_assert state_no true) asserts;
+        List.iter (append_one_assert state_no false) assumes
     in
     solver#push_ctx;
     (* put asserts from the control flow graph *)
     log INFO (sprintf 
-        "    collecting declarations and assertions of transition relation (%d xducers)..."
+        "    getting declarations and assertions of %d transition relations..."
         (List.length (Program.get_procs prog)));
     flush stdout;
     let proc_asserts proc =
@@ -124,16 +127,16 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
         List.concat (List.map proc_asserts (Program.get_procs prog)) in
     let decls = expr_list_used_vars xducer_asserts in
 
-    log INFO (sprintf "    appending %d declarations..."
+    log INFO (sprintf "    adding %d declarations..."
         (List.length decls)); flush stdout;
     let append_def v =
         solver#append_var_def v (type_tab#get_type v)
     in
     List.iter append_def decls;
-    log INFO (sprintf "    appending %d transducer asserts..."
+    log INFO (sprintf "    adding %d transition asserts..."
         (List.length xducer_asserts)); flush stdout;
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
-    log INFO (sprintf "    appending %d trail asserts..."
+    log INFO (sprintf "    adding %d trail asserts..."
         (List.length trail_asserts)); flush stdout;
     (* put asserts from the counter example *)
     List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
@@ -400,16 +403,15 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     (* State 0 is fair and it is a concretization of the abstract state
        kept in state_asserts. State 1 is restricted only by the transition
        relation, which also carries the invariants. *)
-    let asserts, annot = state_asserts in
-    let step_asserts = [(asserts @ [fairness], annot); ([], StringMap.empty)]
+    let asserts, _, annot = state_asserts in
+    let step_asserts = [(asserts, [fairness], annot); ([], [], StringMap.empty)]
     in
     (* simulate one step *)
     let res, smt_rev_map =
         simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1 in
 
     (* collect unsat cores if the assertions contradict fairness,
-       or fairness + the state assertions lead to a deadlock
-     *)
+       or fairness + the state assertions lead to a deadlock *)
     let core_exprs, _ =
         if not res
         then retrieve_unsat_cores rt smt_rev_map 0
@@ -506,14 +508,15 @@ let annotate_path path =
         match (elem, accum) with
         | (State es, l) ->
             (* new state, no annotations *)
-            (es, StringMap.empty) :: l
+            (es, [], StringMap.empty) :: l
 
-        | (Intrinsic i, (es, map) :: tl) ->
+        | (Intrinsic i, (es, _, map) :: tl) ->
             (* merge annotations *)
-            (es, StringMap.merge map_merge_fst i map) :: tl
+            (es, [], StringMap.merge map_merge_fst i map) :: tl
 
         | (Intrinsic i, []) ->
-            raise (Failure "Intrinsic met before State")
+            log DEBUG "Intrinsic met before State. Ignored.";
+            []
     in
     List.rev (List.fold_left f [] path)
 
