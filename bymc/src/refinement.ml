@@ -15,6 +15,8 @@ open Debug
 
 exception Refinement_error of string
 
+exception No_moving_error
+
 let pred_reach = "p"
 let pred_recur = "r"
 
@@ -83,7 +85,6 @@ let smt_append_bind solver smt_rev_map state_no orig_expr mapped_expr =
         then Hashtbl.add smt_rev_map smt_id (state_no, orig_expr)
     end
 
-
 let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     let shared_vars = Program.get_shared prog in
     let type_tab = Program.get_type_tab prog in
@@ -92,7 +93,7 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     let is_proc_moving proc (_, _, annot) =
         try proc#get_name = (StringMap.find "proc" annot)
-        with Not_found -> false
+        with Not_found -> raise No_moving_error
     in
     let append_one_assert state_no is_traceable asrt =
         let new_e =
@@ -118,7 +119,10 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     let proc_asserts proc =
         let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
         let proc_xd = proc#get_stmts in
-        let when_moving = List.map (is_proc_moving proc) trail_asserts in
+        let all_but_last = List.tl (List.rev trail_asserts) in
+        let when_moving =
+            (* no process is moving from the last state *)
+            List.rev (false :: (List.map (is_proc_moving proc) all_but_last)) in
         let local_vars = [c_ctx#get_ctr] in
         create_path c_ctx#abbrev_name proc_xd local_vars shared_vars
             when_moving n_steps
@@ -408,7 +412,11 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     in
     (* simulate one step *)
     let res, smt_rev_map =
-        simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1 in
+        try simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1
+        with No_moving_error ->
+            raise (Refinement_error
+                (sprintf "No process moving at state %d of the loop" state_num))
+    in
 
     (* collect unsat cores if the assertions contradict fairness,
        or fairness + the state assertions lead to a deadlock *)
@@ -541,7 +549,11 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         rt#solver#set_collect_asserts true;
         let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
         let res, smt_rev_map =
-            simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl step_asserts 1 in
+            try simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl step_asserts 1
+            with No_moving_error ->
+                raise (Refinement_error
+                    (sprintf "No process is moving from state %d" st))
+        in
         rt#solver#set_collect_asserts false;
         if not res
         then begin
