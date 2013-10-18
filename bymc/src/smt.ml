@@ -10,14 +10,14 @@ open Spin
 open SpinIr
 open SpinIrImp
 
-exception Smt_error of string;;
-exception Communication_failure of string;;
+exception Smt_error of string
+exception Communication_failure of string
 
 let rec expr_to_smt e =
     match e with
     | Nop comment -> sprintf ";; %s\n" comment
     | Const i -> string_of_int i
-    | Var v -> v#get_name
+    | Var v -> v#mangled_name
     | UnEx (tok, f) ->
         begin match tok with
         | UMIN -> sprintf "(- %s)" (expr_to_smt f)
@@ -76,7 +76,7 @@ let var_to_smt var tp =
         then sprintf "(-> (subrange 0 %d) %s)" (tp#nelems - 1) subtype
         else subtype
     in
-    sprintf "(define %s :: %s)" var#get_name complex_type
+    sprintf "(define %s :: %s)" var#mangled_name complex_type
 
 
 (* The interface to the SMT solver (yices).

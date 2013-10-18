@@ -138,7 +138,7 @@ var name_i var_id =
             if qi <> "" then qi ^ "." ^ name else name
 
         (* a qualified name as a mangled identifier, e.g.,
-           when an external tool does not likes dots and brackets *)
+           when an external tool does not like dots and brackets *)
         method mangled_name =
             let q = if m_proc_name <> "" then m_proc_name else "" in
             let qi =
