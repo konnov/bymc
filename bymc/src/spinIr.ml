@@ -207,8 +207,10 @@ class symb_tab i_tab_name =
         method tab_name = i_tab_name
 
         method add_symb name symb = Hashtbl.add tab name symb
+
         method add_all_symb symb_list =
             List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
+
         method set_syms symb_list =
             tab <- Hashtbl.create (List.length symb_list);
             List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list

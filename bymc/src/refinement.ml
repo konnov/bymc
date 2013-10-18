@@ -49,24 +49,21 @@ let skip_step local_vars step =
     list_to_binex AND (List.map eq local_vars)
 
 
-let create_path proc xducer local_vars shared_vars when_moving n_steps =
+let create_path proc local_vars shared_vars n_steps =
     let tracked_vars = local_vars @ shared_vars in
     let map_xducer n =
-        let es = List.map expr_of_m_stmt xducer in
+        let es = List.map expr_of_m_stmt proc#get_stmts in
         List.map (map_vars (stick_var (map_to_step n))) es
     in
-    (* different proctypes will not clash on their local variables as only
-       one of them is taking at each point of time *)
-    let move_or_skip is_moving step =
-        if is_moving
-        then map_xducer step
-        else [skip_step local_vars step]
+    let move_or_skip step =
+        let entry_loc = map_to_step step (CfgSmt.get_entry_loc proc) in
+        (* if the process is enabled, use the transition relation,
+           else keep the local variables *)
+        BinEx (OR, Var entry_loc, skip_step local_vars step)
+            :: (* by construction: at_0 -> *) (map_xducer step)
     in
-    (* the last element of when_moving is always false, as no process
-       is moving from the last state. Skip it. *)
-    let my_steps = List.rev (List.tl (List.rev when_moving)) in
     let xducers =
-        List.concat (List.map2 move_or_skip my_steps (range 0 n_steps)) in
+        List.concat (List.map move_or_skip (range 0 n_steps)) in
     let connections =
         List.map
             (connect_steps tracked_vars)
@@ -85,16 +82,30 @@ let smt_append_bind solver smt_rev_map state_no orig_expr mapped_expr =
         then Hashtbl.add smt_rev_map smt_id (state_no, orig_expr)
     end
 
-let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
-    let shared_vars = Program.get_shared prog in
-    let type_tab = Program.get_type_tab prog in
+
+let activate_process procs step =
+    let enabled p = Var (map_to_step step (CfgSmt.get_entry_loc p)) in
+    let disabled p = UnEx (NEG, enabled p) in
+    let proc_mux = function
+        | [p; q] ->
+            if p#get_name <> q#get_name
+            then BinEx (OR, disabled p, disabled q)
+            else (Nop "")
+
+        | _ -> raise (Failure "[p; q] expected")
+    in
+    let at_least_one = list_to_binex OR (List.map enabled procs) in
+    let mux = list_to_binex AND (List.map proc_mux (mk_product procs 2))
+    in
+    BinEx (AND, at_least_one, mux)
+
+
+let simulate_in_smt solver xd_prog ctr_ctx_tbl trail_asserts n_steps =
+    let shared_vars = Program.get_shared xd_prog in
+    let type_tab = Program.get_type_tab xd_prog in
     let smt_rev_map = Hashtbl.create 10 in
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
-    let is_proc_moving proc (_, _, annot) =
-        try proc#get_name = (StringMap.find "proc" annot)
-        with Not_found -> raise No_moving_error
-    in
     let append_one_assert state_no is_traceable asrt =
         let new_e =
             if state_no = 0
@@ -114,21 +125,18 @@ let simulate_in_smt solver prog ctr_ctx_tbl trail_asserts n_steps =
     (* put asserts from the control flow graph *)
     log INFO (sprintf 
         "    getting declarations and assertions of %d transition relations..."
-        (List.length (Program.get_procs prog)));
+        (List.length (Program.get_procs xd_prog)));
     flush stdout;
     let proc_asserts proc =
         let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
-        let proc_xd = proc#get_stmts in
-        let all_but_last = List.tl (List.rev trail_asserts) in
-        let when_moving =
-            (* no process is moving from the last state *)
-            List.rev (false :: (List.map (is_proc_moving proc) all_but_last)) in
         let local_vars = [c_ctx#get_ctr] in
-        create_path c_ctx#abbrev_name proc_xd local_vars shared_vars
-            when_moving n_steps
+        create_path proc local_vars shared_vars n_steps
     in
+    let procs = Program.get_procs xd_prog in
+    let activation = List.map (activate_process procs) (range 0 n_steps) in
     let xducer_asserts =
-        List.concat (List.map proc_asserts (Program.get_procs prog)) in
+        activation @ (List.concat (List.map proc_asserts procs))
+    in
     let decls = expr_list_used_vars xducer_asserts in
 
     log INFO (sprintf "    adding %d declarations..."
@@ -412,12 +420,8 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     in
     (* simulate one step *)
     let res, smt_rev_map =
-        try simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1
-        with No_moving_error ->
-            raise (Refinement_error
-                (sprintf "No process moving at state %d of the loop" state_num))
+        simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1
     in
-
     (* collect unsat cores if the assertions contradict fairness,
        or fairness + the state assertions lead to a deadlock *)
     let core_exprs, _ =
@@ -487,9 +491,10 @@ let check_fairness_supression rt fair_forms
             let new_f = StringMap.add "fairness_ctr" new_fairness
                 (Program.get_ltl_forms cur_prog) in
             let new_prog =
-                Program.set_ltl_forms new_f
-                    (Program.set_instrumental new_i
-                        (Program.set_procs new_p cur_prog)) in
+                Program.set_type_tab new_type_tab
+                    (Program.set_ltl_forms new_f
+                        (Program.set_instrumental new_i
+                            (Program.set_procs new_p cur_prog))) in
             (not sat, new_prog)
         end else (res || not sat, cur_prog)
     in
