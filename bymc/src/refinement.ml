@@ -513,8 +513,9 @@ let filter_good_fairness type_tab aprops fair_forms =
     filtered
 
 
-(* translate the Program.path_t format to the list of
-    assertions annotated with intrinsics
+(* Translate the Program.path_t format to the list of assertions
+   annotated with intrinsics. Intrinsics are not used anymore,
+   but maybe they will be used in the future again.
  *)
 let annotate_path path =
     let f accum elem =
