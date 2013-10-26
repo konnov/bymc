@@ -1,6 +1,7 @@
+open Map
 open Printf
 open Str
-open Map
+open Sys
 
 open Infra
 open Abstract
@@ -45,16 +46,13 @@ let main () =
 
 
 let _ =
-    let print_trace () =
+    let print_trace _ =
         fprintf stderr " -----------------------------------------------\n";
         Printexc.print_backtrace stderr;
-        fprintf stderr " -----------------------------------------------\n"
+        fprintf stderr " -----------------------------------------------\n";
+        flush stderr
     in
-    (* pay the price of easier debugging *)
-    Printexc.record_backtrace true;
-    try
-        main ()
-    with e ->
+    let on_exception e =
         if Printexc.backtrace_status ()
         then begin
             fprintf stdout "\nException: %s\n\n" (Printexc.to_string e);
@@ -65,3 +63,16 @@ let _ =
             fprintf stdout "(Trace is not available. Compile with -g?\n";
             Pervasives.exit 1
         end
+    in
+    (* pay the price of easier debugging *)
+    Printexc.record_backtrace true;
+    let q _ =
+        fprintf stderr "Stack trace:\n";
+        flush stderr;
+        raise Break
+    in
+    ignore (Sys.set_signal Sys.sigusr1 (Signal_handle q));
+    ignore (Unix.sigprocmask Unix.SIG_UNBLOCK [sigint]);
+    try main ()
+    with e -> on_exception e
+
