@@ -3,6 +3,7 @@
 # Print line number before every line.
 # It works like nl and cat -n, which are missing in busybox distributions.
 # An additional second argument limits the number of lines.
+# Additionally, it skips the lines starting with <<<.
 #
 # Igor Konnov, 2013
 
@@ -43,7 +44,12 @@ try:
             sys.stdout.write("[...]\n")
             break
 
-        sys.stdout.write("%6d  %s" % (num, l))
-        num += 1
+
+        if l.find("<<<") == -1:
+            sys.stdout.write("%6d  %s" % (num, l))
+            num += 1
+        else:
+            sys.stdout.write("        %s" % l)
+
 finally:
     fin.close()
