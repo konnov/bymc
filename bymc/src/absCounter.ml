@@ -323,25 +323,7 @@ class abs_ctr_funcs dom prog solver =
             []
 
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
-            (* old impl 
-            let n = c_ctx#get_ctr_dim in
-            let m = List.length (Program.get_shared prog) in
-            let str = sprintf "%s:GS{%%d->%%d:{%s},%s}\\n"
-                c_ctx#abbrev_name
-                (String.concat "," (Accums.n_copies n "%d"))
-                (String.concat "," (Accums.n_copies m "%d")) in
-            let mk_deref i = self#deref_ctr c_ctx (Const i) in
-            let es = (List.map mk_deref (range 0 n))
-                @ (List.map (fun v -> Var v) (Program.get_shared prog)) in
-
-            [ MPrint (fresh_id (), str, prev_idx :: next_idx :: es)]
-            *)
-            let fmt =
-                sprintf "X{proc=%s,from=%%d,to=%%d}\\n" c_ctx#proctype_name in
-            let intr = MPrint (fresh_id (), fmt, [prev_idx; next_idx]) in
-            if prev_idx <> (Const (-1))
-            then [ intr; replace_m_stmt_id (fresh_id ()) m_print ]
-            else [ replace_m_stmt_id (fresh_id ()) m_print ]
+            [ replace_m_stmt_id (fresh_id ()) m_print ]
 
 
         method mk_init c_ctx active_expr decls init_stmts =
