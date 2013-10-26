@@ -4,7 +4,7 @@ open Accums
 open Debug
 open Ltl
 open Program
-open Refinement
+open PiaCtrRefinement
 open Runtime
 open Spin
 open SpinIr

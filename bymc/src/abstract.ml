@@ -11,7 +11,7 @@ open PiaDataCtx
 open PiaCtrCtx
 open Plugin
 open Program
-open Refinement
+open PiaCtrRefinement
 open Runtime
 open Simplif
 open Smt

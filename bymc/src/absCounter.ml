@@ -23,7 +23,7 @@ open AbsBasics
 open VarRole
 open AbsInterval
 open Program
-open Refinement
+open PiaCtrRefinement
 open Regions
 open Ltl
 

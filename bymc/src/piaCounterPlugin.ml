@@ -7,7 +7,7 @@ open PiaDataCtx
 open PiaDataPlugin
 open Plugin
 open Program
-open Refinement
+open PiaCtrRefinement
 open Spin
 open SpinIr
 open SpinIrImp
@@ -110,7 +110,7 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 else e
 
             | _ as e ->
-                raise (Refinement.Refinement_error
+                raise (PiaCtrRefinement.Refinement_error
                     ("Don't know how to decode: " ^ (expr_s e)))
             in
             let conc_row = function
