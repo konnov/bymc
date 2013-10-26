@@ -16,7 +16,6 @@ open Runtime
 open Simplif
 open Smt
 open Spin
-open SpinIr
 open SpinIrImp
 open VarRole
 open Writer

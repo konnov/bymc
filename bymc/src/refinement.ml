@@ -100,12 +100,8 @@ let activate_process procs step =
     BinEx (AND, at_least_one, mux)
 
 
-let simulate_in_smt solver xd_prog ctr_ctx_tbl trail_asserts n_steps =
-    let shared_vars = Program.get_shared xd_prog in
-    let type_tab = Program.get_type_tab xd_prog in
+let check_trail_asserts solver trail_asserts n_steps =
     let smt_rev_map = Hashtbl.create 10 in
-    assert (n_steps < (List.length trail_asserts));
-    let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     let append_one_assert state_no is_traceable asrt =
         let new_e =
             if state_no = 0
@@ -121,41 +117,48 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl trail_asserts n_steps =
         List.iter (append_one_assert state_no true) asserts;
         List.iter (append_one_assert state_no false) assumes
     in
-    solver#push_ctx;
-    (* put asserts from the control flow graph *)
-    log INFO (sprintf 
-        "    getting declarations and assertions of %d transition relations..."
-        (List.length (Program.get_procs xd_prog)));
-    flush stdout;
-    let proc_asserts proc =
-        let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
-        let local_vars = [c_ctx#get_ctr] in
-        create_path proc local_vars shared_vars n_steps
-    in
-    let procs = Program.get_procs xd_prog in
-    let activation = List.map (activate_process procs) (range 0 n_steps) in
-    let xducer_asserts =
-        activation @ (List.concat (List.map proc_asserts procs))
-    in
-    let decls = expr_list_used_vars xducer_asserts in
-
-    log INFO (sprintf "    adding %d declarations..."
-        (List.length decls)); flush stdout;
-    let append_def v =
-        solver#append_var_def v (type_tab#get_type v)
-    in
-    List.iter append_def decls;
-    log INFO (sprintf "    adding %d transition asserts..."
-        (List.length xducer_asserts)); flush stdout;
-    List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts;
+    (* put asserts from the counter example *)
     log INFO (sprintf "    adding %d trail asserts..."
         (List.length trail_asserts)); flush stdout;
-    (* put asserts from the counter example *)
+
+    assert (n_steps < (List.length trail_asserts));
+    let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
+    solver#push_ctx;
     List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
     log INFO "    waiting for SMT..."; flush stdout;
     let result = solver#check in
     solver#pop_ctx;
     (result, smt_rev_map)
+
+
+let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
+    let shared_vars = Program.get_shared xd_prog in
+    let type_tab = Program.get_type_tab xd_prog in
+
+    let proc_asserts proc =
+        let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
+        let local_vars = [c_ctx#get_ctr] in
+        create_path proc local_vars shared_vars n_steps
+    in
+    (* put asserts from the control flow graph *)
+    log INFO (sprintf 
+        "    getting declarations and assertions of %d transition relations..."
+        (List.length (Program.get_procs xd_prog)));
+    flush stdout;
+    let procs = Program.get_procs xd_prog in
+    let activation = List.map (activate_process procs) (range 0 n_steps) in
+    let xducer_asserts =
+        activation @ (List.concat (List.map proc_asserts procs)) in
+    let decls = expr_list_used_vars xducer_asserts in
+
+    log INFO (sprintf "    adding %d declarations..."
+        (List.length decls)); flush stdout;
+    let append_def v = solver#append_var_def v (type_tab#get_type v) in
+    List.iter append_def decls;
+
+    log INFO (sprintf "    adding %d transition asserts..."
+        (List.length xducer_asserts)); flush stdout;
+    List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts
 
 
 let parse_smt_evidence prog solver =
@@ -419,9 +422,10 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     let step_asserts = [(asserts, [fairness], annot); ([], [], StringMap.empty)]
     in
     (* simulate one step *)
-    let res, smt_rev_map =
-        simulate_in_smt rt#solver prog ctr_ctx_tbl step_asserts 1
-    in
+    rt#solver#push_ctx;
+    simulate_in_smt rt#solver prog ctr_ctx_tbl 1;
+    let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
+    rt#solver#pop_ctx;
     (* collect unsat cores if the assertions contradict fairness,
        or fairness + the state assertions lead to a deadlock *)
     let core_exprs, _ =
@@ -553,12 +557,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         rt#solver#append
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         rt#solver#set_collect_asserts true;
-        let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
-        let res, smt_rev_map =
-            try simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl step_asserts 1
-            with No_moving_error ->
-                raise (Refinement_error
-                    (sprintf "No process is moving from state %d" st))
+        let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1
         in
         rt#solver#set_collect_asserts false;
         if not res
@@ -585,10 +584,14 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
        (discussed in the FMCAD13 paper) *)
     log INFO "  Trying to find a spurious transition...";
     flush stdout;
+    rt#solver#push_ctx;
     rt#solver#set_need_evidence true; (* needed for refinement! *)
+    let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
+    simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1;
     let (refined, new_prog) =
         List.fold_left find_first (false, ctr_prog) (range 0 (num_states - 1))
     in
+    rt#solver#pop_ctx;
     if refined
     then begin
         log INFO "(status trace-refined)";

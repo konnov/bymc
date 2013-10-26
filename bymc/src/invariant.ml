@@ -29,8 +29,10 @@ let check_invariant rtm xducers_prog inv_name =
              ([not_inv], [], StringMap.empty)] in
         solver#set_collect_asserts true;
         solver#set_need_evidence true;
-        let res, smt_rev_map =
-            simulate_in_smt solver xducers_prog ctr_ctx_tbl step_asserts 1 in
+        solver#push_ctx;
+        simulate_in_smt solver xducers_prog ctr_ctx_tbl 1;
+        let res, smt_rev_map = check_trail_asserts solver step_asserts 1 in
+        solver#pop_ctx;
         solver#set_collect_asserts false;
         if res then begin
             printf "Expression %s is not an invariant!\n\n" inv_name;
