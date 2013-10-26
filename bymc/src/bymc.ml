@@ -28,10 +28,6 @@ let main () =
                 let _ = do_abstraction rt in ()
             | OptRefine ->
                 new_refine rt
-                (*
-                let _ = do_refinement caches solver opts.trail_name prog in
-                let _ = solver#stop in ()
-                *)
             | OptSubstitute ->
                 let chain = new plugin_chain_t in
                 chain#add_plugin
