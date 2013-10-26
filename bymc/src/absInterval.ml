@@ -113,11 +113,15 @@ let var_trait t_ctx v =
 
 
 let refine_var_type ctx dom roles type_tab new_type_tab theVar =
+    let ref_stack = ref [] in
     let rec new_type v =
-        let vrole = roles#get_role v in
-        match vrole with
-            | Scratch v ->
-                    new_type v
+        ref_stack := v#id :: !ref_stack;
+        match roles#get_role v with
+            | Scratch ov ->
+                    if List.mem ov#id !ref_stack
+                    then raise (Failure (sprintf
+                     "infinite recursion on %s -> %s" v#qual_name ov#qual_name))
+                    else new_type ov
 
             | SharedBoundedInt (l, r)
             | BoundedInt (l, r) ->
