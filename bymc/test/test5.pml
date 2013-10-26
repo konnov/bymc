@@ -1,5 +1,5 @@
 /**
- A simple test, one pc, two intervals for received.
+ Testing support for multiple process types
  */
 
 #define IT      0 /* the initial state */
@@ -84,5 +84,5 @@ end: /* at some point there will be nothing to do */
 }
 
 ltl fairness { []<>(!in_transit) }
-ltl no_spurios1 { [](!procAprop) }
+ltl no_spurious1 { [](!procAprop) }
 
