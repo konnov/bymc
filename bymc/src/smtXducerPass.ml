@@ -56,6 +56,16 @@ let do_xducers caches prog =
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let new_procs = List.map
         (to_xducer caches prog new_type_tab) (Program.get_procs prog) in
-    (Program.set_type_tab new_type_tab
-        (Program.set_procs new_procs prog))
+    let new_prog =
+        (Program.set_type_tab new_type_tab
+            (Program.set_procs new_procs prog)) in
+    (* uncomment to deep debug:
+    let p s =
+        if s#get_sym_type = SymVar
+        then printf "%s:%d\n" s#as_var#qual_name s#as_var#id
+        else () in
+    List.iter p (Program.get_sym_tab new_prog)#get_symbs_rec;
+    *)
+    new_type_tab#print;
+    new_prog
 

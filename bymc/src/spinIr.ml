@@ -291,19 +291,42 @@ class data_type i_basetype =
             let l, r = m_range in
             c#set_range l r;
             c
+
+        method to_s =
+            let base_str = function
+              | TBIT -> "bit"
+              | TBYTE -> "byte"
+              | TSHORT -> "short"
+              | TINT -> "int"
+              | TUNSIGNED -> "unsigned"
+              | TCHAN -> "chan"
+              | TMTYPE -> "mtype"
+              | TPROPOSITION -> "proposition"
+              | TUNDEF -> raise (Failure "Undefined type")
+            in
+            let l, r = m_range in
+            let base = if not self#is_array && self#has_range && l >= 0
+            then "unsigned" (* bitwidth will be specified *)
+            else base_str m_basetype in
+            sprintf "%s%s%s" base
+                (if m_nbits > 0 then sprintf ":%d" m_nbits else "")
+                (if self#is_array then sprintf "[%d]" m_nelems else "")
+ 
     end
 
 
 (* This table binds integer identifiers of (variables) to the datatypes *)
 class data_type_tab =
-    object
+    object(self)
         val mutable m_tab: (int, data_type) Hashtbl.t = Hashtbl.create 5
 
         method has_type (v: var) = Hashtbl.mem m_tab v#id
         method get_type (v: var) =
             try Hashtbl.find m_tab v#id
             with Not_found ->
-                raise (Type_not_found (sprintf "Type of %s not found" v#get_name))
+                self#print;
+                raise (Type_not_found (sprintf "Type of %s (id=%d) not found"
+                    v#get_name v#id))
 
         method set_type (v: var) (dtp: data_type) =
             Hashtbl.replace m_tab v#id dtp
@@ -316,6 +339,12 @@ class data_type_tab =
             let new_t = new data_type_tab in
             new_t#set_all_types (Hashtbl.copy m_tab);
             new_t
+
+        method print =
+            let p (id, t) =
+                printf "  %6d -> %s\n" id t#to_s
+            in
+            List.iter p (Accums.hashtbl_as_list m_tab)
     end
 
 

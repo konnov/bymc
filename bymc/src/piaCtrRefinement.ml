@@ -119,13 +119,13 @@ let check_trail_asserts solver trail_asserts n_steps =
     in
     (* put asserts from the counter example *)
     log INFO (sprintf "    adding %d trail asserts..."
-        (List.length trail_asserts)); flush stdout;
+        (List.length trail_asserts));
 
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     solver#push_ctx;
     List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
-    log INFO "    waiting for SMT..."; flush stdout;
+    log INFO "    waiting for SMT...";
     let result = solver#check in
     solver#pop_ctx;
     (result, smt_rev_map)
@@ -144,20 +144,24 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
     log INFO (sprintf 
         "    getting declarations and assertions of %d transition relations..."
         (List.length (Program.get_procs xd_prog)));
-    flush stdout;
     let procs = Program.get_procs xd_prog in
     let activation = List.map (activate_process procs) (range 0 n_steps) in
     let xducer_asserts =
         activation @ (List.concat (List.map proc_asserts procs)) in
     let decls = expr_list_used_vars xducer_asserts in
+    (* uncomment to debug:
+    log INFO "    xducer asserts:";
+    List.iter (fun e -> log INFO (expr_s e)) xducer_asserts;
+    log INFO "    xducer decls:";
+    List.iter (fun v -> log INFO (sprintf "%s (%d)" v#qual_name v#id)) decls;
+    *)
 
-    log INFO (sprintf "    adding %d declarations..."
-        (List.length decls)); flush stdout;
+    log INFO (sprintf "    adding %d declarations..." (List.length decls));
     let append_def v = solver#append_var_def v (type_tab#get_type v) in
     List.iter append_def decls;
 
     log INFO (sprintf "    adding %d transition asserts..."
-        (List.length xducer_asserts)); flush stdout;
+        (List.length xducer_asserts));
     List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts
 
 
@@ -454,7 +458,7 @@ let check_fairness_supression rt fair_forms
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let check_one (res, cur_prog) ff = 
-        log INFO ("  Checking if the loop is fair..."); flush stdout;
+        log INFO ("  Checking if the loop is fair...");
         let check_and_collect_cores (all_sat, all_core_exprs, num) state_asserts =
             let sat, core_exprs =
                 is_loop_state_fair_by_step rt
@@ -549,8 +553,8 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     log INFO (sprintf "  %d step(s)" total_steps);
     if total_steps = 0
     then raise (Failure "All processes idle forever at the initial state");
-    log INFO "  [DONE]"; flush stdout;
-    log INFO "> Simulating counter example in VASS..."; flush stdout;
+    log INFO "  [DONE]";
+    log INFO "> Simulating counter example in VASS...";
 
     let check_trans st = 
         let step_asserts = list_sub apath st 2 in
@@ -564,14 +568,12 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         then begin
             log INFO
                 (sprintf "  The transition %d -> %d is spurious." st (st + 1));
-            flush stdout;
             let new_prog =
                 refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
             (true, new_prog)
         end else begin
             log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st (st + 1) total_steps);
-            flush stdout;
             (false, ctr_prog)
         end
     in
@@ -583,7 +585,6 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     (* Try to detect spurious transitions and unfair paths
        (discussed in the FMCAD13 paper) *)
     log INFO "  Trying to find a spurious transition...";
-    flush stdout;
     rt#solver#push_ctx;
     rt#solver#set_need_evidence true; (* needed for refinement! *)
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in

@@ -299,6 +299,9 @@ class virtual ctr_funcs =
         method deref_ctr (c_ctx: ctr_abs_ctx) (e: token expr): token expr =
             BinEx (ARR_ACCESS, Var c_ctx#get_ctr, e)
 
+        method virtual transform_inc:
+            PiaDataCtx.pia_data_ctx -> token mir_stmt -> token mir_stmt
+
         method virtual keep_assume:
             token expr -> bool
 
@@ -371,6 +374,8 @@ class abs_ctr_funcs dom prog solver =
                   [MOptGuarded seq;
                    MOptElse [MExpr(fresh_id (), Nop comment)]])
             ]
+
+        method transform_inc _ s = s
 
         method keep_assume e = false
         
@@ -475,6 +480,24 @@ class vass_funcs dom prog solver =
                   [MOptGuarded seq;
                    MOptElse [MExpr(fresh_id (), Nop comment)]])]
 
+        method transform_inc t_ctx = function
+            (* XXX: this is a hack saying that if we have nsnt + 1,
+                then it must be translated to nsnt + delta
+                (as delta identical processes may fire at once).
+                This is not needed in our current setup (FMCAD13),
+                but it might be useful, when checking feasibility of a
+                path (currently we are checking invividual transitions).
+             *)
+           | MExpr (id, BinEx (ASGN, Var x,
+                    BinEx (PLUS, Var y, Const 1))) as s ->
+                if t_ctx#must_keep_concrete (Var x) && x#id = y#id
+                then MExpr (id,
+                        BinEx (ASGN, Var x,
+                            BinEx (PLUS, Var x, Var delta)))
+                else s
+
+           | _ as s -> s 
+
         method keep_assume e = true
         
         method embed_inv = m_embed_inv
@@ -572,28 +595,8 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         @ new_update
     in
     let replace_comp atomics stmts =
-        let rec hack_nsnt = function
-            (* XXX: this is a hack saying if we have nsnt + 1,
-                then it must be nsnt + delta. This is not required to
-               refine single transitions, but it might be helpful to check
-               feasibility of a counterexample.
-             *)
-            | MExpr (id, BinEx (ASGN, Var x, BinEx (PLUS, Var y, Const 1))) as s ->
-                if t_ctx#must_keep_concrete (Var x) && x#get_name = y#get_name
-                then MExpr (id,
-                        BinEx (ASGN, Var x,
-                            BinEx (PLUS, Var x, Var (new_var "vass_dta"))))
-                else s
-            | MIf (id, opts) ->
-                let on_opt = function
-                    | MOptGuarded seq -> MOptGuarded (List.map hack_nsnt seq)
-                    | MOptElse seq -> MOptElse (List.map hack_nsnt seq)
-                in
-                MIf (id, (List.map on_opt opts))
-            | _ as s -> s
-        in
         List.map (sub_basic_stmt (trans_quantifiers solver ctr_ctx_tbl prog))
-            (List.map hack_nsnt (List.map (replace_assume atomics) stmts))
+            (List.map (sub_basic_stmt (funcs#transform_inc t_ctx)) stmts)
     in
     let mk_assume e = MAssume (fresh_id (), e) in
     let abstract_proc atomics p =
