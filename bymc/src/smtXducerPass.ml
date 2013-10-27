@@ -65,7 +65,8 @@ let do_xducers caches prog =
         then printf "%s:%d\n" s#as_var#qual_name s#as_var#id
         else () in
     List.iter p (Program.get_sym_tab new_prog)#get_symbs_rec;
-    *)
     new_type_tab#print;
+    *)
+
     new_prog
 
