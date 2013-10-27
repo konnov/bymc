@@ -1,5 +1,6 @@
 /**
- A simple test, one pc, two intervals for received.
+ A simple test, two PCs, three intervals for received,
+ no actual use of nsnt.
  */
 
 #define IT      0 /* the initial state */

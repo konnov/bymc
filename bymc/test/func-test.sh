@@ -4,7 +4,7 @@
 
 bymc_dir=`dirname $0`
 export bymc_dir=`cd $bymc_dir/.. && pwd`
-export run_dir="$bymc_dir/test-run"
+export run_dir="$bymc_dir/_test-run"
 logfile="$run_dir/test.log"
 
 if [ "${run_dir}" != "" -a -d "$run_dir" ]; then
