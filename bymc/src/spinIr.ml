@@ -408,7 +408,7 @@ let expr_list_used_vars (exprs: 't expr list) : var list =
     let tbl = Hashtbl.create 10 in
     let collect_for_expr e =
         let vs = expr_used_vars e in
-        List.iter (fun v -> Hashtbl.replace tbl v#get_name v) vs
+        List.iter (fun v -> Hashtbl.replace tbl v#qual_name v) vs
     in
     List.iter collect_for_expr exprs;
     List.sort cmp_vars (Accums.hashtbl_vals tbl)
