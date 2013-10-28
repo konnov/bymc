@@ -568,6 +568,10 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         then begin
             log INFO
                 (sprintf "  The transition %d -> %d is spurious." st (st + 1));
+            (* speedup trick: pop out the transition relation,
+               as we do not need it anymore *)
+            rt#solver#pop_ctx;
+            rt#solver#push_ctx;
             let new_prog =
                 refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
             (true, new_prog)
