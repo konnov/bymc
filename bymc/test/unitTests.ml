@@ -1,6 +1,11 @@
 open OUnit
-open PipeCmd
 
 let _ =
-    run_test_tt_main PipeCmdTest.suite
+    let all = "all-tests" >:::
+    [
+        PipeCmdTest.suite;
+        AccumsTest.suite
+    ]
+    in
+    run_test_tt_main all
 

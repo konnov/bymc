@@ -2,8 +2,11 @@
    desktops, let's make a transition).
    Useful functions that do not fit elsewhere.
 
-   Igor Konnov, 2011
+   Igor Konnov, 2011-2013
 *)
+
+open Printf
+open Str
 
 exception Not_found_msg of string
 
@@ -235,7 +238,53 @@ let map_merge_fst key aopt bopt =
     | Some a, Some _ -> aopt
     | None, Some _ -> bopt
 
+(* regular expressions: OCaml limits the number of matched groups
+   with 30. Here we provide an implementation that lifts this
+   limitation. This implementation will not work with nested groups.
+ *)
 
+(* split a regex into two regexes:
+     the one ending with group 'group' and the one after that group.
+ *)
+let re_split re_s text start_pos group =
+    let rec find i p =
+        if i = 0
+        then p
+        else find (i - 1) ((search_forward (regexp_string "\\)") re_s p) + 2)
+    in
+    try
+        let p = find group 0 in
+        let before = string_before re_s p in
+        if not (string_partial_match (regexp before) text start_pos)
+        then raise (Invalid_argument (sprintf "no partial match of %s to %s" text before))
+        else ((before, string_after re_s p), match_end ())
+    with Not_found ->
+        raise (Invalid_argument (sprintf "group %d of %s not found" group re_s))
+
+
+(* retrieve group_cnt matching groups, notwithstanding the group
+   limit in ocaml (currently, 30)
+ *)
+let re_all_groups re_s text group_cnt =
+    (* this is the de-facto limit on the number of groups in OCaml 3.12.1 *)
+    let limit = 30 in
+    let groups r n p =
+        if string_partial_match (regexp r) text p
+        then List.map (fun i -> matched_group i text) (range 1 (n + 1))
+        else raise (Invalid_argument (sprintf "no match of %s:%d to %s" text p r))
+    in
+    if not (string_match (regexp re_s) text 0)
+    then raise (Invalid_argument (sprintf "string '%s' does not match '%s'" text re_s))
+    else let rec next r n p =
+        if n <= limit
+        then groups r n p
+        else let ((before, after), np) = re_split r text p limit in
+            (groups before limit p) @ (next after (n - limit) np)
+    in
+    next re_s group_cnt 0
+
+
+(* misc *)
 let n_copies n e =
     let rec gen = function
     | 0 -> []
