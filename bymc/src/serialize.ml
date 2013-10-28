@@ -43,12 +43,14 @@ let global_state_re fmt =
 let parse_global_state prog text =
     let fmt, es = global_state_fmt prog in
     let re = global_state_re fmt in
-    let bind group expr =
-        let value = int_of_string (Str.matched_group (1 + group) text) in
+    let bind group_s expr =
+        let value = int_of_string group_s in
         BinEx(EQ, expr, Const value)
     in
+    let re_s =
+        Str.global_replace (Str.regexp_string "%d") "\\([0-9]+\\)" fmt in
     if Str.string_match re text 0
-    then List.map2 bind (range 0 (List.length es)) es
+    then List.map2 bind (re_all_groups re_s text (List.length es)) es
     else []
 
 
