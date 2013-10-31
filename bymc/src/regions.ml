@@ -121,5 +121,22 @@ class region_tbl =
                 let m = sprintf "No region %s:[%d, %d] found"
                     name first_id last_id in
                 raise (Region_error m)
+
+        (* when one inserts a new statement, the regions have to be extended *)
+        method extend_after (os: token mir_stmt) (ns: token mir_stmt) =
+            let update name (first, last) =
+                if last = (m_stmt_id os)
+                then Hashtbl.replace m_regions name (first, (m_stmt_id ns))
+            in
+            Hashtbl.iter update m_regions
+
+        (* when one inserts a new statement, the regions have to be extended *)
+        method extend_before (os: token mir_stmt) (ns: token mir_stmt) =
+            let update name (first, last) =
+                if first = (m_stmt_id os)
+                then Hashtbl.replace m_regions name ((m_stmt_id ns), last)
+            in
+            Hashtbl.iter update m_regions
+
     end
 

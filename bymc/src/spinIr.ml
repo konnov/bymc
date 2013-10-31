@@ -709,6 +709,7 @@ let list_to_binex tok lst =
     List.fold_left join_e (Nop "") lst
 
 
+(* miscellaneous statement traversing and substitution functions *)
 let sub_basic_stmt
         (trav_fun: 'a mir_stmt -> 'a mir_stmt) (m_stmt: 'a mir_stmt)
         : 'a mir_stmt =
@@ -752,6 +753,36 @@ let sub_basic_stmt_with_list
             MOptElse (List.fold_left fold [] body)
     in
     List.fold_left fold [] stmts
+
+
+(* the general way to do substitutions *)
+let sub_stmt_with_list
+        (sub_fun: 't mir_stmt -> (bool * 't mir_stmt list))
+        (seq: 't mir_stmt list): 't mir_stmt list =
+    let rec sub rs s =
+        let no_deeper, nss = sub_fun s in
+        if no_deeper      (* the user did the substitution as they like *)
+        then (List.rev nss) @ rs
+        else match s with (* go deeper *)
+            | MIf (id, opts) ->
+                (MIf (id, List.map sub_opt opts)) :: rs
+
+            | MAtomic (id, body) ->
+                (MAtomic (id, List.rev (List.fold_left sub [] body))) :: rs
+
+            | MD_step (id, body) ->
+                (MD_step (id, List.rev (List.fold_left sub [] body))) :: rs
+
+            | _ as s -> s :: rs
+
+    and sub_opt = function
+    | MOptGuarded body ->
+        MOptGuarded (List.rev (List.fold_left sub [] body))
+
+    | MOptElse body ->
+        MOptElse (List.rev (List.fold_left sub [] body))
+    in
+    List.rev (List.fold_left sub [] seq)
 
 
 let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)
