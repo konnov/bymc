@@ -110,7 +110,7 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
         if comment <> ""
         then begin
             openb ff lvl indent_first;
-            Format.fprintf ff "/* %s */" comment;
+            Format.fprintf ff "skip; /* %s */" comment;
             closeb ff
         end
 

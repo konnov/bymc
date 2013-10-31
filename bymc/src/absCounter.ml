@@ -259,7 +259,7 @@ let omit_local_assignments prog init_stmts =
         | MExpr (id, BinEx(ASGN, Var v, rhs)) as s ->
             if Program.is_global prog v
             then s
-            else MExpr (id, Nop ("/* " ^ (mir_stmt_s s) ^ " */"))
+            else MExpr (id, Nop (mir_stmt_s s))
         | MAtomic (id, seq) ->
                 MAtomic (id, List.map tr seq)
         | MD_step (id, seq) ->
