@@ -548,6 +548,10 @@ let m_stmt_id = function
     | MDeclProp (id, _, _) -> id
 
 
+let mk_comment text =
+    MExpr (fresh_id (), Nop text)
+
+
 let replace_m_stmt_id new_id = function
     | MSkip _ -> MSkip new_id
     | MExpr (_, e) -> MExpr (new_id, e)

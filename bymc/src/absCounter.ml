@@ -516,10 +516,6 @@ class vass_funcs dom prog solver =
     end
 
 
-let mk_comment text =
-    MExpr (fresh_id (), Nop text)
-
-
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struct_cache#regions.
  *)
