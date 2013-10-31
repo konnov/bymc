@@ -277,8 +277,6 @@ let omit_local_assignments prog init_stmts =
 (* abstraction of functions different in VASS and our counter abstraction *)
 class virtual ctr_funcs =
     object
-        val mutable m_print = MExpr (fresh_id(), Nop "")
-
         method virtual introduced_vars:
             var list
 
@@ -309,7 +307,6 @@ class virtual ctr_funcs =
         method virtual set_embed_inv: bool -> unit
 
         method virtual register_new_vars: ctr_abs_ctx_tbl -> data_type_tab -> unit
-        method set_print (s: token mir_stmt) = m_print <- s 
     end
 
 
@@ -682,8 +679,6 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (Program.set_atomics new_atomics
         (Program.set_ltl_forms new_ltl_forms
         Program.empty))))))) in
-    let fmt, es = Serialize.global_state_fmt new_prog in
-    funcs#set_print (MPrint (fresh_id (), fmt ^ "\\n", es));
     let new_procs =
         let trp p =
             if not (List.mem p#get_name proc_names)
