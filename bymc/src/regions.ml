@@ -11,8 +11,7 @@
  *
  * NOTE: if one wants to change the regions when statements are modified,
  * then statements must be added only via a special interface like
- * insert_before, insert_after, remove_before, remove_after, which is not
- * implemented yet.
+ * insert_before and insert_after (see stmtIns.ml).
  *
  * TODO: if we can guarantee total order between the statements' ids, then
  * the region lookups and updates are much easier.
