@@ -5,6 +5,7 @@ open Options
 open Parse
 open Plugin
 open Program
+open SkelStruc
 open Spin
 open Writer
 
@@ -44,7 +45,13 @@ class promela_parser_plugin_t (plugin_name: string) =
             in
             List.iter rt#solver#append smt_exprs;
             if not rt#solver#check
-            then raise (Program.Program_error "Basic assertions are contradictory")
+            then raise (Program.Program_error "Basic assertions are contradictory");
+            (* extract regions *)
+            let extract_reg proc =
+                let reg_tab = extract_skel proc#get_stmts in
+                rt#caches#struc#set_regions proc#get_name reg_tab
+            in
+            List.iter extract_reg (Program.get_procs prog)
 
         method decode_trail _ path = path
 

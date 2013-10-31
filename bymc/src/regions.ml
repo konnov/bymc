@@ -11,7 +11,11 @@
  *
  * NOTE: if one wants to change the regions when statements are modified,
  * then statements must be added only via a special interface like
- * insert_before, insert_after, remove_before, remove_after.
+ * insert_before, insert_after, remove_before, remove_after, which is not
+ * implemented yet.
+ *
+ * TODO: if we can guarantee total order between the statements' ids, then
+ * the region lookups and updates are much easier.
  *
  * Igor Konnov, 2012
  *)
@@ -71,18 +75,17 @@ let rec find_region_by_range
         search 0 stmts
     in
     let first_pos, last_pos = (find_pos first), (find_pos last) in
-    (* DEBUG:
-    Printf.printf "first_pos = %d, last_pos = %d\n" first_pos last_pos;
-    *)
-    (* lots of diagnostics *)
+    (* some diagnostics *)
     if first_pos >= 0 && last_pos < 0
     then let m = sprintf
-        "Malformed region, ids %d and %d are located on different levels"
-        first last in
+        "Malformed region: no last statement <%d> on the same level with the first one <%d>"
+        last first in
+        List.iter (fun s -> printf "%s\n" (SpinIrImp.mir_stmt_s s)) stmts;
         raise (Region_error m)
     else if first_pos > last_pos
     then raise (Region_error
-        ("Malformed region, last statement before first statement"))
+        (sprintf "Malformed region: last statement <%d> before first statement <%d>"
+         last first))
     else if first_pos >= 0
     (* everything is fine, return the statements *)
     then Some (list_sub stmts first_pos (last_pos - first_pos + 1))

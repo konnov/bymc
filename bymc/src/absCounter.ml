@@ -326,7 +326,7 @@ class abs_ctr_funcs dom prog solver =
             []
 
         method mk_post_asserts c_ctx active_expr prev_idx next_idx =
-            [ replace_m_stmt_id (fresh_id ()) m_print ]
+            [ ]
 
 
         method mk_init c_ctx active_expr decls init_stmts =
@@ -607,6 +607,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         let body = remove_bad_statements p#get_stmts in
         (* TODO: figure out why the order of the following calls affects
            the number of refinement steps! *)
+        (* rebuild the regions, as some statements are removed *)
         let reg_tab = extract_skel body in
         let main_lab = mk_uniq_label () in
         let new_init =

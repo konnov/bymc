@@ -9,6 +9,7 @@ open Runtime
 open Serialize
 open SpinIr
 open SpinIrImp
+open StmtIns
 open Writer
 
 class spin_plugin_t (plugin_name: string) (out_name: string) =
@@ -18,10 +19,30 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
         method is_disabled (rt: runtime_t) =
             rt#caches#options.Options.mc_tool <> Options.ToolSpin
 
-        method transform rtm prog =
+        method transform rt prog =
+            (* add the printf statement the init and after the step *)
+            let add_printf proc =
+                let reg_tab = rt#caches#struc#get_regions proc#get_name in
+                let fmt, es = Serialize.global_state_fmt prog in
+                let print = MPrint (fresh_id (), fmt ^ "\\n", es) in
+                let init = reg_tab#get "init" proc#get_stmts in
+                let np = insert_after rt proc (List.hd (List.rev init)) print in
+                (* find a non-empty region *)
+                let update = reg_tab#get "update" proc#get_stmts in
+                let last_reg =
+                    if update <> []
+                    then update
+                    else reg_tab#get "comp" proc#get_stmts in (* no updates *)
+                if last_reg = []
+                then raise (Failure "Neither compute, nor update region is found")
+                else insert_after rt np (List.hd (List.rev last_reg)) print
+            in
+            let new_procs = List.map add_printf (Program.get_procs prog) in
+            let new_prog = Program.set_procs new_procs prog in
+
             let filename = out_name ^ ".prm" in
             log INFO (sprintf "> Writing Promela model %s..." out_name);
-            let f_prog = Ltl.embed_fairness prog in
+            let f_prog = Ltl.embed_fairness new_prog in
             (* TODO: give it a better name like target-spin? *)
             write_to_file true filename
                 (units_of_program f_prog) (get_type_tab f_prog);

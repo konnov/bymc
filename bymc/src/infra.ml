@@ -99,6 +99,7 @@ class pass_caches (i_options: options_t)
     object(self)
         method options = i_options
         method analysis = i_analysis
+        (* TODO: this cache must depend on the program! *)
         method struc = i_struc
     end
 

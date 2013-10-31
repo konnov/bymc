@@ -3,6 +3,7 @@ open Debug
 open PiaDataCtx
 open Plugin
 open Program
+open SkelStruc
 
 class pia_data_plugin_t (plugin_name: string) =
     object(self)

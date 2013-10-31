@@ -62,7 +62,7 @@ let str_map_s elem_fun map =
 
 (* separate a list into three parts:
     before a matching element, the matching element, the tail.
-    If an element is not found, then two last resulting lists are empty.
+    If the element is not found, then the two last resulting lists are empty.
  *)
 let list_cut_general ignore_dups match_fun lst =
     List.fold_left

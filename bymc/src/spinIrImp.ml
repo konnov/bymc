@@ -200,7 +200,9 @@ let rec expr_tree_s e =
 let rec fprint_expr var_fun ff e =
     match e with
     | Nop comment ->
-        Format.fprintf ff "skip@ /*@ %s@ */" comment
+        if comment = ""
+        then Format.fprintf ff "skip@"
+        else Format.fprintf ff "/*@ %s@ */" comment
     | Const i ->
         Format.fprintf ff "%d" i
     | Var v ->
