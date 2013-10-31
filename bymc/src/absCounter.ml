@@ -369,7 +369,8 @@ class abs_ctr_funcs dom prog solver =
             let comment = "processes stay at the same local state" in
             [MIf (fresh_id (),
                   [MOptGuarded seq;
-                   MOptElse [MExpr(fresh_id (), Nop comment)]])
+                   MOptElse [MSkip (fresh_id ());
+                             MExpr(fresh_id (), Nop comment)]])
             ]
 
         method transform_inc _ s = s

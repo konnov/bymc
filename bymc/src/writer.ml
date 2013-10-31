@@ -106,6 +106,14 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
         Format.fprintf ff "skip;";
         closeb ff
 
+    | MExpr (_, Nop comment) -> (* special treatment *)
+        if comment <> ""
+        then begin
+            openb ff lvl indent_first;
+            Format.fprintf ff "/* %s */" comment;
+            closeb ff
+        end
+
     | MExpr (_, e) ->
         openb ff lvl indent_first;
         fprint_expr_mangled ff e;
