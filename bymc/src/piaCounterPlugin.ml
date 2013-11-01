@@ -67,7 +67,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 do_counter_abstraction funcs solver caches prog proc_names
             in
             write_to_file false "abs-counter-general.prm"
-                (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog);
+                (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog)
+                (Hashtbl.create 10);
             log INFO "[DONE]";
             ctrabs_prog
 
@@ -79,11 +80,13 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 do_counter_abstraction vass_funcs solver caches prog proc_names
             in
             write_to_file false "abs-vass.prm"
-                (units_of_program vass_prog) (get_type_tab vass_prog);
+                (units_of_program vass_prog) (get_type_tab vass_prog)
+                (Hashtbl.create 10);
             log INFO "> Constructing SMT transducers...";
             let xducer_prog = SmtXducerPass.do_xducers caches vass_prog in
             write_to_file false "abs-xducers.prm"
-                (units_of_program xducer_prog) (get_type_tab xducer_prog);
+                (units_of_program xducer_prog) (get_type_tab xducer_prog)
+                (Hashtbl.create 10);
             log INFO "  [DONE]"; flush stdout;
             xducer_prog
 

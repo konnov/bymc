@@ -25,7 +25,8 @@ class promela_parser_plugin_t (plugin_name: string) =
             log INFO (sprintf "> Parsing %s..." basename);
             let prog = parse_promela filename basename dirname in
             write_to_file false "original.prm"
-                (units_of_program prog) (get_type_tab prog);
+                (units_of_program prog) (get_type_tab prog)
+                (Hashtbl.create 10);
             log INFO "  [DONE]";
             log DEBUG (sprintf "#units: %d" (List.length (units_of_program prog)));
             log DEBUG (sprintf "#vars: %d" (get_type_tab prog)#length);

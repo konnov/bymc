@@ -46,6 +46,7 @@ exception Invalid_type of string
 
 type sym_type = SymGen | SymVar | SymLab
 
+type annot_t = AnnotBefore of string | AnnotAfter of string
 
 (* the next identifier (used for vars, statements, etc.) *)
 let uniq_id_next = ref 0

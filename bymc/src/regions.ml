@@ -26,6 +26,7 @@ open SpinIr
 
 exception Region_error of string
 
+
 let rec find_region_by_range
         (first: int) (last: int) (stmts: token mir_stmt list):
         token mir_stmt list option =
@@ -137,5 +138,16 @@ class region_tbl =
             in
             Hashtbl.iter update m_regions
 
+        method get_annotations =
+            let tab = Hashtbl.create 10 in
+            let add name (first, last) =
+                Hashtbl.replace tab
+                    first (AnnotBefore (sprintf "%s::begin" name));
+                Hashtbl.replace tab
+                    last (AnnotAfter (sprintf "%s::end" name))
+            in
+            Hashtbl.iter add m_regions;
+            tab
+                
     end
 

@@ -25,7 +25,8 @@ class pia_data_plugin_t (plugin_name: string) =
             let intabs_prog =
                 do_interval_abstraction rt prog proc_names in
             Writer.write_to_file false "abs-interval.prm"
-                (units_of_program intabs_prog) (get_type_tab intabs_prog);
+                (units_of_program intabs_prog) (get_type_tab intabs_prog)
+                (Hashtbl.create 10);
             log INFO "[DONE]";
             intabs_prog
 

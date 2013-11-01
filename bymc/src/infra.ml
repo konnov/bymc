@@ -20,6 +20,7 @@ open PiaDom
 open PiaCtrCtx
 open Program
 open Regions
+open SpinIr
 open VarRole
 
 exception CacheStateError of string
@@ -91,6 +92,24 @@ class proc_struc_cache =
 
         method set_regions (proc_name: string) (proc_regs: region_tbl) =
             Hashtbl.replace m_reg_tbl proc_name proc_regs
+
+        method get_annotations =
+            let main_tab = Hashtbl.create 10 in
+            let add_proc proc_name tab =
+                let add id = function
+                    | AnnotBefore text ->
+                        Hashtbl.replace main_tab 
+                            id (AnnotBefore (sprintf "%s::%s" proc_name text))
+
+                    | AnnotAfter text ->
+                        Hashtbl.replace main_tab 
+                            id (AnnotAfter (sprintf "%s::%s" proc_name text))
+                in
+                Hashtbl.iter add (tab#get_annotations)
+            in
+            Hashtbl.iter add_proc m_reg_tbl;
+            main_tab
+
     end
 
 

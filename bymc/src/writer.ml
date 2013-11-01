@@ -99,8 +99,8 @@ let rec write_atomic_expr ff = function
         Format.pp_print_string ff ")"
 
 
-let rec write_stmt type_tab ff lvl indent_first lab_tab s =
-    match s with
+let rec write_stmt type_tab annot ff lvl indent_first lab_tab s =
+    let write = function
     | MSkip _ ->
         openb ff lvl indent_first;
         Format.fprintf ff "skip;";
@@ -175,14 +175,14 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
         openb ff lvl indent_first;
         Format.pp_print_string ff "atomic {";
         closeb ff;
-        List.iter (write_stmt type_tab ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab annot ff (lvl + 2) true lab_tab) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
 
     | MD_step (_, seq) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "d_step {";
         closeb ff;
-        List.iter (write_stmt type_tab ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab annot ff (lvl + 2) true lab_tab) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
 
     | MGoto (_, l) ->
@@ -198,9 +198,9 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
             (function
                 | MOptGuarded seq ->
                     openb ff (lvl + 2) true; Format.fprintf ff "::@ @ @]";
-                    write_stmt type_tab ff (lvl + 4) false lab_tab (List.hd seq);
+                    write_stmt type_tab annot ff (lvl + 4) false lab_tab (List.hd seq);
                     List.iter
-                        (write_stmt type_tab ff (lvl + 6) true lab_tab)
+                        (write_stmt type_tab annot ff (lvl + 6) true lab_tab)
                         (List.tl seq);
 
                 | MOptElse seq ->
@@ -212,8 +212,8 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
                         match seq with
                         | [] -> ()
                         | hd :: tl ->
-                            write_stmt type_tab ff (lvl + 6) false lab_tab hd;
-                            List.iter (write_stmt type_tab ff (lvl + 4) true lab_tab) tl;
+                            write_stmt type_tab annot ff (lvl + 6) false lab_tab hd;
+                            List.iter (write_stmt type_tab annot ff (lvl + 4) true lab_tab) tl;
                     end
             ) opts;
         openb ff lvl true; Format.pp_print_string ff "fi;"; closeb ff;
@@ -248,9 +248,28 @@ let rec write_stmt type_tab ff lvl indent_first lab_tab s =
         List.iter (fun e -> Format.fprintf ff ",@ "; fprint_expr_mangled ff e) es;
         Format.pp_print_string ff ");";
         closeb ff
+    in
+    let write_comment text =
+        (* write down the annotation as a comment *)
+        openb ff lvl indent_first;
+        Format.fprintf ff "/* %s */" text;
+        closeb ff
+    in
+    let annotate is_before =
+        if Hashtbl.mem annot (m_stmt_id s)
+        then match (Hashtbl.find annot (m_stmt_id s)) with
+            | AnnotBefore text ->
+                if is_before then write_comment text
+
+            | AnnotAfter text ->
+                if not is_before then write_comment text
+    in
+    annotate true;
+    write s;
+    annotate false
 
   
-let write_proc type_tab ff lvl p =
+let write_proc type_tab annot ff lvl p =
     openb ff lvl true;
     if not_nop p#get_active_expr
     then begin Format.fprintf ff "active[%s]@ " (expr_s p#get_active_expr) end;
@@ -280,19 +299,19 @@ let write_proc type_tab ff lvl p =
         (fun n l -> Hashtbl.add labels l#get_num n)
         p#labels_as_hash;
 
-    List.iter (write_stmt type_tab ff (lvl + 2) true labels) p#get_stmts;
+    List.iter (write_stmt type_tab annot ff (lvl + 2) true labels) p#get_stmts;
     (* end the body *)
 
     openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
 
 
-let write_unit type_tab cout lvl u =
+let write_unit type_tab annot cout lvl u =
     let ff = Format.formatter_of_out_channel cout in
     match u with
     | Stmt s ->
-        write_stmt type_tab ff lvl true (Hashtbl.create 0) s
+        write_stmt type_tab annot ff lvl true (Hashtbl.create 0) s
     | Proc p ->
-        write_proc type_tab ff lvl p
+        write_proc type_tab annot ff lvl p
     | Ltl (name, exp) ->
         openb ff lvl true;
         Format.fprintf ff "ltl@ %s@ {@ " name;
@@ -303,7 +322,7 @@ let write_unit type_tab cout lvl u =
     Format.pp_print_flush ff ()
 
 
-let write_to_file externalize_ltl name units type_tab =
+let write_to_file externalize_ltl name units type_tab annot =
     let fo = open_out name in
     let save_unit = function
         | Ltl (form_name, form) as u->
@@ -316,8 +335,8 @@ let write_to_file externalize_ltl name units type_tab =
                 fprintf out "%s\n" (expr_s form);
                 close_out out
             end else
-                write_unit type_tab fo 0 u
-        | _ as u -> write_unit type_tab fo 0 u
+                write_unit type_tab annot fo 0 u
+        | _ as u -> write_unit type_tab annot fo 0 u
     in
     List.iter save_unit units;
     close_out fo

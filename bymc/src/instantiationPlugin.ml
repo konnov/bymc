@@ -19,7 +19,8 @@ class instantiation_plugin_t (plugin_name: string) =
             let opts = rt#caches#options in
             let units = units_of_program prog in
             let new_units = do_substitution opts.param_assignments units in
-            write_to_file true "concrete.prm" new_units (get_type_tab prog);
+            write_to_file true "concrete.prm"
+                new_units (get_type_tab prog) (Hashtbl.create 10);
             program_of_units (new data_type_tab) new_units
 
         method update_runtime rt = ()
