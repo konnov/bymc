@@ -25,15 +25,19 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
                 let reg_tab = rt#caches#struc#get_regions proc#get_name in
                 let fmt, es = Serialize.global_state_fmt prog in
                 let print1 = MPrint (fresh_id (), fmt ^ "\\n", es) in
-                let print2 = MPrint (fresh_id (), fmt ^ "\\n", es) in
                 let init = reg_tab#get "init" proc#get_stmts in
-                let np = insert_after rt proc (List.hd (List.rev init)) print1 in
+                let np =
+                    if init <> []
+                    then insert_after rt proc (List.hd (List.rev init)) print1
+                    else proc_replace_body proc (print1 :: proc#get_stmts)
+                in
                 (* find a non-empty region *)
                 let update = reg_tab#get "update" proc#get_stmts in
                 let last_reg =
                     if update <> []
                     then update
                     else reg_tab#get "comp" proc#get_stmts in (* no updates *)
+                let print2 = MPrint (fresh_id (), fmt ^ "\\n", es) in
                 if last_reg = []
                 then raise (Failure "Neither compute, nor update region is found")
                 else insert_after rt np (List.hd (List.rev last_reg)) print2
