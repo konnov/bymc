@@ -101,12 +101,15 @@ let identify_var_roles prog =
                 raise (Analysis_error ("No rhs for scratch " ^ v#qual_name))
             end
         in
+        let is_global v =
+            List.exists (fun x -> x#id = v#id) (Program.get_shared prog)
+        in
         let refine_role v r =
             let is_const = match Hashtbl.find loc_roles v with
                 | IntervalInt (a, b) -> a = b   (* const *)
                 | _ -> false                    (* mutating *)
             in
-            if is_const
+            if is_const && (not (is_global v))
             then Scratch (get_used_var v)
             else match Hashtbl.find int_body_sum v with
                 | IntervalInt (a, b) -> BoundedInt (a, b)
