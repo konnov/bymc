@@ -553,21 +553,21 @@ let mk_comment text =
     MExpr (fresh_id (), Nop text)
 
 
-let replace_m_stmt_id new_id = function
-    | MSkip _ -> MSkip new_id
-    | MExpr (_, e) -> MExpr (new_id, e)
-    | MDecl (_, d, e) -> MDecl (new_id, d, e)
-    | MLabel (_, l) -> MLabel (new_id, l)
-    | MAtomic (_, s) -> MAtomic (new_id, s)
-    | MD_step (_, s) -> MD_step (new_id, s)
-    | MGoto (_, l) -> MGoto (new_id, l)
-    | MIf (_, s) -> MIf (new_id, s)
-    | MAssert (_, s) -> MAssert (new_id, s)
-    | MAssume (_, e) -> MAssume (new_id, e)
-    | MPrint (_, f, es) -> MPrint (new_id, f, es)
-    | MHavoc (_, e) -> MHavoc (new_id, e)
-    | MUnsafe (_, e) -> MUnsafe (new_id, e)
-    | MDeclProp (_, d, e) -> MDeclProp (new_id, d, e)
+let fresh_m_stmt = function
+    | MSkip _ -> MSkip (fresh_id ())
+    | MExpr (_, e) -> MExpr (fresh_id (), e)
+    | MDecl (_, d, e) -> MDecl (fresh_id (), d, e)
+    | MLabel (_, l) -> MLabel (fresh_id (), l)
+    | MAtomic (_, s) -> MAtomic (fresh_id (), s)
+    | MD_step (_, s) -> MD_step (fresh_id (), s)
+    | MGoto (_, l) -> MGoto (fresh_id (), l)
+    | MIf (_, s) -> MIf (fresh_id (), s)
+    | MAssert (_, s) -> MAssert (fresh_id (), s)
+    | MAssume (_, e) -> MAssume (fresh_id (), e)
+    | MPrint (_, f, es) -> MPrint (fresh_id (), f, es)
+    | MHavoc (_, e) -> MHavoc (fresh_id (), e)
+    | MUnsafe (_, e) -> MUnsafe (fresh_id (), e)
+    | MDeclProp (_, d, e) -> MDeclProp (fresh_id (), d, e)
 
 
 let cmp_m_stmt s1 s2 =
