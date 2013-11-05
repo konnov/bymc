@@ -79,6 +79,8 @@ class symb name_i =
                 else f :: flags
 
         method get_flags = flags
+
+        method set_flags fs = flags <- fs
         
         method flags_s =
             List.fold_left
@@ -164,6 +166,7 @@ var name_i var_id =
         method fresh_copy new_name =
             let new_var = new var new_name (fresh_id ()) in
             new_var#set_ini ini;
+            new_var#set_flags self#get_flags;
             if self#is_symbolic then new_var#set_symbolic;
             if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
