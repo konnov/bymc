@@ -327,14 +327,12 @@ let rec mir_stmt_s s =
         sprintf "<%3d> d_step {\n%s\n }" id (seq_s stmts)
     | MGoto (id, l) -> sprintf "<%3d> goto %d" id l
     | MIf (id, opts) ->
-        let inner = (List.fold_left
-            (fun t o ->
-                match o with
-                | MOptGuarded seq -> "  :: " ^ (seq_s seq)
-                | MOptElse seq -> "  :: else -> " ^ (seq_s seq)
-            ) "" opts)
+        let opt_s s = function
+            | MOptGuarded seq -> sprintf "%s  :: %s" s (seq_s seq)
+            | MOptElse seq -> sprintf "%s  :: else -> %s" s (seq_s seq)
         in
-        sprintf "<%3d> if\n%s\n fi" id inner
+        let inner = List.fold_left opt_s "" opts in
+        sprintf "<%3d> if\n%s      fi" id inner
     | MAssert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | MAssume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
     | MHavoc (id, v) -> sprintf "<%3d> havoc %s" id v#get_name
