@@ -90,6 +90,10 @@ let list_cut_general ignore_dups match_fun lst =
 
 let list_cut match_fun lst = list_cut_general false match_fun lst
 
+let list_div match_fun lst =
+    let hl, el, tl = list_cut_general true match_fun lst in
+    (hl, el @ tl)
+
 
 let list_cut_ignore match_fun lst = list_cut_general true match_fun lst
 
