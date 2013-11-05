@@ -582,11 +582,6 @@ let expr_of_m_stmt = function
     | _ -> raise (Failure "Expected MExpr (_, e), found another statement")
 
 
-(* find the first statement with a non-negative id *)
-let first_normal_stmt seq =
-    List.find (fun s -> (stmt_id s) >= 0) seq
-
-
 let is_decl = function
     | Decl (_, _, _) -> true
     | _ -> false
@@ -691,19 +686,6 @@ let proc_of_unit = function
     | _ -> raise (Failure "Expected Proc p, found other unit")
 
 
-let collect_final_labs (stmts: 't mir_stmt list)
-        : ('t mir_stmt list * 't mir_stmt list) =
-    let rec collect = function
-    | MLabel (_, _) as s :: tl ->
-        let ls, os = collect tl in
-        (s :: ls, os)
-    | _ as lst ->
-        ([], lst)
-    in
-    let ls, os = collect (List.rev stmts) in
-    (List.rev os, List.rev ls)
-
-
 (* convert a list of expressions [e1, ..., ek] to a binary tree
    (tok, e1, (tok, e2, (... (tok, e(k-1), ek) ...))).
    Nop expressions are ignored.
@@ -770,27 +752,27 @@ let sub_stmt_with_list
     let rec sub rs s =
         let no_deeper, nss = sub_fun s in
         if no_deeper      (* the user did the substitution as they like *)
-        then (List.rev nss) @ rs
+        then nss @ rs
         else match s with (* go deeper *)
             | MIf (id, opts) ->
                 (MIf (id, List.map sub_opt opts)) :: rs
 
             | MAtomic (id, body) ->
-                (MAtomic (id, List.rev (List.fold_left sub [] body))) :: rs
+                (MAtomic (id, List.fold_left sub [] (List.rev body))) :: rs
 
             | MD_step (id, body) ->
-                (MD_step (id, List.rev (List.fold_left sub [] body))) :: rs
+                (MD_step (id, List.fold_left sub [] (List.rev body))) :: rs
 
             | _ as s -> s :: rs
 
     and sub_opt = function
     | MOptGuarded body ->
-        MOptGuarded (List.rev (List.fold_left sub [] body))
+        MOptGuarded (List.fold_left sub [] (List.rev body))
 
     | MOptElse body ->
-        MOptElse (List.rev (List.fold_left sub [] body))
+        MOptElse (List.fold_left sub [] (List.rev body))
     in
-    List.rev (List.fold_left sub [] seq)
+    List.fold_left sub [] (List.rev seq)
 
 
 let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)
