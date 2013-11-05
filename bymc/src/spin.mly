@@ -1029,7 +1029,6 @@ track_ap: /* empty */	{ HNone }
 prop_decl:
     track_ap ATOMIC NAME ASGN atomic_prop {
         let v = new_var($3) in
-        v#set_proc_name spec_scope#tab_name;
         v#add_flag $1;
         type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
         spec_scope#add_symb v#get_name (v :> symb);
