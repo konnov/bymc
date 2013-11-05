@@ -60,6 +60,12 @@ let str_map_s elem_fun map =
     in
     StringMap.fold f map ""
 
+(* the last element of the list *)    
+let rec list_end = function
+    | [] -> raise (Invalid_argument "list_end []")
+    | [ e ] -> e
+    | _ :: tl -> list_end tl
+
 (* separate a list into three parts:
     before a matching element, the matching element, the tail.
     If the element is not found, then the two last resulting lists are empty.
