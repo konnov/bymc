@@ -3,8 +3,11 @@
    init section, main loop, etc.
  *)
 
+open Accums
 open Cfg
+open Printf
 open Regions
+open Spin
 open SpinIr
 open SpinIrImp
 
@@ -26,67 +29,71 @@ exception Skel_error of string
   fi;
   goto main;
 
+  alternatively, it can have the structure:
+  declarations;
+  init_statements;
+  loop_prefix;
+  main:
+  atomic {
+      computation;
+      updates;
+  }
+  goto main;
+
+
   The mentioned sections are extracted from the sequence.
   This is to be generalized in the future.
  *)
 let extract_skel proc_body =
+    (* declarations come first *)
     let decls, non_decls = List.partition is_mdecl proc_body in
-    let cfg = Cfg.mk_cfg (mir_to_lir proc_body) in
-    let loop = match (comp_sccs cfg#entry) with
-    | [] -> raise (Skel_error "Skeleton does not have the main loop")
-    | [one_scc] ->
-        one_scc
-    | _ as sccs ->
-        List.iter
-            (fun scc ->
-                Printf.printf " *** SCC ***\n";
-                List.iter (fun b -> Printf.printf "  %s\n" b#str) scc
-            ) sccs;
-        raise (Skel_error "Skeleton has more than one loop inside")
+    (* whatever is before the loop is considered to be initialization *)
+    let is_label = function
+        | MLabel (_, _) -> true
+        | _ -> false
     in
-    (* the last elem of the first block is supposed to be 'if' *)
-    let if_id = match (List.hd (List.rev (List.hd loop)#get_seq)) with
-    | If (id, _, _) -> id
+    let inits, rests = Accums.list_div is_label non_decls in
+    let not_label s = not (is_label s) in
+    (* the labels form the loop prefix *)
+    let loop_prefix, loop_body = Accums.list_div not_label rests in
+    (* the loop body can be written EITHER AS:
+        lab:
+        atomic { ... }
+        goto lab
+
+        OR (goto-haters, we care of your feelings) 
+        
+        do
+            :: atomic { ... }
+        od
+    *)
+    let atomic_body = match loop_body with
+    | (MAtomic (_, atomic_body)) :: _ -> atomic_body
+    | (MIf (_, [MOptGuarded [MAtomic (_, atomic_body)]])) :: _ -> atomic_body
     | _ ->
-        Printf.printf " *** LOOP ***\n";
-        List.iter (fun b -> Printf.printf "  %s\n" b#str) loop;
-        raise (Skel_error "The main loop does not start with 'if'")
+         printf "loop_body:\n";
+         List.iter (fun s -> printf "%s\n" (mir_stmt_s s)) loop_body;
+         raise (Skel_error "The loop body must be protected with atomic")
     in
-    let init_s, if_s, rest_s =
-        Accums.list_cut (fun s -> (m_stmt_id s) = if_id) non_decls
+    let not_update = function
+        | MExpr (_, Nop _) -> false
+        | MExpr (_, BinEx (ASGN, _, _)) -> false
+        | MPrint (_, _, _) -> false (* ignore *)
+        | MAssume (_, _) -> false   (* ignore *)
+        | MSkip _ -> false          (* ignore *)
+        | _ -> true
     in
-    let init_s, prefix_s = collect_final_labs init_s in
-    let opt_body = match if_s with
-    | [MIf (_, [MOptGuarded seq])] -> seq
-    | _ -> raise (Skel_error "The main loop must be guarded by the only option")
-    in
-    let atomic_body = match opt_body with
-    | [MAtomic (_, atomic_body)] -> atomic_body
-    | _ -> raise (Skel_error "The computation must be protected by atomic")
-    in
-    let assumps, el, tl =
-        Accums.list_cut_ignore (* collect finalizing assumptions *)
-            (function | MAssume (_, _) -> false | _ -> true)
-            (List.rev atomic_body)
-    in
-    let hd, el, tl =
-        Accums.list_cut_ignore (* collect finalizing expressions + assumps *)
-            (function
-                | MExpr (_, _) -> false
-                | MAssume (_, _) -> false
-                | MPrint (_, _, _) -> false
-                | _ -> true)
-            (el @ tl)
-    in
-    let update = (List.rev hd) @ (List.rev assumps) in
-    let comp = List.rev (el @ tl) in
+    let rupdates, rcomp = Accums.list_div not_update (List.rev atomic_body) in
+    let updates = List.rev rupdates
+    and comp = List.rev rcomp in
+    
     let reg_tbl = new region_tbl in
     reg_tbl#add "decl" decls;
-    reg_tbl#add "init" init_s;
-    reg_tbl#add "loop_prefix" prefix_s;
+    reg_tbl#add "init" inits;
+    reg_tbl#add "loop_prefix" loop_prefix;
     reg_tbl#add "comp" comp;
-    reg_tbl#add "update" update;
-    reg_tbl#add "loop_body" (if_s @ rest_s);
+    reg_tbl#add "update" updates;
+    reg_tbl#add "loop_body" loop_body;
     reg_tbl
 
 
