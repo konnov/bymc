@@ -529,16 +529,6 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         with Not_found ->
             raise (Abstraction_error ("No atomic expression: " ^ name))
     in
-    let replace_assume atomics = function
-        | MAssume (id, Var v) as s ->
-            if funcs#keep_assume (Var v)
-            then 
-                if v#proc_name = "spec"
-                then MAssume (id, extract_atomic_prop atomics v#get_name)
-                else s
-            else MSkip id
-        | _ as s -> s
-    in
     let counter_guard c_ctx =
         let make_opt idx =
             let guard =
@@ -566,7 +556,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
                     else s
                 | _ as s -> s
             in
-            List.map (fun e -> replace_assume atomics (replace_expr e)) update
+            List.map (fun e -> replace_expr e) update
         in
         let prev_idx_ex = c_ctx#pack_index_expr in
         let next_idx_ex =
@@ -638,14 +628,8 @@ let do_counter_abstraction funcs solver caches prog proc_names =
             @ new_prefix
             @ new_loop_body
         in
-        let new_reg_tbl = new region_tbl in
-        new_reg_tbl#add "decl" (reg_tab#get "decl" body);
-        new_reg_tbl#add "init" new_init;
-        new_reg_tbl#add "loop_prefix" new_prefix;
-        new_reg_tbl#add "comp" new_comp;
-        new_reg_tbl#add "update" new_update;
-        new_reg_tbl#add "loop_body" new_loop_body;
-        caches#struc#set_regions p#get_name new_reg_tbl;
+        (* re-construct the regions *)
+        caches#struc#set_regions p#get_name (extract_skel new_body);
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
