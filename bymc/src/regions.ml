@@ -102,10 +102,10 @@ class region_tbl =
         method add name (stmts: token mir_stmt list): unit =
             if stmts = []
             then Hashtbl.replace m_regions name (null_id, null_id)
-            else let first = List.hd stmts in
-                let last = List.hd (List.rev stmts) in
-                Hashtbl.replace
-                    m_regions name (m_stmt_id first, m_stmt_id last)
+            else let first = m_stmt_id (List.hd stmts) in
+                let last = m_stmt_id (list_end stmts) in
+                assert(first >= 0 && last >= 0);
+                Hashtbl.replace m_regions name (first, last)
 
         method get name all_stmts =
             let first_id, last_id =
@@ -122,21 +122,27 @@ class region_tbl =
                     name first_id last_id in
                 raise (Region_error m)
 
-        (* when one inserts a new statement, the regions have to be extended *)
-        method extend_after (os: token mir_stmt) (ns: token mir_stmt) =
-            let update name (first, last) =
-                if last = (m_stmt_id os)
-                then Hashtbl.replace m_regions name (first, (m_stmt_id ns))
+        (* when one inserts new statements, the regions have to be extended *)
+        method extend_after (st: token mir_stmt) (seq: token mir_stmt list) =
+            let update new_id name (first, last) =
+                if last = (m_stmt_id st)
+                then Hashtbl.replace m_regions name (first, new_id)
             in
-            Hashtbl.iter update m_regions
+            if seq <> []
+            then Hashtbl.iter
+                (update (m_stmt_id (List.hd (List.rev seq)))) m_regions
+            else ()
 
-        (* when one inserts a new statement, the regions have to be extended *)
-        method extend_before (os: token mir_stmt) (ns: token mir_stmt) =
-            let update name (first, last) =
-                if first = (m_stmt_id os)
-                then Hashtbl.replace m_regions name ((m_stmt_id ns), last)
+        (* when one inserts new statements, the regions have to be extended *)
+        method extend_before (st: token mir_stmt) (seq: token mir_stmt list) =
+            let update new_id name (first, last) =
+                if first = (m_stmt_id st)
+                then Hashtbl.replace m_regions name (new_id, last)
             in
-            Hashtbl.iter update m_regions
+            if seq <> []
+            then Hashtbl.iter
+                (update (m_stmt_id (List.hd (List.rev seq)))) m_regions
+            else ()
 
         method get_annotations =
             let tab = Hashtbl.create 10 in

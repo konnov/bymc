@@ -38,12 +38,24 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
         method add_printfs rt prog pr =
             let reg_tab = rt#caches#struc#get_regions pr#get_name in
             let fmt, es = Serialize.global_state_fmt prog in
-            let print1 = MPrint (fresh_id (), fmt ^ "\\n", es) in
+            let print_state = MPrint (fresh_id (), fmt ^ "\\n", es) in
+            let preds =
+                List.filter (fun v -> v#has_flag HShow)
+                    (List.map fst (Program.get_atomics prog)) in
+            let preds_es = List.map (fun v -> Var v) preds in
+            let preds_fmt = sprintf "P{%s}"
+                (str_join ","
+                    (List.map (fun v -> sprintf "%s=%%d" v#get_name) preds))
+            in
+            let print_preds =
+                MPrint (fresh_id (), preds_fmt ^ "\\n", preds_es) in
+
             let init = reg_tab#get "init" pr#get_stmts in
             let np =
                 if init <> []
-                then insert_after rt pr (List.hd (List.rev init)) print1
-                else proc_replace_body pr (print1 :: pr#get_stmts)
+                then insert_after rt pr
+                    (list_end init) [print_state; print_preds]
+                else proc_replace_body pr (print_state :: pr#get_stmts)
             in
             (* find a non-empty region *)
             let update = reg_tab#get "update" pr#get_stmts in
@@ -51,10 +63,11 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
                 if update <> []
                 then update
                 else reg_tab#get "comp" pr#get_stmts in (* no updates *)
-            let print2 = MPrint (fresh_id (), fmt ^ "\\n", es) in
             if last_reg = []
             then raise (Failure "Neither compute, nor update region is found")
-            else insert_after rt np (List.hd (List.rev last_reg)) print2
+            else insert_after rt np
+                (list_end last_reg)
+                [fresh_m_stmt print_state; fresh_m_stmt print_preds]
 
 
         method update_runtime _ =
