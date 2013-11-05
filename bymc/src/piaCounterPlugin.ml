@@ -8,6 +8,7 @@ open PiaDataPlugin
 open Plugin
 open Program
 open PiaCtrRefinement
+open SkelStruc
 open Spin
 open SpinIr
 open SpinIrImp
@@ -91,6 +92,13 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             xducer_prog
 
         method update_runtime rt =
+            (* extract regions *)
+            let extract_reg proc =
+                let reg_tab = extract_skel proc#get_stmts in
+                rt#caches#struc#set_regions proc#get_name reg_tab
+            in
+            List.iter extract_reg (Program.get_procs self#get_output);
+            (* set counter contexts *)
             match m_ctr_abs_ctx_tbl with
             | Some c -> rt#caches#analysis#set_pia_ctr_ctx_tbl c
             | _ -> ()
