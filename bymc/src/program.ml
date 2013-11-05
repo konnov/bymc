@@ -47,13 +47,12 @@ let update_sym_tab prog =
         (* the new code:
         List.map (fun (k, _) -> string_to_symb k) (StringMap.bindings m) *)
     in
-    let take1 lst = List.map (fun (a1, _) -> a1) lst in
     let syms =
         (List.map var_to_symb prog.f_params)
-        @ (List.map var_to_symb (take1 prog.f_shared))
+        @ (List.map var_to_symb (List.map fst prog.f_shared))
         @ (List.map var_to_symb prog.f_instrumental)
         @ (List.map proc_to_symb prog.f_procs)
-        @ (List.map var_to_symb (take1 prog.f_atomics))
+        @ (List.map var_to_symb (List.map fst prog.f_atomics))
         @ (map_to_symb prog.f_ltl_forms)
     in
     prog.f_sym_tab#set_syms syms;
