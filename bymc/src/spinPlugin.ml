@@ -49,13 +49,16 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             in
             let print_preds =
                 MPrint (fresh_id (), preds_fmt ^ "\\n", preds_es) in
-
+            let prints =
+                if preds_es <> []
+                then [print_state; print_preds]
+                else [print_state]
+            in
             let init = reg_tab#get "init" pr#get_stmts in
             let np =
                 if init <> []
-                then insert_after rt pr
-                    (list_end init) [print_state; print_preds]
-                else proc_replace_body pr (print_state :: pr#get_stmts)
+                then insert_after rt pr (list_end init) prints
+                else proc_replace_body pr (prints @ pr#get_stmts)
             in
             (* find a non-empty region *)
             let update = reg_tab#get "update" pr#get_stmts in
@@ -67,7 +70,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             then raise (Failure "Neither compute, nor update region is found")
             else insert_after rt np
                 (list_end last_reg)
-                [fresh_m_stmt print_state; fresh_m_stmt print_preds]
+                (List.map (fun s -> fresh_m_stmt s) prints)
 
 
         method update_runtime _ =
