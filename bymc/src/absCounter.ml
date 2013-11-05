@@ -521,14 +521,6 @@ class vass_funcs dom prog solver =
 let do_counter_abstraction funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
-    let extract_atomic_prop atomics name =
-        try
-            match (Accums.StringMap.find name atomics) with
-            | PropGlob e -> e
-            | _ -> raise (Abstraction_error ("Cannot extract " ^ name))
-        with Not_found ->
-            raise (Abstraction_error ("No atomic expression: " ^ name))
-    in
     let counter_guard c_ctx =
         let make_opt idx =
             let guard =
