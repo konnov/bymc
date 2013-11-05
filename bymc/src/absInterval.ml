@@ -461,8 +461,8 @@ let trans_ltl_form new_type_tab name f =
     let rec tr_f atype = function
     | Var v ->
         let nv = if atype = UnivAbs
-            then new_var (v#get_name ^ "_univ")
-            else new_var (v#get_name ^ "_exst") in
+            then new_var (v#get_name ^ "_A")
+            else new_var (v#get_name ^ "_E") in
         new_type_tab#set_type nv (new data_type SpinTypes.TPROPOSITION);
         Var nv
     | BinEx(AND, l, r) ->
@@ -519,8 +519,8 @@ let do_interval_abstraction rt prog proc_names =
         let ex = trans_prop_decl rt#solver rt#caches prog ExistAbs ae in
         if Ltl.is_invariant_atomic v#get_name
         then (v, ae) :: lst
-        else (v#fresh_copy (v#get_name ^ "_exst"), ex)
-            :: (v#fresh_copy (v#get_name ^ "_univ"), univ)
+        else (v#fresh_copy (v#get_name ^ "_E"), ex)
+            :: (v#fresh_copy (v#get_name ^ "_A"), univ)
             :: lst
     in
     let new_atomics =
