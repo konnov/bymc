@@ -225,8 +225,9 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) extern_vars;
 
     let sub_var v =
-        if v#is_symbolic || v#proc_name = "spec" (* XXX: magic const *)
-        then v (* do not touch symbolic variables, they are parameters! *)
+        if v#is_symbolic
+        (* do not touch symbolic variables, they are parameters! *)
+        then v                (* TODO: what about atomic propositions? *)
         else 
             let i = s_top v in
             let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
