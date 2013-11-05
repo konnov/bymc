@@ -20,7 +20,7 @@ type program_t = {
     f_type_tab: data_type_tab;
     f_assumes: expr_t list; f_unsafes: string list;
     f_procs: Spin.token proc list;
-    f_atomics: Spin.token atomic_expr StringMap.t;
+    f_atomics: (var * Spin.token atomic_expr) list;
     f_ltl_forms: expr_t StringMap.t
 }
 
@@ -30,7 +30,7 @@ let empty = {
     f_sym_tab = new symb_tab ""; (* global scope *)
     f_type_tab = new data_type_tab;
     f_assumes = []; f_procs = []; f_unsafes = [];
-    f_atomics = StringMap.empty; f_ltl_forms = StringMap.empty
+    f_atomics = []; f_ltl_forms = StringMap.empty
 }
 
 let prog_uid prog =
@@ -53,7 +53,7 @@ let update_sym_tab prog =
         @ (List.map var_to_symb (take1 prog.f_shared))
         @ (List.map var_to_symb prog.f_instrumental)
         @ (List.map proc_to_symb prog.f_procs)
-        @ (map_to_symb prog.f_atomics)
+        @ (List.map var_to_symb (take1 prog.f_atomics))
         @ (map_to_symb prog.f_ltl_forms)
     in
     prog.f_sym_tab#set_syms syms;
@@ -121,6 +121,10 @@ let set_procs new_procs prog =
 
 let get_atomics prog = prog.f_atomics
 
+let get_atomics_map prog =
+    let add m (v, e) = StringMap.add v#get_name e m in
+    List.fold_left add StringMap.empty prog.f_atomics
+
 let set_atomics new_atomics prog =
     update_sym_tab { prog with f_uid = fresh_id (); f_atomics = new_atomics }
 
@@ -165,8 +169,7 @@ let program_of_units type_tab units =
             then { prog with f_instrumental = (v :: prog.f_instrumental) }
             else { prog with f_shared = ((v, e) :: prog.f_shared) }
     | Stmt (MDeclProp(_, v, e)) ->
-            let new_ap = (StringMap.add v#get_name e prog.f_atomics) in
-            { prog with f_atomics = new_ap }
+            { prog with f_atomics = (v, e) :: prog.f_atomics }
     | Stmt (MAssume(_, e)) ->
             { prog with f_assumes = (e :: prog.f_assumes) }
     | Stmt (MUnsafe(_, s)) ->
@@ -191,8 +194,8 @@ let units_of_program program =
         Stmt (MDecl (fresh_id (), v, (Nop ""))) in
     let var_init_to_decl (v, e) =
         Stmt (MDecl (fresh_id (), v, e)) in
-    let atomic_to_decl name expr accum =
-        (Stmt (MDeclProp(fresh_id (), new_var name, expr))) :: accum in
+    let atomic_to_decl (v, e) =
+        Stmt (MDeclProp(fresh_id (), v, e)) in
     let form_to_ltl name expr accum =
         (Ltl(name, expr)) :: accum in
     let to_assume e = Stmt (MAssume(fresh_id (), e)) in
@@ -202,7 +205,7 @@ let units_of_program program =
         [(List.map var_to_decl program.f_params);
          (List.map var_init_to_decl program.f_shared);
          (List.map var_to_decl program.f_instrumental);
-         (StringMap.fold atomic_to_decl program.f_atomics []);
+         (List.map atomic_to_decl program.f_atomics);
          (List.map to_assume program.f_assumes);
          (List.map to_unsafe program.f_unsafes);
          (List.map to_proc program.f_procs);

@@ -606,7 +606,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
         let type_tab = Program.get_type_tab xducer_prog in
         let fairness =
-            filter_good_fairness type_tab (Program.get_atomics xducer_prog)
+            filter_good_fairness type_tab (Program.get_atomics_map xducer_prog)
                 (collect_fairness_forms ltl_forms) in
         let aloop = annotate_path loop in
         let (refined, new_prog) =

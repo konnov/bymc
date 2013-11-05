@@ -514,19 +514,18 @@ let do_interval_abstraction rt prog proc_names =
             proc_replace_body p body
         end
     in
-    let abstract_atomic name ae map =
+    let abstract_atomic lst (v, ae) =
         let univ = trans_prop_decl rt#solver rt#caches prog UnivAbs ae in
         let ex = trans_prop_decl rt#solver rt#caches prog ExistAbs ae in
-        if Ltl.is_invariant_atomic name
-        then Accums.StringMap.add name ex map
-        else Accums.StringMap.add (name ^ "_exst") ex
-                (Accums.StringMap.add (name ^ "_univ") univ map)
+        if Ltl.is_invariant_atomic v#get_name
+        then (v, ae) :: lst
+        else (v#fresh_copy (v#get_name ^ "_exst"), ex)
+            :: (v#fresh_copy (v#get_name ^ "_univ"), univ)
+            :: lst
     in
-    let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_atomics =
-        Accums.StringMap.fold
-            abstract_atomic (Program.get_atomics prog) Accums.StringMap.empty
-    in
+        List.fold_left abstract_atomic [] (Program.get_atomics prog) in
+    let new_procs = List.map abstract_proc (Program.get_procs prog) in
     let new_forms = Accums.StringMap.mapi
         (trans_ltl_form new_type_tab) (Program.get_ltl_forms prog) in
     let abs_shared (shared_var, init_expr) =

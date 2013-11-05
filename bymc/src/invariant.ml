@@ -13,7 +13,7 @@ open SpinIrImp
 let check_invariant rtm xducers_prog inv_name =
     let solver = rtm#solver and caches = rtm#caches in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
-    let aprops = Program.get_atomics xducers_prog in
+    let aprops = Program.get_atomics_map xducers_prog in
     let inv_expr =
         match Accums.StringMap.find inv_name aprops with
         | PropGlob e -> e
@@ -51,7 +51,8 @@ let check_all_invariants rtm prog =
     let fold_invs name ae lst =
         if is_invariant_atomic name then name :: lst else lst
     in
-    let invs = Accums.StringMap.fold fold_invs (Program.get_atomics prog) []
+    let invs =
+        Accums.StringMap.fold fold_invs (Program.get_atomics_map prog) []
     in
     rtm#solver#push_ctx;
     rtm#solver#comment "check_all_invariants";

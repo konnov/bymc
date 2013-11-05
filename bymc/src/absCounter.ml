@@ -651,11 +651,9 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
         new_proc
     in
-    let abstract_atomic ae =
-        (trans_prop_decl solver ctr_ctx_tbl prog ae)
-    in
-    let new_atomics =
-        Accums.StringMap.map abstract_atomic (Program.get_atomics prog) in
+    let abstract_atomic (av, ae) =
+        (av, trans_prop_decl solver ctr_ctx_tbl prog ae) in
+    let new_atomics = List.map abstract_atomic (Program.get_atomics prog) in
     let new_decls = ctr_ctx_tbl#get_spur :: funcs#introduced_vars in
     let counters =
         List.map (fun v -> (v, Const 0)) ctr_ctx_tbl#all_counters in
@@ -679,7 +677,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         let trp p =
             if not (List.mem p#get_name proc_names)
             then p
-            else abstract_proc new_atomics p in
+            else abstract_proc (Program.get_atomics_map new_prog) p in
         List.map trp (Program.get_procs prog)
     in
     Program.set_procs new_procs new_prog

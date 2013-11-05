@@ -466,7 +466,7 @@ let transform solver caches roles out_name intabs_prog prog =
     fprintf out " & (bymc_loc != 1 | %s);\n" (nostuttering shared);
     *)
     fprintf out "\n\n-- specifications\n";
-    let atomics = Program.get_atomics prog in
+    let atomics = Program.get_atomics_map prog in
     let _ = Accums.StringMap.mapi
         (write_ltl_spec out atomics new_type_tab main_sym_tab hidden_idx_fun)
         (Program.get_ltl_forms prog) in

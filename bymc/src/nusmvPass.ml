@@ -355,7 +355,7 @@ let transform solver caches scope out_name prog =
 
     write_hidden_spec hidden out;
     fprintf out "\n-- specifications\n";
-    let atomics = Program.get_atomics prog in
+    let atomics = Program.get_atomics_map prog in
     let _ = Accums.StringMap.mapi
         (write_ltl_spec out atomics new_type_tab new_sym_tab hidden_idx_fun)
         (Program.get_ltl_forms prog) in

@@ -68,8 +68,9 @@ val set_unsafes: string list -> program_t -> program_t
 val get_procs: program_t -> (Spin.token proc) list
 val set_procs: (Spin.token proc) list -> program_t -> program_t
 
-val get_atomics: program_t -> (Spin.token atomic_expr) StringMap.t
-val set_atomics: (Spin.token atomic_expr) StringMap.t -> program_t -> program_t
+val get_atomics: program_t -> (var * Spin.token atomic_expr) list
+val get_atomics_map: program_t -> (Spin.token atomic_expr) StringMap.t
+val set_atomics: (var * Spin.token atomic_expr) list -> program_t -> program_t
 
 val get_ltl_forms: program_t -> (expr_t) StringMap.t
 val get_ltl_forms_as_hash: program_t -> (string, expr_t) Hashtbl.t
