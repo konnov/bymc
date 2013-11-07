@@ -139,6 +139,7 @@ let token_s t =
       | CARD -> "card"
       | POR -> "or"
       | PAND -> "and"
+      | HAVOC -> "havoc"
 
 
 let is_name = function

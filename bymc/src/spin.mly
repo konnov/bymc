@@ -155,7 +155,7 @@ let fatal msg payload =
 %token  <string> MACRO_OTHER
 %token  EOF
 /* FORSYTE extensions { */
-%token  ASSUME SYMBOLIC ALL SOME CARD POR PAND
+%token  ASSUME SYMBOLIC ALL SOME CARD POR PAND HAVOC
 /* FORSYTE extensions } */
 /* imaginary tokens not directly used in the grammar, but used in the
    intermediate representations
@@ -642,7 +642,9 @@ for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
 
 for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
-Special : varref RCV	/*	{ (* Expand_Ok++; *) } */
+Special :
+    | HAVOC LPAREN varref RPAREN { [MHavoc (fresh_id (), $3)]  }
+    | varref RCV	/*	{ (* Expand_Ok++; *) } */
       rargs		{ raise (Not_implemented "rcv")
                 (* Expand_Ok--; has_io++;
                   $$ = nn($1,  'r', $1, $4);
@@ -935,6 +937,7 @@ expr    : LPAREN expr RPAREN		{ $2 }
     /* our extensions */
     | ALL LPAREN prop_expr RPAREN { UnEx (ALL, $3)  }
     | SOME LPAREN prop_expr RPAREN { UnEx (SOME, $3)  }
+
     /* not implemented yet */
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")

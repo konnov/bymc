@@ -169,6 +169,7 @@ let token_s t =
       | CARD -> "card"
       | POR -> "or"
       | PAND -> "and"
+      | HAVOC -> "havoc"
 
 (* we need var_fun as variables can look either x or next(x) *)
 let expr_s var_fun e =
