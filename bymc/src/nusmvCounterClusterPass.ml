@@ -56,10 +56,16 @@ let collect_rhs solver type_tab dom ctr_ctx op =
     tbl
 
 
-let mk_mod_sig proc idx myval params =
+let mk_mod_sig proc myval params my_locals =
     let vname v = v#mangled_name in
     let ps = str_join ", " (List.map vname params) in
-    sprintf "kntr_%s_%d(%s, %s, bymc_loc, bymc_proc)" proc#get_name idx ps myval
+    let iname = function
+        | Var v -> "my_" ^ v#get_name
+        | Const i -> string_of_int i
+        | _ as e -> raise (Failure ("Unexpected expression: " ^ (expr_s e)))
+    in
+    let ls = str_join ", " (List.map iname my_locals) in
+    sprintf "kntr_%s(%s, %s, %s, bymc_loc, bymc_proc)" proc#get_name ps ls myval
 
 
 let write_counter_mods solver caches sym_tab type_tab hidden_idx_fun
@@ -68,49 +74,40 @@ let write_counter_mods solver caches sym_tab type_tab hidden_idx_fun
     let dom = caches#analysis#get_pia_dom in
     let dec_tbl = collect_rhs solver type_tab dom ctr_ctx PLUS in
     let inc_tbl = collect_rhs solver type_tab dom ctr_ctx MINUS in
-    let create_module idx =
-        let valtab = ctr_ctx#unpack_from_const idx in
-        let mk_prev con op =
-            let f (k, v) =
-                let inp = get_input sym_tab k in
-                sprintf "%s %s %d" inp#mangled_name op v in
-            str_join con (List.map f (hashtbl_as_list valtab)) in
-        let prev_eq = mk_prev " & " "=" in
-        let prev_neq = mk_prev " | " "!=" in
-        let mk_next con op =
-            let f (k, v) =
-                let out = get_output sym_tab k in
-                sprintf "%s %s %d" out#mangled_name op v in
-            str_join con (List.map f (hashtbl_as_list valtab)) in
-        let next_eq = mk_next " & " "=" in
-        let next_neq = mk_next " | " "!=" in
-        fprintf out "MODULE %s\n" (mk_mod_sig proc idx "myval" (in_locals @ out_locals));
-        fprintf out " ASSIGN\n";
-        fprintf out " next(myval) :=\n";
-        fprintf out "  case\n";
-        let print_next k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
-                proc_num prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
-        in
-        let print_prev k vs =
-            fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
-                proc_num prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
-        in
-        Hashtbl.iter print_prev dec_tbl;
-        Hashtbl.iter print_next inc_tbl;
-        fprintf out "   bymc_loc = 0 : {%s};\n"
-            (str_join ", " (List.map string_of_int (range 0 dom#length)));
-        fprintf out "   TRUE : myval;\n";
-        fprintf out "  esac;\n";
+    let mk_prev con op =
+        let f v =
+            let inp = get_input sym_tab v in
+            sprintf "%s %s my_%s" inp#mangled_name op v#get_name in
+        str_join con (List.map f out_locals) in
+    let prev_eq = mk_prev " & " "=" in
+    let prev_neq = mk_prev " | " "!=" in
+    let mk_next con op =
+        let f v =
+            let out = get_output sym_tab v in
+            sprintf "%s %s my_%s" out#mangled_name op v#get_name in
+        str_join con (List.map f out_locals) in
+    let next_eq = mk_next " & " "=" in
+    let next_neq = mk_next " | " "!=" in
+    fprintf out "MODULE %s\n"
+        (mk_mod_sig proc "myval" (in_locals @ out_locals)
+        (List.map (fun v -> Var v) out_locals));
+    fprintf out " ASSIGN\n";
+    fprintf out " next(myval) :=\n";
+    fprintf out "  case\n";
+    let print_next k vs =
+        fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+            proc_num prev_neq next_eq k (str_join ", " (List.map string_of_int vs));
     in
-    let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-    let is_visible i =
-        let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name i in
-        let myval_var = (sym_tab#lookup myval)#as_var in
-        0 = (hidden_idx_fun myval_var)
+    let print_prev k vs =
+        fprintf out "   bymc_proc = %d & bymc_loc = 1 & (%s) & (%s) & myval = %d : { %s };\n"
+            proc_num prev_eq next_neq k (str_join ", " (List.map string_of_int vs))
     in
-    let visible = List.filter is_visible all_indices in
-    List.iter create_module visible
+    Hashtbl.iter print_prev dec_tbl;
+    Hashtbl.iter print_next inc_tbl;
+    fprintf out "   bymc_loc = 0 : {%s};\n"
+        (str_join ", " (List.map string_of_int (range 0 dom#length)));
+    fprintf out "   TRUE : myval;\n";
+    fprintf out "  esac;\n"
 
 
 let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
@@ -248,7 +245,11 @@ let declare_locals_and_counters caches roles sym_tab type_tab rev_tab
     let declare_mod idx =
         (* XXX: magic encoding *)
         let myval = sprintf "%s_%dI" ctr_ctx#get_ctr#get_name idx in
-        let signature = mk_mod_sig proc idx myval (in_locals @ out_locals) in
+        let valtab = ctr_ctx#unpack_from_const idx in
+        let get_val v = Const (Hashtbl.find valtab v) in
+        let signature =
+            mk_mod_sig proc myval
+                (in_locals @ out_locals) (List.map get_val out_locals) in
         if not (is_visible idx) then fprintf out "-- ";
         fprintf out "  mod%s_k%d: %s;\n" proc#get_name idx signature
     in
