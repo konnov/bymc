@@ -102,7 +102,6 @@ and
 var name_i var_id =
     object(self)
         inherit symb name_i
-        val mutable ini: int = 0          (* initial value, or chan-def *)
 
         (* the name of the owning process type (if there is one) *)
         val mutable m_proc_name: string = "" 
@@ -114,9 +113,6 @@ var name_i var_id =
         method get_sym_type = SymVar
         
         method as_var = (self :> var)
-
-        method set_ini i = ini <- i
-        method get_ini = ini
 
         method is_symbolic = self#has_flag HSymbolic
         method set_symbolic = self#add_flag HSymbolic
@@ -155,7 +151,7 @@ var name_i var_id =
            (e.g., types and variable roles are the same). *)
         method copy new_name =
             let new_var = new var new_name self#id in
-            new_var#set_ini ini;
+            new_var#set_flags self#get_flags;
             if self#is_symbolic then new_var#set_symbolic;
             if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
@@ -165,7 +161,6 @@ var name_i var_id =
         (* Make a copy of the variable and assign a fresh id. *)
         method fresh_copy new_name =
             let new_var = new var new_name (fresh_id ()) in
-            new_var#set_ini ini;
             new_var#set_flags self#get_flags;
             if self#is_symbolic then new_var#set_symbolic;
             if self#is_instrumental then new_var#set_instrumental;
