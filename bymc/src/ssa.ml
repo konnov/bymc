@@ -138,16 +138,16 @@ let optimize_ssa cfg =
         let on_stmt = function
             | Expr (id, Phi (lhs, rhs)) as s ->
                     let fst = List.hd rhs in
-                    if List.for_all (fun o -> o#qual_name = fst#qual_name) rhs
+                    if List.for_all (fun o -> o#color = fst#color) rhs
                     then begin
-                        Hashtbl.add sub_tbl lhs#qual_name fst;
+                        Hashtbl.add sub_tbl (lhs#id, lhs#color) fst;
                         changed := true;
                         Skip id 
                     end else s
             | Expr (id, e) ->
                     let sub v =
-                        if Hashtbl.mem sub_tbl v#qual_name
-                        then Var (Hashtbl.find sub_tbl v#qual_name)
+                        if Hashtbl.mem sub_tbl (v#id, v#color)
+                        then Var (Hashtbl.find sub_tbl (v#id, v#color))
                         else Var v in
                     let ne = map_rvalues sub e in
                     Expr (id, ne)
@@ -167,8 +167,11 @@ let optimize_ssa cfg =
    pp. 451-490.
 
    Figure 12.
+
+   NOTE: instead of renaming variables directly,
+   we keep the new version number in var#color.
  *)
-let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
+let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
     let vars = extern_vars @ intern_vars in
     if may_log DEBUG then print_detailed_cfg "CFG before SSA" cfg;
     let cfg = place_phi vars cfg in
@@ -178,15 +181,17 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
 
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
-    let nm v = v#qual_name in
+    let nm v = v#id in
     let s_push v i =
         Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
-    let s_pop var_nm = 
-        Hashtbl.replace stacks var_nm (List.tl (Hashtbl.find stacks var_nm)) in
+    let s_pop v = 
+        Hashtbl.replace stacks (nm v) (List.tl (Hashtbl.find stacks (nm v))) in
     let intro_var v =
         try
             let i = Hashtbl.find counters (nm v) in
-            let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in
+            let new_v = v#copy v#get_name in
+            new_v#set_color i;
+            (* let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in *)
             s_push v i;
             Hashtbl.replace counters (nm v) (i + 1);
             new_v
@@ -195,10 +200,9 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
     in
     let s_top v =
         let stack =
-            try
-                Hashtbl.find stacks (nm v)
+            try Hashtbl.find stacks (nm v)
             with Not_found ->
-                raise (Var_not_found ("No stack for " ^ (nm v)))
+                raise (Var_not_found ("No stack for " ^ v#qual_name))
         in
         if stack <> []
         then List.hd stack
@@ -230,8 +234,9 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         then v                (* TODO: what about atomic propositions? *)
         else 
             let i = s_top v in
-            let suf = (if i = 0 then "IN" else sprintf "Y%d" i) in
-            v#copy (sprintf "%s_%s" v#get_name suf) (* not a qualified name! *)
+            let nv = v#copy v#get_name in
+            nv#set_color i;
+            nv
     in
     let sub_var_as_var e v =
         try Var (sub_var v)
@@ -299,31 +304,52 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         (* visit children in the dominator tree *)
         List.iter search (Hashtbl.find idom_tree x);
         (* our extension: if we are at the exit block,
-           then add x_OUT for each shared variable x *)
+           then add the output assignment for each shared variable x *)
         if bb#get_succ = []
         then begin
             let bind_out v =
-                let out_v = v#copy (v#get_name ^ "_OUT") in
+                let out_v = v#copy v#get_name in
+                out_v#set_color max_int;
                 Expr (fresh_id (), BinEx (ASGN, Var out_v,
-                    sub_var_as_var (Nop "bind_out") v)) in
+                    sub_var_as_var (Nop "out") v)) in
             let out_assignments = List.map bind_out extern_vars in
             bb#set_seq (bb#get_seq @ out_assignments);
         end;
         (* pop the stack for each assignment *)
-        let pop_v v = s_pop v#qual_name in
         let pop_stmt = function
-            | Decl (_, v, _) -> pop_v v
-            | Expr (_, Phi (v, _)) -> pop_v v
-            | Expr (_, BinEx (ASGN, Var v, _)) -> pop_v v
+            | Decl (_, v, _) -> s_pop v
+            | Expr (_, Phi (v, _)) -> s_pop v
+            | Expr (_, BinEx (ASGN, Var v, _)) -> s_pop v
             | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
-                    pop_v v
-            | Havoc (_, v) -> pop_v v
+                    s_pop v
+            | Havoc (_, v) -> s_pop v
             | _ -> ()
         in
         List.iter pop_stmt bb_old_seq
     in
-    search 0;
-    optimize_ssa cfg (* optimize it after all *)
+    search 0
+
+
+(* (in-place) transformation of CFG to SSA *)
+let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
+    mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
+    let rename v =
+        if v#is_symbolic
+        then Var v (* don't touch it *)
+        else if v#color = 0
+        then Var (v#copy (sprintf "%s_IN" v#get_name))
+        else if v#color = max_int
+        then Var (v#copy (sprintf "%s_OUT" v#get_name))
+        else Var (v#copy (sprintf "%s_Y%d" v#get_name v#color))
+    in
+    let rename_block bb =
+        let ns =
+            (List.map (map_expr_in_lir_stmt (map_vars rename)) bb#get_seq) in
+        bb#set_seq ns
+    in
+    ignore (optimize_ssa cfg); (* optimize it after all *)
+    List.iter rename_block cfg#block_list;
+    cfg
 
 
 (* move explicit statements x_1 = phi(x_2, x_3) to basic blocks (see bddPass) *)

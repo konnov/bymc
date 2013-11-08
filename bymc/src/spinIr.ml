@@ -672,10 +672,16 @@ let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
 
 
 let map_vars map_fun ex =
+    let mapv v =
+        match map_fun v with
+        | Var v -> v
+        | _ -> raise (Failure "expected var")
+    in
     let rec sub = function
     | Var v -> map_fun v
     | UnEx (t, l) -> UnEx (t, sub l)
     | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+    | Phi (v, es) -> Phi (mapv v, List.map mapv es)
     | _ as e -> e
     in
     sub ex
@@ -817,4 +823,21 @@ let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)
         MOptElse (List.map trav body)
     in
     trav stmt
+
+
+let map_expr_in_lir_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a stmt)
+        : 'a stmt =
+    let sub_var v =
+        match map_expr (Var v) with
+        | Var nv -> nv
+        | _ -> raise (Failure "expected var, found something else")
+    in
+    match stmt with
+    | Expr (id, e) -> Expr (id, map_expr e)
+    | Decl (id, v, e) -> Decl (id, sub_var v, map_expr e)
+    | Assert (id, e) -> Assert (id, map_expr e)
+    | Assume (id, e) -> Assume (id, map_expr e)
+    | Havoc (id, v) -> Havoc (id, sub_var v)
+    | Print (id, fmt, es) -> Print (id, fmt, List.map map_expr es)
+    | _ as e -> e
 
