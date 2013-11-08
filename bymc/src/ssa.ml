@@ -178,50 +178,12 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
 
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
-    let nm v = v#qual_name in (* TODO: use v#id instead *)
+    let nm v = v#qual_name in
     let s_push v i =
         Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
     let s_pop var_nm = 
         Hashtbl.replace stacks var_nm (List.tl (Hashtbl.find stacks var_nm)) in
-    let s_top v =
-        let stack =
-            try Hashtbl.find stacks (nm v)
-            with Not_found ->
-                raise (Var_not_found ("No stack for " ^ (nm v)))
-        in
-        if stack <> []
-        then List.hd stack
-        else if tolerate_undeclared_vars
-        then begin
-            1 (* return 1, as index 0 means 'input' *)
-            (* ORIGINAL:
-            let i = Hashtbl.find counters (nm v) in
-            Hashtbl.replace counters (nm v) (i + 1);
-            *)
-            (* We have reached a location where a value from an
-               undeclared variable can be used. *)
-            (* Push a special variable on top of the empty. *)
-            end else
-                let m = (sprintf "Use of %s before declaration?" v#qual_name) in
-                raise (Failure m)
-    in
     let intro_var v =
-        (* EXPERIMENTAL: as opposite to Cytron et al., we assign
-           the *same* variable versions on parallel branches.  Thus, SSA
-           deals only with sequential copies of the same variable.
-           This works for us, because we introduce variables at_i in CFG,
-           to distinguish the control. The present optimization allows us
-           to decrease the number of variables copies, which are integer
-           variables, and to decrease the size of the problem!
-         *)
-        try let stack = Hashtbl.find stacks (nm v) in
-            let num = if stack <> [] then List.hd stack else 0 in
-            s_push v (num + 1);
-            v#copy (sprintf "%s_Y%d" v#get_name (num + 1))
-        with Not_found ->
-            raise (Var_not_found ("No stack for " ^ (nm v)))
-
-        (* ORIGINAL:
         try
             let i = Hashtbl.find counters (nm v) in
             let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in
@@ -230,20 +192,36 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
             new_v
         with Not_found ->
             raise (Var_not_found ("Var not found: " ^ v#qual_name))
-        *)
+    in
+    let s_top v =
+        let stack =
+            try
+                Hashtbl.find stacks (nm v)
+            with Not_found ->
+                raise (Var_not_found ("No stack for " ^ (nm v)))
+        in
+        if stack <> []
+        then List.hd stack
+        else if tolerate_undeclared_vars
+        then begin
+            let i = Hashtbl.find counters (nm v) in
+            Hashtbl.replace counters (nm v) (i + 1);
+            i
+            (* We have reached a location where a value from an
+               undeclared variable can be used. *)
+            (* Push a special variable on top of the empty. *)
+            end else
+                let m = (sprintf "Use of %s before declaration?" v#qual_name) in
+                raise (Failure m)
     in
     (* initialize local variables: start with 1 as 0 is reserved for input *)
-    (* ORIGINAL:
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) intern_vars;
-    *)
     List.iter (fun v -> Hashtbl.add stacks (nm v) []) intern_vars;
     (* global vars are different,
        each global variable x has a version x_0 referring
        to the variable on the input
      *)
-    (* ORIGINAL:
     List.iter (fun v -> Hashtbl.add counters (nm v) 1) extern_vars;
-    *)
     List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) extern_vars;
 
     let sub_var v =
@@ -331,6 +309,7 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
             let out_assignments = List.map bind_out extern_vars in
             bb#set_seq (bb#get_seq @ out_assignments);
         end;
+        (* pop the stack for each assignment *)
         let pop_v v = s_pop v#qual_name in
         let pop_stmt = function
             | Decl (_, v, _) -> pop_v v
