@@ -107,7 +107,11 @@ var name_i var_id =
         val mutable m_proc_name: string = "" 
         (* the index of the owner process (if known) *)
         val mutable m_proc_index: int = -1
+        (* this attribute does not have any particular meaning, but it can be
+          used by algorithms to label variables somehow, e.g., see ssa.ml *)
+        val mutable m_color: int = 0
 
+        (* use it to compare variables, as the content may vary *)
         method id = var_id
 
         method get_sym_type = SymVar
@@ -125,6 +129,9 @@ var name_i var_id =
 
         method proc_index = m_proc_index
         method set_proc_index i = m_proc_index <- i
+
+        method color = m_color
+        method set_color c = m_color <- c
 
         (* get a qualified name with
            the prepending proctype and the index (if known) *)
@@ -156,6 +163,7 @@ var name_i var_id =
             if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
             new_var#set_proc_index m_proc_index;
+            new_var#set_color m_color;
             new_var
 
         (* Make a copy of the variable and assign a fresh id. *)
@@ -166,6 +174,7 @@ var name_i var_id =
             if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
             new_var#set_proc_index m_proc_index;
+            new_var#set_color m_color;
             new_var
     end
 and
