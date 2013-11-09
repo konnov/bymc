@@ -1,23 +1,37 @@
-In case you want to play with the tool, do the following:
+0. WHAT IS THAT?
 
-Prerequisites:
+ByMC is a tool for model checking fault-tolerant distributed algorithms.
+More details to be found at: http://forsyte.at/software/bymc/
 
- * ocaml (not earlier than 3.11.0)
+1. PREREQUISITES
+
+ * ocaml and ocamlbuild (not earlier than 3.11.0)
+ * ocamlgraph: http://ocamlgraph.lri.fr/
  * yices 1.x: http://yices.csl.sri.com/download.shtml
  * spin: http://spinroot.com/spin/Man/README.html#S2
  * gcc
  * python
 
+2. COMPILING
+
 # building (you need ocaml and ocamlbuild)
-cd bymc # (the directory with HOWTO)
+cd bymc # (the directory with this README)
 ./make.sh
 
-# checking models for concrete parameters
-./run-concrete 'N=3,T=1,F=1' cond-consensus.pml termination
+3. EXAMPLES
 
-# the automatic CEGAR loop
+You can find the examples at the tool's website:
 
-./cegar ../../promela/bcast-byz.pml relay
+http://forsyte.at/software/bymc/#examples
+
+4. RUNNING
+
+# checking models with concrete parameters using spin
+./run-concrete 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
+
+# parameterized model checking with the abstraction-refinement
+
+./cegar ${fmcad13-benchmarks}/bcast-byz.pml relay
 
 (you can invoke cegar from any directory you want)
 
@@ -28,24 +42,29 @@ cd bymc # (the directory with HOWTO)
 # The tool will check automatically if it is an invariant.
 #
 # after that run cegar once more:
-./cegar ../../promela/bcast-byz.pml relay
+./cegar ${fmcad13-benchmarks}/bcast-byz.pml relay
 
 # the manual execution of the tool chain (most likely, you don't need it!)
 
-OCAMLRUNPARAM=b ./bymc.native -a ../../promela/bcast-byz.pml
+OCAMLRUNPARAM=b ./bymc.native -a bcast-byz.pml
 view original.prm     # the original system as parsed by the tool
 view abs-interval.prm # the interval abstraction
 view abs-counter-general.prm  # the counter abstraction
 view abs-vass.prm     # the VASS representation used for refinement
-spin -a -N ../../promela/unforg.never abs-counter.prm
+spin -a -N unforg.never abs-counter.prm
 gcc -o pan pan.c && ./pan -a -m1000000
 # see a counter example produced in Spin
-spin -t -N ../../promela/unforg.never abs-counter.prm | grep '{' >spin.trace
+spin -t -N unforg.never abs-counter.prm | grep '{' >spin.trace
 view trace.ys         # the trace encoded in yices (SMT solver)
 
-# properties we want to check
+# properties we usually check:
 {unforg,corr,relay}
 
 # see a counter example in VASS and (perhaps) refine the system:
 
-OCAMLRUNPARAM=b ./bymc.native -t spin.trace ../../promela/bcast-byz.pml
+OCAMLRUNPARAM=b ./bymc.native -t spin.trace bcast-byz.pml
+
+5. MISC
+
+Should you have any questions, ask Igor Konnov <konnov@forsyte.at>
+
