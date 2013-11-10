@@ -8,6 +8,8 @@
 
 open Printf
 
+open Graph.Pack.Graph
+
 open Cfg
 open Analysis
 open Spin
@@ -127,9 +129,8 @@ let map_rvalues map_fun ex =
 
 
 (*
- It appears that the Cytron's algorithm can produce phi functions like
- x_2 = phi(x_1, x_1, x_1).
- Here we remove them.
+ It appears that the Cytron's algorithm can produce redundant phi functions like
+ x_2 = phi(x_1, x_1, x_1). Here we remove them.
  *)
 let optimize_ssa cfg =
     let sub_tbl = Hashtbl.create 10 in
@@ -162,11 +163,66 @@ let optimize_ssa cfg =
     cfg
 
 
+(* for every basic block, find the starting indices of the variables,
+   i.e., such indices that have not been used in immediate dominators.
+ *)
+let reduce_indices cfg var =
+    (* create dependencies between different copies of the variable *)
+    let add_copy lst = function
+        | Decl (_, v, _) ->
+            v#color :: lst          
+        | Expr (_, Phi (v, _)) ->
+            v#color :: lst          
+        | Expr (_, BinEx (ASGN, Var v, _)) ->
+            v#color :: lst          
+        | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
+            v#color :: lst          
+        | Havoc (_, v) ->
+            v#color :: lst          
+        | _ -> lst
+    in
+    let get_bb_copies bb =
+        List.fold_left add_copy [] bb#get_seq in
+    let vertices = Hashtbl.create 10 in
+    let depg = create () in
+    let create_vertex id =
+        let v = V.create id in
+        add_vertex depg v;
+        Hashtbl.add vertices id v
+    in
+    List.iter (fun bb -> List.iter create_vertex get_bb_copies bb) cfg#block_list;
+    (* add dependencies *)
+    let add_dep v1 v2 =
+        if v1#color <> v2#color
+        then add_edge depg
+            (Hashtbl.find vertices v1#color)
+            (Hashtbl.find vertices v2#color)
+    in
+    let add_bb_deps bb =
+        let copies = get_bb_copies bb in
+        (* all copies are dependent in the block *)
+        List.iter (fun v -> List.iter (add_dep v) copies) copies;
+        let add_succ succ =
+            let scopies = get_bb_copies succ in
+            List.iter (fun v -> List.iter (add_dep v) scopies) copies
+        in
+        List.iter add_succ bb#succ
+    in
+    List.iter add_bb_deps cfg#block_list;
+    ()
+
+
 (* Ron Cytron et al. Efficiently Computing Static Single Assignment Form and
    the Control Dependence Graph, ACM Transactions on PLS, Vol. 13, No. 4, 1991,
    pp. 451-490.
 
    Figure 12.
+   
+   NOTE: we do not need unique versions on parallel blocks.
+   Here we are trying to minimize the number of different versions
+   (as it defines the number of variables in an SMT problem),
+   thus, blocks corresponding to different options introduce copies
+   with the same indices.
  *)
 let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
     let vars = extern_vars @ intern_vars in
@@ -178,7 +234,7 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
 
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
-    let nm v = v#qual_name in (* TODO: use v#id instead *)
+    let nm v = v#id in (* TODO: use v#id instead *)
     let s_push v i =
         Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
     let s_pop var_nm = 
@@ -193,14 +249,9 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         then List.hd stack
         else if tolerate_undeclared_vars
         then begin
-            1 (* return 1, as index 0 means 'input' *)
-            (* ORIGINAL:
             let i = Hashtbl.find counters (nm v) in
             Hashtbl.replace counters (nm v) (i + 1);
-            *)
-            (* We have reached a location where a value from an
-               undeclared variable can be used. *)
-            (* Push a special variable on top of the empty. *)
+            i
             end else
                 let m = (sprintf "Use of %s before declaration?" v#qual_name) in
                 raise (Failure m)
@@ -344,6 +395,7 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         List.iter pop_stmt bb_old_seq
     in
     search 0;
+    List.iter (reduce_indices cfg) vars;
     optimize_ssa cfg (* optimize it after all *)
 
 
