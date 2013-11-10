@@ -102,21 +102,21 @@ and
 var name_i var_id =
     object(self)
         inherit symb name_i
-        val mutable ini: int = 0          (* initial value, or chan-def *)
 
         (* the name of the owning process type (if there is one) *)
         val mutable m_proc_name: string = "" 
         (* the index of the owner process (if known) *)
         val mutable m_proc_index: int = -1
+        (* this attribute does not have any particular meaning, but it can be
+          used by algorithms to label variables somehow, e.g., see ssa.ml *)
+        val mutable m_color: int = 0
 
+        (* use it to compare variables, as the content may vary *)
         method id = var_id
 
         method get_sym_type = SymVar
         
         method as_var = (self :> var)
-
-        method set_ini i = ini <- i
-        method get_ini = ini
 
         method is_symbolic = self#has_flag HSymbolic
         method set_symbolic = self#add_flag HSymbolic
@@ -129,6 +129,9 @@ var name_i var_id =
 
         method proc_index = m_proc_index
         method set_proc_index i = m_proc_index <- i
+
+        method color = m_color
+        method set_color c = m_color <- c
 
         (* get a qualified name with
            the prepending proctype and the index (if known) *)
@@ -155,22 +158,23 @@ var name_i var_id =
            (e.g., types and variable roles are the same). *)
         method copy new_name =
             let new_var = new var new_name self#id in
-            new_var#set_ini ini;
-            if self#is_symbolic then new_var#set_symbolic;
-            if self#is_instrumental then new_var#set_instrumental;
-            new_var#set_proc_name m_proc_name;
-            new_var#set_proc_index m_proc_index;
-            new_var
-
-        (* Make a copy of the variable and assign a fresh id. *)
-        method fresh_copy new_name =
-            let new_var = new var new_name (fresh_id ()) in
-            new_var#set_ini ini;
             new_var#set_flags self#get_flags;
             if self#is_symbolic then new_var#set_symbolic;
             if self#is_instrumental then new_var#set_instrumental;
             new_var#set_proc_name m_proc_name;
             new_var#set_proc_index m_proc_index;
+            new_var#set_color m_color;
+            new_var
+
+        (* Make a copy of the variable and assign a fresh id. *)
+        method fresh_copy new_name =
+            let new_var = new var new_name (fresh_id ()) in
+            new_var#set_flags self#get_flags;
+            if self#is_symbolic then new_var#set_symbolic;
+            if self#is_instrumental then new_var#set_instrumental;
+            new_var#set_proc_name m_proc_name;
+            new_var#set_proc_index m_proc_index;
+            new_var#set_color m_color;
             new_var
     end
 and
@@ -668,10 +672,16 @@ let proc_replace_body (p: 't proc) (new_body: 't mir_stmt list) =
 
 
 let map_vars map_fun ex =
+    let mapv v =
+        match map_fun v with
+        | Var v -> v
+        | _ -> raise (Failure "expected var")
+    in
     let rec sub = function
     | Var v -> map_fun v
     | UnEx (t, l) -> UnEx (t, sub l)
     | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+    | Phi (v, es) -> Phi (mapv v, List.map mapv es)
     | _ as e -> e
     in
     sub ex
@@ -813,4 +823,21 @@ let map_expr_in_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a mir_stmt)
         MOptElse (List.map trav body)
     in
     trav stmt
+
+
+let map_expr_in_lir_stmt (map_expr: 'a expr -> 'a expr) (stmt: 'a stmt)
+        : 'a stmt =
+    let sub_var v =
+        match map_expr (Var v) with
+        | Var nv -> nv
+        | _ -> raise (Failure "expected var, found something else")
+    in
+    match stmt with
+    | Expr (id, e) -> Expr (id, map_expr e)
+    | Decl (id, v, e) -> Decl (id, sub_var v, map_expr e)
+    | Assert (id, e) -> Assert (id, map_expr e)
+    | Assume (id, e) -> Assume (id, map_expr e)
+    | Havoc (id, v) -> Havoc (id, sub_var v)
+    | Print (id, fmt, es) -> Print (id, fmt, List.map map_expr es)
+    | _ as e -> e
 
