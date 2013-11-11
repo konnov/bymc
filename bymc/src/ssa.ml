@@ -230,7 +230,7 @@ let print_dot filename var_graph =
 (* for every basic block, find the starting indices of the variables,
    i.e., such indices that have not been used in immediate dominators.
  *)
-let reduce_indices cfg is_local var =
+let reduce_indices cfg var =
     let bcfg = cfg#as_block_graph in
     (* we need to track dependencies along paths *)
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
@@ -281,12 +281,11 @@ let reduce_indices cfg is_local var =
             (0, VarColoring.H.create 1)
             (range 1 ((VarGraph.nb_vertex depg) + 1))
     in
-    let base = if is_local then 0 else -1 in (* the colors are assigned from 1*)
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
         if v#mark <> 0 && v#mark <> Pervasives.max_int
-        then (v, (base + (VarColoring.H.find coloring v))) :: l
+        then (v, (VarColoring.H.find coloring v)) :: l
         else (v, v#mark) :: l
     in
     let new_marks = VarGraph.fold_vertex fold depg [] in
@@ -470,8 +469,8 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
         let ns = List.map map_s bb#get_seq in
         bb#set_seq ns
     in
-    List.iter (reduce_indices cfg true) intern_vars;
-    List.iter (reduce_indices cfg false) extern_vars;
+    List.iter (reduce_indices cfg) intern_vars;
+    List.iter (reduce_indices cfg) extern_vars;
     ignore (optimize_ssa cfg); (* optimize it after all *)
     List.iter rename_block cfg#block_list;
     cfg
