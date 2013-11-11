@@ -8,14 +8,14 @@
 
 open Printf
 
-open Graph.Pack.Graph
-
-open Cfg
+open Accums
 open Analysis
+open Cfg
+open Debug
 open Spin
 open SpinIr
 open SpinIrImp
-open Debug
+
 
 exception Var_not_found of string
 
@@ -134,8 +134,14 @@ let map_rvalues map_fun ex =
  *)
 let optimize_ssa cfg =
     let sub_tbl = Hashtbl.create 10 in
+    let sub_var v =
+        if Hashtbl.mem sub_tbl (v#id, v#color)
+        then Var (Hashtbl.find sub_tbl (v#id, v#color))
+        else Var v
+    in
+    let map_s s = map_expr_in_lir_stmt (map_vars sub_var) s in
     let changed = ref true in
-    let collect_replace bb =
+    let reduce_phi bb =
         let on_stmt = function
             | Expr (id, Phi (lhs, rhs)) as s ->
                     let fst = List.hd rhs in
@@ -145,58 +151,99 @@ let optimize_ssa cfg =
                         changed := true;
                         Skip id 
                     end else s
-            | Expr (id, e) ->
-                    let sub v =
-                        if Hashtbl.mem sub_tbl (v#id, v#color)
-                        then Var (Hashtbl.find sub_tbl (v#id, v#color))
-                        else Var v in
-                    let ne = map_rvalues sub e in
-                    Expr (id, ne)
             | _ as s -> s
         in
         bb#set_seq (List.map on_stmt bb#get_seq);
     in
     while !changed do
         changed := false;
-        List.iter collect_replace cfg#block_list;
+        List.iter reduce_phi cfg#block_list;
+        List.iter
+            (fun bb -> bb#set_seq (List.map map_s bb#get_seq)) cfg#block_list
     done;
     cfg
+
+
+let add_mark_to_name v =
+    if v#is_symbolic
+    then Var v (* don't touch it *)
+    else if v#color = 0
+    then Var (v#copy (sprintf "%s_IN" v#get_name))
+    else if v#color = max_int
+    then Var (v#copy (sprintf "%s_OUT" v#get_name))
+    else Var (v#copy (sprintf "%s_Y%d" v#get_name v#color))
+
+
+let get_var_copies var seq =
+    let add_if l v = if v#id = var#id then v :: l else l in
+    let add_copy l = function
+        | Decl (_, v, _) ->
+                add_if l v 
+        | Expr (_, Phi (v, _)) ->
+                add_if l v 
+        | Expr (_, BinEx (ASGN, Var v, _)) ->
+                add_if l v 
+        | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
+                add_if l v 
+        | Havoc (_, v) ->
+                add_if l v 
+        | _ -> l
+    in
+    List.fold_left add_copy [] seq
+
+
+module IGraph = Graph.Pack.Digraph
+module IGraphColoring = Graph.Coloring.Make(IGraph)
+module IGraphOper = Graph.Oper.I(IGraph)
+
+module VarGraph = Graph.Imperative.Digraph.Concrete(
+    struct
+        type t = var
+        let compare lhs rhs =
+            if lhs#id = rhs#id
+            then lhs#color - rhs#color
+            else lhs#id - rhs#id
+
+        let hash v = v#id * v#color
+
+        let equal lhs rhs = (lhs#id = rhs#id && lhs#color = rhs#color)
+    end
+)    
+
+module VarOper = Graph.Oper.I(VarGraph)
+module VarColoring = Graph.Coloring.Make(VarGraph)
+
+
+let print_dot filename var_graph =
+    let ig = IGraph.create () in
+    let addv v = IGraph.add_vertex ig (IGraph.V.create v#color) in
+    VarGraph.iter_vertex addv var_graph;
+    let adde v w =
+        IGraph.add_edge ig
+            (IGraph.find_vertex ig v#color) (IGraph.find_vertex ig w#color)
+    in
+    (* FIXME: inefficient due to find_vertex *)
+    VarGraph.iter_edges adde var_graph;
+    IGraph.dot_output ig filename
 
 
 (* for every basic block, find the starting indices of the variables,
    i.e., such indices that have not been used in immediate dominators.
  *)
-let reduce_indices cfg var =
-    (* create dependencies between different copies of the variable *)
-    let add_copy lst = function
-        | Decl (_, v, _) ->
-            v#color :: lst          
-        | Expr (_, Phi (v, _)) ->
-            v#color :: lst          
-        | Expr (_, BinEx (ASGN, Var v, _)) ->
-            v#color :: lst          
-        | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var v, _), _)) ->
-            v#color :: lst          
-        | Havoc (_, v) ->
-            v#color :: lst          
-        | _ -> lst
-    in
-    let get_bb_copies bb =
-        List.fold_left add_copy [] bb#get_seq in
-    let vertices = Hashtbl.create 10 in
-    let depg = create () in
-    let create_vertex id =
-        let v = V.create id in
-        add_vertex depg v;
-        Hashtbl.add vertices id v
-    in
-    List.iter (fun bb -> List.iter create_vertex get_bb_copies bb) cfg#block_list;
+let reduce_indices cfg is_local var =
+    let bcfg = cfg#as_block_graph in
+    (* we need to track dependencies along paths *)
+    ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
+
+    let get_bb_copies bb = get_var_copies var bb#seq in
+    let depg = VarGraph.create () in
+    let add_vertex var = VarGraph.add_vertex depg var in
+    BlockG.iter_vertex (fun bb -> List.iter add_vertex (get_bb_copies bb)) bcfg;
+
     (* add dependencies *)
     let add_dep v1 v2 =
         if v1#color <> v2#color
-        then add_edge depg
-            (Hashtbl.find vertices v1#color)
-            (Hashtbl.find vertices v2#color)
+        then VarGraph.add_edge depg v1 v2
     in
     let add_bb_deps bb =
         let copies = get_bb_copies bb in
@@ -206,10 +253,50 @@ let reduce_indices cfg var =
             let scopies = get_bb_copies succ in
             List.iter (fun v -> List.iter (add_dep v) scopies) copies
         in
-        List.iter add_succ bb#succ
+        List.iter add_succ (BlockG.succ bcfg bb)
     in
-    List.iter add_bb_deps cfg#block_list;
-    ()
+    BlockG.iter_vertex add_bb_deps bcfg;
+
+    (* all assignment along one path depend on each other *)
+    ignore (VarOper.add_transitive_closure ~reflexive:false depg);
+    (* remove self-loops that can be introduced by transitive closure *)
+    VarGraph.iter_vertex (fun v -> VarGraph.remove_edge depg v v) depg;
+    print_dot (sprintf "deps-%s.dot" var#get_name) depg;
+
+    (* NOTE: coloring works only on undirected graphs,
+       so we have to add the mirror *)
+    let depg = VarOper.union depg (VarOper.mirror depg) in
+
+    (* try to find minimal coloring *)
+    let find_coloring (min_colors, coloring) k =
+        if min_colors = 0
+        then begin
+            try
+                let _, h = (k, VarColoring.coloring depg k) in
+                printf "S%d\n" k; flush stdout;
+                (k, h)
+            with e (* where to find NoColoring??? *) ->
+                printf "E%d\n" k; flush stdout;
+                (0, coloring)
+        end else (min_colors, coloring)
+    in
+    let (ncolors, coloring) =
+        List.fold_left find_coloring
+            (0, VarColoring.H.create 1)
+            (range 1 ((VarGraph.nb_vertex depg) + 1))
+    in
+    log INFO (sprintf "%s needs %d colors" var#get_name ncolors);
+    let base = if is_local then 0 else -1 in (* the colors are assigned from 1*)
+    (* find new marks. NOTE: we do not replace colors in place, as this
+       might corrupt the vertex iterator. *)
+    let fold v l =
+        if v#color <> 0 && v#color <> Pervasives.max_int
+        then (v, (base + (VarColoring.H.find coloring v))) :: l
+        else (v, v#color) :: l
+    in
+    let new_marks = VarGraph.fold_vertex fold depg [] in
+    List.iter (fun (v, c) -> v#set_color c) new_marks;
+    print_dot (sprintf "deps-%s-colored.dot" var#get_name) depg
 
 
 (* Ron Cytron et al. Efficiently Computing Static Single Assignment Form and
@@ -232,21 +319,28 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
     let counters = Hashtbl.create (List.length vars) in
     let stacks = Hashtbl.create (List.length vars) in
     let nm v = v#id in
-    let s_push v i =
-        Hashtbl.replace stacks (nm v) (i :: (Hashtbl.find stacks (nm v))) in
-    let s_pop v = 
-        Hashtbl.replace stacks (nm v) (List.tl (Hashtbl.find stacks (nm v))) in
-    let intro_var v =
-        try
-            let i = Hashtbl.find counters (nm v) in
-            let new_v = v#copy v#get_name in
-            new_v#set_color i;
-            (* let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in *)
-            s_push v i;
-            Hashtbl.replace counters (nm v) (i + 1);
-            new_v
+    let s_push v =
+        try Hashtbl.replace stacks (nm v) (v :: (Hashtbl.find stacks (nm v)))
         with Not_found ->
-            raise (Var_not_found ("Var not found: " ^ v#qual_name))
+            raise (Failure (sprintf "No stack for %s#%d" v#qual_name (nm v)))
+    in
+    let s_pop v = 
+        try Hashtbl.replace stacks (nm v) (List.tl (Hashtbl.find stacks (nm v)))
+        with Not_found ->
+            raise (Failure (sprintf "No stack for %s#%d" v#qual_name v#id))
+    in
+    let intro_var v =
+        let i =
+            try Hashtbl.find counters (nm v)
+            with Not_found ->
+                raise (Var_not_found ("Var not found: " ^ v#qual_name))
+        in
+        let new_v = v#copy v#get_name in
+        new_v#set_color i;
+        (* let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in *)
+        s_push new_v;
+        Hashtbl.replace counters (nm v) (i + 1);
+        new_v
     in
     let s_top v =
         let stack =
@@ -257,33 +351,29 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         if stack <> []
         then List.hd stack
         else if tolerate_undeclared_vars
-        then begin
-            let i = Hashtbl.find counters (nm v) in
-            Hashtbl.replace counters (nm v) (i + 1);
-            i
-            end else
-                let m = (sprintf "Use of %s before declaration?" v#qual_name) in
-                raise (Failure m)
+        then intro_var v
+        else raise (Failure (sprintf "%s: use before declaration?" v#qual_name))
     in
+    let add_stack ?add_input:(add=false) v =
+        Hashtbl.add stacks (nm v) [];
+        if add then ignore (intro_var v) 
+    in
+    let add_counter base v = Hashtbl.add counters (nm v) base in
     (* initialize local variables: start with 1 as 0 is reserved for input *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 1) intern_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) []) intern_vars;
+    List.iter (add_counter 1) intern_vars;
+    List.iter add_stack intern_vars;
     (* global vars are different,
        each global variable x has a version x_0 referring
        to the variable on the input
      *)
-    List.iter (fun v -> Hashtbl.add counters (nm v) 1) extern_vars;
-    List.iter (fun v -> Hashtbl.add stacks (nm v) [0]) extern_vars;
+    List.iter (add_counter 0) extern_vars;
+    List.iter (add_stack ~add_input:true) extern_vars;
 
     let sub_var v =
         if v#is_symbolic
         (* do not touch symbolic variables, they are parameters! *)
         then v                (* TODO: what about atomic propositions? *)
-        else 
-            let i = s_top v in
-            let nv = v#copy v#get_name in
-            nv#set_color i;
-            nv
+        else s_top v
     in
     let sub_var_as_var e v =
         try Var (sub_var v)
@@ -380,21 +470,13 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
 (* (in-place) transformation of CFG to SSA *)
 let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
     mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
-    let rename v =
-        if v#is_symbolic
-        then Var v (* don't touch it *)
-        else if v#color = 0
-        then Var (v#copy (sprintf "%s_IN" v#get_name))
-        else if v#color = max_int
-        then Var (v#copy (sprintf "%s_OUT" v#get_name))
-        else Var (v#copy (sprintf "%s_Y%d" v#get_name v#color))
-    in
     let rename_block bb =
-        let ns =
-            (List.map (map_expr_in_lir_stmt (map_vars rename)) bb#get_seq) in
+        let map_s s = map_expr_in_lir_stmt (map_vars add_mark_to_name) s in
+        let ns = List.map map_s bb#get_seq in
         bb#set_seq ns
     in
-    List.iter (reduce_indices cfg) vars;
+    List.iter (reduce_indices cfg true) intern_vars;
+    List.iter (reduce_indices cfg false) extern_vars;
     ignore (optimize_ssa cfg); (* optimize it after all *)
     List.iter rename_block cfg#block_list;
     cfg

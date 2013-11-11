@@ -1,17 +1,62 @@
 open Printf
 
 open Accums
+open Spin
 open SpinIr
 open SpinIrImp
 open Debug
 
 exception CfgError of string
 
-module IntSet = Set.Make (struct
- type t = int
- let compare a b = a - b
-end)
+module IntSet = Set.Make(
+    struct
+        type t = int
+        let compare a b = a - b
+    end
+)
 
+(*
+A basic block that can be used with ocamlgraph.
+TODO: replace basic_block with block_t in the future.
+ *)
+class block_t =
+    object(self)
+        val mutable m_seq: token stmt list = []
+        val mutable m_id: int = 0
+
+        method id = m_id
+
+        method seq = m_seq
+
+        method set_seq s =
+            let id = match s with
+                | Label (_, i) :: _ -> i
+                | _ -> raise (CfgError
+                    "Corrupted block, first statement must be a label")
+            in
+            m_id <- id;
+            m_seq <- s
+    end
+
+
+(*
+A graph of blocks. It is not a control flow graph in common sense.
+See control_flow_graph.
+TODO: extend BlockG and replace control_flow_graph with the new version.
+ *)
+module BlockG = Graph.Imperative.Digraph.Concrete(
+    struct
+        type t = block_t
+        let compare bb1 bb2 = bb1#id - bb2#id
+        let hash bb = bb#id
+        let equal bb1 bb2 = (bb1#id = bb2#id)
+    end
+)    
+
+module BlockGO = Graph.Oper.I(BlockG)
+
+
+(* the old implementation of a basic block, see block_t for the new version *)
 class ['t] basic_block =
     object(self)
         val mutable seq: 't stmt list = []
@@ -51,11 +96,17 @@ class ['t] basic_block =
 
         (* deprecated, use label *)
         method get_lead_lab =
-            match List.hd seq with
-                | Label (_, i) -> i
+            self#label
+
+        method label =
+            match seq with
+                | Label (_, i) :: _ -> i
                 | _ -> raise (CfgError "Corrupted basic block, no leading label")
 
-        method label = self#get_lead_lab
+        method as_block_t =
+            let b = new block_t in
+            b#set_seq seq;
+            b
 
         method str =
             let exit_s = List.fold_left
@@ -65,7 +116,7 @@ class ['t] basic_block =
             (sprintf "Basic block %d [succs: %s]:\n" self#get_lead_lab exit_s) ^
             (List.fold_left (fun a s -> sprintf "%s%s\n" a (stmt_s s)) "" seq)
     end
-
+    
 
 let bb_lab bb = bb#label
 
@@ -83,6 +134,9 @@ class ['t, 'attr] attr_basic_block a =
     end
 
 
+(* A control flow graph.  This is a primitive home-brewed graph implementation.
+   It will be replaced with BlockG in the future.
+ *)
 class ['t] control_flow_graph i_entry i_blocks =
     object(self)
         val m_blocks: (int, 't basic_block) Hashtbl.t = i_blocks
@@ -94,7 +148,30 @@ class ['t] control_flow_graph i_entry i_blocks =
         method entry = m_entry
 
         method find lab = Hashtbl.find m_blocks lab
+
+        method as_block_graph =
+            let bbs = self#block_list in
+            let num_blocks = List.length bbs in
+            let g = BlockG.create () in
+            let new_blocks = Hashtbl.create num_blocks in
+            let add_block bb =
+                let newb = bb#as_block_t in
+                Hashtbl.add new_blocks bb#label newb;
+                BlockG.add_vertex g newb
+            in
+            let add_succ bb =
+                let src = Hashtbl.find new_blocks bb#label in
+                let add_to succ =
+                    let dst = Hashtbl.find new_blocks succ#label in
+                    BlockG.add_edge g src dst
+                in
+                List.iter add_to bb#get_succ
+            in
+            List.iter add_block bbs;
+            List.iter add_succ bbs;
+            g (* the new graph *)
     end
+
 
 
 (* collect labels standing one next to each other *)
