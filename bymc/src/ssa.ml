@@ -135,8 +135,8 @@ let map_rvalues map_fun ex =
 let optimize_ssa cfg =
     let sub_tbl = Hashtbl.create 10 in
     let sub_var v =
-        if Hashtbl.mem sub_tbl (v#id, v#color)
-        then Var (Hashtbl.find sub_tbl (v#id, v#color))
+        if Hashtbl.mem sub_tbl (v#id, v#mark)
+        then Var (Hashtbl.find sub_tbl (v#id, v#mark))
         else Var v
     in
     let map_s s = map_expr_in_lir_stmt (map_vars sub_var) s in
@@ -145,9 +145,9 @@ let optimize_ssa cfg =
         let on_stmt = function
             | Expr (id, Phi (lhs, rhs)) as s ->
                     let fst = List.hd rhs in
-                    if List.for_all (fun o -> o#color = fst#color) rhs
+                    if List.for_all (fun o -> o#mark = fst#mark) rhs
                     then begin
-                        Hashtbl.add sub_tbl (lhs#id, lhs#color) fst;
+                        Hashtbl.add sub_tbl (lhs#id, lhs#mark) fst;
                         changed := true;
                         Skip id 
                     end else s
@@ -167,11 +167,11 @@ let optimize_ssa cfg =
 let add_mark_to_name v =
     if v#is_symbolic
     then Var v (* don't touch it *)
-    else if v#color = 0
+    else if v#mark = 0
     then Var (v#copy (sprintf "%s_IN" v#get_name))
-    else if v#color = max_int
+    else if v#mark = max_int
     then Var (v#copy (sprintf "%s_OUT" v#get_name))
-    else Var (v#copy (sprintf "%s_Y%d" v#get_name v#color))
+    else Var (v#copy (sprintf "%s_Y%d" v#get_name v#mark))
 
 
 let get_var_copies var seq =
@@ -201,12 +201,12 @@ module VarGraph = Graph.Imperative.Digraph.Concrete(
         type t = var
         let compare lhs rhs =
             if lhs#id = rhs#id
-            then lhs#color - rhs#color
+            then lhs#mark - rhs#mark
             else lhs#id - rhs#id
 
-        let hash v = v#id * v#color
+        let hash v = v#id * v#mark
 
-        let equal lhs rhs = (lhs#id = rhs#id && lhs#color = rhs#color)
+        let equal lhs rhs = (lhs#id = rhs#id && lhs#mark = rhs#mark)
     end
 )    
 
@@ -216,11 +216,11 @@ module VarColoring = Graph.Coloring.Make(VarGraph)
 
 let print_dot filename var_graph =
     let ig = IGraph.create () in
-    let addv v = IGraph.add_vertex ig (IGraph.V.create v#color) in
+    let addv v = IGraph.add_vertex ig (IGraph.V.create v#mark) in
     VarGraph.iter_vertex addv var_graph;
     let adde v w =
         IGraph.add_edge ig
-            (IGraph.find_vertex ig v#color) (IGraph.find_vertex ig w#color)
+            (IGraph.find_vertex ig v#mark) (IGraph.find_vertex ig w#mark)
     in
     (* FIXME: inefficient due to find_vertex *)
     VarGraph.iter_edges adde var_graph;
@@ -242,7 +242,7 @@ let reduce_indices cfg is_local var =
 
     (* add dependencies *)
     let add_dep v1 v2 =
-        if v1#color <> v2#color
+        if v1#mark <> v2#mark
         then VarGraph.add_edge depg v1 v2
     in
     let add_bb_deps bb =
@@ -271,12 +271,8 @@ let reduce_indices cfg is_local var =
     let find_coloring (min_colors, coloring) k =
         if min_colors = 0
         then begin
-            try
-                let _, h = (k, VarColoring.coloring depg k) in
-                printf "S%d\n" k; flush stdout;
-                (k, h)
-            with e (* where to find NoColoring??? *) ->
-                printf "E%d\n" k; flush stdout;
+            try (k, VarColoring.coloring depg k)
+            with _ (* where to find NoColoring??? *) ->
                 (0, coloring)
         end else (min_colors, coloring)
     in
@@ -285,18 +281,17 @@ let reduce_indices cfg is_local var =
             (0, VarColoring.H.create 1)
             (range 1 ((VarGraph.nb_vertex depg) + 1))
     in
-    log INFO (sprintf "%s needs %d colors" var#get_name ncolors);
     let base = if is_local then 0 else -1 in (* the colors are assigned from 1*)
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
-        if v#color <> 0 && v#color <> Pervasives.max_int
+        if v#mark <> 0 && v#mark <> Pervasives.max_int
         then (v, (base + (VarColoring.H.find coloring v))) :: l
-        else (v, v#color) :: l
+        else (v, v#mark) :: l
     in
     let new_marks = VarGraph.fold_vertex fold depg [] in
-    List.iter (fun (v, c) -> v#set_color c) new_marks;
-    print_dot (sprintf "deps-%s-colored.dot" var#get_name) depg
+    List.iter (fun (v, c) -> v#set_mark c) new_marks;
+    print_dot (sprintf "deps-%s-marked.dot" var#get_name) depg
 
 
 (* Ron Cytron et al. Efficiently Computing Static Single Assignment Form and
@@ -306,7 +301,7 @@ let reduce_indices cfg is_local var =
    Figure 12.
 
    NOTE: instead of renaming variables directly,
-   we keep the new version number in var#color.
+   we keep the new version number in var#mark.
  *)
 let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
     let vars = extern_vars @ intern_vars in
@@ -336,7 +331,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
                 raise (Var_not_found ("Var not found: " ^ v#qual_name))
         in
         let new_v = v#copy v#get_name in
-        new_v#set_color i;
+        new_v#set_mark i;
         (* let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in *)
         s_push new_v;
         Hashtbl.replace counters (nm v) (i + 1);
@@ -446,7 +441,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         then begin
             let bind_out v =
                 let out_v = v#copy v#get_name in
-                out_v#set_color max_int;
+                out_v#set_mark max_int;
                 Expr (fresh_id (), BinEx (ASGN, Var out_v,
                     sub_var_as_var (Nop "out") v)) in
             let out_assignments = List.map bind_out extern_vars in
