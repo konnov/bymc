@@ -3,9 +3,10 @@
 # check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
 
 <src> or <test>: include
-<**/*.top>: use_str, package(threads), thread
-<**/*.native> or <**/*.byte>: use_str, package(threads), thread
+<**/*.top>: use_str, package(threads), thread, package(ocamlgraph)
+<**/*.native> or <**/*.byte>: use_str, package(threads), thread, package(ocamlgraph)
 
+<src/*.ml>: package(ocamlgraph)
 <src/pipeCmd.ml>: thread
 <test/*.ml>: package(oUnit)
 <test/*.byte>: package(oUnit)
