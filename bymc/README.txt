@@ -12,6 +12,9 @@ More details to be found at: http://forsyte.at/software/bymc/
  * gcc
  * python
 
+If you want to install ocaml libraries into your home directory,
+check "HOW TO INSTALL OCAML LIBRARIES?".
+
 2. COMPILING
 
 # building (you need ocaml and ocamlbuild)
@@ -64,7 +67,30 @@ view trace.ys         # the trace encoded in yices (SMT solver)
 
 OCAMLRUNPARAM=b ./bymc.native -t spin.trace bcast-byz.pml
 
-5. MISC
+5. HOW TO INSTALL OCAML LIBRARIES?
+
+The easiest way to install the dependencies is to use your package manager,
+i.e., apt-get, zypper, etc. You may also consider godi.camlcity.org.
+
+Nevertheless, if you want to rely on ocaml and findlib only, and you do not
+have the root permission on your root machine, then you can do the following:
+
+Execute:
+$ mkdir -p ~/ocaml/site-lib
+$ cat >~ocaml/findlib.conf <<EOF
+destdir="$HOME/ocaml/site-lib"                                         
+path="/usr/lib/ocaml/site-lib:$HOME/ocaml/site-lib"                    
+ocamlc="ocamlc.opt"                                                           
+ocamlopt="ocamlopt.opt"
+EOF
+
+Set in either ~/.bashrc or ~/.zshrc the variable:
+export OCAMLFIND_CONF=$HOME/ocaml/findlib.conf
+
+Since you have done that, the new packages will be installed to your local
+directory ~/ocaml/site-lib
+
+6. MISC
 
 Should you have any questions, ask Igor Konnov <konnov@forsyte.at>
 
