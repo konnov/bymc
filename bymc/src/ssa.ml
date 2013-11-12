@@ -3,7 +3,7 @@
  * This module is written in Dubrovnik next to Adriatic sea.
  * So it may have more bugs than the other modules!
  *
- * Igor Konnov, July 2012.
+ * Igor Konnov, 2012-2013.
  *)
 
 open Printf
@@ -446,15 +446,6 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
            then add the output assignment for each shared variable x *)
         if bb#get_succ = []
         then
-            (*
-            let bind_out v =
-                let out_v = v#copy v#get_name in
-                out_v#set_mark max_int;
-                Expr (fresh_id (), BinEx (ASGN, Var out_v,
-                    sub_var_as_var (Nop "out") v)) in
-            let out_assignments = List.map bind_out extern_vars in
-            bb#set_seq (bb#get_seq @ out_assignments);
-            *)
             (* declare the variables on the top of the stack
                to be output variables *)
             let mark_out v = (s_top v)#set_mark max_int in
