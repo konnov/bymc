@@ -39,6 +39,34 @@ let type_default_smv tp =
       | TUNDEF -> raise (Failure "Undefined type")
 
 
+(* a subset of nusmv language *)
+
+type case_t = (* guard *) token expr * (* values *) token expr list
+
+
+type assign_t =
+    | AInit of var * case_t list
+    | ANext of var * case_t list
+
+
+type section_t =
+    | SAssign of assign_t list
+    | STrans of token expr list (* the expressions are joined with & *)
+    | SInit of token expr list (* the expressions are joined with & *)
+    | SInvar of token expr list (* the expressions are joined with & *)
+    (* normal variable, not a module *)
+    | SVar of (var * data_type) list
+    (* module instance *)
+    | SModInst of string * string * (var list)
+
+
+type top_t =
+    | Module of string * (var list) * (section_t list)
+    | SLtlSpec of string * token expr
+    | Justice of token expr
+    (* TODO: | Compassion *)
+
+
 let token_s t =
     match t with
       | ASSERT -> "ASSERT"
@@ -158,7 +186,7 @@ let token_s t =
       | UNTIL -> " U "
       | RELEASE -> " V "
       | WEAK_UNTIL -> " W "
-      | NEXT -> " X "
+      | NEXT -> " next" (* the unary operator next(foo) *)
       | IMPLIES -> "->"
       | EQUIV -> "<->"
       | EOF -> "EOF"
@@ -189,7 +217,7 @@ let expr_s var_fun e =
                 old_arr#get_name (to_s idx) (to_s rhs)
     | BinEx (AND, f, g) -> sprintf "(%s & %s)" (to_s f) (to_s g)
     | BinEx (OR, f, g) -> sprintf "(%s | %s)" (to_s f) (to_s g)
-    | BinEx (ASGN, f, g) -> sprintf "%s == %s" (to_s f) (to_s g)
+    | BinEx (ASGN, f, g) -> sprintf "%s = %s" (to_s f) (to_s g)
     | BinEx (AT, proc, lab) ->
         (* initialized *)
         sprintf "bymc_loc = 1"
@@ -206,9 +234,78 @@ let expr_s var_fun e =
     to_s e
 
 
-let form_s = function
+let rec form_s = function
     | Const 1 -> "TRUE"
+    | BinEx (AND, f, g) -> sprintf "(%s & %s)" (form_s f) (form_s g)
+    | BinEx (OR, f, g) -> sprintf "(%s | %s)" (form_s f) (form_s g)
+    | UnEx (ALWAYS, f) -> sprintf " G (%s)" (form_s f)
+    | UnEx (EVENTUALLY, f) -> sprintf " F (%s)" (form_s f)
+    | UnEx (NEXT, f) -> sprintf " X (%s)" (form_s f)
+    | BinEx (UNTIL, f, g) -> sprintf " ((%s) U (%s))" (form_s f) (form_s g)
+    | BinEx (EQ, f, g) ->
+            let vf v = v#get_name in
+            sprintf "(%s = %s)" (expr_s vf f) (expr_s vf g)
+    | BinEx (NE, f, g) ->
+            let vf v = v#get_name in
+            sprintf "(%s != %s)" (expr_s vf f) (expr_s vf g)
     | _ as e -> expr_s (fun v -> v#get_name) e
+
+
+let case_s (guard, es) =
+    let vf v = v#get_name in
+    sprintf "%s : { %s };"
+        (expr_s vf guard)
+        (str_join ", " (List.map (expr_s vf) es))
+
+
+let assign_s = function
+    | AInit (v, cases) ->
+            sprintf " init(%s) := case\n%s esac;"
+                v#get_name (str_join ";\n" (List.map case_s cases))
+
+    | ANext (v, cases) ->
+            sprintf " next(%s) :=\n  case\n%s\n  esac;"
+                v#get_name (str_join "\n" (List.map case_s cases))
+
+
+let section_s s =
+    let vf v = v#get_name in
+    match s with
+    | SAssign assigns ->
+            "ASSIGN\n" ^ (str_join "\n" (List.map assign_s assigns))
+
+    | STrans es ->
+            "TRANS\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+
+    | SInit es ->
+            "INIT\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+
+    | SInvar es ->
+            "INVAR\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+
+    | SVar decls ->
+            let vd (v, tp) =
+                sprintf "%s: %s;" v#get_name (var_type_smv tp) in
+            "VAR\n " ^ (str_join "\n " (List.map vd decls))
+
+    | SModInst (inst_name, mod_type, params) ->
+            let ps = List.map (fun v -> v#get_name) params in
+            sprintf " %s: %s(%s);" inst_name mod_type (str_join ", " ps)
+
+
+let top_s t =
+    let vf v = v#get_name in
+    match t with
+    | Module (mod_type, args, sections) ->
+        let a_s = str_join ", " (List.map (fun v -> v#get_name) args) in
+        let sects = str_join "\n" (List.map section_s sections) in
+        sprintf "MODULE %s(%s)\n%s" mod_type a_s sects
+
+    | SLtlSpec (name, e) ->
+        sprintf "LTLSPEC NAME %s := (%s);" name (form_s e)
+
+    | Justice e ->
+        sprintf "JUSTICE (%s);" (expr_s vf e)
 
 
 let keep vars =
