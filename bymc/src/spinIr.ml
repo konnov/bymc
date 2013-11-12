@@ -89,11 +89,11 @@ class symb name_i =
 
         (* is there a better way to do this? *)
         method as_var =
-            raise (Invalid_type "symb is not a var")
+            raise (Invalid_type (sprintf "symb %s is not a var" name))
 
         (* is there a better way to do this? *)
         method as_label =
-            raise (Invalid_type "symb is not a label")
+            raise (Invalid_type (sprintf "symb %s is not a label" name))
     end
 and
 (* A variable, not a generalized symbol.
@@ -214,14 +214,14 @@ class symb_tab i_tab_name =
 
         method tab_name = i_tab_name
 
-        method add_symb name symb = Hashtbl.add tab name symb
+        method add_symb name symb = Hashtbl.replace tab name symb
 
         method add_all_symb symb_list =
-            List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
+            List.iter (fun s -> Hashtbl.replace tab s#get_name s) symb_list
 
         method set_syms symb_list =
             tab <- Hashtbl.create (List.length symb_list);
-            List.iter (fun s -> Hashtbl.add tab s#get_name s) symb_list
+            List.iter (fun s -> Hashtbl.replace tab s#get_name s) symb_list
 
         method lookup name =
             try

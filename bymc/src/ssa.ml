@@ -166,10 +166,12 @@ let optimize_ssa cfg =
 
 let add_mark_to_name new_sym_tab new_type_tab v =
     let copy v new_name =
-        let newv = v#fresh_copy new_name in
-        new_sym_tab#add_symb newv#get_name (v :> symb);
-        new_type_tab#set_type newv (new_type_tab#get_type v);
-        newv
+        try (new_sym_tab#lookup new_name)#as_var
+        with Symbol_not_found _ ->
+            let newv = v#fresh_copy new_name in
+            new_sym_tab#add_symb newv#get_name (newv :> symb);
+            new_type_tab#set_type newv (new_type_tab#get_type v);
+            newv
     in
     if v#is_symbolic
     then Var v (* don't touch it *)
