@@ -202,7 +202,7 @@ let token_s t =
 (* we need var_fun as variables can look either x or next(x) *)
 let expr_s var_fun e =
     let rec to_s = function
-    | Nop comment -> sprintf "-- %s" comment
+    | Nop comment -> sprintf "TRUE -- %s" comment
     | Const i -> string_of_int i
     | Var v -> var_fun v
     | UnEx (CARD, f) -> sprintf "card(%s)" (to_s f)
