@@ -147,7 +147,7 @@ let optimize_ssa cfg =
                     let fst = List.hd rhs in
                     if List.for_all (fun o -> o#mark = fst#mark) rhs
                     then begin
-                        Hashtbl.add sub_tbl (lhs#id, lhs#mark) fst;
+                        Hashtbl.add sub_tbl (fst#id, fst#mark) lhs;
                         changed := true;
                         Skip id 
                     end else s
@@ -445,7 +445,8 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         (* our extension: if we are at the exit block,
            then add the output assignment for each shared variable x *)
         if bb#get_succ = []
-        then begin
+        then
+            (*
             let bind_out v =
                 let out_v = v#copy v#get_name in
                 out_v#set_mark max_int;
@@ -453,7 +454,11 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
                     sub_var_as_var (Nop "out") v)) in
             let out_assignments = List.map bind_out extern_vars in
             bb#set_seq (bb#get_seq @ out_assignments);
-        end;
+            *)
+            (* declare the variables on the top of the stack
+               to be output variables *)
+            let mark_out v = (s_top v)#set_mark max_int in
+            List.iter mark_out extern_vars;
         (* pop the stack for each assignment *)
         let pop_stmt = function
             | Decl (_, v, _) -> s_pop v
