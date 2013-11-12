@@ -113,13 +113,29 @@ class proc_struc_cache =
     end
 
 
-class pass_caches (i_options: options_t)
-        (i_analysis: analysis_cache) (i_struc: proc_struc_cache) =
+class pass_caches (i_options: options_t) (i_analysis: analysis_cache) =
     object(self)
+        val mutable m_struc_tab:
+            (int, proc_struc_cache) Hashtbl.t = Hashtbl.create 1
+
         method options = i_options
         method analysis = i_analysis
-        (* TODO: this cache must depend on the program! *)
-        method struc = i_struc
+
+        method find_struc prog =
+            let uid = Program.prog_uid prog in
+            try Hashtbl.find m_struc_tab uid
+            with Not_found ->
+                let pick_max m x =
+                    if m > x && m <= uid then m else x in
+                let max_id =
+                    List.fold_left pick_max (-1) (hashtbl_keys m_struc_tab) in
+                if max_id = (-1)
+                then raise
+                    (Failure ("No matching structure found for the program"))
+                else Hashtbl.find m_struc_tab max_id
+
+        method set_struc prog s =
+            Hashtbl.replace m_struc_tab (Program.prog_uid prog) s
     end
 
 

@@ -31,12 +31,13 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             (* TODO: give it a better name like target-spin? *)
             write_to_file true filename
                 (units_of_program f_prog) (get_type_tab f_prog)
-                rt#caches#struc#get_annotations (* region annotations *);
+                (rt#caches#find_struc f_prog)#get_annotations (* region annotations *);
             f_prog
 
         (* add printfs after the initialization and the step *)
         method add_printfs rt prog pr =
-            let reg_tab = rt#caches#struc#get_regions pr#get_name in
+            let struc = rt#caches#find_struc prog in
+            let reg_tab = struc#get_regions pr#get_name in
             let fmt, es = Serialize.global_state_fmt prog in
             let print_state = MPrint (fresh_id (), fmt ^ "\\n", es) in
             let preds =
@@ -57,7 +58,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             let init = reg_tab#get "init" pr#get_stmts in
             let np =
                 if init <> []
-                then insert_after rt pr (list_end init) prints
+                then insert_after struc pr (list_end init) prints
                 else proc_replace_body pr (prints @ pr#get_stmts)
             in
             (* find a non-empty region *)
@@ -68,7 +69,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
                 else reg_tab#get "comp" pr#get_stmts in (* no updates *)
             if last_reg = []
             then raise (Failure "Neither compute, nor update region is found")
-            else insert_after rt np
+            else insert_after struc np
                 (list_end last_reg)
                 (List.map (fun s -> fresh_m_stmt s) prints)
 

@@ -574,7 +574,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
             (List.map (sub_basic_stmt (funcs#transform_inc t_ctx)) stmts)
     in
     let mk_assume e = MAssume (fresh_id (), e) in
-    let abstract_proc atomics p =
+    let abstract_proc new_struc atomics p =
         let c_ctx = ctr_ctx_tbl#get_ctx p#get_name in
         let invs = if funcs#embed_inv
             then List.map mk_assume (find_invariants atomics)
@@ -621,7 +621,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
             @ new_loop_body
         in
         (* re-construct the regions *)
-        caches#struc#set_regions p#get_name (extract_skel new_body);
+        new_struc#set_regions p#get_name (extract_skel new_body);
         let new_proc = proc_replace_body p new_body in
         new_proc#set_active_expr (Const 1);
         new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
@@ -649,12 +649,15 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (Program.set_atomics new_atomics
         (Program.set_ltl_forms new_ltl_forms
         Program.empty))))))) in
+    let new_struc = new Infra.proc_struc_cache in
     let new_procs =
         let trp p =
             if not (List.mem p#get_name proc_names)
             then p
-            else abstract_proc (Program.get_atomics_map new_prog) p in
+            else abstract_proc new_struc (Program.get_atomics_map new_prog) p in
         List.map trp (Program.get_procs prog)
     in
-    Program.set_procs new_procs new_prog
+    let res_prog = Program.set_procs new_procs new_prog in
+    caches#set_struc res_prog new_struc;
+    res_prog
 

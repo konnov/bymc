@@ -93,11 +93,13 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
 
         method update_runtime rt =
             (* extract regions *)
+            let struc = new Infra.proc_struc_cache in
             let extract_reg proc =
                 let reg_tab = extract_skel proc#get_stmts in
-                rt#caches#struc#set_regions proc#get_name reg_tab
+                struc#set_regions proc#get_name reg_tab
             in
             List.iter extract_reg (Program.get_procs self#get_output);
+            rt#caches#set_struc (self#get_output) struc;
             (* set counter contexts *)
             match m_ctr_abs_ctx_tbl with
             | Some c -> rt#caches#analysis#set_pia_ctr_ctx_tbl c

@@ -11,8 +11,8 @@
 open Printf
 
 open Accums
+open Infra
 open Program
-open Runtime
 open Spin
 open SpinIr
 
@@ -22,13 +22,14 @@ type st = token mir_stmt
   Insert statement s after statement anchor,
   extend all anchor's regions to include s.
  *)
-let insert_after (rt: runtime_t) (p: token proc) (anchor: st) (elems: st list) =
+let insert_after (struc: proc_struc_cache) (p: token proc)
+        (anchor: st) (elems: st list) =
     let sub_fun s =
         if (m_stmt_id anchor) = (m_stmt_id s)
         then (true, s :: elems)
         else (false, [])
     in
-    let reg_tab = rt#caches#struc#get_regions p#get_name in
+    let reg_tab = struc#get_regions p#get_name in
     reg_tab#extend_after anchor elems;
     proc_replace_body p (sub_stmt_with_list sub_fun p#get_stmts)
 
@@ -36,13 +37,14 @@ let insert_after (rt: runtime_t) (p: token proc) (anchor: st) (elems: st list) =
   Insert statement s before statement anchor,
   extend all anchor's regions to include s.
  *)
-let insert_before (rt: runtime_t) (p: token proc) (anchor: st) (elems: st list) =
+let insert_before (struc: proc_struc_cache) (p: token proc)
+        (anchor: st) (elems: st list) =
     let sub_fun s =
         if (m_stmt_id anchor) = (m_stmt_id s)
         then (true, elems @ [s])
         else (false, [])
     in
-    let reg_tab = rt#caches#struc#get_regions p#get_name in
+    let reg_tab = struc#get_regions p#get_name in
     reg_tab#extend_before anchor elems;
     proc_replace_body p (sub_stmt_with_list sub_fun p#get_stmts)
 

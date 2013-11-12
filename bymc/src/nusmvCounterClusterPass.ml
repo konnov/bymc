@@ -314,10 +314,10 @@ let transform solver caches roles out_name intabs_prog prog =
     write_smv_header new_type_tab main_sym_tab shared_and_aux hidden_idx_fun out; 
 
     (* TODO: create a new program and keep symbols and type tables there *)
-    let make_init procs =
+    let make_init prog procs =
         let add_init_section accum proc =
             log INFO (sprintf "  add init %s" proc#get_name);
-            let reg_tbl = caches#struc#get_regions proc#get_name in
+            let reg_tbl = (caches#find_struc prog)#get_regions proc#get_name in
             (reg_tbl#get "decl" proc#get_stmts)
                 @ (reg_tbl#get "init" proc#get_stmts) @ accum
         in
@@ -459,7 +459,7 @@ let transform solver caches roles out_name intabs_prog prog =
     fprintf out "TRANS\n\n";
     (* initialization is now made as a first step! *)
     fprintf out " ((bymc_loc = 0 & next(bymc_loc) = 1 & (FALSE\n";
-    make_init (Program.get_procs prog);
+    make_init prog (Program.get_procs prog);
     fprintf out " ))";
     fprintf out " | (bymc_loc = 1 & next(bymc_loc) = 1));\n";
     (* XXX: doubtful...

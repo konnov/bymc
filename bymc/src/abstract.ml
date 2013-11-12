@@ -61,6 +61,7 @@ let do_abstraction rt =
         "piaCounter" pia_data_p);
     chain#add_plugin (new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t
             "nusmvCounter" "main" pia_data_p);
+    chain#add_plugin (new NusmvPlugin.nusmv_plugin_t "nusmv" "main-alt");
     chain#add_plugin (new SpinPlugin.spin_plugin_t "spin" "abs-counter");
     let _ = chain#transform rt Program.empty in
     rt#solver#pop_ctx;

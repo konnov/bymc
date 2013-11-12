@@ -296,10 +296,11 @@ let transform solver caches scope out_name prog =
     in
     List.iter add_locals (Program.get_procs prog);
 
-    let make_init procs =
+    let make_init prog procs =
         let add_init_section accum proc =
             log INFO (sprintf "  add mono init for %s" proc#get_name);
-            let reg_tbl = caches#struc#get_regions proc#get_name in
+            let reg_tbl =
+                (caches#find_struc prog) #get_regions proc#get_name in
             (reg_tbl#get "decl" proc#get_stmts)
                 @ (reg_tbl#get "init" proc#get_stmts) @ accum
         in
@@ -331,7 +332,7 @@ let transform solver caches scope out_name prog =
         let proc_sym_tab = new_sym_tab in
         fprintf out "-- Process: %s\n" proc#get_name;
         fprintf out " | (FALSE\n";
-        let reg_tbl = caches#struc#get_regions proc#get_name in
+        let reg_tbl = (caches#find_struc prog)#get_regions proc#get_name in
         let loop_prefix = reg_tbl#get "loop_prefix" proc#get_stmts in
         let loop_body = reg_tbl#get "loop_body" proc#get_stmts in
         let body = loop_body @ loop_prefix in
@@ -344,7 +345,7 @@ let transform solver caches scope out_name prog =
     write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out;
     fprintf out "TRANS\n  (bymc_loc = 0 & next(bymc_loc) = 1) & (FALSE\n";
     (* initialization is now made as a first step! *)
-    make_init (Program.get_procs prog);
+    make_init prog (Program.get_procs prog);
     fprintf out ") | \n";
     fprintf out "(bymc_loc = 1 & next(bymc_loc) = 1) & (FALSE\n";
     let no_paths = List.map make_mono_trans (Program.get_procs prog) in
