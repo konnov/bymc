@@ -164,14 +164,20 @@ let optimize_ssa cfg =
     cfg
 
 
-let add_mark_to_name v =
+let add_mark_to_name new_sym_tab new_type_tab v =
+    let copy v new_name =
+        let newv = v#fresh_copy new_name in
+        new_sym_tab#add_symb newv#get_name (v :> symb);
+        new_type_tab#set_type newv (new_type_tab#get_type v);
+        newv
+    in
     if v#is_symbolic
     then Var v (* don't touch it *)
     else if v#mark = 0
-    then Var (v#copy (sprintf "%s_IN" v#get_name))
+    then Var (copy v (sprintf "%s_IN" v#get_name))
     else if v#mark = max_int
-    then Var (v#copy (sprintf "%s_OUT" v#get_name))
-    else Var (v#copy (sprintf "%s_Y%d" v#get_name v#mark))
+    then Var (copy v (sprintf "%s_OUT" v#get_name))
+    else Var (copy v (sprintf "%s_Y%d" v#get_name v#mark))
 
 
 let get_var_copies var seq =
@@ -461,11 +467,14 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
     search 0
 
 
-(* (in-place) transformation of CFG to SSA *)
-let mk_ssa tolerate_undeclared_vars extern_vars intern_vars cfg =
+(* (in-place) transformation of CFG to SSA.  *)
+let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
+        new_sym_tab new_type_tab cfg =
     mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
     let rename_block bb =
-        let map_s s = map_expr_in_lir_stmt (map_vars add_mark_to_name) s in
+        let map_s s =
+            map_expr_in_lir_stmt
+                (map_vars (add_mark_to_name new_sym_tab new_type_tab)) s in
         let ns = List.map map_s bb#get_seq in
         bb#set_seq ns
     in

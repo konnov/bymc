@@ -40,11 +40,12 @@ let to_xducer caches prog new_type_tab p =
     let globals =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let locals = (Program.get_all_locals prog) in
-    let cfg = mk_ssa true globals locals (mk_cfg lirs) in
+    let new_sym_tab = new symb_tab "tmp" in
+    let cfg = mk_ssa true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
+    in
     if may_log DEBUG
     then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
     Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
-    let new_sym_tab = new symb_tab "tmp" in
     let transd = cfg_to_constraints p#get_name new_sym_tab new_type_tab cfg in
     write_exprs p#get_name transd;
     let new_proc = proc_replace_body p transd in
