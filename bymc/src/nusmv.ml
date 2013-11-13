@@ -61,9 +61,9 @@ type section_t =
 
 
 type top_t =
-    | Module of string * (var list) * (section_t list)
+    | SModule of string * (var list) * (section_t list)
     | SLtlSpec of string * token expr
-    | Justice of token expr
+    | SJustice of token expr
     (* TODO: | Compassion *)
 
 
@@ -296,7 +296,7 @@ let section_s s =
 let top_s t =
     let vf v = v#mangled_name in
     match t with
-    | Module (mod_type, args, sections) ->
+    | SModule (mod_type, args, sections) ->
         let a_s = str_join ", " (List.map (fun v -> v#mangled_name) args) in
         let sects = str_join "\n" (List.map section_s sections) in
         sprintf "MODULE %s(%s)\n%s" mod_type a_s sects
@@ -304,7 +304,7 @@ let top_s t =
     | SLtlSpec (name, e) ->
         sprintf "LTLSPEC NAME %s := (%s);" name (form_s e)
 
-    | Justice e ->
+    | SJustice e ->
         sprintf "JUSTICE (%s);" (expr_s vf e)
 
 

@@ -90,7 +90,7 @@ let partition_var tt v =
     | (true, _) ->
             if v#proc_name = "" then SharedIn (v, t) else LocalIn (v, t)
     | (_, true) ->
-            if v#proc_name = "" then SharedOut (v, t) else SharedIn (v, t)
+            if v#proc_name = "" then SharedOut (v, t) else LocalOut (v, t)
     | _ -> Temp (v, t)
 
 
@@ -137,21 +137,20 @@ let module_of_proc rt prog proc =
     let args =
         List.filter (fun pv -> is_var_local pv || is_var_shared_in pv) pvars in
     let mod_type =
-        Module (proc#get_name,
+        SModule (proc#get_name,
             List.map ptov args, [SVar (List.map ptovt temps); STrans exprs])
     in
     (mod_type, args)
 
 
-let transform rt out_name intabs_prog =
-    let out = open_out (out_name ^ ".smv") in
+let create_proc_mods rt intabs_prog =
     let transform_proc (globals, main_sects) p =
         let mod_type, args = module_of_proc rt intabs_prog p in
         let to_param = function
             | SharedIn (v, t) -> (v#copy (strip_in v#get_name), t)
             | SharedOut (v, t) -> (v#copy (strip_out v#get_name), t)
-            | LocalIn (v, t)
-            | LocalOut (v, t) -> (v, t)
+            | LocalIn (v, t) -> raise (Failure ("Unexpected LocalIn"))
+            | LocalOut (v, t) -> (v#copy (strip_out v#get_name), t)
             | _ -> raise (Failure ("Unexpected param type"))
         in
         let params = List.map to_param args in
@@ -166,7 +165,38 @@ let transform rt out_name intabs_prog =
     let shared =
         List.map (fun v -> (v, tt#get_type v)) (Program.get_shared intabs_prog)
     in
-    let tops = Module ("main", [], (SVar shared) :: main_sects) :: globals in
+    ((SVar shared) :: main_sects, globals)
+
+
+(* partially copied from nusmvCounterClusterPass *)
+(* TODO: deal with many process types *)
+let module_of_counter rt ctrabs_prog p =
+    let ctr_ctx = rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+    let dom = rt#caches#analysis#get_pia_dom in
+    let tt = Program.get_type_tab ctrabs_prog in
+    let dec_tbl =
+        NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx PLUS in
+    let inc_tbl =
+        NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx MINUS in
+    let myval = new_var "myval" in
+    (*
+    let myval_type = new data_type SpinTypes.TINT in
+    myval_type#set_range_tuple (0, ctr_ctx#get_ctr_dim);
+    *)
+    let cases = [(Const 1, [Var myval])] in
+    let choice = SAssign [ANext (myval, cases)] in
+    SModule ("Counter" ^ p#get_name, [myval], [choice])
+
+
+let create_counter_mods rt ctrabs_prog =
+    List.map (module_of_counter rt ctrabs_prog) (Program.get_procs ctrabs_prog)
+
+
+let transform rt out_name intabs_prog ctrabs_prog =
+    let out = open_out (out_name ^ ".smv") in
+    let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
+    let ctr_mod_defs = create_counter_mods rt ctrabs_prog in
+    let tops = SModule ("main", [], main_sects) :: proc_mod_defs @ ctr_mod_defs in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 
