@@ -219,6 +219,7 @@ let hashtbl_keys tbl = Hashtbl.fold (fun k _ s -> k :: s) tbl []
 
 let hashtbl_as_list tbl = Hashtbl.fold (fun k v s -> (k, v) :: s) tbl []
 
+let hashtbl_map f tbl = Hashtbl.fold (fun k v s -> (f k v) :: s) tbl []
 
 let hashtbl_inverse (tbl: ('a, 'b) Hashtbl.t) : (('b, 'a) Hashtbl.t) =
     let inv = Hashtbl.create (Hashtbl.length tbl) in

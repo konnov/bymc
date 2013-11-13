@@ -57,7 +57,7 @@ type section_t =
     (* normal variable, not a module *)
     | SVar of (var * data_type) list
     (* module instance *)
-    | SModInst of string * string * (var list)
+    | SModInst of string * string * (token expr list)
 
 
 type top_t =
@@ -253,7 +253,7 @@ let rec form_s = function
 
 let case_s (guard, es) =
     let vf v = v#mangled_name in
-    sprintf "%s : { %s };"
+    sprintf "   %s : { %s };"
         (expr_s vf guard)
         (str_join ", " (List.map (expr_s vf) es))
 
@@ -289,7 +289,8 @@ let section_s s =
             "VAR\n " ^ (str_join "\n " (List.map vd decls))
 
     | SModInst (inst_name, mod_type, params) ->
-            let ps = List.map (fun v -> v#mangled_name) params in
+            let ps = List.map (expr_s (fun v -> v#mangled_name)) params
+            in
             sprintf " %s: %s(%s);" inst_name mod_type (str_join ", " ps)
 
 
@@ -299,13 +300,18 @@ let top_s t =
     | SModule (mod_type, args, sections) ->
         let a_s = str_join ", " (List.map (fun v -> v#mangled_name) args) in
         let sects = str_join "\n" (List.map section_s sections) in
-        sprintf "MODULE %s(%s)\n%s" mod_type a_s sects
+        sprintf "MODULE %s(%s)\n%s\n" mod_type a_s sects
 
     | SLtlSpec (name, e) ->
         sprintf "LTLSPEC NAME %s := (%s);" name (form_s e)
 
     | SJustice e ->
         sprintf "JUSTICE (%s);" (expr_s vf e)
+
+
+(* kind of a hack *)
+let nusmv_true = new var "TRUE" 1
+let nusmv_false = new var "FALSE" 0
 
 
 let keep vars =

@@ -5,6 +5,7 @@
 
 open Printf
 
+open Accums
 open Cfg
 open CfgSmt
 open Nusmv
@@ -154,7 +155,8 @@ let create_proc_mods rt intabs_prog =
             | _ -> raise (Failure ("Unexpected param type"))
         in
         let params = List.map to_param args in
-        let inst = SModInst("p_" ^ p#get_name, p#get_name, List.map fst params)
+        let inst = SModInst("p_" ^ p#get_name, p#get_name,
+            (List.map (fun (v, _) -> Var v) params))
         in
         let locals = List.filter (fun (v, _) -> v#proc_name <> "") params in
         (mod_type :: globals, (SVar locals) :: inst :: main_sects)
@@ -178,25 +180,75 @@ let module_of_counter rt ctrabs_prog p =
         NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx PLUS in
     let inc_tbl =
         NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx MINUS in
+    let prev_locals = List.map fst ctr_ctx#prev_next_pairs in
+    let next_locals = List.map snd ctr_ctx#prev_next_pairs in
+    let my_var v = v#copy ("my_" ^ v#get_name) in
+    let cmp_idx join cmp vars =
+        let f pv v = BinEx (cmp, Var v, Var (my_var pv)) in
+        list_to_binex join (List.map2 f prev_locals vars)
+    in
+    let prev_eq = cmp_idx AND EQ prev_locals in
+    let prev_ne = cmp_idx OR NE prev_locals in
+    let next_eq = cmp_idx AND EQ next_locals in
+    let next_ne = cmp_idx OR NE next_locals in
     let myval = new_var "myval" in
-    (*
-    let myval_type = new data_type SpinTypes.TINT in
-    myval_type#set_range_tuple (0, ctr_ctx#get_ctr_dim);
-    *)
-    let cases = [(Const 1, [Var myval])] in
+    let mk_case prev_ex next_ex prev_val next_vals =
+        let guard = BinEx (AND, BinEx (AND, prev_ex, next_ex),
+                                BinEx (EQ, Var myval, Const prev_val)) in
+        let rhs = List.map (fun i -> Const i) next_vals in
+        (guard, rhs)
+    in
+    let prev_cases = hashtbl_map (mk_case prev_eq next_ne) dec_tbl in
+    let next_cases = hashtbl_map (mk_case prev_ne next_eq) inc_tbl in
+    let cases = prev_cases @ next_cases @
+        [(Var nusmv_true, [Var myval])] in
     let choice = SAssign [ANext (myval, cases)] in
-    SModule ("Counter" ^ p#get_name, [myval], [choice])
+    let args =
+        myval :: (List.map my_var prev_locals)
+            @ prev_locals @ next_locals
+    in 
+    SModule ("Counter" ^ p#get_name, args, [choice])
 
 
 let create_counter_mods rt ctrabs_prog =
-    List.map (module_of_counter rt ctrabs_prog) (Program.get_procs ctrabs_prog)
+    let dom = rt#caches#analysis#get_pia_dom in
+    let create_vars l p =
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name
+        in
+        let prev = List.map fst ctr_ctx#prev_next_pairs in
+        let next = List.map snd ctr_ctx#prev_next_pairs in
+        let ctr = ctr_ctx#get_ctr in
+        let tp = new data_type SpinTypes.TINT in
+        tp#set_range 0 dom#length;
+        let per_idx l idx =
+            let myctr = ctr#copy (sprintf "%s%d" ctr#get_name idx) in
+            let valtab = ctr_ctx#unpack_from_const idx in
+            let get_val v = Const (Hashtbl.find valtab v) in
+            let tov v = Var v in
+            let params =
+                [tov myctr] @ (List.map get_val prev)
+                @ (List.map tov prev) @ (List.map tov next) in
+            (SVar [(myctr, tp)])
+            :: (SModInst( (sprintf "p_%s%d" ctr#get_name idx),
+                     "Counter" ^ p#get_name, params))
+            :: l
+        in
+        List.fold_left per_idx
+            l (ctr_ctx#all_indices_for (fun _ -> true))
+    in
+    let procs = Program.get_procs ctrabs_prog in
+    let main_sects = List.fold_left create_vars [] procs in
+    let mods = List.map (module_of_counter rt ctrabs_prog) procs in
+    (main_sects, mods)
 
 
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
-    let ctr_mod_defs = create_counter_mods rt ctrabs_prog in
-    let tops = SModule ("main", [], main_sects) :: proc_mod_defs @ ctr_mod_defs in
+    let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
+    let tops = SModule ("main", [], main_sects @ ctr_main)
+        :: proc_mod_defs @ ctr_mods in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 
