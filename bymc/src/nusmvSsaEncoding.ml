@@ -8,9 +8,57 @@ open Printf
 open Cfg
 open CfgSmt
 open Nusmv
+open Spin
 open SpinIr
 open SpinIrImp
 open Ssa
+
+type proc_var_t =
+    | SharedIn of var
+    | SharedOut of var
+    | LocalIn of var
+    | LocalOut of var
+    | Temp of var
+
+let is_var_temp = function
+    | Temp _ -> true
+    | _ -> false
+
+let is_var_local = function
+    | LocalIn _ -> true
+    | LocalOut _ -> true
+    | _ -> false
+
+let is_var_shared_in = function
+    | SharedIn _ -> true
+    | _ -> false
+
+let ptov = function
+    | SharedIn v
+    | SharedOut v
+    | LocalIn v
+    | LocalOut v
+    | Temp v -> v
+
+
+let partition_var v =
+    let is_in = (Str.last_chars v#get_name 3) = "_IN" in
+    let is_out = (Str.last_chars v#get_name 4) = "_OUT" in
+    match (is_in, is_out) with
+    | (true, _) -> if v#proc_name = "" then SharedIn v else LocalIn v
+    | (_, true) -> if v#proc_name = "" then SharedOut v else SharedIn v
+    | _ -> Temp v
+
+
+let replace_with_next syms v =
+    match partition_var v with
+    | SharedOut _ ->
+        let nm = v#get_name in
+        let inm = (String.sub nm 0 ((String.length nm) - 4)) ^ "_IN" in
+        UnEx (NEXT, Var ((syms#lookup inm)#as_var))
+
+    | _ -> Var v 
+
 
 let module_of_proc rt prog proc =
     let vars_of_syms syms =
@@ -33,18 +81,19 @@ let module_of_proc rt prog proc =
         let exprs =
             cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg in
         (* find the new variables *)
-        let temps = vars_of_syms new_sym_tab#get_symbs in
-        (new_type_tab, shared, locals, temps, List.map expr_of_m_stmt exprs)
+
+        (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
-    let is_arg v =
-        (Str.last_chars v#get_name 3) = "_IN"
-        || (Str.last_chars v#get_name 4) = "_OUT"
-    in
-    let ntt, shared, locals, temps, exprs = to_ssa in
-    let locals = List.filter (fun v -> not (is_arg v)) temps in
-    let args = List.filter is_arg temps in
-    let temp_decls = List.map (fun v -> (v, ntt#get_type v)) locals in
+    let ntt, syms, exprs = to_ssa in
+    let new_vars = vars_of_syms syms#get_symbs in
+    let exprs = List.map (map_vars (replace_with_next syms)) exprs in
+    let pvars = List.map partition_var new_vars in
+    let temps = List.map ptov (List.filter is_var_temp pvars) in
+    let args = List.map ptov (List.filter
+        (fun pv -> is_var_local pv || is_var_shared_in pv) pvars) in
+    let temp_decls = List.map (fun v -> (v, ntt#get_type v)) temps in
     Module (proc#get_name, args, [SVar temp_decls; STrans exprs])
+
 
 let transform rt out_name intabs_prog =
     let procs = Program.get_procs intabs_prog in

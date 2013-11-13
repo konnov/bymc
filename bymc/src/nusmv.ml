@@ -224,9 +224,9 @@ let expr_s var_fun e =
     | BinEx (tok, f, g) ->
         sprintf "(%s %s %s)" (to_s f) (token_s tok) (to_s g)
     | Phi (lhs, rhs) ->
-        let rhs_s = String.concat ", " (List.map (fun v -> v#get_name) rhs)
+        let rhs_s = String.concat ", " (List.map (fun v -> v#mangled_name) rhs)
         in
-        sprintf "%s = phi(%s)" lhs#get_name rhs_s
+        sprintf "%s = phi(%s)" lhs#mangled_name rhs_s
     | LabelRef (_, _) ->
         (* initialized *)
         sprintf "bymc_loc = 1"
@@ -243,16 +243,16 @@ let rec form_s = function
     | UnEx (NEXT, f) -> sprintf " X (%s)" (form_s f)
     | BinEx (UNTIL, f, g) -> sprintf " ((%s) U (%s))" (form_s f) (form_s g)
     | BinEx (EQ, f, g) ->
-            let vf v = v#get_name in
+            let vf v = v#mangled_name in
             sprintf "(%s = %s)" (expr_s vf f) (expr_s vf g)
     | BinEx (NE, f, g) ->
-            let vf v = v#get_name in
+            let vf v = v#mangled_name in
             sprintf "(%s != %s)" (expr_s vf f) (expr_s vf g)
-    | _ as e -> expr_s (fun v -> v#get_name) e
+    | _ as e -> expr_s (fun v -> v#mangled_name) e
 
 
 let case_s (guard, es) =
-    let vf v = v#get_name in
+    let vf v = v#mangled_name in
     sprintf "%s : { %s };"
         (expr_s vf guard)
         (str_join ", " (List.map (expr_s vf) es))
@@ -261,15 +261,15 @@ let case_s (guard, es) =
 let assign_s = function
     | AInit (v, cases) ->
             sprintf " init(%s) := case\n%s esac;"
-                v#get_name (str_join ";\n" (List.map case_s cases))
+                v#mangled_name (str_join ";\n" (List.map case_s cases))
 
     | ANext (v, cases) ->
             sprintf " next(%s) :=\n  case\n%s\n  esac;"
-                v#get_name (str_join "\n" (List.map case_s cases))
+                v#mangled_name (str_join "\n" (List.map case_s cases))
 
 
 let section_s s =
-    let vf v = v#get_name in
+    let vf v = v#mangled_name in
     match s with
     | SAssign assigns ->
             "ASSIGN\n" ^ (str_join "\n" (List.map assign_s assigns))
@@ -285,19 +285,19 @@ let section_s s =
 
     | SVar decls ->
             let vd (v, tp) =
-                sprintf "%s: %s;" v#get_name (var_type_smv tp) in
+                sprintf "%s: %s;" v#mangled_name (var_type_smv tp) in
             "VAR\n " ^ (str_join "\n " (List.map vd decls))
 
     | SModInst (inst_name, mod_type, params) ->
-            let ps = List.map (fun v -> v#get_name) params in
+            let ps = List.map (fun v -> v#mangled_name) params in
             sprintf " %s: %s(%s);" inst_name mod_type (str_join ", " ps)
 
 
 let top_s t =
-    let vf v = v#get_name in
+    let vf v = v#mangled_name in
     match t with
     | Module (mod_type, args, sections) ->
-        let a_s = str_join ", " (List.map (fun v -> v#get_name) args) in
+        let a_s = str_join ", " (List.map (fun v -> v#mangled_name) args) in
         let sects = str_join "\n" (List.map section_s sections) in
         sprintf "MODULE %s(%s)\n%s" mod_type a_s sects
 
