@@ -229,9 +229,16 @@ let create_counter_mods rt ctrabs_prog =
             let params =
                 [tov myctr] @ (List.map get_val prev)
                 @ (List.map tov prev) @ (List.map tov next) in
+            let ne v = BinEx (NE, Var v, get_val v) in
+            let invar =
+                SInvar ([BinEx (OR,
+                    BinEx (NE, Var myctr, Const 0),
+                    list_to_binex OR (List.map ne prev))])
+            in
             (SVar [(myctr, tp)])
             :: (SModInst( (sprintf "p_%s%d" ctr#get_name idx),
                      "Counter" ^ p#get_name, params))
+            :: invar
             :: l
         in
         List.fold_left per_idx
@@ -242,6 +249,7 @@ let create_counter_mods rt ctrabs_prog =
     let mods = List.map (module_of_counter rt ctrabs_prog) procs in
     (main_sects, mods)
 
+(* TODO: add init *)
 
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
