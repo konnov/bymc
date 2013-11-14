@@ -516,7 +516,7 @@ class vass_funcs dom prog solver =
 
 
 (* Transform the program using counter abstraction over the piaDomain.
-   Updates proc_struct_cache#regions.
+   Updates proc_struc#regions.
  *)
 let do_counter_abstraction funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
@@ -649,7 +649,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (Program.set_atomics new_atomics
         (Program.set_ltl_forms new_ltl_forms
         Program.empty))))))) in
-    let new_struc = new Infra.proc_struc_cache in
+    let new_struc = new SkelStruc.proc_struc in
     let new_procs =
         let trp p =
             if not (List.mem p#get_name proc_names)

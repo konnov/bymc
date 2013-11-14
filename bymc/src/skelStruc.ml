@@ -4,7 +4,6 @@
  *)
 
 open Accums
-open Cfg
 open Printf
 open Regions
 open Spin
@@ -13,6 +12,7 @@ open SpinIrImp
 
 
 exception Skel_error of string
+exception Struc_error of string
 
 (*
   Here we check that a process body has the following structure:
@@ -96,4 +96,53 @@ let extract_skel proc_body =
     reg_tbl#add "loop_body" loop_body;
     reg_tbl
 
+
+(*
+  The structural information of the control flow and data
+  flow. The structure is bound to a program id. If there is no
+  last version of the cache found, then the last one before the
+  given program version is found.
+ *)
+
+class proc_struc =
+    object(self)
+        val mutable m_reg_tbl:
+            (string, region_tbl) Hashtbl.t = Hashtbl.create 1
+
+        method get_regions (proc_name: string): region_tbl =
+            try Hashtbl.find m_reg_tbl proc_name
+            with Not_found ->
+                raise (Struc_error "regions are not set")
+
+        method set_regions (proc_name: string) (proc_regs: region_tbl) =
+            Hashtbl.replace m_reg_tbl proc_name proc_regs
+
+        method get_annotations =
+            let main_tab = Hashtbl.create 10 in
+            let add_proc proc_name tab =
+                let add id = function
+                    | AnnotBefore text ->
+                        Hashtbl.replace main_tab 
+                            id (AnnotBefore (sprintf "%s::%s" proc_name text))
+
+                    | AnnotAfter text ->
+                        Hashtbl.replace main_tab 
+                            id (AnnotAfter (sprintf "%s::%s" proc_name text))
+                in
+                Hashtbl.iter add (tab#get_annotations)
+            in
+            Hashtbl.iter add_proc m_reg_tbl;
+            main_tab
+
+    end
+
+
+let compute_struc prog = 
+    let struc = new proc_struc in
+    let extract_reg proc =
+        let reg_tab = extract_skel proc#get_stmts in
+        struc#set_regions proc#get_name reg_tab
+    in
+    List.iter extract_reg (Program.get_procs prog);
+    struc
 

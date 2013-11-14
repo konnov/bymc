@@ -47,15 +47,8 @@ class promela_parser_plugin_t (plugin_name: string) =
             List.iter rt#solver#append smt_exprs;
             if not rt#solver#check
             then raise (Program.Program_error "Basic assertions are contradictory");
-            (* extract regions *)
-            (* TODO: it is copy/pasted to many plugins, fix it *)
-            let struc = new Infra.proc_struc_cache in
-            let extract_reg proc =
-                let reg_tab = extract_skel proc#get_stmts in
-                struc#set_regions proc#get_name reg_tab
-            in
-            List.iter extract_reg (Program.get_procs prog);
-            rt#caches#set_struc prog struc
+            (* update regions *)
+            rt#caches#set_struc prog (compute_struc prog);
 
         method decode_trail _ path = path
 

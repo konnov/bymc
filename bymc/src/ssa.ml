@@ -279,7 +279,9 @@ let reduce_indices cfg var =
     let ecoloring = VarColoring.H.create 1 in
     let rec find_min_colors left right =
         let k = (left + right) / 2 in
+        (*
         printf "%s: left=%d, right=%d, k=%d\n" var#get_name left right k;
+        *)
         if left > right
         then (0, ecoloring)
         else let found, h =

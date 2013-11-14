@@ -13,6 +13,7 @@ open Printf
 open Accums
 open Infra
 open Program
+open SkelStruc
 open Spin
 open SpinIr
 
@@ -22,7 +23,7 @@ type st = token mir_stmt
   Insert statement s after statement anchor,
   extend all anchor's regions to include s.
  *)
-let insert_after (struc: proc_struc_cache) (p: token proc)
+let insert_after (struc: proc_struc) (p: token proc)
         (anchor: st) (elems: st list) =
     let sub_fun s =
         if (m_stmt_id anchor) = (m_stmt_id s)
@@ -37,7 +38,7 @@ let insert_after (struc: proc_struc_cache) (p: token proc)
   Insert statement s before statement anchor,
   extend all anchor's regions to include s.
  *)
-let insert_before (struc: proc_struc_cache) (p: token proc)
+let insert_before (struc: proc_struc) (p: token proc)
         (anchor: st) (elems: st list) =
     let sub_fun s =
         if (m_stmt_id anchor) = (m_stmt_id s)

@@ -20,6 +20,7 @@ open PiaDom
 open PiaCtrCtx
 open Program
 open Regions
+open SkelStruc
 open SpinIr
 open VarRole
 
@@ -72,51 +73,12 @@ class analysis_cache =
             m_pia_ctr_ctx_tbl <- Some c
     end
 
-(*
-  All analysis and transformation passes have an access to this cache,
-  and every pass may update the attributes of this cache. The purpose of the
-  cache is to collect the structural information about control flow and data
-  flow. If a pass corrupts certain cached data, then the pass must reset this
-  data.
- *)
-
-class proc_struc_cache =
-    object(self)
-        val mutable m_reg_tbl:
-            (string, region_tbl) Hashtbl.t = Hashtbl.create 1
-
-        method get_regions (proc_name: string): region_tbl =
-            try Hashtbl.find m_reg_tbl proc_name
-            with Not_found ->
-                raise (CacheStateError "regions is not set")
-
-        method set_regions (proc_name: string) (proc_regs: region_tbl) =
-            Hashtbl.replace m_reg_tbl proc_name proc_regs
-
-        method get_annotations =
-            let main_tab = Hashtbl.create 10 in
-            let add_proc proc_name tab =
-                let add id = function
-                    | AnnotBefore text ->
-                        Hashtbl.replace main_tab 
-                            id (AnnotBefore (sprintf "%s::%s" proc_name text))
-
-                    | AnnotAfter text ->
-                        Hashtbl.replace main_tab 
-                            id (AnnotAfter (sprintf "%s::%s" proc_name text))
-                in
-                Hashtbl.iter add (tab#get_annotations)
-            in
-            Hashtbl.iter add_proc m_reg_tbl;
-            main_tab
-
-    end
 
 
 class pass_caches (i_options: options_t) (i_analysis: analysis_cache) =
     object(self)
         val mutable m_struc_tab:
-            (int, proc_struc_cache) Hashtbl.t = Hashtbl.create 1
+            (int, proc_struc) Hashtbl.t = Hashtbl.create 1
 
         method options = i_options
         method analysis = i_analysis

@@ -31,6 +31,10 @@ class pia_data_plugin_t (plugin_name: string) =
             intabs_prog
 
         method update_runtime rt =
+            (* update regions *)
+            rt#caches#set_struc
+                self#get_output (compute_struc self#get_output);
+            (* update context *)
             match m_pia_data_ctx with
             | Some c -> rt#caches#analysis#set_pia_data_ctx c
             | _ -> ()

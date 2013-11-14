@@ -14,13 +14,7 @@ class nusmv_plugin_t (plugin_name: string) (out_name: string) =
             let solver = rt#solver in
             let caches = rt#caches in
             log INFO (sprintf "> writing NuSMV model to %s.smv..." out_name);
-            let struc = new Infra.proc_struc_cache in
-            let extract_reg proc =
-                let reg_tab = SkelStruc.extract_skel proc#get_stmts in
-                struc#set_regions proc#get_name reg_tab
-            in
-            List.iter extract_reg (Program.get_procs prog);
-            rt#caches#set_struc prog struc;
+            rt#caches#set_struc prog (compute_struc prog);
             NusmvPass.transform solver caches
                 NusmvPass.LocalShared out_name prog;
             log INFO "[DONE]";
