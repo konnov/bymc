@@ -2,6 +2,7 @@ open Printf
 
 open Debug
 open Plugin
+open SkelStruc
 
 class nusmv_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
