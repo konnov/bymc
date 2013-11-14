@@ -21,11 +21,13 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             let intabs_prog = pia_data_plugin#get_output in
             NusmvSsaEncoding.transform rt "main-ssa" intabs_prog self#get_input;
             log INFO (sprintf
-                "> writing clusterized NuSMV model to %s.smv..." out_name);
+                "> writing clusterized NuSMV model to %s.smv... SKIPPED" out_name);
             let roles =
                 rt#caches#analysis#get_var_roles pia_data_plugin#get_input in
+            (*
             NusmvCounterClusterPass.transform
                 solver caches roles out_name intabs_prog prog;
+                *)
             log INFO "[DONE]";
             prog
 

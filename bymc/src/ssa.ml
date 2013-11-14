@@ -275,20 +275,31 @@ let reduce_indices cfg var =
        so we have to add the mirror *)
     let depg = VarOper.union depg (VarOper.mirror depg) in
 
-    (* try to find minimal coloring *)
-    let find_coloring (min_colors, coloring) k =
-        if min_colors = 0
-        then begin
-            try (k, VarColoring.coloring depg k)
-            with _ (* where to find NoColoring??? *) ->
-                (0, coloring)
-        end else (min_colors, coloring)
+    (* try to find minimal coloring via binary search *)
+    let ecoloring = VarColoring.H.create 1 in
+    let rec find_min_colors left right =
+        let k = (left + right) / 2 in
+        printf "%s: left=%d, right=%d, k=%d\n" var#get_name left right k;
+        if left > right
+        then (0, ecoloring)
+        else let found, h =
+            try true, VarColoring.coloring depg k
+            with _ -> false, ecoloring
+        in
+        printf "found=%b\n" found;
+        if found 
+        then if left = right
+            then (k, h)
+            else
+            let nk, nh = find_min_colors left k in
+                if nk <> 0
+                then (nk, nh)
+                else (0, ecoloring)
+        else find_min_colors (k + 1) right
     in
-    let (ncolors, coloring) =
-        List.fold_left find_coloring
-            (0, VarColoring.H.create 1)
-            (range 1 ((VarGraph.nb_vertex depg) + 1))
-    in
+    let max_colors = VarGraph.nb_vertex depg in
+    let ncolors, coloring = find_min_colors 1 max_colors in
+    assert (max_colors = 0 || ncolors <> 0);
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
