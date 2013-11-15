@@ -138,9 +138,13 @@ let module_of_proc rt prog proc =
     let temps = List.filter is_var_temp pvars in
     let args =
         List.filter (fun pv -> is_var_local pv || is_var_shared_in pv) pvars in
+    (* activate the process *)
+    (* XXX: TODO: it does not work for several proctypes *)
+    let invar = Var ((syms#lookup "at_0")#as_var) in
     let mod_type =
         SModule (proc#get_name,
-            List.map ptov args, [SVar (List.map ptovt temps); STrans exprs])
+            List.map ptov args,
+            [SVar (List.map ptovt temps); SInvar [invar]; STrans exprs])
     in
     (mod_type, args)
 
@@ -256,8 +260,10 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         in
         ex :: l
     in
+    let init_global v = BinEx (EQ, Var v, Const 0) in
     let init_ess =
-        List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
+        (List.map init_global (Program.get_shared intabs_prog))
+        @ List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
     [ SInit init_ess ]
     
 
