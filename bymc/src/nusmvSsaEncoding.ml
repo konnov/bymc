@@ -14,6 +14,8 @@ open SpinIr
 open SpinIrImp
 open Ssa
 
+exception NusmvEncoding_error of string
+
 (* ============================= utility declarations and functions *)
 
 type proc_var_t =
@@ -239,7 +241,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
             let idx = ctr_ctx#pack_to_const valuation in
             let eq =
                 BinEx (EQ,
-                    Var (ctr#copy (sprintf "%s%d" ctr#get_name idx)),
+                    Var (ctr#copy (sprintf "%s_%dI" ctr#get_name idx)),
                     Const abs_size) in
             (IntSet.add idx hits, eq :: l)
         in
@@ -249,7 +251,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
             let zero l i =
                 if not (IntSet.mem i hits)
                 then BinEx (EQ,
-                    Var (ctr#copy (sprintf "%s%d" ctr#get_name i)),
+                    Var (ctr#copy (sprintf "%s_%dI" ctr#get_name i)),
                     Const 0) :: l
                 else l
             in
@@ -260,11 +262,21 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         in
         ex :: l
     in
-    let init_global v = BinEx (EQ, Var v, Const 0) in
+    let bymc_loc = new_var "bymc_loc" in
+    let init_global i v = BinEx (EQ, Var v, Const i) in
     let init_ess =
-        (List.map init_global (Program.get_shared intabs_prog))
-        @ List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
-    [ SInit init_ess ]
+        (init_global 1 bymc_loc)
+        :: (List.map (init_global 0) (Program.get_shared intabs_prog))
+        @  List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
+    let bymc_loc_decl =
+        let t = new data_type SpinTypes.TINT in
+        t#set_range 0 2;
+        SVar [(bymc_loc, t)]
+    in
+    let change_loc =
+        ANext (bymc_loc, [(Var nusmv_true, [ Const 1 ])]) 
+    in
+    [ bymc_loc_decl; SInit init_ess; SAssign [change_loc] ]
     
 
 
@@ -279,7 +291,7 @@ let create_counter_mods rt ctrabs_prog =
         let tp = new data_type SpinTypes.TINT in
         tp#set_range 0 dom#length;
         let per_idx l idx =
-            let myctr = ctr#copy (sprintf "%s%d" ctr#get_name idx) in
+            let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
             let valtab = ctr_ctx#unpack_from_const idx in
             let get_val v = Const (Hashtbl.find valtab v) in
             let tov v = Var v in
@@ -307,13 +319,70 @@ let create_counter_mods rt ctrabs_prog =
     (main_sects, mods)
 
 
+let create_counter_specs rt ctrabs_prog =
+    let type_tab = Program.get_type_tab ctrabs_prog in
+    let atomics = Program.get_atomics_map ctrabs_prog in
+    let create_spec sym_tab name ltl_form lst =
+        let embedded = Ltl.embed_atomics type_tab atomics ltl_form in
+        let flat = SymbExec.elim_array_access sym_tab embedded in
+        let hidden_masked = Simplif.compute_consts flat in
+        if not (Ltl.is_fairness_form name)
+        then begin
+            match hidden_masked with
+            | UnEx (ALWAYS, f) as tf ->
+                if Ltl.is_propositional type_tab f
+                then (* use a faster algorithm *)
+                    (SInvarSpec (name, f)) :: lst
+                else (SLtlSpec (name, tf)) :: lst
+
+            | _ as tf ->
+                (SLtlSpec (name, tf)) :: lst
+        end else begin
+            let collect l = function
+            | UnEx (ALWAYS, UnEx (EVENTUALLY, f)) as ff ->
+                if Ltl.is_propositional type_tab f
+                then if not_nop l then BinEx (AND, f, l) else f
+                else raise (NusmvEncoding_error
+                    ("Unsupported fairness: " ^ (expr_s ff)))
+
+            | _ as ff ->
+                printf "WARN: unsupported fairness type (ignored): %s\n"
+                    (expr_s ff);
+                l
+            in
+            let tab = Hashtbl.create 1 in
+            Hashtbl.add tab name hidden_masked;
+            let jf = List.fold_left collect
+                (Nop "") (Ltl.collect_fairness_forms tab)
+            in
+            if not_nop jf then (SJustice jf) :: lst else lst
+        end
+    in
+    let sym_tab = new symb_tab "tmp" in
+    let reg_ctr p =
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let ctr = ctr_ctx#get_ctr in
+        let per_idx i =
+            let v = ctr#copy (sprintf "%s_%dI" ctr#get_name i) in
+            sym_tab#add_symb v#get_name (v :> symb)
+        in
+        List.iter per_idx (ctr_ctx#all_indices_for (fun _ -> true))
+    in
+    List.iter reg_ctr (Program.get_procs ctrabs_prog);
+    Accums.StringMap.fold
+        (create_spec sym_tab) (Program.get_ltl_forms ctrabs_prog) []
+
+
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
-    let tops = SModule ("main", [], main_sects @ ctr_main @ init_main)
-        :: proc_mod_defs @ ctr_mods in
+    let forms = create_counter_specs rt ctrabs_prog in
+    let tops =
+        SModule ("main", [], main_sects @ ctr_main @ init_main)
+        :: forms @ proc_mod_defs @ ctr_mods in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 

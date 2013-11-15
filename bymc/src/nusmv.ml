@@ -63,6 +63,7 @@ type section_t =
 type top_t =
     | SModule of string * (var list) * (section_t list)
     | SLtlSpec of string * token expr
+    | SInvarSpec of string * token expr
     | SJustice of token expr
     (* TODO: | Compassion *)
 
@@ -304,6 +305,9 @@ let top_s t =
 
     | SLtlSpec (name, e) ->
         sprintf "LTLSPEC NAME %s := (%s);" name (form_s e)
+
+    | SInvarSpec (name, e) ->
+        sprintf "INVARSPEC NAME %s := (%s);" name (form_s e)
 
     | SJustice e ->
         sprintf "JUSTICE (%s);" (expr_s vf e)
