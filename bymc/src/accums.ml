@@ -22,6 +22,11 @@ module IntMap = Map.Make (struct
  let compare a b = a - b
 end)
 
+(* short-hand functions *)
+let int_s i = string_of_int i
+let string_i s = int_of_string s
+
+
 (* make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =
     if n <= 0

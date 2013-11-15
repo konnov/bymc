@@ -88,12 +88,6 @@ class ['t] basic_block =
         method set_visit_flag f = visit_flag <- f
         method get_visit_flag = visit_flag
 
-        method get_exit_labs =
-            match List.hd (List.rev seq) with
-                | Goto (_, i) -> [i]
-                | If (_, is, _) -> is
-                | _ -> [] (* an exit block *)
-
         (* deprecated, use label *)
         method get_lead_lab =
             self#label
@@ -109,11 +103,10 @@ class ['t] basic_block =
             b
 
         method str =
-            let exit_s = List.fold_left
-                (fun a i ->
-                    sprintf "%s%s%d" a (if a <> "" then ", " else "") i) 
-                "" self#get_exit_labs in
-            (sprintf "Basic block %d [succs: %s]:\n" self#get_lead_lab exit_s) ^
+            let exits =
+                str_join ", "
+                    (List.map (fun b -> int_s b#label) self#get_succ) in
+            (sprintf "Basic block %d [succs: %s]:\n" self#label exits) ^
             (List.fold_left (fun a s -> sprintf "%s%s\n" a (stmt_s s)) "" seq)
     end
     
@@ -197,8 +190,8 @@ let merge_neighb_labels stmts =
             match s with
             | Goto (id, i) ->
                     Goto (id, sub_lab i)
-            | If (id, targs, exit) ->
-                    If (id, (List.map sub_lab targs), (sub_lab exit))
+            | If (id, targs) ->
+                    If (id, (List.map sub_lab targs))
             | _ -> s
         ) stmts
 
@@ -208,11 +201,71 @@ let collect_jump_targets stmts =
         (fun targs stmt ->
             match stmt with
                 | Goto (_, i) -> IntSet.add i targs
-                | If (_, is, _)  -> List.fold_right IntSet.add is targs
+                | If (_, is)  -> List.fold_right IntSet.add is targs
                 | _      -> targs
         )
         IntSet.empty
         stmts
+
+
+(* After transformations some blocks may become empty, e.g., they contain
+   gotos and skip. Remove these blocks from the graph.
+   NOTE: this optimization somehow breaks VASS construction.
+   That is why it is not used by default.
+   *)
+let remove_ineffective_blocks cfg =
+    let is_ineffective = function
+        | Label _
+        | Skip _
+        | Expr (_, Nop _)
+        | Goto _
+        | If _ -> true
+        | _ -> false
+    in
+    let has_lab lab b = b#label = lab in
+    let process_block bb =
+        let relink_pred pbb =
+            (* change the successors of the predecessors *)
+            let _, new_succ =
+                List.partition (has_lab bb#label) pbb#get_succ in
+            let _, bb_succ =
+                List.partition (has_lab bb#label) bb#get_succ in
+            pbb#set_succ (new_succ @ bb_succ)
+        in
+        let relink_succ sbb =
+            let _, new_pred =
+                List.partition (has_lab bb#label) sbb#get_pred in
+            let _, bb_pred =
+                List.partition (has_lab bb#label) bb#get_pred in
+            sbb#set_pred (bb_pred @ new_pred)
+        in
+        if List.for_all is_ineffective bb#get_seq
+                && bb#get_pred <> [] (* not the entry block *)
+                && bb#get_succ <> [] (* not the exit block *)
+        then begin
+            List.iter relink_pred bb#get_pred;
+            List.iter relink_succ bb#get_succ;
+            true
+        end else false
+    in
+    let rec do_work cfg = function
+        | hd :: tl ->
+            if process_block hd
+            (* the predecessors might require a change *)
+            then begin
+                let new_blocks = Hashtbl.create 8 in
+                let add bb =
+                    if bb#label <> hd#label
+                    then Hashtbl.add new_blocks bb#label bb
+                in
+                List.iter add cfg#block_list;
+                let new_cfg = new control_flow_graph cfg#entry new_blocks in
+                do_work new_cfg (hd#get_pred @ tl)
+            end else do_work cfg tl
+        | [] -> cfg
+    in
+    let new_cfg = do_work cfg cfg#block_list in
+    new_cfg
 
 
 (* split a list into a list of list each terminating with an element
@@ -257,7 +310,7 @@ let mk_cfg stmts =
         let has_terminator =
             match (List.hd (List.rev seq)) with
             | Goto (_, _) -> true
-            | If (_, _, _) -> true
+            | If (_, _) -> true
             | _ -> false
         in
         let get_entry_lab = function
@@ -278,15 +331,32 @@ let mk_cfg stmts =
         seq_list ((List.tl seq_list) @ [[Label (fresh_id (), exit_label)]]) in
     let entry = List.hd bbs in
     (* set successors *)
+    let get_exits bb =
+        match list_end (bb#get_seq) with
+            | Goto (_, i) -> [i]
+            | If (_, is) -> is
+            | _ -> [] (* an exit block *)
+    in
     Hashtbl.iter
         (fun _ bb -> bb#set_succ
-            (List.map (Hashtbl.find blocks) bb#get_exit_labs))
+            (List.map (Hashtbl.find blocks) (get_exits bb)))
         blocks;
     (* set predecessors *)
     Hashtbl.iter
         (fun _ bb ->
             List.iter (fun s -> s#set_pred (bb :: s#get_pred)) bb#get_succ)
         blocks;
+    (* remove terminators, they are useless by now *)
+    let skip_terminator bb =
+        (* some functions will need the id *)
+        let new_seq = match List.rev bb#get_seq with
+        | Goto (id, _) :: tl -> List.rev ((Skip id) :: tl)
+        | If (id, _) :: tl -> List.rev ((Skip id) :: tl)
+        | seq -> List.rev seq
+        in
+        bb#set_seq new_seq
+    in
+    List.iter skip_terminator (hashtbl_vals blocks);
     (* return the hash table: heading_label: int -> basic_block *)
     new control_flow_graph entry blocks
 
@@ -317,6 +387,7 @@ type label = { node_num: int; low: int; on_stack: bool }
 (*
   A function to find strongly connected components by Tarjan's algorithm.
   Singleton sets are ignored.
+  TODO: use ocamlgraph
 
   Imperative code like in the book by Aho et al.
  *)
@@ -380,6 +451,7 @@ let comp_sccs first_bb =
 
 (*
 Compute dominators for a node. The algorithm is copied as it is.
+TODO: use ocamlgraph
 
 S. Muchnik. Advanced Compiler Design and Implementation, p. 182, Fig. 7.14.
 *)
@@ -413,6 +485,7 @@ let comp_doms cfg =
 (*
 Compute immediate dominators for a node.
 Minor changes made to write it in OCaml.
+TODO: use ocamlgraph
 
 S. Muchnik. Advanced Compiler Design and Implementation, p. 182, Fig. 7.15.
 *)

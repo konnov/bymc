@@ -288,9 +288,9 @@ let stmt_s s =
     | D_step_beg id -> sprintf "<%3d> d_step {" id
     | D_step_end id -> sprintf "<%3d> } /* d_step */" id
     | Goto (id, l) -> sprintf "<%3d> goto %d" id l
-    | If (id, ls, exitl) ->
-        sprintf "<%3d> if %s -> %d"
-            id (List.fold_left (sprintf "%s %d") "" ls) exitl
+    | If (id, ls) ->
+        sprintf "<%3d> if %s"
+            id (List.fold_left (sprintf "%s %d") "" ls)
     | Assert (id, e) -> sprintf "<%3d> assert %s" id (expr_s e)
     | Assume (id, e) -> sprintf "<%3d> assume %s" id (expr_s e)
     | Havoc (id, v) -> sprintf "<%3d> havoc %s" id v#get_name
@@ -363,7 +363,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
             let exit_lab = mk_uniq_label () in
             let labs_seqs = List.map (make_option options exit_lab) options in
             let opt_labs, opt_seqs = List.split labs_seqs in
-            If (id, opt_labs, exit_lab)
+            If (id, opt_labs)
                 :: ((List.concat opt_seqs) @ (Label (fresh_id (), exit_lab) :: tl))
         | MAtomic (id, seq) ->
             let new_seq = List.fold_right make_one seq [] in

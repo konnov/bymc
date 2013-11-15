@@ -121,13 +121,14 @@ let module_of_proc rt prog proc =
         (* construct SSA as in SmtXducerPass *)
         let new_sym_tab = new symb_tab "tmp" in
         let new_type_tab = (Program.get_type_tab prog)#copy in
-        let cfg =
+        let cfg = Cfg.remove_ineffective_blocks (mk_cfg (mir_to_lir comp)) in
+        let cfg_ssa =
             mk_ssa false (shared @ locals) []
-                new_sym_tab new_type_tab (mk_cfg (mir_to_lir comp)) in
+                new_sym_tab new_type_tab cfg in
+        Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
         let exprs =
-            cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg in
-        (* find the new variables *)
-
+            cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg_ssa
+        in
         (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
     let ntt, syms, exprs = to_ssa in
@@ -265,8 +266,7 @@ let create_counter_mods rt ctrabs_prog =
     let dom = rt#caches#analysis#get_pia_dom in
     let create_vars l p =
         let ctr_ctx =
-            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name
-        in
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
         let prev = List.map fst ctr_ctx#prev_next_pairs in
         let next = List.map snd ctr_ctx#prev_next_pairs in
         let ctr = ctr_ctx#get_ctr in
@@ -300,7 +300,6 @@ let create_counter_mods rt ctrabs_prog =
     let mods = List.map (module_of_counter rt ctrabs_prog) procs in
     (main_sects, mods)
 
-(* TODO: add init *)
 
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in

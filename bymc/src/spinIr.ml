@@ -456,7 +456,7 @@ type 't stmt =
     | Atomic_beg of int | Atomic_end of int
     | D_step_beg of int | D_step_end of int
     | Goto of int * int
-    | If of int * int list (* condition labels *) * int (* exit label *)
+    | If of int * int list (* condition labels *)
     | Assert of int * 't expr
     | Assume of int * 't expr
     | Havoc of int * var (* forget about the current value of the variable *)
@@ -472,7 +472,7 @@ let stmt_id = function
     | D_step_beg id -> id
     | D_step_end id -> id
     | Goto (id, _) -> id
-    | If (id, _, _) -> id
+    | If (id, _) -> id
     | Assert (id, _) -> id
     | Assume (id, _) -> id
     | Havoc (id, _) -> id
@@ -503,7 +503,7 @@ let replace_stmt_id new_id = function
     | D_step_beg _ -> D_step_beg new_id
     | D_step_end _ -> D_step_end new_id
     | Goto (_, l) -> Goto (new_id, l)
-    | If (_, opt_labs, exit_lab) -> If (new_id, opt_labs, exit_lab)
+    | If (_, opt_labs) -> If (new_id, opt_labs)
     | Assert (_, e) -> Assert (new_id, e)
     | Assume (_, e) -> Assume (new_id, e)
     | Havoc (_, v) -> Havoc (new_id, v)
