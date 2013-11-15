@@ -288,7 +288,6 @@ let reduce_indices cfg var =
             try true, VarColoring.coloring depg k
             with _ -> false, ecoloring
         in
-        printf "found=%b\n" found;
         if found 
         then if left = right
             then (k, h)

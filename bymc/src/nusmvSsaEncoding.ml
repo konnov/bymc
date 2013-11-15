@@ -103,14 +103,14 @@ let replace_with_next syms tt v =
 
     | _ -> Var v 
 
+let vars_of_syms syms =
+    let is_var s = s#get_sym_type = SymVar in
+    List.map (fun s -> s#as_var) (List.filter is_var syms)
+
 
 (* ====================== important functions *)
 
 let module_of_proc rt prog proc =
-    let vars_of_syms syms =
-        let is_var s = s#get_sym_type = SymVar in
-        List.map (fun s -> s#as_var) (List.filter is_var syms)
-    in
     let to_ssa =
         let reg_tbl =
             (rt#caches#find_struc prog)#get_regions proc#get_name in
@@ -210,6 +210,57 @@ let module_of_counter rt ctrabs_prog p =
     SModule ("Counter" ^ p#get_name, args, [choice])
 
 
+(* it is probably not the best way to do initialization *)
+let init_of_ctrabs rt intabs_prog ctrabs_prog =
+    let dom = rt#caches#analysis#get_pia_dom in
+    let to_ssa l p =
+        (* similar to AbsCounter.ctr_funcs#mk_init *)
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let ctr = ctr_ctx#get_ctr in
+        let reg_tab =
+            (rt#caches#find_struc intabs_prog)#get_regions p#get_name in
+        let init = reg_tab#get "init" p#get_stmts in
+        let decl = reg_tab#get "decl" p#get_stmts in
+        let init_vals =
+            AbsCounter.find_init_local_vals ctr_ctx decl init in
+        let size_dist_list =
+            dom#scatter_abs_vals
+                rt#solver p#get_active_expr (List.length init_vals) in
+        let mk_opt (hits, l) local_vals abs_size =
+            let valuation = Hashtbl.create 10 in
+            let add_var (var, i) = Hashtbl.add valuation var i in
+            List.iter add_var local_vals;
+            let idx = ctr_ctx#pack_to_const valuation in
+            let eq =
+                BinEx (EQ,
+                    Var (ctr#copy (sprintf "%s%d" ctr#get_name idx)),
+                    Const abs_size) in
+            (IntSet.add idx hits, eq :: l)
+        in
+        let mk_one_vec d =
+            let e = IntSet.empty in
+            let hits, ess = List.fold_left2 mk_opt (e, []) init_vals d in
+            let zero l i =
+                if not (IntSet.mem i hits)
+                then BinEx (EQ,
+                    Var (ctr#copy (sprintf "%s%d" ctr#get_name i)),
+                    Const 0) :: l
+                else l
+            in
+            let ess = List.fold_left zero ess (range 0 ctr_ctx#get_ctr_dim) in
+            list_to_binex AND ess
+        in
+        let ex = list_to_binex OR (List.map mk_one_vec size_dist_list)
+        in
+        ex :: l
+    in
+    let init_ess =
+        List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
+    [ SInit init_ess ]
+    
+
+
 let create_counter_mods rt ctrabs_prog =
     let dom = rt#caches#analysis#get_pia_dom in
     let create_vars l p =
@@ -254,8 +305,9 @@ let create_counter_mods rt ctrabs_prog =
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
+    let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
-    let tops = SModule ("main", [], main_sects @ ctr_main)
+    let tops = SModule ("main", [], main_sects @ ctr_main @ init_main)
         :: proc_mod_defs @ ctr_mods in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
