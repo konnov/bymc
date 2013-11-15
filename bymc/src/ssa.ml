@@ -430,7 +430,10 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
                     Skip id
             | _ as s -> s
         in
-        let on_stmt lst s = (replace_lhs (replace_rhs s)) :: lst in
+        let on_stmt lst s =
+            let new_rhs = replace_rhs s in
+            (replace_lhs new_rhs) :: lst
+        in
         bb#set_seq (List.rev (List.fold_left on_stmt [] bb#get_seq));
         (* put the variables in the successors *)
         let sub_phi_arg y =
@@ -457,11 +460,12 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         (* our extension: if we are at the exit block,
            then add the output assignment for each shared variable x *)
         if bb#get_succ = []
-        then
+        then begin
             (* declare the variables on the top of the stack
                to be output variables *)
             let mark_out v = (s_top v)#set_mark max_int in
-            List.iter mark_out extern_vars;
+            List.iter mark_out extern_vars
+        end;
         (* pop the stack for each assignment *)
         let pop_stmt = function
             | Decl (_, v, _) -> s_pop v
@@ -472,7 +476,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
             | Havoc (_, v) -> s_pop v
             | _ -> ()
         in
-        List.iter pop_stmt bb_old_seq
+        List.iter pop_stmt bb_old_seq;
     in
     search 0
 
