@@ -238,15 +238,12 @@ let print_dot filename var_graph =
 (* for every basic block, find the starting indices of the variables,
    i.e., such indices that have not been used in immediate dominators.
  *)
-let reduce_indices cfg var =
-    let bcfg = cfg#as_block_graph in
-    (* we need to track dependencies along paths *)
-    ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
-
+let reduce_indices bcfg_closure var =
     let get_bb_copies bb = get_var_copies var bb#seq in
     let depg = VarGraph.create () in
     let add_vertex var = VarGraph.add_vertex depg var in
-    BlockG.iter_vertex (fun bb -> List.iter add_vertex (get_bb_copies bb)) bcfg;
+    BlockG.iter_vertex (fun bb -> List.iter add_vertex (get_bb_copies bb))
+    bcfg_closure;
 
     (* add dependencies *)
     let add_dep v1 v2 =
@@ -261,9 +258,9 @@ let reduce_indices cfg var =
             let scopies = get_bb_copies succ in
             List.iter (fun v -> List.iter (add_dep v) scopies) copies
         in
-        List.iter add_succ (BlockG.succ bcfg bb)
+        List.iter add_succ (BlockG.succ bcfg_closure bb)
     in
-    BlockG.iter_vertex add_bb_deps bcfg;
+    BlockG.iter_vertex add_bb_deps bcfg_closure;
 
     (* all assignment along one path depend on each other *)
     ignore (VarOper.add_transitive_closure ~reflexive:false depg);
@@ -299,7 +296,11 @@ let reduce_indices cfg var =
         else find_min_colors (k + 1) right
     in
     let max_colors = VarGraph.nb_vertex depg in
-    let ncolors, coloring = find_min_colors 1 max_colors in
+    let ncolors, coloring =
+        if max_colors <> 0
+        then find_min_colors 1 max_colors
+        else max_colors, ecoloring
+    in
     assert (max_colors = 0 || ncolors <> 0);
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
@@ -492,8 +493,12 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
         let ns = List.map map_s bb#get_seq in
         bb#set_seq ns
     in
-    List.iter (reduce_indices cfg) intern_vars;
-    List.iter (reduce_indices cfg) extern_vars;
+    let bcfg = cfg#as_block_graph in
+    (* we need to track dependencies along paths *)
+    ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
+
+    List.iter (reduce_indices bcfg) intern_vars;
+    List.iter (reduce_indices bcfg) extern_vars;
     ignore (optimize_ssa cfg); (* optimize it after all *)
     List.iter rename_block cfg#block_list;
     cfg

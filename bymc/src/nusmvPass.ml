@@ -145,7 +145,7 @@ let write_trans_loop vars hidden_idx_fun out =
     Printf.fprintf out " | bymc_loc = 1 & (%s)\n" keep_s
 
 
-let create_read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
+let create_or_read_names (default: string list) (filename: string) =
     (* XXX: we should definitely use batteries here *)
     let file_exists =
         try Unix.access filename [Unix.F_OK]; true
@@ -155,35 +155,39 @@ let create_read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string)
         if not file_exists
         then begin
             let fout = open_out filename in
-            List.iter (fun v -> fprintf fout "%s\n" v#mangled_name) shared;
+            List.iter (fun s -> fprintf fout "%s\n" s) default;
             close_out fout;
-            shared
+            default
         end else 
-            let vars = ref [] in
+            let names = ref [] in
             let fin = open_in filename in
             try
                 while true; do
                     let line = input_line fin in
-                    let sym = sym_tab#lookup line in
-                    vars := (sym#as_var :: !vars)
+                    names := (line :: !names)
                 done;
-                List.rev !vars
+                List.rev !names
             with End_of_file ->
                 close_in fin;
-                printf "    %d variables are hidden\n" (List.length !vars);
-                List.rev !vars
+                List.rev !names
     in
-    let hidden_tab = Hashtbl.create (List.length hidden) in
+    hidden
+
+
+let create_read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
+    let default = List.map (fun v -> v#mangled_name) shared in
+    let names = create_or_read_names default filename in
+    let vars = List.map (fun s -> (sym_tab#lookup s)#as_var) names in
+    let hidden_tab = Hashtbl.create (List.length vars) in
     List.iter2 (fun n v -> Hashtbl.add hidden_tab v#id n)
-        (range 1 (1 + (List.length hidden))) hidden;
+        (range 1 (1 + (List.length vars))) vars;
     (* If the variable is hidden, return its positive index in the table.
-       Otherwise, return 0.
-    *)
+       Otherwise, return 0. *)
     let hidden_fun v =
         try Hashtbl.find hidden_tab v#id
         with Not_found -> 0
     in
-    (hidden, hidden_fun)
+    (vars, hidden_fun)
 
 
 let write_default_init new_type_tab new_sym_tab shared hidden_idx_fun out =

@@ -15,12 +15,13 @@ module IntSet = Set.Make (struct
  let compare a b = a - b
 end)
 
-module StringMap = Map.Make(String)
-
 module IntMap = Map.Make (struct
  type t = int
  let compare a b = a - b
 end)
+
+module StringMap = Map.Make(String)
+module StrSet = Set.Make(String)
 
 (* short-hand functions *)
 let int_s i = string_of_int i

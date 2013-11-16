@@ -9,6 +9,7 @@ open Accums
 open Cfg
 open CfgSmt
 open Nusmv
+open Simplif
 open Spin
 open SpinIr
 open SpinIrImp
@@ -305,10 +306,10 @@ let create_counter_mods rt ctrabs_prog =
                     list_to_binex OR (List.map ne prev))])
             in
             (SVar [(myctr, tp)])
-            :: (SModInst( (sprintf "p_%s%d" ctr#get_name idx),
-                     "Counter" ^ p#get_name, params))
-            :: invar
-            :: l
+                :: (SModInst( (sprintf "p_%s_%dI" ctr#get_name idx),
+                         "Counter" ^ p#get_name, params))
+                :: invar
+                :: l
         in
         List.fold_left per_idx
             l (ctr_ctx#all_indices_for (fun _ -> true))
@@ -358,6 +359,20 @@ let create_counter_specs rt ctrabs_prog =
             if not_nop jf then (SJustice jf) :: lst else lst
         end
     in
+    let create_reach lst p =
+        let ctr_ctx = rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name
+        in
+        let ctr = ctr_ctx#get_ctr in
+        let idx_spec l idx = 
+            let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
+            let name = sprintf "r_%s%d" ctr#get_name idx in
+            (SInvarSpec (name, BinEx (EQ, Var myctr, Const 0))) :: l
+        in
+        List.fold_left idx_spec lst (ctr_ctx#all_indices_for (fun _ -> true))
+    in
+    let reach_specs =
+        List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
+    in
     let sym_tab = new symb_tab "tmp" in
     let reg_ctr p =
         let ctr_ctx =
@@ -370,8 +385,91 @@ let create_counter_specs rt ctrabs_prog =
         List.iter per_idx (ctr_ctx#all_indices_for (fun _ -> true))
     in
     List.iter reg_ctr (Program.get_procs ctrabs_prog);
-    Accums.StringMap.fold
-        (create_spec sym_tab) (Program.get_ltl_forms ctrabs_prog) []
+    let specs =
+        Accums.StringMap.fold
+            (create_spec sym_tab) (Program.get_ltl_forms ctrabs_prog) []
+    in
+    specs @ reach_specs
+
+
+let collect_globals main_sect =
+    let f lst = function
+    | SVar decls -> (List.fold_left (fun  l (v, _) -> v :: l) lst decls)
+    | _ -> lst
+    in
+    List.fold_left f [] main_sect
+
+
+let hide_vars names sections =
+    let is_vis n = not (StrSet.mem n names)
+    in
+    let rec rewrite_ex = function
+    | Var v as e ->
+        if is_vis v#mangled_name
+        then e
+        else Var nusmv_false  (* unreachable meaning always 0 *)
+
+    | BinEx (EQ, Var v, Const i) as e ->
+        if is_vis v#mangled_name
+        then e
+        (* unreachable meaning always 0 *)
+        else if i > 0 then Var nusmv_false else Var nusmv_true
+
+    | BinEx (NE, Var v, Const i) as e ->
+        if is_vis v#mangled_name
+        then e
+        (* unreachable, always 0 *)
+        else if i > 0 then Var nusmv_true else Var nusmv_false
+
+    | BinEx (t, l, r) -> BinEx (t, rewrite_ex l, rewrite_ex r)
+
+    | UnEx (t, r) -> UnEx (t, rewrite_ex r)
+
+    | _ as e -> e
+    in
+    let on_sect l = function
+    | SAssign assigns as asgn ->
+        asgn :: l (* keep as is *)
+
+    | STrans es ->
+        (STrans (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+
+    | SInit es ->
+        (SInit (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+
+    | SInvar es ->
+        (SInvar (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+
+    | SVar decls ->
+        let on_decl l (v, t) =
+            if is_vis v#mangled_name
+            then (v, t) :: l
+            else l
+        in
+        let left = List.fold_left on_decl [] (List.rev decls) in
+        if left <> [] then (SVar left) :: l else l
+
+    | SModInst (inst_name, mod_type, params) as mod_inst ->
+        if (Str.string_before inst_name 2) = "p_"
+                && (not (is_vis (Str.string_after inst_name 2)))
+        then l (* hide *)
+        else mod_inst :: l
+    in
+    let on_top l = function
+    | SModule (mod_type, args, sections) ->
+        (SModule (mod_type, args,
+            (List.fold_left on_sect [] (List.rev sections)))) :: l
+
+    | SLtlSpec (name, e) ->
+        (SLtlSpec (name, compute_consts (rewrite_ex e))) :: l
+
+    | SInvarSpec (name, e) ->
+        (SInvarSpec (name, compute_consts (rewrite_ex e))) :: l
+
+    | SJustice e ->
+        (SJustice (compute_consts (rewrite_ex e))) :: l
+    in
+    List.fold_left on_top [] (List.rev sections)
 
 
 let transform rt out_name intabs_prog ctrabs_prog =
@@ -380,9 +478,15 @@ let transform rt out_name intabs_prog ctrabs_prog =
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
     let forms = create_counter_specs rt ctrabs_prog in
-    let tops =
-        SModule ("main", [], main_sects @ ctr_main @ init_main)
-        :: forms @ proc_mod_defs @ ctr_mods in
-    List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
+    let all_main_sects = main_sects @ ctr_main @ init_main in
+    let tops = SModule ("main", [], all_main_sects)
+            :: forms @ proc_mod_defs @ ctr_mods in
+    let globals =
+        List.map (fun v -> v#mangled_name) (collect_globals all_main_sects) in
+    let hidden = NusmvPass.create_or_read_names globals "main-ssa-hidden.txt" in
+    let hidden_set =
+        List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in
+    let visible_sections = hide_vars hidden_set tops in
+    List.iter (fun t -> fprintf out "%s\n" (top_s t)) visible_sections;
     close_out out
 
