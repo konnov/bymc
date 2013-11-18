@@ -342,7 +342,7 @@ let create_counter_specs rt ctrabs_prog =
             let collect l = function
             | UnEx (ALWAYS, UnEx (EVENTUALLY, f)) as ff ->
                 if Ltl.is_propositional type_tab f
-                then if not_nop l then BinEx (AND, f, l) else f
+                then (SJustice f) :: l
                 else raise (NusmvEncoding_error
                     ("Unsupported fairness: " ^ (expr_s ff)))
 
@@ -353,10 +353,7 @@ let create_counter_specs rt ctrabs_prog =
             in
             let tab = Hashtbl.create 1 in
             Hashtbl.add tab name hidden_masked;
-            let jf = List.fold_left collect
-                (Nop "") (Ltl.collect_fairness_forms tab)
-            in
-            if not_nop jf then (SJustice jf) :: lst else lst
+            List.fold_left collect lst (Ltl.collect_fairness_forms tab)
         end
     in
     let create_reach lst p =
