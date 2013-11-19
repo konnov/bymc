@@ -284,9 +284,10 @@ class data_type i_basetype =
         method nbits = m_nbits
         method set_nbits n = m_nbits <- n
 
+        (* a range [l, r), the right bound is excluded *)
         method has_range = let l, r = m_range in r > l
         method range = m_range
-        method range_len = let l, r = m_range in r - l + 1
+        method range_len = let l, r = m_range in r - l
         method range_list =
            let l, r = m_range in Accums.range l r
         method set_range l r = m_range <- (l, r)

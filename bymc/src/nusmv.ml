@@ -22,7 +22,8 @@ let var_type_smv tp =
     in
     let l, r = tp#range in
     if not tp#is_array && tp#has_range
-    then sprintf "{ %s }" (str_join ", " (List.map string_of_int (range l r)))
+    then sprintf "{ %s }"
+        (str_join ", " (List.map string_of_int (range l r)))
     else base_str tp#basetype
 
 

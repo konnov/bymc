@@ -87,8 +87,9 @@ let strip_out s = String.sub s 0 ((String.length s) - 4 (* _OUT *))
 
 
 let partition_var tt v =
-    let is_in = (Str.last_chars v#get_name 3) = "_IN" in
-    let is_out = (Str.last_chars v#get_name 4) = "_OUT" in
+    let vlen = String.length v#get_name in
+    let is_in = vlen > 3 && (Str.last_chars v#get_name 3) = "_IN" in
+    let is_out = vlen > 4 && (Str.last_chars v#get_name 4) = "_OUT" in
     let t = tt#get_type v in
     match (is_in, is_out) with
     | (true, _) ->
@@ -129,8 +130,7 @@ let module_of_proc rt prog proc =
             mk_ssa false (shared @ locals) []
                 new_sym_tab new_type_tab cfg in
         Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
-        let exprs =
-            cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg_ssa
+        let exprs = cfg_to_constraints proc new_sym_tab new_type_tab cfg_ssa
         in
         (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
@@ -143,7 +143,7 @@ let module_of_proc rt prog proc =
         List.filter (fun pv -> is_var_local pv || is_var_shared_in pv) pvars in
     (* activate the process *)
     (* XXX: TODO: it does not work for several proctypes *)
-    let invar = Var ((syms#lookup "at_0")#as_var) in
+    let invar = Var ((syms#lookup "at0")#as_var) in
     let mod_type =
         SModule (proc#get_name,
             List.map ptov args,
@@ -271,11 +271,11 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         @  List.fold_left to_ssa [] (Program.get_procs intabs_prog) in
     let bymc_loc_decl =
         let t = new data_type SpinTypes.TINT in
-        t#set_range 0 2;
+        t#set_range 0 3;
         SVar [(bymc_loc, t)]
     in
     let change_loc =
-        ANext (bymc_loc, [(Var nusmv_true, [ Const 1 ])]) 
+        ANext (bymc_loc, [(Var nusmv_true, [ Const 2 (* TODO: 0? *) ])]) 
     in
     [ bymc_loc_decl; SInit init_ess; SAssign [change_loc] ]
     

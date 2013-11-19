@@ -116,6 +116,7 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
             let has_v i = (check_val_fun (self#unpack_from_const i)) in
             List.filter has_v (range 0 self#get_ctr_dim)
 
+
         method dump (out: out_channel) =
             let print_kv k v =
                 Printf.fprintf out "%s = %d; " k#qual_name v in

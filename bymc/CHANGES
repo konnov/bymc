@@ -1,0 +1,8 @@
+
+19/10/2013
+
+* cfgSmt.ml: using integer succ${i} to denote successors instead of
+boolean variable at${i}; eliminate mutual exclusion of successors by doing so.
+
+
+I was too lazy to keep track of the changes, but you can find them in git...

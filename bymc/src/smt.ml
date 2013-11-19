@@ -41,9 +41,11 @@ let rec expr_to_smt e =
         | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | ARR_ACCESS -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
         | _ -> raise (Failure
-                (sprintf "No idea how to translate %s to SMT" (token_s tok)))
+                (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
         end
 
     | Phi (lhs, rhs) ->
@@ -69,7 +71,7 @@ let var_to_smt var tp =
         let subtype =
             if tp#has_range
             then let l, r = tp#range in
-                sprintf "(subrange %d %d)" l r
+                sprintf "(subrange %d %d)" l (r - 1)
             else base_type
         in
         if tp#is_array
@@ -129,7 +131,7 @@ class yices_smt =
 
         method append_expr expr =
             let eid = ref 0 in
-            let e_s = (expr_to_smt expr) in
+            let e_s = expr_to_smt expr in
             let is_comment = (String.length e_s) > 1
                     && e_s.[0] = ';' && e_s.[1] = ';' in
             if not is_comment

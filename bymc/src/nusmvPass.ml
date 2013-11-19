@@ -155,16 +155,19 @@ let create_or_read_names (default: string list) (filename: string) =
         if not file_exists
         then begin
             let fout = open_out filename in
-            List.iter (fun s -> fprintf fout "%s\n" s) default;
+            List.iter (fun s -> fprintf fout "#%s\n" s) default;
             close_out fout;
-            default
+            []
         end else 
             let names = ref [] in
             let fin = open_in filename in
             try
                 while true; do
                     let line = input_line fin in
-                    names := (line :: !names)
+                    let skip = (String.length line) = 0 
+                        || (String.get line 0) = '#' in
+                    if not skip
+                    then names := (line :: !names)
                 done;
                 List.rev !names
             with End_of_file ->

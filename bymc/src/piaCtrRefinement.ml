@@ -60,7 +60,7 @@ let create_path proc local_vars shared_vars n_steps =
         (* if the process is enabled, use the transition relation,
            else keep the local variables *)
         BinEx (OR, Var entry_loc, skip_step local_vars step)
-            :: (* by construction: at_0 -> *) (map_xducer step)
+            :: (* by construction: at0 -> *) (map_xducer step)
     in
     let xducers =
         List.concat (List.map move_or_skip (range 0 n_steps)) in
@@ -359,10 +359,13 @@ let retrieve_unsat_cores rt smt_rev_map src_state_no =
     let filtered =
         List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids in
     let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
+    (* List.iter (fun (s, e) -> printf "   %d: %s\n" s (expr_s e)) mapped; *)
+    rt#solver#push_ctx;
     let aes = List.map abstract mapped in
     let pre, post = List.partition (fun (s, _) -> s = src_state_no) aes in
     let b2 (_, e) = e in
     let pre, post = List.map b2 pre, List.map b2 post in
+    rt#solver#pop_ctx;
     (pre, post)
 
 
@@ -429,7 +432,7 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     rt#solver#push_ctx;
     simulate_in_smt rt#solver prog ctr_ctx_tbl 1;
     let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
-    rt#solver#pop_ctx;
+
     (* collect unsat cores if the assertions contradict fairness,
        or fairness + the state assertions lead to a deadlock *)
     let core_exprs, _ =
@@ -437,6 +440,7 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
         then retrieve_unsat_cores rt smt_rev_map 0
         else [], []
     in
+    rt#solver#pop_ctx;
     let core_exprs_and = list_to_binex AND core_exprs in
 
     if res then begin
@@ -561,19 +565,18 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         rt#solver#append
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         rt#solver#set_collect_asserts true;
-        let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1
-        in
+        let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
         rt#solver#set_collect_asserts false;
         if not res
         then begin
             log INFO
                 (sprintf "  The transition %d -> %d is spurious." st (st + 1));
+            let new_prog =
+                refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
             (* speedup trick: pop out the transition relation,
                as we do not need it anymore *)
             rt#solver#pop_ctx;
             rt#solver#push_ctx;
-            let new_prog =
-                refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
             (true, new_prog)
         end else begin
             log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
