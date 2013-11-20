@@ -168,7 +168,11 @@ let extract_locals proc_id (ren_map, decls) = function
 let concretize_unit param_vals pmap lmap accum = function
     | EmptyUnit -> accum
     | Ltl (name, form) ->
-            let fairness = StringMap.find "fairness" lmap in
+            let fairness =
+                try StringMap.find "fairness" lmap
+                with Not_found ->
+                    raise (Failure "LTL formula 'fairness' is not found")
+            in
             let embedded = BinEx (IMPLIES, fairness, form) in
             if name <> "fairness"
             then begin
