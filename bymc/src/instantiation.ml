@@ -170,10 +170,14 @@ let concretize_unit param_vals pmap lmap accum = function
     | Ltl (name, form) ->
             let fairness =
                 try StringMap.find "fairness" lmap
-                with Not_found ->
-                    raise (Failure "LTL formula 'fairness' is not found")
+                with Not_found -> (* no fairness condition *)
+                    Nop ""
             in
-            let embedded = BinEx (IMPLIES, fairness, form) in
+            let embedded =
+                if not_nop fairness
+                then BinEx (IMPLIES, fairness, form)
+                else form
+            in
             if name <> "fairness"
             then begin
                 let out = open_out (sprintf "%s.ltl" name) in
