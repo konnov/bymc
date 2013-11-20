@@ -8,6 +8,7 @@ open Printf
 open Accums
 open Cfg
 open CfgSmt
+open Debug
 open Nusmv
 open Simplif
 open Spin
@@ -481,6 +482,7 @@ let transform rt out_name intabs_prog ctrabs_prog =
     let globals =
         List.map (fun v -> v#mangled_name) (collect_globals all_main_sects) in
     let hidden = NusmvPass.create_or_read_names globals "main-ssa-hidden.txt" in
+    log INFO (sprintf "    %d variables are hidden\n" (List.length hidden));
     let hidden_set =
         List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in
     let visible_sections = hide_vars hidden_set tops in
