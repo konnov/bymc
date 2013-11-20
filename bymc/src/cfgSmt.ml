@@ -17,6 +17,31 @@ let mkez e = MExpr (fresh_id (), e)
 let get_entry_loc proc =
     (proc#lookup "at0")#as_var
 
+
+(* Find all blocks that have exactly one successor (we call them options).
+   Map these blocks to their successors transitively. As these blocks do not
+   have to choose their successor, they do not need the succ variable, and
+   their activation is defined via their parents.
+ *)
+let find_choices cfg =
+    let tab = Hashtbl.create (List.length cfg#block_list) in
+    let rec find_edge b l p =
+        if (List.length p#get_succ) > 1
+        then
+            (* this node has a choice, return the edge *)
+            let pos = list_find_pos b p#get_succ in
+            (p, pos) :: l
+        else
+            List.fold_left (find_edge p) l p#get_pred
+    in
+    let each_block b =
+        let edges = List.map (find_edge b []) b#get_pred in
+        Hashtbl.replace tab b#label edges
+    in
+    List.iter each_block cfg#block_list;
+    tab
+
+
 (*
  XXX: this translation does not work with a control flow graph like this:
      A -> (B, C); B -> D; C -> D; B -> C.
@@ -25,6 +50,7 @@ let get_entry_loc proc =
 let block_to_constraints (proc: 't proc)
         (new_sym_tab: symb_tab)
         (new_type_tab: data_type_tab)
+        (choices: (int, ('t basic_block * int) list list) Hashtbl.t)
         (bb: 't basic_block): (Spin.token mir_stmt list) =
     (*printf "block_to_constraints %s: %d\n" proc#get_name bb#label; flush stdout; *)
     let succ_var bb =
@@ -42,56 +68,44 @@ let block_to_constraints (proc: 't proc)
             Var nv
     in
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
+    let parents_cons l edges =
+        let f l (p, i) = BinEx (EQ, succ_var p, Const (1 + i)) :: l in
+        List.fold_left f l edges
+    in
+    let parents_activate =
+        let flat =
+            List.fold_left parents_cons [] (Hashtbl.find choices bb#label) in 
+        list_to_binex OR flat
+    in
     let n_succ = List.length bb#get_succ in
+    let n_pred = List.length bb#get_pred in
     let flow_succ =
-        let some_pred_enables =
-            let for_pred p =
-                let pos = 1 + (list_find_pos bb p#get_succ) in
-                BinEx (EQ, succ_var p, Const pos)
-            in
-            if bb#get_pred <> []
-            then BinEx (EQUIV,
-                         BinEx (NE, succ_var bb, Const 0),
-                         list_to_binex OR (List.map for_pred bb#get_pred))
-            else Nop ""
-        in
-        let for_succ s si =
-            BinEx (IMPLIES, BinEx (EQ, succ_var bb, Const si),
-                          BinEx (NE, succ_var s, Const 0))
-        in
-        if n_succ <> 0
-        then mkez some_pred_enables
-            (*
-            mkez (list_to_binex AND
-            ((List.map2 for_succ bb#get_succ (range 1 (1 + n_succ)))
-            @ some_pred_enables))
-            *)
-        else mkez (Nop "")
+        if n_succ > 1 && n_pred <> 0
+        then mkez (* predecessors activate *)
+            (BinEx (EQUIV, BinEx (NE, succ_var bb, Const 0), parents_activate))
+        else mkez (Nop "") (* no succ variable for this block *)
     in
     (* convert statements *)
-    let n_pred = List.length bb#get_pred in
     let at_impl_expr e =
-        (*
-        let is_succ p =
-            let pos = 1 + (list_find_pos bb p#get_succ) in
-            BinEx (NE, succ_var p, Const pos) in
-        let inactive = list_to_binex AND (List.map is_succ bb#get_pred) in
-        *)
-        BinEx (IMPLIES, BinEx (NE, succ_var bb, Const 0), e)
+        if n_succ > 1
+        (* we have the variable succ${i} for this block *)
+        then BinEx (IMPLIES, BinEx (NE, succ_var bb, Const 0), e)
+        else (* use the parents' variables *)
+            BinEx (IMPLIES, parents_activate, e)
     in
     let convert (tl: Spin.token mir_stmt list) (s: Spin.token stmt):
             Spin.token mir_stmt list=
         match s with
         | Expr (id, (Phi (lhs, rhs) as e)) ->
             (* (at_i -> x = x_i) for x = phi(x_1, ..., x_k) *)
-            let pred_labs = bb#pred_labs in
-            let n_preds = List.length pred_labs in
-            let pred_selects_arg p i =
-                BinEx (OR,
-                    BinEx (EQ, succ_var p, Const 0),
+            let choices = Hashtbl.find choices bb#label in
+            let n_preds = List.length bb#get_pred in
+            let pred_selects_arg cs i =
+                BinEx (IMPLIES,
+                    list_to_binex OR (parents_cons [] cs),
                     BinEx (EQ, Var lhs, Var (List.nth rhs i)))
             in
-            let exprs = List.map2 pred_selects_arg bb#get_pred (range 0 n_preds)
+            let exprs = List.map2 pred_selects_arg choices (range 0 n_preds)
             in
             (* keep ids and keep comments to ease debugging *)
             (mke id (Nop (sprintf "%d: %s" id (expr_s e))))
@@ -200,8 +214,9 @@ let block_intra_cons (proc_name: string)
 
 
 let cfg_to_constraints proc new_sym_tab new_type_tab cfg =
+    let choices = find_choices cfg in
     let cons_lists =
-        List.map (block_to_constraints proc new_sym_tab new_type_tab)
+        List.map (block_to_constraints proc new_sym_tab new_type_tab choices)
             cfg#block_list
     in
     let cons = List.concat cons_lists in
