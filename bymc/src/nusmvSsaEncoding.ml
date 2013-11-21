@@ -104,7 +104,15 @@ let replace_with_next syms tt v =
     match partition_var tt v with
     | SharedOut (_, _) ->
         let inm = (strip_out v#get_name) ^ "_IN" in
-        UnEx (NEXT, Var ((syms#lookup inm)#as_var))
+        let inv =
+            try (syms#lookup inm)#as_var
+            with Symbol_not_found _ ->
+                (* it might happen that we have x_OUT only *)
+                let nv = v#fresh_copy inm in
+                syms#add_symb inm (nv :> symb);
+                nv
+        in
+        UnEx (NEXT, Var inv)
 
     | _ -> Var v 
 
