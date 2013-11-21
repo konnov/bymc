@@ -67,6 +67,9 @@ let block_to_constraints (proc: 't proc)
             new_sym_tab#add_symb nv#get_name (nv :> symb);
             Var nv
     in
+    if bb#label = 0 (* immediately introduce succ0 *)
+    then ignore (succ_var bb);
+
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
     let parents_cons l edges =
         let f l (p, i) = BinEx (EQ, succ_var p, Const (1 + i)) :: l in

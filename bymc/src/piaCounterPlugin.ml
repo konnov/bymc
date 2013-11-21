@@ -80,6 +80,7 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             let vass_prog =
                 do_counter_abstraction vass_funcs solver caches prog proc_names
             in
+            caches#set_struc vass_prog (compute_struc vass_prog);
             write_to_file false "abs-vass.prm"
                 (units_of_program vass_prog) (get_type_tab vass_prog)
                 (Hashtbl.create 10);

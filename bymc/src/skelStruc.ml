@@ -112,7 +112,7 @@ class proc_struc =
         method get_regions (proc_name: string): region_tbl =
             try Hashtbl.find m_reg_tbl proc_name
             with Not_found ->
-                raise (Struc_error "regions are not set")
+                raise (Struc_error ("No regions for " ^ proc_name))
 
         method set_regions (proc_name: string) (proc_regs: region_tbl) =
             Hashtbl.replace m_reg_tbl proc_name proc_regs
