@@ -365,20 +365,6 @@ let create_counter_specs rt ctrabs_prog =
             List.fold_left collect lst (Ltl.collect_fairness_forms tab)
         end
     in
-    let create_reach lst p =
-        let ctr_ctx = rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name
-        in
-        let ctr = ctr_ctx#get_ctr in
-        let idx_spec l idx = 
-            let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
-            let name = sprintf "r_%s%d" ctr#get_name idx in
-            (SInvarSpec (name, BinEx (EQ, Var myctr, Const 0))) :: l
-        in
-        List.fold_left idx_spec lst (ctr_ctx#all_indices_for (fun _ -> true))
-    in
-    let reach_specs =
-        List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
-    in
     let sym_tab = new symb_tab "tmp" in
     let reg_ctr p =
         let ctr_ctx =
@@ -391,11 +377,59 @@ let create_counter_specs rt ctrabs_prog =
         List.iter per_idx (ctr_ctx#all_indices_for (fun _ -> true))
     in
     List.iter reg_ctr (Program.get_procs ctrabs_prog);
-    let specs =
-        Accums.StringMap.fold
+    Accums.StringMap.fold
             (create_spec sym_tab) (Program.get_ltl_forms ctrabs_prog) []
+
+
+let reach_inv_of_ctrabs rt ctrabs_prog =
+    let create_reach lst p =
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let ctr = ctr_ctx#get_ctr in
+        let idx_spec l idx = 
+            let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
+            let name = sprintf "r_%s%d" ctr#get_name idx in
+            let vals = ctr_ctx#unpack_from_const idx in
+            let f n v a = (BinEx (NE, Var n, Const v)) :: a in
+            (SInvarSpec (name, list_to_binex OR (Hashtbl.fold f vals []))) :: l
+        in
+        List.fold_left idx_spec lst (ctr_ctx#all_indices_for (fun _ -> true))
     in
-    specs @ reach_specs
+    List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
+
+
+(* initialize the processes' variables to the initial values *)
+let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog =
+    let dom = rt#caches#analysis#get_pia_dom in
+    let init_of_proc l p =
+        (* find all possible valuations of the local variables *)
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let ctr = ctr_ctx#get_ctr in
+        let reg_tab =
+            (rt#caches#find_struc intabs_prog)#get_regions p#get_name in
+        let init = reg_tab#get "init" p#get_stmts in
+        let decl = reg_tab#get "decl" p#get_stmts in
+        let init_vals = AbsCounter.find_init_local_vals ctr_ctx decl init in
+        let to_and asgns =
+            list_to_binex AND
+                (List.map (fun (v, i) -> BinEx (EQ, Var v, Const i)) asgns) in
+        let ex = list_to_binex OR (List.map to_and init_vals) in
+        ex :: l
+    in
+    let bind_locals l p =
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let bind lst v =
+            let n = ctr_ctx#get_next v in
+            BinEx (EQ, UnEx (NEXT, Var v), Var n) :: lst
+        in
+        List.fold_left bind l ctr_ctx#var_vec
+    in
+    let procs = Program.get_procs intabs_prog in
+    let init_ess = List.fold_left init_of_proc [] procs in
+    let trans_ess = List.fold_left bind_locals [] procs in
+    [ SInit init_ess; STrans trans_ess ]
 
 
 let collect_globals main_sect =
@@ -495,5 +529,16 @@ let transform rt out_name intabs_prog ctrabs_prog =
         List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in
     let visible_sections = hide_vars hidden_set tops in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) visible_sections;
+    close_out out
+
+
+let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
+    let out = open_out (out_name ^ ".smv") in
+    let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
+    let exec_procs = exec_of_ctrabs_procs rt intabs_prog ctrabs_prog in
+    let invs = reach_inv_of_ctrabs rt ctrabs_prog in
+    let all_main_sects = main_sects @ exec_procs in
+    let tops = SModule ("main", [], all_main_sects) :: invs @ proc_mod_defs in
+    List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 
