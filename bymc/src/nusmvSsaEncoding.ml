@@ -388,7 +388,7 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
         let ctr = ctr_ctx#get_ctr in
         let idx_spec l idx = 
             let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
-            let name = sprintf "r_%s%d" ctr#get_name idx in
+            let name = sprintf "r_%s_%dI" ctr#get_name idx in
             let vals = ctr_ctx#unpack_from_const idx in
             let f n v a = (BinEx (NE, Var n, Const v)) :: a in
             (SInvarSpec (name, list_to_binex OR (Hashtbl.fold f vals []))) :: l
@@ -400,7 +400,6 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
 
 (* initialize the processes' variables to the initial values *)
 let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog =
-    let dom = rt#caches#analysis#get_pia_dom in
     let init_of_proc l p =
         (* find all possible valuations of the local variables *)
         let ctr_ctx =
