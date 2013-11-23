@@ -93,7 +93,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
                     else if intrinsic <> StringMap.empty
                     then trail := (Intrinsic intrinsic) :: !trail
                     else if Str.string_match loop_re line 0
-                        then loop_pos := (List.length !trail)
+                        then loop_pos := 1 + (List.length !trail)
                         else (printf "WARNING: no match for %s\n" line)
                 done
             with End_of_file ->

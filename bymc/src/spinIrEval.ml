@@ -21,7 +21,9 @@ let rec eval_expr val_fun e =
     | Const value ->
             Int value
     | Var v ->
-            Int (val_fun v)
+            Int (val_fun e)
+    | BinEx (ARR_ACCESS, Var _, Const _) ->
+            Int (val_fun e)
     | BinEx (EQ, le, re) ->
             let lv = uint (eval_expr val_fun le) in
             let rv = uint (eval_expr val_fun re) in

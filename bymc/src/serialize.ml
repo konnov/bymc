@@ -10,6 +10,7 @@ open Accums
 open Program
 open Spin
 open SpinIr
+open SpinIrEval
 open Str
 
 let global_state_fmt prog =
@@ -33,6 +34,19 @@ let global_state_fmt prog =
     let strs = List.map format_var vars in
     let exprs = List.rev (List.fold_left ref_var [] vars) in
     (sprintf "S{%s}" (str_join "," strs), exprs)
+
+
+let global_state_s prog val_fun =
+    let fmt, es = global_state_fmt prog in
+    let eval e =
+        match SpinIrEval.eval_expr val_fun e with
+        | Int i -> string_of_int i
+        | Bool _ -> raise (Eval_error "Unexpected bool")
+    in
+    let replace s e =
+        Str.replace_first (Str.regexp_string "%d") (eval e) s
+    in
+    List.fold_left replace fmt es
 
     
 let global_state_re fmt =
