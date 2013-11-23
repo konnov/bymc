@@ -24,6 +24,7 @@ def collect_invar_names(filename):
 
 
 def collect_unreachable(filename, invars):
+    reachable = []
     unreachable = []
     spec_re = re.compile('^-- invariant.*is (false|true)$')
     fin = open(filename, "r")
@@ -35,11 +36,14 @@ def collect_unreachable(filename, invars):
                 if m.group(1) == "true":
                     unreachable.append(invars[i])
                     print "Counter %s is always zero" % invars[i]
+                else:
+                    reachable.append(invars[i])
+
                 i += 1
     finally:
         fin.close()
 
-    return unreachable        
+    return (reachable, unreachable)
 
 
 def exclude_lines(in_filename, out_filename, unreachable):
@@ -75,9 +79,10 @@ if __name__ == '__main__':
         sys.exit(1)
 
     invars = collect_invar_names(smvf)
-    unreachable = collect_unreachable(OUT_FILENAME, invars)
+    reachable, unreachable = collect_unreachable(OUT_FILENAME, invars)
     exclude_lines(hiddenf, 'hidden.new', unreachable)
-    print "%d counters are hidden as always zero" % (len(unreachable))
+    print "%d counters out of %d are always zero (hidden)" \
+            % (len(unreachable), len(unreachable) + len(reachable))
     os.remove(hiddenf)
     os.rename('hidden.new', hiddenf)
 
