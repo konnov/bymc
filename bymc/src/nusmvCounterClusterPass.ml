@@ -289,7 +289,7 @@ let mk_rev_trans_tab caches roles intabs_prog prog =
 
 (* create a cluster encoding in nusmv *)
 (* XXX: TODO: XXX: this requires serious refactoring! *)
-let transform solver caches roles out_name intabs_prog prog =
+let transform solver opts caches roles out_name intabs_prog prog =
     let type_tab = Program.get_type_tab prog in
     let new_type_tab = type_tab#copy in
     let main_sym_tab = new symb_tab "main" in
@@ -300,7 +300,7 @@ let transform solver caches roles out_name intabs_prog prog =
         main_sym_tab rev_tab (Program.get_shared prog)) in
     let scope = SharedOnly in
     let hidden, hidden_idx_fun =
-        create_read_hidden main_sym_tab
+        create_read_hidden opts main_sym_tab
         (if scope = SharedOnly then instr else []) (* no refinement *)
         (sprintf "%s-hidden.txt" out_name) in
     let procs = Program.get_procs prog in

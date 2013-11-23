@@ -145,24 +145,32 @@ let write_trans_loop vars hidden_idx_fun out =
     Printf.fprintf out " | bymc_loc = 1 & (%s)\n" keep_s
 
 
-let create_or_read_names (default: string list) (filename: string) =
+let create_or_read_names (opts: Options.options_t)
+        (default: string list) (filename: string) =
     (* XXX: we should definitely use batteries here *)
-    let file_exists =
-        try Unix.access filename [Unix.F_OK]; true
-        with (Unix.Unix_error (_, _, _)) -> false
+    let sign = sprintf "#@source=%s" opts.Options.filename in
+    let no_file_or_wrong_sig =
+        try let fin = open_in filename in begin
+            try let line = input_line fin in
+                let correct = (line = sign) in
+                close_in fin;
+                not correct
+            with End_of_file -> close_in fin; true 
+        end with Sys_error _ -> true
     in
     let hidden =
-        if not file_exists
+        if no_file_or_wrong_sig
         then begin
             let fout = open_out filename in
+            fprintf fout "%s\n" sign;
             List.iter (fun s -> fprintf fout "#%s\n" s) default;
             close_out fout;
             []
         end else 
             let names = ref [] in
             let fin = open_in filename in
-            try
-                while true; do
+            ignore (input_line fin); (* skip the signature line *)
+            try while true; do
                     let line = input_line fin in
                     let skip = (String.length line) = 0 
                         || (String.get line 0) = '#' in
@@ -177,9 +185,9 @@ let create_or_read_names (default: string list) (filename: string) =
     hidden
 
 
-let create_read_hidden (sym_tab: symb_tab) (shared: var list) (filename: string) =
+let create_read_hidden opts (sym_tab: symb_tab) (shared: var list) (filename: string) =
     let default = List.map (fun v -> v#mangled_name) shared in
-    let names = create_or_read_names default filename in
+    let names = create_or_read_names opts default filename in
     let vars = List.map (fun s -> (sym_tab#lookup s)#as_var) names in
     let hidden_tab = Hashtbl.create (List.length vars) in
     List.iter2 (fun n v -> Hashtbl.add hidden_tab v#id n)
@@ -282,7 +290,7 @@ let transform solver caches scope out_name prog =
     let shared = transform_vars type_tab new_type_tab new_sym_tab rev_tab
         ((Program.get_shared prog) @ (Program.get_instrumental prog)) in
     let hidden, hidden_idx_fun =
-        create_read_hidden new_sym_tab
+        create_read_hidden caches#options new_sym_tab
         (if scope = SharedOnly then shared else [] (* no refinement *))
         (sprintf "%s-hidden.txt" out_name) in
     let procs = Program.get_procs prog in

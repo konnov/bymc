@@ -406,7 +406,6 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
         let ctr = ctr_ctx#get_ctr in
         let idx_spec l idx = 
-            let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
             let name = sprintf "r_%s_%dI" ctr#get_name idx in
             let vals = ctr_ctx#unpack_from_const idx in
             let f n v a = (BinEx (NE, Var n, Const v)) :: a in
@@ -540,7 +539,9 @@ let transform rt out_name intabs_prog ctrabs_prog =
             :: forms @ proc_mod_defs @ ctr_mods in
     let globals =
         List.map (fun v -> v#mangled_name) (collect_globals all_main_sects) in
-    let hidden = NusmvPass.create_or_read_names globals "main-ssa-hidden.txt" in
+    let hidden = NusmvPass.create_or_read_names
+        rt#caches#options globals "main-ssa-hidden.txt"
+    in
     log INFO (sprintf "    %d variables are hidden\n" (List.length hidden));
     let hidden_set =
         List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in

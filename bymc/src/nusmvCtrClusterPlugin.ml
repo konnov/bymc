@@ -14,8 +14,6 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             rt#caches#options.Options.mc_tool <> Options.ToolNusmv
 
         method transform rt prog =
-            let caches = rt#caches in
-            let solver = rt#solver in
             log INFO (sprintf
                 "> writing ssa NuSMV model to %s.smv..." "main-ssa");
             let intabs_prog = pia_data_plugin#get_output in
@@ -24,9 +22,11 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
                 rt "main-ssa-reach" intabs_prog self#get_input;
             log INFO (sprintf
                 "> writing clusterized NuSMV model to %s.smv... SKIPPED" out_name);
+            (*
+            let caches = rt#caches in
+            let solver = rt#solver in
             let roles =
                 rt#caches#analysis#get_var_roles pia_data_plugin#get_input in
-            (*
             NusmvCounterClusterPass.transform
                 solver caches roles out_name intabs_prog prog;
                 *)
