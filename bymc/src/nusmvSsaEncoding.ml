@@ -68,6 +68,11 @@ let is_var_shared_in = function
     | SharedIn _ -> true
     | _ -> false
 
+let is_var_shared = function
+    | SharedIn _ -> true
+    | SharedOut _ -> true
+    | _ -> false
+
 let ptov = function
     | SharedIn (v, _)
     | SharedOut (v, _)
@@ -85,6 +90,7 @@ let ptovt = function
 
 let strip_in s = String.sub s 0 ((String.length s) - 3 (* _IN *))
 let strip_out s = String.sub s 0 ((String.length s) - 4 (* _OUT *))
+let attach_out v = v#fresh_copy (v#get_name ^ "_OUT")
 
 
 let partition_var tt v =
@@ -123,7 +129,7 @@ let vars_of_syms syms =
 
 (* ====================== important functions *)
 
-let module_of_proc rt prog proc =
+let module_of_proc rt keep_out_next prog proc =
     let to_ssa =
         let reg_tbl =
             (rt#caches#find_struc prog)#get_regions proc#get_name in
@@ -139,17 +145,22 @@ let module_of_proc rt prog proc =
             mk_ssa false (shared @ locals) []
                 new_sym_tab new_type_tab cfg in
         Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
-        let exprs = cfg_to_constraints proc new_sym_tab new_type_tab cfg_ssa
-        in
+        let exprs = cfg_to_constraints proc new_sym_tab new_type_tab cfg_ssa in
         (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
     let ntt, syms, exprs = to_ssa in
     let new_vars = vars_of_syms syms#get_symbs in
-    let exprs = List.map (map_vars (replace_with_next syms ntt)) exprs in
+    let exprs =
+        if keep_out_next
+        then exprs
+        else List.map (map_vars (replace_with_next syms ntt)) exprs in
     let pvars = List.sort proc_var_cmp (List.map (partition_var ntt) new_vars) in
     let temps = List.filter is_var_temp pvars in
     let args =
-        List.filter (fun pv -> is_var_local pv || is_var_shared_in pv) pvars in
+        if keep_out_next
+        then List.filter (fun v -> is_var_local v || is_var_shared v) pvars
+        else List.filter (fun v -> is_var_local v || is_var_shared_in v) pvars
+    in
     (* activate the process *)
     (* XXX: TODO: it does not work for several proctypes *)
     let invar = Var ((syms#lookup "at0")#as_var) in
@@ -161,12 +172,16 @@ let module_of_proc rt prog proc =
     (mod_type, args)
 
 
-let create_proc_mods rt intabs_prog =
+let create_proc_mods rt keep_out_next intabs_prog =
     let transform_proc (globals, main_sects) p =
-        let mod_type, args = module_of_proc rt intabs_prog p in
+        let mod_type, args = module_of_proc rt keep_out_next intabs_prog p in
         let to_param = function
-            | SharedIn (v, t) -> (v#copy (strip_in v#get_name), t)
-            | SharedOut (v, t) -> (v#copy (strip_out v#get_name), t)
+            | SharedIn (v, t) ->
+                    (v#copy (strip_in v#get_name), t)
+            | SharedOut (v, t) ->
+                    if keep_out_next
+                    then (v, t)
+                    else (v#copy (strip_out v#get_name), t)
             | LocalIn (v, t) -> raise (Failure ("Unexpected LocalIn"))
             | LocalOut (v, t) -> (v#copy (strip_out v#get_name), t)
             | _ -> raise (Failure ("Unexpected param type"))
@@ -181,10 +196,14 @@ let create_proc_mods rt intabs_prog =
     let procs = Program.get_procs intabs_prog in
     let tt = Program.get_type_tab intabs_prog in
     let globals, main_sects = List.fold_left transform_proc ([], []) procs in
-    let shared =
-        List.map (fun v -> (v, tt#get_type v)) (Program.get_shared intabs_prog)
+    let shared = Program.get_shared intabs_prog in
+    let shared_in = List.map (fun v -> (v, tt#get_type v)) shared in
+    let shared_out =
+        if keep_out_next
+        then List.map (fun v -> (attach_out v, tt#get_type v)) shared
+        else []
     in
-    ((SVar shared) :: main_sects, globals)
+    ((SVar (shared_in @ shared_out)) :: main_sects, globals)
 
 
 (* partially copied from nusmvCounterClusterPass *)
@@ -404,7 +423,6 @@ let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog =
         (* find all possible valuations of the local variables *)
         let ctr_ctx =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
-        let ctr = ctr_ctx#get_ctr in
         let reg_tab =
             (rt#caches#find_struc intabs_prog)#get_regions p#get_name in
         let init = reg_tab#get "init" p#get_stmts in
@@ -513,7 +531,7 @@ let hide_vars names sections =
 
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
-    let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
+    let main_sects, proc_mod_defs = create_proc_mods rt false intabs_prog in
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
     let forms = create_counter_specs rt ctrabs_prog in
@@ -533,7 +551,7 @@ let transform rt out_name intabs_prog ctrabs_prog =
 
 let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
-    let main_sects, proc_mod_defs = create_proc_mods rt intabs_prog in
+    let main_sects, proc_mod_defs = create_proc_mods rt true intabs_prog in
     let exec_procs = exec_of_ctrabs_procs rt intabs_prog ctrabs_prog in
     let invs = reach_inv_of_ctrabs rt ctrabs_prog in
     let all_main_sects = main_sects @ exec_procs in
