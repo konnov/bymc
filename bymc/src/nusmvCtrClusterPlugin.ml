@@ -31,12 +31,31 @@ let parse_assignment syms line =
             Nop "" (* ignore local process variables *)
 
 
+let add_hidden prog state_es =            
+    let tab = Hashtbl.create 8 in
+    let assign = function
+    | BinEx (EQ, lhs, Const i) as e ->
+        Hashtbl.replace tab (expr_s lhs) e
+    | _ as e ->
+        raise (Failure ("Unexpected expression " ^ (expr_s e)))
+    in
+    List.iter assign state_es;
+    let add_if_needed l e =
+        let e_s = expr_s e in
+        try (Hashtbl.find tab e_s) :: l
+        with Not_found -> (BinEx (EQ, e, Const 0)) :: l
+    in
+    let _, es = global_state_fmt prog in
+    List.rev (List.fold_left add_if_needed [] es)
+
+
 let print_state prog path_elem =
     let tab = Hashtbl.create 8 in
     let assign = function
     | BinEx (EQ, e, Const i) ->
-            Hashtbl.replace tab (expr_s e) i
-    | _ as e -> raise (Failure ("Unexpected expression " ^ (expr_s e)))
+        Hashtbl.replace tab (expr_s e) i
+    | _ as e ->
+        raise (Failure ("Unexpected expression " ^ (expr_s e)))
     in
     let state_es =
         match path_elem with
@@ -47,7 +66,7 @@ let print_state prog path_elem =
     let val_fun e =
         let e_s = expr_s e in
         try Hashtbl.find tab e_s
-        with Not_found -> 0 (* some variables were hidden *)
+        with Not_found -> raise (Failure ("No value for " ^ e_s))
     in
     let state_s = global_state_s prog val_fun in
     printf "%s\n" state_s
@@ -97,7 +116,7 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             let state_exprs = ref [] in
             let flush_to_trail () =
                 if !state_exprs <> []
-                then trail := (State !state_exprs) :: !trail;
+                then trail := (State (add_hidden prog !state_exprs)) :: !trail;
                 state_exprs := []
             in
             begin try

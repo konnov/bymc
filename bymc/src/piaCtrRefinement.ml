@@ -379,6 +379,9 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
     if pre = [] && post = []
     then raise (Failure "Cannot refine: unsat core is empty");
 
+    printf "pre = %s\n" (str_join ", " (List.map expr_s pre));
+    printf "post = %s\n" (str_join ", " (List.map expr_s post));
+
     let asgn_spur e =
         MExpr (fresh_id (),
             BinEx (ASGN, Var bymc_spur,

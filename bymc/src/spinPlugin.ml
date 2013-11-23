@@ -86,7 +86,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             begin try
                 while true do
                     let line = input_line fin in
-                    let state_exprs = parse_global_state self#get_input line in
+                    let state_exprs = parse_global_state self#get_output line in
                     let intrinsic = parse_intrinsic line in
                     if state_exprs <> []
                     then trail := (State state_exprs) :: !trail
