@@ -86,7 +86,10 @@ class pia_domain conds_i =
                 solver#push_ctx;
                 List.iter2 put_interval_constraint used intervals;
                 let expr_to_check =
-                    if (at = ExistAbs) then symb_expr else UnEx(NEG, symb_expr) in
+                    if (at = ExistAbs)
+                    then symb_expr
+                    else UnEx(NEG, symb_expr)
+                in
                 solver#append_assert (expr_to_smt expr_to_check);
                 let result = solver#check in
                 solver#pop_ctx;
