@@ -34,11 +34,13 @@ function mc_verify_spec {
         && ./pan ${PAN_FLAGS} -a 2>&1 | tee ${MC_OUT}) \
         || report_and_quit "pan failed"
     set +x # echo off
+    # the status code of spin is the return value
+    egrep -q "errors: +0" ${MC_OUT}
 }
 
 function mc_refine {
     ./pan -S | grep -v MSC | egrep '(^S\{|^X\{|START OF CYCLE)' > ${CEX} \
-    && CAMLRUNPARAM="b" ${TOOL} -t ${CEX} ${PROG} 2>&1 \
+    && CAMLRUNPARAM="b" ${TOOL} -t ${CEX} 2>&1 \
         | tee refinement.out
 
     echo -e "The trace in the ABSTRACT system (produced by spin):\n"

@@ -1,0 +1,4 @@
+#!/bin/bash
+
+TARGET_MC=nusmv `dirname $0`/cegar $@
+
