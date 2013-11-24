@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Run the abstraction-model checking-refinement loop.
+# Run the abstraction refinement loop.
 #
 # Igor Konnov, 2012-2013
 
@@ -16,13 +16,19 @@ trap "exit" SIGHUP SIGINT SIGTERM
 PROG=$1
 PROP=$2
 BYMC_HOME=`dirname $0`
+CEX="cex.trace"
+MC_OUT="mc.out"
 
-SPIN=${SPIN:-spin}
-LTL2BA="$BYMC_HOME/../deps/ltl2ba-1.1/ltl2ba"
-#PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
-PANCC_FLAGS=${PANCC_FLAGS:-"-DCOLLAPSE -DNOREDUCE"}
-PAN_FLAGS=${PAN_FLAGS:-"-m100000"}
-SPIN_OUT="spin.out"
+# interpret the functions specific to model checker
+if [ "${TARGET_MC}" == "spin" ]; then
+    . "${BYMC_HOME}/mod-verify-spin.sh"
+elif [ "${TARGET_MC}" == "nusmv" ]; then
+    . "${BYMC_HOME}/mod-verify-nusmv.sh"
+else
+    echo "Unsupported TARGET_MC='${TARGET_MC}'"
+    exit 2
+fi
+
 cmd=""
 step="0"
 rand=""
@@ -35,7 +41,7 @@ function report_and_quit {
     exit 1
 }
 
-function appendToVerdict() {
+function to_verdict() {
     if [ "$out" == "" ]; then
         out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
     fi
@@ -43,19 +49,12 @@ function appendToVerdict() {
     END_TIME=$(date +%s)
     DIFF_TIME=$(($END_TIME-$START_TIME))
 
-    spin_data=`$BYMC_HOME/script/parse-spin-out.py $SPIN_OUT`
+    mc_collect_stat
     common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
-    echo "$out|$common|$spin_data" >>verdict.txt
+    echo "$out|$common|$mc_stat" >>verdict.txt
 }
 
-trap "appendToVerdict" ERR EXIT
-
-if [ ! -x "$LTL2BA" ]; then
-    echo "WARNING: $LTL2BA is not found. Please go to `dirname $LTL2BA` and invoke make."
-    echo "WARNING: using 'spin -f' instead of ltl2ba. Performance may degrade."
-    echo "********************************************************************"
-    LTL2BA="$SPIN"
-fi
+trap "to_verdict" ERR EXIT
 
 CUR_DIR=`pwd`
 cd $BYMC_HOME
@@ -78,36 +77,21 @@ cd $CUR_DIR
 START_TIME=$(date +%s)
 
 if [ "$CONTINUE" == "" ]; then
-    CAMLRUNPARAM="b" $TOOL -a $PROG \
-        || report_and_quit "Failure: $TOOL -a $PROG"
+    # first run: no refinement, generate the initial abstraction
+    mc_compile_first
 fi
 
-rm -rf $SPIN_OUT spin.trace refinement.out
+rm -rf ${MC_OUT} ${CEX} refinement.out
 
 while [ "$cmd" != "q" ]; do
-    echo "Converting the spec: !`head $PROP.ltl`..."
-    $LTL2BA -f "!`head $PROP.ltl`" >$PROP.never \
-        || (report_and_quit "`cat $PROP.never`")
-    echo "Generating pan..."
-    set -x # echo on
-    $SPIN -a -N $PROP.never abs-counter.prm || report_and_quit "spin failed"
-    (gcc $rand $PANCC_FLAGS -o ./pan pan.c \
-        && ./pan $PAN_FLAGS -a 2>&1 | tee $SPIN_OUT) \
-        || report_and_quit "pan failed"
-    set +x # echo off
+    mc_verify_spec
 
-    if egrep -q "errors: +0" $SPIN_OUT; then
+    if egrep -q "errors: +0" ${MC_OUT}; then
         echo "The property is verified in $step refinement steps"
         out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
         cmd="q"
     else
-        ./pan -S | grep -v MSC | egrep '(^S\{|^X\{|START OF CYCLE)' > spin.trace \
-        && CAMLRUNPARAM="b" $TOOL -t spin.trace $PROG 2>&1 | tee refinement.out
-
-        echo -e "The trace in the ABSTRACT system (produced by spin):\n"
-        echo -n "     0  "; head -n 1 spin.trace # start with 0
-        tail -n '+2' spin.trace | $BYMC_HOME/script/nl.py -n 30
-        echo ""
+        mc_refine
         
         if grep "trace-no-refinement" refinement.out; then
             if [ "$AUTO" == "" ]; then
@@ -135,5 +119,5 @@ while [ "$cmd" != "q" ]; do
     fi
 done
 
-# here appendToVerdict fires
+# here to_verdict fires
 

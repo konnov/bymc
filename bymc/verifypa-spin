@@ -1,0 +1,4 @@
+#!/bin/bash
+
+TARGET_MC=spin `dirname $0`/cegar $@
+
