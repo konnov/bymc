@@ -408,6 +408,9 @@ let create_counter_non_spurious rt ctrabs_prog globals =
         let post = Simplif.replace_arr_elem_with_var syms post in
         let next_post = map_vars (fun v -> UnEx (NEXT, Var v)) post in
         (* either precondition or postcondition do not hold *)
+        let pre = if not_nop pre then pre else Var nusmv_true in
+        let next_post =
+            if not_nop next_post then next_post else Var nusmv_true in
         BinEx (OR, UnEx (NEG, pre), UnEx (NEG, next_post))
     in
     let spurious = Program.get_spurious_steps ctrabs_prog in
