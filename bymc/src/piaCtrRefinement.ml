@@ -388,6 +388,12 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
                 BinEx (OR, Var bymc_spur, e)))
     in
     let or_true e = if not_nop e then e else (Const 1) in
+    (* Modify the counter abstraction directly to exclude the transitions
+       by setting bymc_spur to true. By adding []!bymc_spur as a precondition,
+       we cut out the spurious behaviour. This works for Promela.
+       As the NuSMV encoding is more subtle, we save pre and post to
+       Program.spurious_steps for a future use in NusmvSsaEncoding.
+     *)
     let sub = function
         | MExpr (id, Nop ("assume(pre_cond)")) as s ->
             [ s; MExpr(fresh_id (),
@@ -401,9 +407,14 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
     let sub_proc proc = 
         proc_replace_body proc (sub_basic_stmt_with_list sub proc#get_stmts)
     in
-    Program.set_type_tab new_type_tab
+    let new_spurious =
+        (list_to_binex AND pre, list_to_binex AND post)
+            :: (Program.get_spurious_steps prog)
+    in
+    Program.set_spurious_steps new_spurious
+        (Program.set_type_tab new_type_tab
         (Program.set_instrumental (pred :: (Program.get_instrumental prog))
-        (Program.set_procs (List.map sub_proc (Program.get_procs prog)) prog))
+        (Program.set_procs (List.map sub_proc (Program.get_procs prog)) prog)))
 
 
 let print_vass_trace prog solver num_states = 

@@ -59,23 +59,36 @@ val get_sym_tab: program_t -> symb_tab
 val get_instrumental: program_t -> var list
 val set_instrumental: var list -> program_t -> program_t
 
+(* assumptions that restrict the state space *)
 val get_assumes: program_t -> expr_t list
 val set_assumes: expr_t list -> program_t -> program_t
 
+(* Constraints that capture the transitions known to be spurious.
+  For instance, the CEGAR loop can report on such transitions *)
+val get_spurious_steps: program_t ->
+    ((* pre *) expr_t * (* post *) expr_t) list
+val set_spurious_steps: 
+    (expr_t * expr_t) list -> program_t -> program_t
+
+(* unsafe expressions that are going to be intepreted by an external tool *)
 val get_unsafes: program_t -> string list
 val set_unsafes: string list -> program_t -> program_t
 
+(* processes *)
 val get_procs: program_t -> (Spin.token proc) list
 val set_procs: (Spin.token proc) list -> program_t -> program_t
 
+(* atomic propositions *)
 val get_atomics: program_t -> (var * Spin.token atomic_expr) list
 val get_atomics_map: program_t -> (Spin.token atomic_expr) StringMap.t
 val set_atomics: (var * Spin.token atomic_expr) list -> program_t -> program_t
 
+(* ltl formulas *)
 val get_ltl_forms: program_t -> (expr_t) StringMap.t
 val get_ltl_forms_as_hash: program_t -> (string, expr_t) Hashtbl.t
 val set_ltl_forms: (expr_t) StringMap.t -> program_t -> program_t
 
+(* is variable global *)
 val is_global: program_t -> var -> bool
 val is_not_global: program_t -> var -> bool
 

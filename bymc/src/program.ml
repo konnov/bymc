@@ -21,7 +21,8 @@ type program_t = {
     f_assumes: expr_t list; f_unsafes: string list;
     f_procs: Spin.token proc list;
     f_atomics: (var * Spin.token atomic_expr) list;
-    f_ltl_forms: expr_t StringMap.t
+    f_ltl_forms: expr_t StringMap.t;
+    f_spurious_steps: (expr_t * expr_t) list
 }
 
 let empty = {
@@ -30,7 +31,8 @@ let empty = {
     f_sym_tab = new symb_tab ""; (* global scope *)
     f_type_tab = new data_type_tab;
     f_assumes = []; f_procs = []; f_unsafes = [];
-    f_atomics = []; f_ltl_forms = StringMap.empty
+    f_atomics = []; f_ltl_forms = StringMap.empty;
+    f_spurious_steps = []
 }
 
 let prog_uid prog =
@@ -158,7 +160,12 @@ let get_all_locals prog =
     in
     List.fold_left collect_proc [] prog.f_procs
 
+let get_spurious_steps prog =
+    prog.f_spurious_steps
 
+let set_spurious_steps steps prog =
+    { prog with f_spurious_steps = steps }
+    
 let program_of_units type_tab units =
     let fold_u prog = function
     | Stmt (MDecl(_, v, e)) ->

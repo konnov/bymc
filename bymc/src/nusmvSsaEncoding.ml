@@ -400,6 +400,22 @@ let create_counter_specs rt ctrabs_prog =
             (create_spec sym_tab) (Program.get_ltl_forms ctrabs_prog) []
 
 
+let create_counter_non_spurious rt ctrabs_prog globals =
+    let syms = new symb_tab "glob" in
+    List.iter (fun v -> syms#add_symb v#get_name (v :> symb)) globals;
+    let each_step (pre, post) =
+        let pre = Simplif.replace_arr_elem_with_var syms pre in
+        let post = Simplif.replace_arr_elem_with_var syms post in
+        let next_post = map_vars (fun v -> UnEx (NEXT, Var v)) post in
+        (* either precondition or postcondition do not hold *)
+        BinEx (OR, UnEx (NEG, pre), UnEx (NEG, next_post))
+    in
+    let spurious = Program.get_spurious_steps ctrabs_prog in
+    if spurious <> []
+    then [STrans (List.map each_step spurious)]
+    else []
+
+
 let reach_inv_of_ctrabs rt ctrabs_prog =
     let create_reach lst p =
         let ctr_ctx =
@@ -534,7 +550,9 @@ let transform rt out_name intabs_prog ctrabs_prog =
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods = create_counter_mods rt ctrabs_prog in
     let forms = create_counter_specs rt ctrabs_prog in
-    let all_main_sects = main_sects @ ctr_main @ init_main in
+    let globals = collect_globals (main_sects @ ctr_main) in
+    let non_spurious = create_counter_non_spurious rt ctrabs_prog globals in
+    let all_main_sects = main_sects @ ctr_main @ init_main @ non_spurious in
     let tops = SModule ("main", [], all_main_sects)
             :: forms @ proc_mod_defs @ ctr_mods in
     let globals =

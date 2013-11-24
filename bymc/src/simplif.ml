@@ -295,7 +295,7 @@ let expand_array_access_struc type_tab stmt =
 let replace_arr_elem_with_var sym_tab exp =
     let rec embed_rec = function
     | BinEx (ARR_ACCESS, Var arr, Const i) ->
-        let new_name = sprintf "%s_%d" arr#get_name i in
+        let new_name = sprintf "%s_%dI" arr#get_name i in
         let sym = sym_tab#lookup new_name in
         let v = sym#as_var in
         Var v
