@@ -576,6 +576,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
 
     let check_trans st = 
         let step_asserts = list_sub apath st 2 in
+        rt#solver#push_ctx;
         rt#solver#append
             (sprintf ";; Checking the transition %d -> %d" st (st + 1));
         rt#solver#set_collect_asserts true;
@@ -585,16 +586,21 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         then begin
             log INFO
                 (sprintf "  The transition %d -> %d is spurious." st (st + 1));
+            rt#solver#pop_ctx;
+            (* speedup trick: pop out  here the transition relation
+               saved in (A),
+               as we do not need it when looking for unsat cores.
+               Otherwise, it will be popped in (C) *)
+            (* XXX: bad design, refactor *)
+            rt#solver#pop_ctx; (* (B) *)
+
             let new_prog =
                 refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
-            (* speedup trick: pop out the transition relation,
-               as we do not need it anymore *)
-            rt#solver#pop_ctx;
-            rt#solver#push_ctx;
             (true, new_prog)
         end else begin
             log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st (st + 1) total_steps);
+            rt#solver#pop_ctx;
             (false, ctr_prog)
         end
     in
@@ -606,19 +612,19 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     (* Try to detect spurious transitions and unfair paths
        (discussed in the FMCAD13 paper) *)
     log INFO "  Trying to find a spurious transition...";
-    rt#solver#push_ctx;
+    rt#solver#push_ctx; (* (A) *)
     rt#solver#set_need_evidence true; (* needed for refinement! *)
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
     simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1;
     let (refined, new_prog) =
         List.fold_left find_first (false, ctr_prog) (range 0 (num_states - 1))
     in
-    rt#solver#pop_ctx;
     if refined
     then begin
         log INFO "(status trace-refined)";
         (true, new_prog)
     end else begin
+        rt#solver#pop_ctx; (* (C) pop the transition relation *)
         (* try to detect fairness supression *)
         let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
         let type_tab = Program.get_type_tab xducer_prog in
