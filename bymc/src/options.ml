@@ -11,7 +11,7 @@ open Accums
 module StringMap = Map.Make(String)
 
 type action_opt_t =
-    OptAbstract | OptRefine | OptSubstitute | OptNone
+    | OptAbstract | OptRefine | OptSubstitute | OptNone
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv
 
@@ -79,7 +79,9 @@ let parse_options =
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "produce lots of verbose output (you are warned).");
         ]
-        (fun s -> if !opts.filename = "" then opts := {!opts with filename = s})
+        (fun s ->
+            if !opts.filename = ""
+            then opts := {!opts with filename = s})
         "Use: bymc [options] promela_file");
 
     !opts
