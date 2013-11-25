@@ -227,15 +227,18 @@ let sort_thresholds solver conds =
             in
             if compare "<=" c1 c2 && compare "<=" c2 c1
             then begin
-                printf "%s is equivalent to %s\n" (expr_s c1) (expr_s c2);
+                log INFO (sprintf "    %s is equivalent to %s\n"
+                    (expr_s c1) (expr_s c2));
                 Hashtbl.replace rm_tbl c2 true
             end else if compare "<=" c1 c2
             then begin
-                printf "%s is subsumed by %s\n" (expr_s c2) (expr_s c1);
+                log INFO (sprintf "    %s is subsumed by %s\n"
+                    (expr_s c2) (expr_s c1));
                 Hashtbl.replace rm_tbl c2 true
             end else if compare "<=" c2 c1
             then begin
-                printf "%s is subsumed by %s\n" (expr_s c1) (expr_s c2);
+                log INFO (sprintf "    %s is subsumed by %s\n"
+                    (expr_s c1) (expr_s c2));
                 Hashtbl.replace rm_tbl c1 true
             end else
             raise (Abstraction_error m)
