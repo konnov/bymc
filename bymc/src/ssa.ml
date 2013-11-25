@@ -204,34 +204,35 @@ module IGraph = Graph.Pack.Digraph
 module IGraphColoring = Graph.Coloring.Make(IGraph)
 module IGraphOper = Graph.Oper.I(IGraph)
 
-module VarGraph = Graph.Imperative.Digraph.Concrete(
-    struct
-        type t = var
-        let compare lhs rhs =
-            if lhs#id = rhs#id
-            then lhs#mark - rhs#mark
-            else lhs#id - rhs#id
+module VarStruct = struct
+    type t = var
+    let compare lhs rhs =
+        if lhs#id = rhs#id
+        then lhs#mark - rhs#mark
+        else lhs#id - rhs#id
 
-        let hash v = v#id * v#mark
+    let hash v = v#id * v#mark
 
-        let equal lhs rhs = (lhs#id = rhs#id && lhs#mark = rhs#mark)
-    end
-)    
+    let equal lhs rhs = (lhs#id = rhs#id && lhs#mark = rhs#mark)
+end
 
-module VarOper = Graph.Oper.I(VarGraph)
+module VarDigraph = Graph.Imperative.Digraph.Concrete(VarStruct)
+module VarGraph = Graph.Imperative.Graph.Concrete(VarStruct)
+
+module VarOper = Graph.Oper.I(VarDigraph)
 module VarColoring = Graph.Coloring.Make(VarGraph)
 
 
 let print_dot filename var_graph =
     let ig = IGraph.create () in
     let addv v = IGraph.add_vertex ig (IGraph.V.create v#mark) in
-    VarGraph.iter_vertex addv var_graph;
+    VarDigraph.iter_vertex addv var_graph;
     let adde v w =
         IGraph.add_edge ig
             (IGraph.find_vertex ig v#mark) (IGraph.find_vertex ig w#mark)
     in
     (* FIXME: inefficient due to find_vertex *)
-    VarGraph.iter_edges adde var_graph;
+    VarDigraph.iter_edges adde var_graph;
     IGraph.dot_output ig filename
 
 
@@ -240,15 +241,15 @@ let print_dot filename var_graph =
  *)
 let reduce_indices bcfg_closure var =
     let get_bb_copies bb = get_var_copies var bb#seq in
-    let depg = VarGraph.create () in
-    let add_vertex var = VarGraph.add_vertex depg var in
+    let depg = VarDigraph.create () in
+    let add_vertex var = VarDigraph.add_vertex depg var in
     BlockG.iter_vertex (fun bb -> List.iter add_vertex (get_bb_copies bb))
     bcfg_closure;
 
     (* add dependencies *)
     let add_dep v1 v2 =
         if v1#mark <> v2#mark
-        then VarGraph.add_edge depg v1 v2
+        then VarDigraph.add_edge depg v1 v2
     in
     let add_bb_deps bb =
         let copies = get_bb_copies bb in
@@ -263,26 +264,32 @@ let reduce_indices bcfg_closure var =
     BlockG.iter_vertex add_bb_deps bcfg_closure;
 
     (* all assignment along one path depend on each other *)
+    printf "add_transitive_closure\n"; flush stdout;
     ignore (VarOper.add_transitive_closure ~reflexive:false depg);
     (* remove self-loops that can be introduced by transitive closure *)
-    VarGraph.iter_vertex (fun v -> VarGraph.remove_edge depg v v) depg;
+    printf "print_dot\n"; flush stdout;
+    VarDigraph.iter_vertex (fun v -> VarDigraph.remove_edge depg v v) depg;
     print_dot (sprintf "deps-%s.dot" var#get_name) depg;
 
     (* NOTE: coloring works only on undirected graphs,
-       so we have to add the mirror *)
+       so we have to convert it to an undirected graph. *)
+    let g = VarGraph.create () in
+    VarDigraph.iter_edges (fun v w -> VarGraph.add_edge g v w) depg;
+    (*
     let depg = VarOper.union depg (VarOper.mirror depg) in
+*)
 
     (* try to find minimal coloring via binary search *)
     let ecoloring = VarColoring.H.create 1 in
     let rec find_min_colors left right =
         let k = (left + right) / 2 in
-        (*
-        printf "%s: left=%d, right=%d, k=%d\n" var#get_name left right k;
-        *)
+        printf "%s: n=%d, left=%d, right=%d, k=%d\n"
+            var#get_name (VarGraph.nb_vertex g) left right k;
+        flush stdout;
         if left > right
         then (0, ecoloring)
         else let found, h =
-            try true, VarColoring.coloring depg k
+            try true, VarColoring.coloring g k
             with _ -> false, ecoloring
         in
         if found 
@@ -295,13 +302,15 @@ let reduce_indices bcfg_closure var =
                 else (0, ecoloring)
         else find_min_colors (k + 1) right
     in
-    let max_colors = VarGraph.nb_vertex depg in
+    let max_colors = VarGraph.nb_vertex g in
+    printf "coloring\n"; flush stdout;
     let ncolors, coloring =
         if max_colors <> 0
         then find_min_colors 1 max_colors
         else max_colors, ecoloring
     in
     assert (max_colors = 0 || ncolors <> 0);
+    printf "remarking\n"; flush stdout;
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
@@ -309,8 +318,9 @@ let reduce_indices bcfg_closure var =
         then (v, (VarColoring.H.find coloring v)) :: l
         else (v, v#mark) :: l
     in
-    let new_marks = VarGraph.fold_vertex fold depg [] in
+    let new_marks = VarGraph.fold_vertex fold g [] in
     List.iter (fun (v, c) -> v#set_mark c) new_marks;
+    printf "print_dot\n"; flush stdout;
     print_dot (sprintf "deps-%s-marked.dot" var#get_name) depg
 
 
@@ -485,6 +495,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
 (* (in-place) transformation of CFG to SSA.  *)
 let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
         new_sym_tab new_type_tab cfg =
+    printf "mk_ssa_cytron\n"; flush stdout;
     mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
     let rename_block bb =
         let map_s s =
@@ -495,10 +506,13 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
     in
     let bcfg = cfg#as_block_graph in
     (* we need to track dependencies along paths *)
+    printf "add_transitive_closure\n"; flush stdout;
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
 
+    printf "reduce_indices\n"; flush stdout;
     List.iter (reduce_indices bcfg) intern_vars;
     List.iter (reduce_indices bcfg) extern_vars;
+    printf "optimize_ssa\n"; flush stdout;
     ignore (optimize_ssa cfg); (* optimize it after all *)
     List.iter rename_block cfg#block_list;
     cfg
