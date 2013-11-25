@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# Run the abstraction refinement loop with nusmv in bdd mode
+
+NUSMV_VERBOSE=0
+
+# parse options
+TEMPOPTS=`getopt -o w --long nusmv-verbose: -n '$@' -- "$@"`
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+eval set -- "$TEMPOPTS"
+while true ; do
+    case "$1" in
+    -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
+    --) shift ; break ;;
+    *) echo "Internal error!" ; exit 1 ;;
+    esac
+done
+
+# run the tool
+DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bdd \
+    `dirname $0`/cegar "$@"
+
