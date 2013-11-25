@@ -51,5 +51,6 @@ function mc_refine {
 
 function mc_collect_stat {
     mc_stat=`$BYMC_HOME/script/parse-spin-out.py $MC_OUT`
+    mc_stat="$mc_stat|technique=spin"
 }
 
