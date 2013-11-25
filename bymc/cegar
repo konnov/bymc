@@ -22,8 +22,8 @@ MC_OUT="mc.out"
 # interpret the functions specific to model checker
 if [ "${TARGET_MC}" == "spin" ]; then
     . "${BYMC_HOME}/mod-verify-spin.sh"
-elif [ "${TARGET_MC}" == "nusmv" ]; then
-    . "${BYMC_HOME}/mod-verify-nusmv.sh"
+elif [ "${TARGET_MC}" == "nusmv-bmc" ]; then
+    . "${BYMC_HOME}/mod-verify-nusmv-bmc.sh"
 else
     echo "Unsupported TARGET_MC='${TARGET_MC}'"
     exit 2

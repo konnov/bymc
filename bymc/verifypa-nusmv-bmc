@@ -20,6 +20,6 @@ while true ; do
 done
 
 # run the tool
-DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv \
+DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bmc \
     `dirname $0`/cegar "$@"
 
