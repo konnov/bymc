@@ -156,7 +156,7 @@ let abstract_pointwise dom solver atype coord_point_fun symb_expr =
     let mk_eq (var, abs_val) = coord_point_fun var abs_val in
     let mk_point point_tuple = list_to_binex AND (List.map mk_eq point_tuple)
     in
-    let points_lst = (dom#find_abs_vals atype solver symb_expr) in
+    let points_lst = dom#find_abs_vals atype solver symb_expr in
     if points_lst <> []
     then list_to_binex OR (List.map mk_point points_lst)
     else Const 0 (* false *)
