@@ -54,7 +54,7 @@ function mc_verify_spec {
 }
 
 function mc_refine {
-    CAMLRUNPARAM="b" ${TOOL} -t ${CEX} 2>&1 | tee refinement.out
+    CAMLRUNPARAM="b" ${TOOL} -t ${CEX} ${PROG} 2>&1 | tee refinement.out
     echo ""
 }
 
