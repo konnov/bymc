@@ -21,6 +21,10 @@ function mc_compile_first {
     echo "Checking reachability of the local states..."
     ${BYMC_HOME}/nusmv-find-reach "${NUSMV}" "${SRC_REACH}" "${HIDDEN}"
     echo "[DONE]"
+    echo "Generating smaller abstraction..."
+    CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
+    echo "[DONE]"
     echo ""
 }
 
