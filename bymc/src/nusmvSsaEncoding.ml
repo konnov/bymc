@@ -478,42 +478,45 @@ let collect_globals main_sect =
 let hide_vars names sections =
     let is_vis n = not (StrSet.mem n names)
     in
-    let rec rewrite_ex = function
-    | Var v as e ->
-        if is_vis v#mangled_name
-        then e
-        else Var nusmv_false  (* unreachable meaning always 0 *)
+    let simplify e =
+        let rec rewrite = function
+        | Var v as e ->
+            if is_vis v#mangled_name
+            then e
+            else Const 0  (* unreachable meaning always 0 *)
 
-    | BinEx (EQ, Var v, Const i) as e ->
-        if is_vis v#mangled_name
-        then e
-        (* unreachable meaning always 0 *)
-        else if i > 0 then Var nusmv_false else Var nusmv_true
+        | BinEx (EQ, Var v, Const i) as e ->
+            if is_vis v#mangled_name
+            then e
+            (* unreachable meaning always 0 *)
+            else if i > 0 then Const 0 else Const 1
 
-    | BinEx (NE, Var v, Const i) as e ->
-        if is_vis v#mangled_name
-        then e
-        (* unreachable, always 0 *)
-        else if i > 0 then Var nusmv_true else Var nusmv_false
+        | BinEx (NE, Var v, Const i) as e ->
+            if is_vis v#mangled_name
+            then e
+            (* unreachable, always 0 *)
+            else if i > 0 then Const 1 else Const 0
 
-    | BinEx (t, l, r) -> BinEx (t, rewrite_ex l, rewrite_ex r)
+        | BinEx (t, l, r) -> BinEx (t, rewrite l, rewrite r)
 
-    | UnEx (t, r) -> UnEx (t, rewrite_ex r)
+        | UnEx (t, r) -> UnEx (t, rewrite r)
 
-    | _ as e -> e
+        | _ as e -> e
+        in
+        compute_consts (rewrite e)
     in
     let on_sect l = function
     | SAssign assigns as asgn ->
         asgn :: l (* keep as is *)
 
     | STrans es ->
-        (STrans (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+        (STrans (List.map (fun e -> compute_consts (simplify e)) es)) :: l
 
     | SInit es ->
-        (SInit (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+        (SInit (List.map (fun e -> compute_consts (simplify e)) es)) :: l
 
     | SInvar es ->
-        (SInvar (List.map (fun e -> compute_consts (rewrite_ex e)) es)) :: l
+        (SInvar (List.map (fun e -> compute_consts (simplify e)) es)) :: l
 
     | SVar decls ->
         let on_decl l (v, t) =
@@ -536,13 +539,13 @@ let hide_vars names sections =
             (List.fold_left on_sect [] (List.rev sections)))) :: l
 
     | SLtlSpec (name, e) ->
-        (SLtlSpec (name, compute_consts (rewrite_ex e))) :: l
+        (SLtlSpec (name, compute_consts (simplify e))) :: l
 
     | SInvarSpec (name, e) ->
-        (SInvarSpec (name, compute_consts (rewrite_ex e))) :: l
+        (SInvarSpec (name, compute_consts (simplify e))) :: l
 
     | SJustice e ->
-        (SJustice (compute_consts (rewrite_ex e))) :: l
+        (SJustice (compute_consts (simplify e))) :: l
     in
     List.fold_left on_top [] (List.rev sections)
 
