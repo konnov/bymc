@@ -6,7 +6,7 @@ DEPTH=10
 NUSMV_VERBOSE=0
 
 # parse options
-TEMPOPTS=`getopt -o d:w --long depth:nusmv-verbose: -n '$@' -- "$@"`
+TEMPOPTS=`getopt -o d:w: --long depth:,nusmv-verbose: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMPOPTS"
