@@ -85,7 +85,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 (units_of_program vass_prog) (get_type_tab vass_prog)
                 (Hashtbl.create 10);
             log INFO "> Constructing SMT transducers...";
-            let xducer_prog = SmtXducerPass.do_xducers caches vass_prog in
+            let xducer_prog =
+                SmtXducerPass.do_xducers solver caches vass_prog in
             write_to_file false "abs-xducers.prm"
                 (units_of_program xducer_prog) (get_type_tab xducer_prog)
                 (Hashtbl.create 10);

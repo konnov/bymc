@@ -142,7 +142,7 @@ let module_of_proc rt keep_out_next prog proc =
         let new_type_tab = (Program.get_type_tab prog)#copy in
         let cfg = Cfg.remove_ineffective_blocks (mk_cfg (mir_to_lir comp)) in
         let cfg_ssa =
-            mk_ssa false (shared @ locals) []
+            mk_ssa rt#solver false (shared @ locals) []
                 new_sym_tab new_type_tab cfg in
         Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
         let exprs = cfg_to_constraints proc new_sym_tab new_type_tab cfg_ssa in
@@ -182,7 +182,10 @@ let create_proc_mods rt keep_out_next intabs_prog =
                     if keep_out_next
                     then (v, t)
                     else (v#copy (strip_out v#get_name), t)
-            | LocalIn (v, t) -> raise (Failure ("Unexpected LocalIn"))
+            | LocalIn (v, t) ->
+                    raise (Failure
+                        (sprintf "Unexpected LocalIn: %s is not assigned?"
+                            (strip_in v#mangled_name)))
             | LocalOut (v, t) -> (v#copy (strip_out v#get_name), t)
             | _ -> raise (Failure ("Unexpected param type"))
         in

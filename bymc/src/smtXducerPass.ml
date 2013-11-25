@@ -32,7 +32,7 @@ let write_exprs name stmts =
     close_out out
 
 
-let to_xducer caches prog new_type_tab p =
+let to_xducer solver caches prog new_type_tab p =
     let reg_tbl = (caches#find_struc prog)#get_regions p#get_name in
     let loop_prefix = reg_tbl#get "loop_prefix" p#get_stmts in
     let loop_body = reg_tbl#get "loop_body" p#get_stmts in
@@ -41,7 +41,7 @@ let to_xducer caches prog new_type_tab p =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let locals = (Program.get_all_locals prog) in
     let new_sym_tab = new symb_tab "tmp" in
-    let cfg = mk_ssa true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
+    let cfg = mk_ssa solver true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
     in
     if may_log DEBUG
     then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
@@ -53,10 +53,10 @@ let to_xducer caches prog new_type_tab p =
     new_proc
 
 
-let do_xducers caches prog =
+let do_xducers solver caches prog =
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let new_procs = List.map
-        (to_xducer caches prog new_type_tab) (Program.get_procs prog) in
+        (to_xducer solver caches prog new_type_tab) (Program.get_procs prog) in
     let new_prog =
         (Program.set_type_tab new_type_tab
             (Program.set_procs new_procs prog)) in

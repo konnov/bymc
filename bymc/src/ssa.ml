@@ -222,6 +222,56 @@ module VarGraph = Graph.Imperative.Graph.Concrete(VarStruct)
 module VarOper = Graph.Oper.I(VarDigraph)
 module VarColoring = Graph.Coloring.Make(VarGraph)
 
+(* Graph.Coloring.coloring stucks unpredictably on small graphs
+  (e.g., 30 nodes, 6 colors). Use SMT solver to do the coloring.
+  Our graphs are not large, so this approach works well enough.
+  For larger examples we can try a SAT solver.
+*)
+let find_coloring solver graph ncolors =
+    solver#push_ctx;
+    solver#set_need_evidence true;
+    let color_tp = new data_type SpinTypes.TINT in
+    color_tp#set_range 0 ncolors;
+    let vars = Hashtbl.create ncolors in
+    let add_vertex v =
+        let c = new_var (sprintf "_nclr%d" v#mark) in
+        Hashtbl.replace vars v#mark c;
+        solver#append_var_def c color_tp
+    in
+    let add_edge v w =
+        if v#mark <> w#mark
+        then let vc = Hashtbl.find vars v#mark
+             and wc = Hashtbl.find vars w#mark in
+            (* the colors of the vertices connected with the edges
+               must be different. That's it. *)
+            ignore (solver#append_expr (BinEx (NE, Var vc, Var wc)))
+    in
+    VarGraph.iter_vertex add_vertex graph;
+    VarGraph.iter_edges add_edge graph;
+    let tab = Hashtbl.create ncolors in
+    let found =
+        if solver#check
+        then begin (* parse evidence, XXX: not super-efficient *)
+            let eq_re = Str.regexp "(= _nclr\\([0-9]+\\) \\([0-9]+\\))" in
+            let oth_re = Str.regexp "(= [A-Za-z0-9_]+ \\([0-9]+\\))" in
+            let each_line l =
+                if Str.string_match eq_re l 0
+                then Hashtbl.replace tab
+                    (int_of_string (Str.matched_group 1 l))
+                    (* a color from 1 to k, as in Graph.Coloring *)
+                    (1 + (int_of_string (Str.matched_group 2 l)))
+                else if not (Str.string_match oth_re l 0) && l <> ""
+                then raise (Failure ("unexpected line: " ^ l))
+            in
+            List.iter each_line solver#get_evidence;
+            true
+        end else
+            false
+    in
+    solver#set_need_evidence false;
+    solver#pop_ctx;
+    (found, tab)
+
 
 let print_dot filename var_graph =
     let ig = IGraph.create () in
@@ -239,7 +289,7 @@ let print_dot filename var_graph =
 (* for every basic block, find the starting indices of the variables,
    i.e., such indices that have not been used in immediate dominators.
  *)
-let reduce_indices bcfg_closure var =
+let reduce_indices solver bcfg_closure var =
     let get_bb_copies bb = get_var_copies var bb#seq in
     let depg = VarDigraph.create () in
     let add_vertex var = VarDigraph.add_vertex depg var in
@@ -264,10 +314,10 @@ let reduce_indices bcfg_closure var =
     BlockG.iter_vertex add_bb_deps bcfg_closure;
 
     (* all assignment along one path depend on each other *)
-    printf "add_transitive_closure\n"; flush stdout;
+    (*printf "add_transitive_closure\n"; flush stdout;*)
     ignore (VarOper.add_transitive_closure ~reflexive:false depg);
     (* remove self-loops that can be introduced by transitive closure *)
-    printf "print_dot\n"; flush stdout;
+    (*printf "print_dot\n"; flush stdout;*)
     VarDigraph.iter_vertex (fun v -> VarDigraph.remove_edge depg v v) depg;
     print_dot (sprintf "deps-%s.dot" var#get_name) depg;
 
@@ -280,17 +330,19 @@ let reduce_indices bcfg_closure var =
 *)
 
     (* try to find minimal coloring via binary search *)
-    let ecoloring = VarColoring.H.create 1 in
+    let ecoloring = Hashtbl.create 1 (*VarColoring.H.create 1*) in
     let rec find_min_colors left right =
         let k = (left + right) / 2 in
-        printf "%s: n=%d, left=%d, right=%d, k=%d\n"
+        (*printf "%s: n=%d, left=%d, right=%d, k=%d\n"
             var#get_name (VarGraph.nb_vertex g) left right k;
-        flush stdout;
+        flush stdout;*)
         if left > right
         then (0, ecoloring)
-        else let found, h =
+        else let found, h = find_coloring solver g k
+            (* alternative: ocamlgraph coloring, extremely slow
             try true, VarColoring.coloring g k
             with _ -> false, ecoloring
+            *)
         in
         if found 
         then if left = right
@@ -303,24 +355,25 @@ let reduce_indices bcfg_closure var =
         else find_min_colors (k + 1) right
     in
     let max_colors = VarGraph.nb_vertex g in
-    printf "coloring\n"; flush stdout;
+    (*printf "coloring\n"; flush stdout;*)
     let ncolors, coloring =
         if max_colors <> 0
         then find_min_colors 1 max_colors
         else max_colors, ecoloring
     in
     assert (max_colors = 0 || ncolors <> 0);
-    printf "remarking\n"; flush stdout;
+    (*printf "remarking\n"; flush stdout;*)
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
         if v#mark <> 0 && v#mark <> Pervasives.max_int
-        then (v, (VarColoring.H.find coloring v)) :: l
+        then (v, Hashtbl.find coloring v#mark
+            (*VarColoring.H.find coloring v*)) :: l
         else (v, v#mark) :: l
     in
     let new_marks = VarGraph.fold_vertex fold g [] in
     List.iter (fun (v, c) -> v#set_mark c) new_marks;
-    printf "print_dot\n"; flush stdout;
+    (*printf "print_dot\n"; flush stdout;*)
     print_dot (sprintf "deps-%s-marked.dot" var#get_name) depg
 
 
@@ -493,9 +546,9 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
 
 
 (* (in-place) transformation of CFG to SSA.  *)
-let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
+let mk_ssa solver tolerate_undeclared_vars extern_vars intern_vars
         new_sym_tab new_type_tab cfg =
-    printf "mk_ssa_cytron\n"; flush stdout;
+    (*printf "mk_ssa_cytron\n"; flush stdout;*)
     mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
     let rename_block bb =
         let map_s s =
@@ -506,13 +559,13 @@ let mk_ssa tolerate_undeclared_vars extern_vars intern_vars
     in
     let bcfg = cfg#as_block_graph in
     (* we need to track dependencies along paths *)
-    printf "add_transitive_closure\n"; flush stdout;
+    (*printf "add_transitive_closure\n"; flush stdout;*)
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
 
-    printf "reduce_indices\n"; flush stdout;
-    List.iter (reduce_indices bcfg) intern_vars;
-    List.iter (reduce_indices bcfg) extern_vars;
-    printf "optimize_ssa\n"; flush stdout;
+    (*printf "reduce_indices\n"; flush stdout;*)
+    List.iter (reduce_indices solver bcfg) intern_vars;
+    List.iter (reduce_indices solver bcfg) extern_vars;
+    (*printf "optimize_ssa\n"; flush stdout;*)
     ignore (optimize_ssa cfg); (* optimize it after all *)
     List.iter rename_block cfg#block_list;
     cfg
