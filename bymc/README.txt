@@ -30,13 +30,13 @@ http://forsyte.at/software/bymc/#examples
 4. RUNNING
 
 # checking models with concrete parameters using spin
-./run-concrete 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
+./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
 
 # parameterized model checking with the abstraction-refinement
 
-./cegar ${fmcad13-benchmarks}/bcast-byz.pml relay
+./verifypa-spin ${fmcad13-benchmarks}/bcast-byz.pml relay
 
-(you can invoke cegar from any directory you want)
+(you can invoke verifypa-* scripts from any directory you want)
 
 # follow the messages by the script...
 
@@ -45,7 +45,7 @@ http://forsyte.at/software/bymc/#examples
 # The tool will check automatically if it is an invariant.
 #
 # after that run cegar once more:
-./cegar ${fmcad13-benchmarks}/bcast-byz.pml relay
+./verifypa-spin ${fmcad13-benchmarks}/bcast-byz.pml relay
 
 # the manual execution of the tool chain (most likely, you don't need it!)
 
