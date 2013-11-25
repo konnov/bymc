@@ -81,8 +81,8 @@ if __name__ == '__main__':
     invars = collect_invar_names(smvf)
     reachable, unreachable = collect_unreachable(OUT_FILENAME, invars)
     exclude_lines(hiddenf, 'hidden.new', unreachable)
-    print "%d counters out of %d are always zero (hidden)" \
-            % (len(unreachable), len(unreachable) + len(reachable))
+    print "%d counters are globally zero, and %d are not" \
+            % (len(unreachable), len(reachable))
     os.remove(hiddenf)
     os.rename('hidden.new', hiddenf)
 
