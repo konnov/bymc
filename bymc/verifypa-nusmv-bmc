@@ -4,9 +4,10 @@
 
 DEPTH=10
 NUSMV_VERBOSE=0
+ONE_SHOT=0
 
 # parse options
-TEMPOPTS=`getopt -o d:w: --long depth:,nusmv-verbose: -n '$@' -- "$@"`
+TEMPOPTS=`getopt -o d:w: --long depth:,nusmv-verbose:,one-shot -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMPOPTS"
@@ -14,6 +15,7 @@ while true ; do
     case "$1" in
     -d|--depth) DEPTH=$2 ; shift 2 ;;
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
+    --one-shot) ONE_SHOT=1 ; shift 1 ;;
     --) shift ; break ;;
     *) echo "Internal error!" ; exit 1 ;;
     esac

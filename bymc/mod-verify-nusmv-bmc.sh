@@ -36,7 +36,11 @@ function mc_verify_spec {
         echo "check_invar_bmc -k $DEPTH -a een-sorensson -P ${PROP}" \
             >>${SCRIPT}
     else
-        echo "check_ltlspec_bmc_inc -k $DEPTH -P ${PROP}" >>${SCRIPT}
+        if [ "$ONE_SHOT" == "0" ]; then
+            echo "check_ltlspec_bmc_inc -k $DEPTH -P ${PROP}" >>${SCRIPT}
+        else
+            echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
+        fi
     fi
     echo "show_traces -v -o ${CEX}" >>${SCRIPT}
     echo "quit" >>${SCRIPT}
