@@ -151,54 +151,44 @@ class pia_domain conds_i =
 exception Skeleton_not_supported of string
 
 let identify_conditions var_roles stmts =
-    let is_threshold v e =
-        let r = var_roles#get_role v in
-        (r = LocalUnbounded || is_scratch r) && not (expr_exists not_symbolic e)
+    let is_symb_expr e = not (expr_exists not_symbolic e) in
+    let thresh_lt l r =
+        let ls = is_symb_expr l and rs = is_symb_expr r in
+        (if ls then [l] else []) @ (if rs then [r] else [])
     in
+    let thresh_le l r =
+        let ls = is_symb_expr l and rs = is_symb_expr r in
+        if ls && not rs (* N <= x, i.e., x >= N *)
+        then [l]
+        else if rs && not ls
+        then [BinEx (PLUS, Const 1, r)] (* x <= N means N + 1 is the threshold *)
+        else [] (* it is either a constant expression, or a general one *)
+    in
+
     let rec on_expr e =
         match e with
         | BinEx(AND, l, r) -> List.append (on_expr l) (on_expr r)
         | BinEx(OR, l, r)  -> List.append (on_expr l) (on_expr r)
         | UnEx(NEG, l)     -> on_expr l
-        | BinEx(LT, Var v, e) -> if is_threshold v e then [e] else []
-        | BinEx(GE, Var v, e) -> if is_threshold v e then [e] else []
-        | BinEx(LE, e, Var v) -> if is_threshold v e then [e] else []
-        | BinEx(GT, e, Var v) -> if is_threshold v e then [e] else []
-        | BinEx(LE, Var v, e) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported ("var <= " ^ (expr_s e)))
-            else []
-        | BinEx(GE, e, Var v) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported ((expr_s e) ^ " >= var"))
-            else []
-        | BinEx(GT, Var v, e) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported ("var > " ^ (expr_s e)))
-            else []
-        | BinEx(LT, e, Var v) ->
-            if is_threshold v e
-            then raise (Skeleton_not_supported ((expr_s e) ^ " < var"))
-            else []
+        | BinEx(LT, l, r) -> thresh_lt l r
+        | BinEx(GE, l, r) -> thresh_le r l
+        | BinEx(LE, l, r) -> thresh_le l r
+        | BinEx(GT, l, r) -> thresh_lt r l
         | _ -> []
     in
-    let rec on_stmts sts = match sts with
-        | Expr (_, e) :: tl -> List.append (on_expr e) (on_stmts tl)
-        | _ :: tl    -> on_stmts tl
-        | _ -> []
+    let tab = Hashtbl.create 10 in
+    let add_on_demand c =
+        let s = expr_s c in
+        if not (Hashtbl.mem tab s) then Hashtbl.replace tab s c
     in
-    let cs = (Const 0) :: (Const 1) :: (on_stmts stmts) in
-    (* TODO: simplify and canonize expressions here, i.e.,
-       f+1 and 1+f should be the same expression *)
-
-    (* remove duplicates *)
-    let tbl = Hashtbl.create 10 in
-    List.iter
-        (fun c ->
-            let s = (expr_s c) in
-            if not (Hashtbl.mem tbl s) then Hashtbl.add tbl s c)
-        cs;
-    Hashtbl.fold (fun text cond lst -> cond :: lst) tbl []
+    let rec for_stmts = function
+        | Expr (_, e) -> List.iter add_on_demand (on_expr e)
+        | _ -> ()
+    in
+    add_on_demand (Const 0);
+    add_on_demand (Const 1);
+    List.iter for_stmts stmts;
+    hashtbl_vals tab
 
 
 let sort_thresholds solver conds =
@@ -209,15 +199,15 @@ let sort_thresholds solver conds =
     let compare op c1 c2 =
         if c1 <> c2
         then begin
+            let i1 = Hashtbl.find id_map c1
+                and i2 = Hashtbl.find id_map c2 in
             let asrt =
                 sprintf "(not (%s %s %s))" op (expr_to_smt c1) (expr_to_smt c2)
             in
             solver#push_ctx;
             solver#append_assert asrt;
             let res = not solver#check in
-            if res
-            then (Hashtbl.add cmp_tbl
-                ((Hashtbl.find id_map c1), (Hashtbl.find id_map c2)) true);
+            if res then (Hashtbl.add cmp_tbl (i1, i2) true);
             solver#pop_ctx; 
             res
         end
@@ -235,7 +225,11 @@ let sort_thresholds solver conds =
             let m =
                 sprintf "No strict order for %s and %s" (expr_s c1) (expr_s c2)
             in
-            if compare "<=" c1 c2
+            if compare "<=" c1 c2 && compare "<=" c2 c1
+            then begin
+                printf "%s is equivalent to %s\n" (expr_s c1) (expr_s c2);
+                Hashtbl.replace rm_tbl c2 true
+            end else if compare "<=" c1 c2
             then begin
                 printf "%s is subsumed by %s\n" (expr_s c2) (expr_s c1);
                 Hashtbl.replace rm_tbl c2 true
