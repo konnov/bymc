@@ -235,26 +235,36 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
 
     | ConcExpr, AbsExpr ->
         (* do abstract_pointwise general abstraction, then concretize lhs *)
+        solver#push_ctx;
         let tmp_var = new_var "_concX" in
         solver#append_var_def tmp_var (new data_type SpinTypes.TINT);
         let new_expr = (BinEx (tok, Var tmp_var, rhs)) in
+        solver#comment (sprintf "abs(%s)" (expr_s new_expr));
         let restore_lhs v abs_val =
             if v == tmp_var
             then dom#expr_is_concretization lhs abs_val
             else BinEx (EQ, Var v, Const abs_val)
         in
-        abstract_pointwise dom solver atype restore_lhs new_expr
+        let ae =
+            abstract_pointwise dom solver atype restore_lhs new_expr in
+        solver#pop_ctx;
+        ae
 
     | AbsExpr, ConcExpr ->
+        solver#push_ctx;
         let tmp_var = new_var "_concX" in
         solver#append_var_def tmp_var (new data_type SpinTypes.TINT);
         let new_expr = (BinEx (tok, lhs, Var tmp_var)) in
+        solver#comment (sprintf "abs(%s)" (expr_s new_expr));
         let restore_rhs v abs_val =
             if v == tmp_var
             then dom#expr_is_concretization rhs abs_val
             else BinEx (EQ, Var v, Const abs_val)
         in
-        abstract_pointwise dom solver atype restore_rhs new_expr
+        let ae =
+            abstract_pointwise dom solver atype restore_rhs new_expr in
+        solver#pop_ctx;
+        ae
 
     | ConcExpr, ConcExpr
     | ConcExpr, ConstExpr
