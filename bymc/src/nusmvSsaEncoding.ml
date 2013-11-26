@@ -145,7 +145,7 @@ let module_of_proc rt keep_out_next prog proc =
             mk_ssa rt#solver false (shared @ locals) []
                 new_sym_tab new_type_tab cfg in
         Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
-        let exprs = cfg_to_constraints proc new_sym_tab new_type_tab cfg_ssa in
+        let exprs = cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg_ssa in
         (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
     let ntt, syms, exprs = to_ssa in

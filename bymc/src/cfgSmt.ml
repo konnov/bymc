@@ -47,7 +47,7 @@ let find_choices cfg =
      A -> (B, C); B -> D; C -> D; B -> C.
  To handle this case two copies of C must be introduced.
  *)
-let block_to_constraints (proc: 't proc)
+let block_to_constraints (proc_name: string)
         (new_sym_tab: symb_tab)
         (new_type_tab: data_type_tab)
         (choices: (int, ('t basic_block * int) list list) Hashtbl.t)
@@ -58,7 +58,7 @@ let block_to_constraints (proc: 't proc)
         try Var ((new_sym_tab#lookup name)#as_var)
         with Symbol_not_found _ ->
             let nv = new_var name in 
-            nv#set_proc_name proc#get_name;
+            nv#set_proc_name proc_name;
             let tp = new data_type SpinTypes.TINT in
             (* value 0 means 'disabled', the exit block should be enabled *)
             let r = max 2 (1 + List.length bb#get_succ) in
@@ -216,10 +216,10 @@ let block_intra_cons (proc_name: string)
     List.fold_left convert [] (List.rev bb#get_seq)
 
 
-let cfg_to_constraints proc new_sym_tab new_type_tab cfg =
+let cfg_to_constraints proc_name new_sym_tab new_type_tab cfg =
     let choices = find_choices cfg in
     let cons_lists =
-        List.map (block_to_constraints proc new_sym_tab new_type_tab choices)
+        List.map (block_to_constraints proc_name new_sym_tab new_type_tab choices)
             cfg#block_list
     in
     let cons = List.concat cons_lists in
@@ -231,7 +231,7 @@ let cfg_to_constraints proc new_sym_tab new_type_tab cfg =
         try Var ((new_sym_tab#lookup name)#as_var)
         with Symbol_not_found _ ->
             let nv = new_var name in 
-            nv#set_proc_name proc#get_name;
+            nv#set_proc_name proc_name;
             let tp = new data_type SpinTypes.TBIT in
             new_type_tab#set_type nv tp;
             new_sym_tab#add_symb nv#get_name (nv :> symb);
