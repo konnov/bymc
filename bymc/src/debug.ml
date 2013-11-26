@@ -7,7 +7,7 @@ let current_verbosity_level = ref INFO (* extremely long on purpose *)
 let verbosity_s = function
     | QUIET -> ""
     | ERROR -> "ERR  "
-    | WARN -> "WARN   "
+    | WARN -> "WARN: "
     | INFO -> " "
     | DEBUG -> " *** "
     | TRACE -> " --- "

@@ -129,23 +129,41 @@ let vars_of_syms syms =
 
 (* ====================== important functions *)
 
-let module_of_proc rt keep_out_next prog proc =
+let module_of_proc rt keep_out_next prog =
+    let get_comp p =
+        let reg_tab = (rt#caches#find_struc prog)#get_regions p#get_name
+        in
+        reg_tab#get "comp" p#get_stmts 
+    in
+    let make_options p =
+        MOptGuarded ((MSkip (fresh_id ())) :: (get_comp p)) in
+    let procs = Program.get_procs prog in
+    let joint_code =
+        if (List.length procs) = 1
+        then get_comp (List.hd procs)
+        else [MIf (fresh_id (), List.map make_options procs)]
+    in
+    (* both locals and shared are the parameters of our module *)
+    let all_locals =
+        List.concat (List.map (fun p -> vars_of_syms p#get_symbs) procs)
+    in
+    let shared = Program.get_shared prog in
+    let joint_name =
+        str_join "_" (List.map (fun p -> p#get_name) procs) in
     let to_ssa =
-        let reg_tbl =
-            (rt#caches#find_struc prog)#get_regions proc#get_name in
-        let comp = reg_tbl#get "comp" proc#get_stmts in
-        (* both locals and shared are the parameters of our module *)
-        let locals = vars_of_syms proc#get_symbs in
-        let shared = Program.get_shared prog in
         (* construct SSA as in SmtXducerPass *)
         let new_sym_tab = new symb_tab "tmp" in
         let new_type_tab = (Program.get_type_tab prog)#copy in
-        let cfg = Cfg.remove_ineffective_blocks (mk_cfg (mir_to_lir comp)) in
+        let cfg = Cfg.remove_ineffective_blocks
+            (mk_cfg (mir_to_lir joint_code))
+        in
         let cfg_ssa =
-            mk_ssa rt#solver false (shared @ locals) []
+            mk_ssa rt#solver false (shared @ all_locals) []
                 new_sym_tab new_type_tab cfg in
-        Cfg.write_dot (sprintf "ssa-comp-%s.dot" proc#get_name) cfg_ssa;
-        let exprs = cfg_to_constraints proc#get_name new_sym_tab new_type_tab cfg_ssa in
+        Cfg.write_dot (sprintf "ssa-comp-%s.dot" joint_name) cfg_ssa;
+        let exprs = cfg_to_constraints
+                joint_name new_sym_tab new_type_tab cfg_ssa
+        in
         (new_type_tab, new_sym_tab, List.map expr_of_m_stmt exprs)
     in
     let ntt, syms, exprs = to_ssa in
@@ -154,51 +172,52 @@ let module_of_proc rt keep_out_next prog proc =
         if keep_out_next
         then exprs
         else List.map (map_vars (replace_with_next syms ntt)) exprs in
-    let pvars = List.sort proc_var_cmp (List.map (partition_var ntt) new_vars) in
+    let pvars =
+        List.sort proc_var_cmp (List.map (partition_var ntt) new_vars)
+    in
     let temps = List.filter is_var_temp pvars in
     let args =
         if keep_out_next
         then List.filter (fun v -> is_var_local v || is_var_shared v) pvars
         else List.filter (fun v -> is_var_local v || is_var_shared_in v) pvars
     in
-    (* activate the process *)
-    (* XXX: TODO: it does not work for several proctypes *)
     let invar = Var ((syms#lookup "at0")#as_var) in
     let mod_type =
-        SModule (proc#get_name,
+        SModule (joint_name,
             List.map ptov args,
             [SVar (List.map ptovt temps); SInvar [invar]; STrans exprs])
     in
-    (mod_type, args)
+    (joint_name, mod_type, args)
 
 
 let create_proc_mods rt keep_out_next intabs_prog =
-    let transform_proc (globals, main_sects) p =
-        let mod_type, args = module_of_proc rt keep_out_next intabs_prog p in
-        let to_param = function
+    let transform_proc =
+        let proc_name, mod_type, args =
+            module_of_proc rt keep_out_next intabs_prog in
+        let to_param l = function
             | SharedIn (v, t) ->
-                    (v#copy (strip_in v#get_name), t)
+                (v#copy (strip_in v#get_name), t) :: l
             | SharedOut (v, t) ->
-                    if keep_out_next
-                    then (v, t)
-                    else (v#copy (strip_out v#get_name), t)
+                if keep_out_next
+                then (v, t) :: l
+                else (v#copy (strip_out v#get_name), t) :: l
             | LocalIn (v, t) ->
-                    raise (Failure
-                        (sprintf "Unexpected LocalIn: %s is not assigned?"
-                            (strip_in v#mangled_name)))
-            | LocalOut (v, t) -> (v#copy (strip_out v#get_name), t)
+                log WARN (sprintf 
+                    "Local variable %s is not always assigned."
+                    (strip_in v#mangled_name));
+                l
+            | LocalOut (v, t) -> (v#copy (strip_out v#get_name), t) :: l
             | _ -> raise (Failure ("Unexpected param type"))
         in
-        let params = List.map to_param args in
-        let inst = SModInst("p_" ^ p#get_name, p#get_name,
+        let params = List.fold_left to_param [] (List.rev args) in
+        let inst = SModInst("p_" ^ proc_name, proc_name,
             (List.map (fun (v, _) -> Var v) params))
         in
         let locals = List.filter (fun (v, _) -> v#proc_name <> "") params in
-        (mod_type :: globals, (SVar locals) :: inst :: main_sects)
+        ([mod_type], [SVar locals; inst])
     in
-    let procs = Program.get_procs intabs_prog in
     let tt = Program.get_type_tab intabs_prog in
-    let globals, main_sects = List.fold_left transform_proc ([], []) procs in
+    let globals, main_sects = transform_proc in
     let shared = Program.get_shared intabs_prog in
     let shared_in = List.map (fun v -> (v, tt#get_type v)) shared in
     let shared_out =
