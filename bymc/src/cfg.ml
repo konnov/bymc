@@ -223,6 +223,7 @@ let remove_ineffective_blocks cfg =
         | _ -> false
     in
     let has_lab lab b = b#label = lab in
+    let cmp_blocks b c = b#label - c#label in
     let process_block bb =
         let relink_pred pbb =
             (* change the successors of the predecessors *)
@@ -230,14 +231,16 @@ let remove_ineffective_blocks cfg =
                 List.partition (has_lab bb#label) pbb#get_succ in
             let _, bb_succ =
                 List.partition (has_lab bb#label) bb#get_succ in
-            pbb#set_succ (new_succ @ bb_succ)
+            let uniq = list_sort_uniq cmp_blocks (bb_succ @ new_succ) in
+            pbb#set_succ uniq
         in
         let relink_succ sbb =
             let _, new_pred =
                 List.partition (has_lab bb#label) sbb#get_pred in
             let _, bb_pred =
                 List.partition (has_lab bb#label) bb#get_pred in
-            sbb#set_pred (bb_pred @ new_pred)
+            let uniq = list_sort_uniq cmp_blocks (bb_pred @ new_pred) in
+            sbb#set_pred uniq
         in
         if List.for_all is_ineffective bb#get_seq
                 && bb#get_pred <> [] (* not the entry block *)
