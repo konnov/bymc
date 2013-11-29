@@ -112,7 +112,7 @@ class yices_smt =
         method read_line =
             let out = PipeCmd.readline m_pipe_cmd in
             fprintf clog ";; READ: %s\n" out; flush clog;
-            log Debug.TRACE (sprintf "YICES: ^^^%s$$$\n" out);
+            trace Trc.smt (fun _ -> sprintf "YICES: ^^^%s$$$\n" out);
             out
 
         method append cmd =
