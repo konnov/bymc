@@ -104,34 +104,42 @@ class yices_smt =
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             close_out clog;
             PipeCmd.destroy m_pipe_cmd;
             m_pipe_cmd <- PipeCmd.null ()
 
         method write_line s =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             writeline m_pipe_cmd s
 
         method read_line =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             let out = PipeCmd.readline m_pipe_cmd in
             fprintf clog ";; READ: %s\n" out; flush clog;
             trace Trc.smt (fun _ -> sprintf "YICES: ^^^%s$$$\n" out);
             out
 
         method append cmd =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             if debug then printf "%s\n" cmd;
             self#write_line (sprintf "%s" cmd);
             fprintf clog "%s\n" cmd; flush clog
 
         method append_assert s =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append (sprintf "(assert %s)" s)
 
         method append_var_def (v: var) (tp: data_type) =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append (var_to_smt v tp)
 
         method comment (line: string) =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append (";; " ^ line)
 
         method append_expr expr =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             let eid = ref 0 in
             let e_s = expr_to_smt expr in
             let is_comment = (String.length e_s) > 1
@@ -154,10 +162,12 @@ class yices_smt =
             end else -1
 
         method push_ctx =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             m_pushes <- m_pushes + 1;
             self#append "(push)"
 
         method pop_ctx =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
             if m_pushes = 0
             then raise (Failure ("pop: yices stack is empty!"));
             m_pushes <- m_pushes - 1;
