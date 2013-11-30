@@ -324,6 +324,12 @@ class data_type i_basetype =
     end
 
 
+let mk_int_range l r =
+    let t = new data_type SpinTypes.TINT in
+    t#set_range l r;
+    t
+
+
 (* This table binds integer identifiers of (variables) to the datatypes *)
 class data_type_tab =
     object(self)
@@ -385,7 +391,6 @@ let is_c_false = function
 let is_var = function
     | Var _ -> true
     | _ -> false
-
 
 let cmp_vars vx vy =
     String.compare vx#get_name vy#get_name
