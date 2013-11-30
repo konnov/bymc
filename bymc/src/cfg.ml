@@ -82,6 +82,14 @@ class ['t] basic_block =
             let idx, _ = List.find (fun (i, bb) -> bb#label = lab) pairs in
             idx
 
+        method set_succ_sync s =
+            succ <- s;
+            let add_self b =
+                let myself = (self :> 't basic_block) in
+                b#set_pred (myself :: b#get_pred)
+            in
+            List.iter add_self s
+
         method set_phis s = phis <- s
         method get_phis = phis
 
@@ -127,23 +135,39 @@ class ['t, 'attr] attr_basic_block a =
     end
 
 
-(* A control flow graph.  This is a primitive home-brewed graph implementation.
-   It will be replaced with BlockG in the future.
+(* A control flow graph.  This is a primitive home-brewed graph
+   implementation.  It will be replaced with BlockG in the future.
  *)
 class ['t] control_flow_graph i_entry i_blocks =
     object(self)
-        val m_blocks: (int, 't basic_block) Hashtbl.t = i_blocks
+        val m_blocks: (int, 't basic_block) Hashtbl.t = Hashtbl.create 1
+        val m_blocks_lst: 't basic_block list = i_blocks
         val m_entry: 't basic_block = i_entry
 
+        initializer
+            let add_block b =
+                Hashtbl.replace m_blocks b#label b
+            in
+            List.iter add_block i_blocks
+
         method blocks = m_blocks
-        method block_list = Accums.hashtbl_vals m_blocks
-        method block_labs = Accums.hashtbl_keys m_blocks
+        method block_list = m_blocks_lst
+        method block_labs = List.map (fun b -> b#label) m_blocks_lst
         method entry = m_entry
+
+        method exit =
+            let ebs =
+                List.filter (fun b -> b#get_succ = []) m_blocks_lst
+            in
+            match ebs with
+            | [] -> raise (Invalid_argument "No exit block")
+            | [hd] -> hd
+            | _ -> raise (Invalid_argument "Several exit blocks")
 
         method find lab = Hashtbl.find m_blocks lab
 
         method as_block_graph =
-            let bbs = self#block_list in
+            let bbs = m_blocks_lst in
             let num_blocks = List.length bbs in
             let g = BlockG.create () in
             let new_blocks = Hashtbl.create num_blocks in
@@ -262,7 +286,8 @@ let remove_ineffective_blocks cfg =
                     then Hashtbl.add new_blocks bb#label bb
                 in
                 List.iter add cfg#block_list;
-                let new_cfg = new control_flow_graph cfg#entry new_blocks in
+                let new_cfg = new control_flow_graph
+                    cfg#entry (hashtbl_vals new_blocks) in
                 do_work new_cfg (hd#get_pred @ tl)
             end else do_work cfg tl
         | [] -> cfg
@@ -361,7 +386,7 @@ let mk_cfg stmts =
     in
     List.iter skip_terminator (hashtbl_vals blocks);
     (* return the hash table: heading_label: int -> basic_block *)
-    new control_flow_graph entry blocks
+    new control_flow_graph entry (hashtbl_vals blocks)
 
 
 (* This is a very naive implementation. We do not expect it to be run
