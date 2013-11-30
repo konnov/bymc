@@ -35,7 +35,6 @@ def collect_unreachable(filename, invars):
             if m:
                 if m.group(1) == "true":
                     unreachable.append(invars[i])
-                    print "Counter %s is always zero" % invars[i]
                 else:
                     reachable.append(invars[i])
 
