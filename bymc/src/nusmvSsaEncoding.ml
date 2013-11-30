@@ -317,15 +317,15 @@ let module_of_counter rt proc_syms proc_types ctrabs_prog p num =
     let next_eq = cmp_idx AND EQ next_locals in
     let next_ne = cmp_idx OR NE next_locals in
     let myval = new_var "myval" in
-    let mk_case prev_ex next_ex prev_val next_vals =
-        let guard = BinEx (EQ, Var myval, Const prev_val) in
-        (*let guard = BinEx (AND, BinEx (AND, prev_ex, next_ex),
-                                BinEx (EQ, Var myval, Const prev_val)) in *)
+    let mk_case local_ex prev_val next_vals =
+        let guard =
+            BinEx (AND, local_ex, BinEx (EQ, Var myval, Const prev_val))
+        in
         let rhs = List.map (fun i -> Const i) next_vals in
         (guard, rhs)
     in
-    let prev_cases = hashtbl_map (mk_case prev_eq next_ne) dec_tbl in
-    let next_cases = hashtbl_map (mk_case prev_ne next_eq) inc_tbl in
+    let prev_cases = hashtbl_map (mk_case prev_eq) dec_tbl in
+    let next_cases = hashtbl_map (mk_case next_eq) inc_tbl in
     let cases =
         (* if the process is not selected, keep the value *)
           (BinEx (NE, Var pid, Const num), [Var myval])
