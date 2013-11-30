@@ -12,9 +12,15 @@ open PromelaParserPlugin
 open Plugin
 open Program
 
+let version = "ByMC-0.3.0-dev"
+let banner =
+    sprintf
+        "*** This is %s. More details at: http://forsyte.at/software/bymc ***"
+        version
 
 let main () =
     try
+        printf "\n%s\n\n" banner;
         let opts = parse_options in
         Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
