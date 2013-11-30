@@ -5,7 +5,8 @@ let _ =
     [
         PipeCmdTest.suite;
         AccumsTest.suite;
-        SsaTest.suite
+        SsaTest.suite;
+        AbsCounterTest.suite;
     ]
     in
     run_test_tt_main all
