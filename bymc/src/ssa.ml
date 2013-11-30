@@ -16,8 +16,44 @@ open Spin
 open SpinIr
 open SpinIrImp
 
+module IGraph = Graph.Pack.Digraph
+module IGraphColoring = Graph.Coloring.Make(IGraph)
+module IGraphOper = Graph.Oper.I(IGraph)
+
+module VarStruct = struct
+    type t = var
+    let compare lhs rhs =
+        if lhs#id = rhs#id
+        then lhs#mark - rhs#mark
+        else lhs#id - rhs#id
+
+    let hash v = v#id * v#mark
+
+    let equal lhs rhs = (lhs#id = rhs#id && lhs#mark = rhs#mark)
+end
+
+module VarDigraph = Graph.Imperative.Digraph.Concrete(VarStruct)
+module VarGraph = Graph.Imperative.Graph.Concrete(VarStruct)
+
+module VarOper = Graph.Oper.I(VarDigraph)
+module VarColoring = Graph.Coloring.Make(VarGraph)
+
+module IntStruct = struct
+    type t = int
+    let default = 0
+    let compare a b = a - b
+    let hash i = i
+    let equal a b = (a = b)
+end
+
+module IIGraph =
+    Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
+        (IntStruct)(IntStruct)
 
 exception Var_not_found of string
+
+let mark_in = 0
+let mark_out = max_int
 
 let comp_dom_frontiers cfg =
     let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
@@ -128,39 +164,177 @@ let map_rvalues map_fun ex =
     sub ex
 
 
+(* Find phis of the form x3 = phi(x2, x2) that can be eliminated.
+   Note that some of these phis must be kept intact, as the
+   sequential dependency will require that. Additionaly, IN and OUT
+   versions are always preserved.
+
+   Surprisingly, this function is very long. Any idea how to make
+   it shorter???
+ *)
+let find_redundant_phis cfg var =
+    (* edge labels show the type of the dependency *)
+    let phi_dep = 0 and seq_dep = 1 in
+
+    (* keep markings and dependencies among them *)
+    let vertices = Hashtbl.create 8 in
+    let depg = IIGraph.create () in
+    let node i =
+        try Hashtbl.find vertices i
+        with Not_found ->
+            let v = IIGraph.V.create i in
+            Hashtbl.replace vertices i v;
+            IIGraph.add_vertex depg v;
+            v
+    in
+    let each_block b =
+        let each_stmt last_mark = function
+            | Expr (_, Phi (lhs, rhs)) ->
+                trace Trc.ssa
+                    (fun _ -> sprintf "b%d: %s#%d = phi(%s)"
+                        b#label lhs#mangled_name lhs#mark
+                        (str_join "," (List.map
+                            (fun v -> string_of_int v#mark) rhs)));
+                let fst = List.hd rhs in
+                if lhs#id = var#id
+                    && List.for_all (fun o -> o#mark = fst#mark) rhs
+                then begin
+                    let e = IIGraph.E.create
+                            (node fst#mark) phi_dep (node lhs#mark) in
+                    IIGraph.add_edge_e depg e;
+                    lhs#mark
+                end else
+                    last_mark
+
+            | Expr (_, BinEx (ASGN, Var lhs, rhs)) ->
+                if lhs#id = var#id
+                then begin
+                    if last_mark <> -1
+                    then let e =
+                        IIGraph.E.create
+                            (node last_mark) seq_dep (node lhs#mark) in
+                        IIGraph.add_edge_e depg e;
+                        lhs#mark
+                    else
+                        lhs#mark
+                end else
+                    last_mark
+
+            | _ -> last_mark
+        in
+        ignore (List.fold_left each_stmt (-1) b#get_seq)
+    in
+    List.iter each_block cfg#block_list;
+    (* the dependencies are known, try the reduction *)
+    let subs = Hashtbl.create 8 in
+    (* update the renaming function transitively,
+       using 'was' for 'what' and 'mit' for 'with',
+       as 'with' is a keyword *)
+    let add_sub mit was =
+        let mit =
+            if Hashtbl.mem subs mit
+            then Hashtbl.find subs mit
+            else mit
+        in
+        let update a b =
+            if b = was && a <> mit
+            then begin
+                trace Trc.ssa (fun _ ->
+                    sprintf "add_sub* %d -> %d -> %d" a b mit);
+                Hashtbl.replace subs a mit
+            end
+        in
+        if was <> mit
+        then begin
+            trace Trc.ssa
+                (fun _ -> sprintf "add_sub %d -> %d" was mit);
+            Hashtbl.replace subs was mit;
+            Hashtbl.iter update subs
+        end
+    in
+    (* find the renaming for each vertex *)
+    let inspect_vertex v =
+        trace Trc.ssa (fun _ -> sprintf "inspect %d" v);
+        let pred = IIGraph.pred depg v in
+        let is_phi_dep e = (phi_dep = (IIGraph.E.label e)) in
+        if List.for_all is_phi_dep (IIGraph.pred_e depg v)
+                && (List.length pred) <> 0
+        then begin
+            let neighb = v :: pred in
+            let emin = List.fold_left min max_int neighb in
+            let repr = emin in
+            (* substitute the neighborhood with repr *)
+            List.iter (add_sub repr) neighb
+        end else
+            trace Trc.ssa (fun _ -> sprintf "%d is rigid" v)
+    in
+    IIGraph.iter_vertex inspect_vertex depg;
+    (* IN and OUT must be left in the graph *)
+    let revert a =
+        trace Trc.ssa (fun _ -> sprintf "revert %d" a);
+        try 
+            let b = Hashtbl.find subs a in
+            Hashtbl.remove subs a; (* there is no substitutes by a *)
+            add_sub a b (* do transitive reversal *)
+        with Not_found -> ()
+    in
+    revert mark_in; (* change the direction *)
+    revert mark_out;
+    (* unbind in -> out and out -> in *)
+    Hashtbl.remove subs mark_in;
+    Hashtbl.remove subs mark_out;
+    subs
+
+
 (*
  It appears that the Cytron's algorithm can produce redundant phi functions like
  x_2 = phi(x_1, x_1, x_1). Here we remove them.
+
+ XXX: proof-read it, there must be definitely some bugs inside!
  *)
-let optimize_ssa cfg =
-    let sub_tbl = Hashtbl.create 10 in
-    let sub_var v =
-        if Hashtbl.mem sub_tbl (v#id, v#mark)
-        then Var (Hashtbl.find sub_tbl (v#id, v#mark))
-        else Var v
-    in
-    let map_s s = map_expr_in_lir_stmt (map_vars sub_var) s in
-    let changed = ref true in
-    let reduce_phi bb =
-        let on_stmt = function
-            | Expr (id, Phi (lhs, rhs)) as s ->
-                    let fst = List.hd rhs in
-                    if List.for_all (fun o -> o#mark = fst#mark) rhs
-                    then begin
-                        Hashtbl.add sub_tbl (fst#id, fst#mark) lhs;
-                        changed := true;
-                        Skip id 
-                    end else s
-            | _ as s -> s
+let optimize_ssa cfg vars =
+    let each_var v =
+        trace Trc.ssa (fun _ ->
+            sprintf "optimize_ssa.each_var %s" v#mangled_name);
+        (* substitutions *)
+        let subs = find_redundant_phis cfg v in
+        let sub what =
+            try let new_mark = Hashtbl.find subs what#mark in
+                what#set_mark new_mark;
+                what
+            with Not_found -> what
         in
-        bb#set_seq (List.map on_stmt bb#get_seq);
+        let subex what = Var (sub what) in
+        let map_s s = map_expr_in_lir_stmt (map_vars subex) s in
+        let each_block b = b#set_seq (List.map map_s b#get_seq) in
+        List.iter each_block cfg#block_list;
+        let each_phi l = function
+            | Expr (id, Phi (lhs, rhs)) as s ->
+                if lhs#id <> v#id
+                then s :: l
+                else
+                    let fst = List.hd rhs in
+                    let all_eq =
+                        List.for_all (fun o -> o#mark = fst#mark) rhs
+                    in
+                    let fst = sub fst and lhs = sub lhs in
+                    if all_eq
+                    then if fst#mark = lhs#mark
+                        (* redundant phi function *)
+                        then l
+                        (* copy the variable, but no phi function *)
+                        else (Expr (id, BinEx (ASGN, Var lhs, Var fst)))
+                             :: l
+                    else s :: l (* we need the phi function *)
+
+            | _ as s -> s :: l
+        in
+        let each_block b =
+            b#set_seq (List.fold_left each_phi [] (List.rev b#get_seq))
+        in
+        List.iter each_block cfg#block_list
     in
-    while !changed do
-        changed := false;
-        List.iter reduce_phi cfg#block_list;
-        List.iter
-            (fun bb -> bb#set_seq (List.map map_s bb#get_seq)) cfg#block_list
-    done;
+    List.iter each_var vars;
     cfg
 
 
@@ -175,11 +349,11 @@ let add_mark_to_name new_sym_tab new_type_tab v =
     in
     if v#is_symbolic
     then Var v (* don't touch it *)
-    else if v#mark = 0
+    else if v#mark = mark_in
     then Var (copy v (sprintf "%s_IN" v#get_name))
-    else if v#mark = max_int
+    else if v#mark = mark_out
     then Var (copy v (sprintf "%s_OUT" v#get_name))
-    else Var (copy v (sprintf "%s_Y%d" v#get_name v#mark))
+    else Var (copy v (sprintf "%s_T%d" v#get_name v#mark))
 
 
 let get_var_copies var seq =
@@ -198,29 +372,6 @@ let get_var_copies var seq =
         | _ -> l
     in
     List.fold_left add_copy [] seq
-
-
-module IGraph = Graph.Pack.Digraph
-module IGraphColoring = Graph.Coloring.Make(IGraph)
-module IGraphOper = Graph.Oper.I(IGraph)
-
-module VarStruct = struct
-    type t = var
-    let compare lhs rhs =
-        if lhs#id = rhs#id
-        then lhs#mark - rhs#mark
-        else lhs#id - rhs#id
-
-    let hash v = v#id * v#mark
-
-    let equal lhs rhs = (lhs#id = rhs#id && lhs#mark = rhs#mark)
-end
-
-module VarDigraph = Graph.Imperative.Digraph.Concrete(VarStruct)
-module VarGraph = Graph.Imperative.Graph.Concrete(VarStruct)
-
-module VarOper = Graph.Oper.I(VarDigraph)
-module VarColoring = Graph.Coloring.Make(VarGraph)
 
 (* Graph.Coloring.coloring stucks unpredictably on small graphs
   (e.g., 30 nodes, 6 colors). Use SMT solver to do the coloring.
@@ -314,10 +465,10 @@ let reduce_indices solver bcfg_closure var =
     BlockG.iter_vertex add_bb_deps bcfg_closure;
 
     (* all assignment along one path depend on each other *)
-    (*printf "add_transitive_closure\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "add_transitive_closure");
     ignore (VarOper.add_transitive_closure ~reflexive:false depg);
     (* remove self-loops that can be introduced by transitive closure *)
-    (*printf "print_dot\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "print_dot");
     VarDigraph.iter_vertex (fun v -> VarDigraph.remove_edge depg v v) depg;
     print_dot (sprintf "deps-%s.dot" var#get_name) depg;
 
@@ -325,24 +476,20 @@ let reduce_indices solver bcfg_closure var =
        so we have to convert it to an undirected graph. *)
     let g = VarGraph.create () in
     VarDigraph.iter_edges (fun v w -> VarGraph.add_edge g v w) depg;
-    (*
-    let depg = VarOper.union depg (VarOper.mirror depg) in
-*)
 
     (* try to find minimal coloring via binary search *)
     let ecoloring = Hashtbl.create 1 (*VarColoring.H.create 1*) in
     let rec find_min_colors left right =
         let k = (left + right) / 2 in
-        (*printf "%s: n=%d, left=%d, right=%d, k=%d\n"
-            var#get_name (VarGraph.nb_vertex g) left right k;
-        flush stdout;*)
+        trace Trc.ssa (fun _ ->
+            sprintf "%s: n=%d, left=%d, right=%d, k=%d\n"
+            var#get_name (VarGraph.nb_vertex g) left right k);
         if left > right
         then (0, ecoloring)
         else let found, h = find_coloring solver g k
-            (* alternative: ocamlgraph coloring, extremely slow
+            (* ALTERNATIVE: ocamlgraph coloring, extremely slow
             try true, VarColoring.coloring g k
-            with _ -> false, ecoloring
-            *)
+            with _ -> false, ecoloring *)
         in
         if found 
         then if left = right
@@ -355,25 +502,25 @@ let reduce_indices solver bcfg_closure var =
         else find_min_colors (k + 1) right
     in
     let max_colors = VarGraph.nb_vertex g in
-    (*printf "coloring\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "coloring");
     let ncolors, coloring =
         if max_colors <> 0
         then find_min_colors 1 max_colors
         else max_colors, ecoloring
     in
     assert (max_colors = 0 || ncolors <> 0);
-    (*printf "remarking\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "remarking");
     (* find new marks. NOTE: we do not replace colors in place, as this
        might corrupt the vertex iterator. *)
     let fold v l =
-        if v#mark <> 0 && v#mark <> Pervasives.max_int
+        if v#mark <> mark_in && v#mark <> mark_out
         then (v, Hashtbl.find coloring v#mark
             (*VarColoring.H.find coloring v*)) :: l
         else (v, v#mark) :: l
     in
     let new_marks = VarGraph.fold_vertex fold g [] in
     List.iter (fun (v, c) -> v#set_mark c) new_marks;
-    (*printf "print_dot\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "print_dot");
     print_dot (sprintf "deps-%s-marked.dot" var#get_name) depg
 
 
@@ -415,7 +562,6 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         in
         let new_v = v#copy v#get_name in
         new_v#set_mark i;
-        (* let new_v = v#copy (sprintf "%s_Y%d" v#get_name i) in *)
         s_push new_v;
         Hashtbl.replace counters (nm v) (i + 1);
         new_v
@@ -450,7 +596,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
     let sub_var v =
         if v#is_symbolic
         (* do not touch symbolic variables, they are parameters! *)
-        then v                (* TODO: what about atomic propositions? *)
+        then v  (* TODO: what about atomic propositions? *)
         else s_top v
     in
     let sub_var_as_var e v =
@@ -527,8 +673,8 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
         then begin
             (* declare the variables on the top of the stack
                to be output variables *)
-            let mark_out v = (s_top v)#set_mark max_int in
-            List.iter mark_out extern_vars
+            let each_set_mark_out v = (s_top v)#set_mark mark_out in
+            List.iter each_set_mark_out extern_vars
         end;
         (* pop the stack for each assignment *)
         let pop_stmt = function
@@ -548,7 +694,7 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
 (* (in-place) transformation of CFG to SSA.  *)
 let mk_ssa solver tolerate_undeclared_vars extern_vars intern_vars
         new_sym_tab new_type_tab cfg =
-    (*printf "mk_ssa_cytron\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "mk_ssa_cytron");
     mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg;
     let rename_block bb =
         let map_s s =
@@ -559,14 +705,16 @@ let mk_ssa solver tolerate_undeclared_vars extern_vars intern_vars
     in
     let bcfg = cfg#as_block_graph in
     (* we need to track dependencies along paths *)
-    (*printf "add_transitive_closure\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "add_transitive_closure");
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
 
-    (*printf "reduce_indices\n"; flush stdout;*)
+    trace Trc.ssa (fun _ -> "reduce_indices");
     List.iter (reduce_indices solver bcfg) intern_vars;
     List.iter (reduce_indices solver bcfg) extern_vars;
-    (*printf "optimize_ssa\n"; flush stdout;*)
-    ignore (optimize_ssa cfg); (* optimize it after all *)
+    trace Trc.ssa (fun _ -> "optimize_ssa");
+    (* remove redundant phi funcs *)
+    ignore (optimize_ssa cfg (intern_vars @ extern_vars));
+
     List.iter rename_block cfg#block_list;
     cfg
 
