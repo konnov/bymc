@@ -417,17 +417,15 @@ let find_coloring solver graph ncolors =
         if solver#check
         then begin (* parse evidence, XXX: not super-efficient *)
             let eq_re = Str.regexp "(= _nclr\\([0-9]+\\) \\([0-9]+\\))" in
-            let oth_re = Str.regexp "(= [A-Za-z0-9_]+ \\([0-9]+\\))" in
             let each_line l =
                 if Str.string_match eq_re l 0
                 then Hashtbl.replace tab
                     (int_of_string (Str.matched_group 1 l))
                     (* a color from 1 to k, as in Graph.Coloring *)
                     (1 + (int_of_string (Str.matched_group 2 l)))
-                else if not (Str.string_match oth_re l 0) && l <> ""
-                then raise (Failure ("unexpected line: " ^ l))
             in
             List.iter each_line solver#get_evidence;
+            assert((Hashtbl.length tab) > 0);
             true
         end else
             false
