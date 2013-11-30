@@ -6,6 +6,7 @@
  * but use the full name, e.g., Trc.SMT.
  *)
 
-let smt = "SMT"
-let ssa = "SSA"
+let smt = "SMT" (* smt *)
+let ssa = "SSA" (* ssa *)
+let cmd = "CMD" (* pipeCmd *)
 

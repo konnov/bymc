@@ -91,20 +91,22 @@ class yices_smt =
         val timeout_sec = 10.0
         val mutable pid = 0
         val mutable clog = stdout
-        val m_pipe_cmd: PipeCmd.cmd_stat =
-            PipeCmd.create "yices" [||] "yices.err"
+        val mutable m_pipe_cmd = PipeCmd.null ()
         val mutable debug = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
         val mutable m_pushes = 0
 
         method start =
+            assert(PipeCmd.is_null m_pipe_cmd);
+            m_pipe_cmd <- PipeCmd.create "yices" [||] "yices.err";
             clog <- open_out "yices.log";
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =
             close_out clog;
-            PipeCmd.destroy m_pipe_cmd
+            PipeCmd.destroy m_pipe_cmd;
+            m_pipe_cmd <- PipeCmd.null ()
 
         method write_line s =
             writeline m_pipe_cmd s

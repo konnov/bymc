@@ -4,9 +4,11 @@
 
 open Printf
 
+open Debug
+
 exception Comm_error of string
 
-type state_t = Running | Stopping | Stopped
+type state_t = Null | Running | Stopping | Stopped
 
 type writer_thread_state = {
     state: state_t ref;
@@ -23,6 +25,21 @@ type cmd_stat = {
     writer_st: writer_thread_state;
     writer_thr: Thread.t
 }
+
+let null _ = {
+    pid = 0; cin = stdin; fdout = Unix.stdout;
+    err_filename = "";
+    writer_thr = Thread.self ();
+    writer_st = {
+        state = ref Null;
+        mutex = Mutex.create ();
+        pending_writes = ref [];
+        dirty = ref false
+    }
+}
+
+let is_null cs =
+    !(cs.writer_st.state) = Null
 
 
 (* the writes are handled by a separate thread, all writes are non-blocking *)
@@ -60,8 +77,8 @@ let write_handler (wts, fdout) =
             wts.dirty := false;
             yields := 0; (* maximum processing speed again *)
             (* now write the line to the output, might be blocked *)
-            (*fprintf stderr "write: %s\n" line; flush stderr;*)
             let writeln l = 
+                trace Trc.cmd (fun _ -> sprintf "writeln: %s" l);
                 let ln = l ^ "\n" in
                 try
                     let _ = Unix.write fdout ln 0 (String.length ln) in ()
@@ -81,7 +98,8 @@ let write_handler (wts, fdout) =
         then Thread.delay sleep_tm  (* sleep for 1 msec *)
         else Thread.yield () (* else busy waiting several times *)
     done;
-    wts.state := Stopped
+    wts.state := Stopped;
+    trace Trc.cmd (fun _ -> sprintf "Stopped")
 
 
 let writeline st s =
