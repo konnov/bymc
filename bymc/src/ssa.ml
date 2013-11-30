@@ -197,11 +197,21 @@ let find_redundant_phis cfg var =
                             (fun v -> string_of_int v#mark) rhs)));
                 let fst = List.hd rhs in
                 if lhs#id = var#id
-                    && List.for_all (fun o -> o#mark = fst#mark) rhs
+                then if List.for_all (fun o -> o#mark = fst#mark) rhs
                 then begin
+                    (* x_T3 = phi(x_T2, x_T2), declare phi dep. *)
                     let e = IIGraph.E.create
                             (node fst#mark) phi_dep (node lhs#mark) in
                     IIGraph.add_edge_e depg e;
+                    lhs#mark
+                end else begin
+                    (* x_T3 = phi(x_T1, x_T2), declare sequential dep.*)
+                    let add_every r =
+                        let e = IIGraph.E.create
+                                (node r#mark) seq_dep (node lhs#mark) in
+                        IIGraph.add_edge_e depg e
+                    in
+                    List.iter add_every rhs;
                     lhs#mark
                 end else
                     last_mark
@@ -299,10 +309,13 @@ let optimize_ssa cfg vars =
         (* substitutions *)
         let subs = find_redundant_phis cfg v in
         let sub what =
-            try let new_mark = Hashtbl.find subs what#mark in
-                what#set_mark new_mark;
-                what
-            with Not_found -> what
+            if what#id <> v#id
+            then what
+            else
+                try let new_mark = Hashtbl.find subs what#mark in
+                    what#set_mark new_mark;
+                    what
+                with Not_found -> what
         in
         let subex what = Var (sub what) in
         let map_s s = map_expr_in_lir_stmt (map_vars subex) s in
