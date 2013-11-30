@@ -33,7 +33,7 @@ let verbosity_s = function
     | ERROR -> "ERR  "
     | WARN -> "WARN: "
     | INFO -> " "
-    | DEBUG -> " *** "
+    | DEBUG -> " --- "
 
 let may_log level =
     let to_num = function
@@ -55,7 +55,7 @@ let log level message =
 let trace (mod_code: string) (text_fun: unit -> string) =
     if Hashtbl.mem enabled_trace_modules mod_code
     then begin
-        printf " ==%s=> %s\n" mod_code (text_fun ());
+        printf " **%s** %s\n" mod_code (text_fun ());
         flush stdout
     end
 

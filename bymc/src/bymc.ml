@@ -16,7 +16,7 @@ open Program
 let main () =
     try
         let opts = parse_options in
-        current_verbosity_level := if opts.verbose then DEBUG else INFO;
+        Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
         let solver = new Smt.yices_smt in
         solver#start;
