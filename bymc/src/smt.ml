@@ -106,7 +106,7 @@ class yices_smt =
         method stop =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             close_out clog;
-            PipeCmd.destroy m_pipe_cmd;
+            ignore (PipeCmd.destroy m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.null ()
 
         method write_line s =
