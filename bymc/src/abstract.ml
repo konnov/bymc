@@ -32,7 +32,12 @@ let load_game rt =
     log INFO "loading game...";
     let cin = open_in_bin serialization_filename in
     let (seq_id: int) = Marshal.from_channel cin in
-    let (chain: plugin_chain_t) = Marshal.from_channel cin in
+    let (chain: plugin_chain_t) =
+        try Marshal.from_channel cin
+        with Failure m ->
+            fprintf stderr "\nERROR: The saved state seems to be incompatible. Did you recompile the tool?\n\n";
+            raise (Failure m)
+    in
     close_in cin;
     SpinIr.uniq_id_next := seq_id; (* unique id sequence used everywhere *)
     chain#update_runtime rt;
