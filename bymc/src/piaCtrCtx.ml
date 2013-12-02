@@ -99,7 +99,11 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
                         (sprintf "Valuation of %s not found" var#get_name))
             in
             let pack_one sum var =
-                sum * (Hashtbl.find var_sizes var) + (get_val var) in
+                try sum * (Hashtbl.find var_sizes var) + (get_val var)
+                with Not_found ->
+                    raise (Failure
+                        (sprintf "Variable %s not found" var#mangled_name))
+            in
             List.fold_left pack_one 0 (List.rev self#var_vec)
 
         method pack_index_expr =
