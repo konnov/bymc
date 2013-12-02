@@ -112,7 +112,7 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             let loop_re = Str.regexp ".*-- Loop starts here.*" in
             let state_re = Str.regexp ".*-> State: [0-9]+\\.[0-9]+ <-" in
             let fin = open_in rt#caches#options.Options.trail_name in
-            let loop_pos = ref 0 in
+            let loop_pos = ref max_int in
             let trail = ref [] in
             let state_exprs = ref [] in
             let flush_to_trail () =
@@ -136,6 +136,8 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
                 close_in fin;
             end;
 
+            if !loop_pos = max_int
+            then loop_pos := List.length !trail;
             let path = List.rev !trail in
             let prefix = list_sub path 0 !loop_pos in
             List.iter (print_state prog) prefix;
