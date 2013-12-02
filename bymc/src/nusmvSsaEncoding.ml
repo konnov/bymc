@@ -64,6 +64,14 @@ let is_var_local = function
     | LocalOut _ -> true
     | _ -> false
 
+let is_var_local_in = function
+    | LocalIn _ -> true
+    | _ -> false
+
+let is_var_local_out = function
+    | LocalOut _ -> true
+    | _ -> false
+
 let is_var_shared_in = function
     | SharedIn _ -> true
     | _ -> false
@@ -163,7 +171,7 @@ let rename_vars tt shared seq =
 
 (* ====================== important functions *)
 
-let module_of_proc rt keep_out_next prog =
+let module_of_proc rt out_is_arg prog =
     let procs = Program.get_procs prog in
     let nprocs = List.length procs in
     let shared = Program.get_shared prog in
@@ -230,7 +238,7 @@ let module_of_proc rt keep_out_next prog =
     let ntt, syms, exprs = to_ssa in
     let new_vars = vars_of_syms syms#get_symbs in
     let exprs =
-        if keep_out_next
+        if out_is_arg
         then exprs
         else List.map
             (map_vars (replace_with_next syms ntt shared_set)) exprs in
@@ -238,11 +246,19 @@ let module_of_proc rt keep_out_next prog =
         List.sort proc_var_cmp
             (List.map (partition_var ntt shared_set) new_vars)
     in
-    let temps = List.filter is_var_temp pvars in
+    (* input versions of the local variables as well as temporary
+       copies must stay local *)
+    let temps =
+        List.filter (fun v -> is_var_temp v || is_var_local_in v) pvars
+    in
     let args =
-        if keep_out_next
-        then List.filter (fun v -> is_var_local v || is_var_shared v) pvars
-        else List.filter (fun v -> is_var_local v || is_var_shared_in v) pvars
+        if out_is_arg
+        then (* x_OUT stays as x_OUT *)
+            let f v = is_var_local_out v || is_var_shared v in
+            List.filter f pvars
+        else (* x_OUT becomes next(x) *)
+            let f v = is_var_local_out v || is_var_shared_in v in
+            List.filter f pvars
     in
     let invar = Var ((syms#lookup "at0")#as_var) in
     let mod_type =
@@ -253,14 +269,14 @@ let module_of_proc rt keep_out_next prog =
     (mono_proc_name, mod_type, args, new_sym_tab, new_type_tab)
 
 
-let create_proc_mods rt keep_out_next intabs_prog =
+let create_proc_mods rt out_is_arg intabs_prog =
     let proc_name, mod_type, args, nst, ntt =
-        module_of_proc rt keep_out_next intabs_prog in
+        module_of_proc rt out_is_arg intabs_prog in
     let to_shared_param l = function
         | SharedIn (v, t) ->
             (v#copy (strip_in v#get_name), t) :: l
         | SharedOut (v, t) ->
-            if keep_out_next
+            if out_is_arg
             then (v, t) :: l
             else (v#copy (strip_out v#get_name), t) :: l
         | _ -> l
@@ -286,7 +302,7 @@ let create_proc_mods rt keep_out_next intabs_prog =
     let shared = Program.get_shared intabs_prog in
     let shared_in = List.map (fun v -> (v, tt#get_type v)) shared in
     let shared_out =
-        if keep_out_next
+        if out_is_arg
         then List.map (fun v -> (attach_out v, tt#get_type v)) shared
         else []
     in
@@ -313,9 +329,7 @@ let module_of_counter rt proc_syms proc_types ctrabs_prog p num =
         list_to_binex join (List.map2 f prev_locals vars)
     in
     let prev_eq = cmp_idx AND EQ prev_locals in
-    let prev_ne = cmp_idx OR NE prev_locals in
     let next_eq = cmp_idx AND EQ next_locals in
-    let next_ne = cmp_idx OR NE next_locals in
     let myval = new_var "myval" in
     let mk_case local_ex prev_val next_vals =
         let guard =
