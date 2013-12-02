@@ -32,8 +32,7 @@ let test_trans_proc_decl_two_var _ =
     (* setup *)
     let nsnt = new_var "nsnt"
         and pc = new_var "pc" and npc = new_var "npc"
-        and rx = new_var "rx" and nrx = new_var "nrx"
-        and spur = new_var "spar" in
+        and rx = new_var "rx" and nrx = new_var "nrx" in
     pc#set_proc_name "Proc";
     npc#set_proc_name "Proc";
     rx#set_proc_name "Proc";
@@ -75,7 +74,6 @@ let test_trans_proc_decl_two_var _ =
             Proc (proc)
         ]
     in
-    let pia_ctx = new ctr_abs_ctx dom roles spur proc "P" in
     let pia_ctx_tab = new ctr_abs_ctx_tbl dom roles prog [proc] in
 
     (* test *)
@@ -95,8 +93,7 @@ let test_trans_proc_decl_three_var _ =
     let nsnt = new_var "nsnt"
         and pc = new_var "pc" and npc = new_var "npc"
         and flt = new_var "flt" and nflt = new_var "nflt"
-        and rx = new_var "rx" and nrx = new_var "nrx"
-        and spur = new_var "spar" in
+        and rx = new_var "rx" and nrx = new_var "nrx" in
     pc#set_proc_name "Proc";
     npc#set_proc_name "Proc";
     rx#set_proc_name "Proc";
@@ -146,7 +143,6 @@ let test_trans_proc_decl_three_var _ =
             Proc (proc)
         ]
     in
-    let pia_ctx = new ctr_abs_ctx dom roles spur proc "P" in
     let pia_ctx_tab = new ctr_abs_ctx_tbl dom roles prog [proc] in
 
     (* test *)
