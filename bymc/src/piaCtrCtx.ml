@@ -19,7 +19,7 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         val mutable control_vars: var list = []
         val mutable control_size = 0
         val mutable data_vars = []
-        val mutable var_sizes: (var, int) Hashtbl.t = Hashtbl.create 1
+        val mutable m_var_vec: (var * int) list = []
         val ctr_var = new_var ("bymc_k" ^ abbrev_name)
         val mutable ctr_dim: int = -1
         val mutable m_next_vars: (var, var) Hashtbl.t = Hashtbl.create 1
@@ -56,12 +56,13 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
                 | _ -> 1
             in
             control_size <- List.fold_left ( * ) 1 (List.map var_dom_size control_vars);
-            List.iter (fun v -> Hashtbl.add var_sizes v (var_dom_size v)) control_vars;
             let dvs = collect_locals is_local_unbounded in
             data_vars <- dvs;
-            List.iter (fun v -> Hashtbl.add var_sizes v dom#length) data_vars;
             ctr_dim <-
-                ((ipow dom#length (List.length data_vars))  * control_size)
+                ((ipow dom#length (List.length data_vars))  * control_size);
+            m_var_vec <-
+                List.map (fun v -> (v, dom#length)) data_vars
+              @ List.map (fun v -> (v, var_dom_size v)) control_vars
            
         method proctype_name = proc#get_name
         method abbrev_name = abbrev_name
@@ -73,7 +74,7 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         method get_ctr_dim = ctr_dim
         method get_spur = spur_var
 
-        method var_vec = (self#get_locals @ self#get_control_vars)
+        method var_vec = List.map fst m_var_vec
 
         method get_next v =
             try Hashtbl.find m_next_vars v
@@ -83,38 +84,31 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
             hashtbl_as_list m_next_vars
 
         method unpack_from_const i =
-            let vsz v = Hashtbl.find var_sizes v in
-            let valuation = Hashtbl.create (List.length self#var_vec) in
-            let unpack_one big_num var =
-                Hashtbl.add valuation var (big_num mod (vsz var));
-                big_num / (vsz var) in
-            let _ = List.fold_left unpack_one i self#var_vec in
+            let valuation = Hashtbl.create (List.length m_var_vec) in
+            let unpack_one big_num (v, sz) =
+                Hashtbl.add valuation v (big_num mod sz);
+                (big_num / sz) in
+            let _ = List.fold_left unpack_one i m_var_vec in
             valuation
 
         method pack_to_const valuation =
-            let get_val var =
-                try Hashtbl.find valuation var
+            let get_val v =
+                try Hashtbl.find valuation v
                 with Not_found ->
                     raise (Failure
-                        (sprintf "Valuation of %s not found" var#get_name))
+                        (sprintf "Valuation of %s not found" v#qual_name))
             in
-            let pack_one sum var =
-                try sum * (Hashtbl.find var_sizes var) + (get_val var)
-                with Not_found ->
-                    raise (Failure
-                        (sprintf "Variable %s not found" var#mangled_name))
-            in
-            List.fold_left pack_one 0 (List.rev self#var_vec)
+            let pack_one sum (v, sz) = sum * sz + (get_val v) in
+            List.fold_left pack_one 0 (List.rev m_var_vec)
 
         method pack_index_expr =
-            let pack_one subex var =
+            let pack_one subex (v, sz) =
                 if is_nop subex
-                then Var var
-                else let shifted =
-                        BinEx (MULT, subex, Const (Hashtbl.find var_sizes var)) in
-                    BinEx (PLUS, shifted, Var var)
+                then Var v
+                else let shifted = BinEx (MULT, subex, Const sz) in
+                    BinEx (PLUS, shifted, Var v)
             in
-            List.fold_left pack_one (Nop "") (List.rev self#var_vec)
+            List.fold_left pack_one (Nop "") (List.rev m_var_vec)
 
         method all_indices_for check_val_fun =
             let has_v i = (check_val_fun (self#unpack_from_const i)) in
