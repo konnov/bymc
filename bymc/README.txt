@@ -7,13 +7,14 @@ More details to be found at: http://forsyte.at/software/bymc/
 
  * ocaml and ocamlbuild (not earlier than 3.11.0)
  * ocamlgraph: http://ocamlgraph.lri.fr/
+ * ocamlunit (only if you want to run unit tests)
  * yices 1.x: http://yices.csl.sri.com/download.shtml
  * spin: http://spinroot.com/spin/Man/README.html#S2
  * gcc
  * python
 
-If you want to install ocaml libraries into your home directory,
-check "HOW TO INSTALL OCAML LIBRARIES?".
+If you do not know how to install ocaml and ocaml libraries in your system,
+check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
 
 2. COMPILING
 
@@ -67,28 +68,25 @@ view trace.ys         # the trace encoded in yices (SMT solver)
 
 OCAMLRUNPARAM=b ./bymc.native -t spin.trace bcast-byz.pml
 
-5. HOW TO INSTALL OCAML LIBRARIES?
+5. HOW TO INSTALL OCAML AND THE LIBRARIES?
 
 The easiest way to install the dependencies is to use your package manager,
-i.e., apt-get, zypper, etc. You may also consider godi.camlcity.org.
+i.e., apt-get, zypper, etc. For instance, this tool is periodically built
+on Debian Wheezy, which makes all the libraries available via its package
+manager apt-get.
 
-Nevertheless, if you want to rely on ocaml and findlib only, and you do not
-have the root permission on your root machine, then you can do the following:
+If you do not have ocaml and the required ocaml packages, consider using
+ocamlbrew: http://opam.ocaml.org/doc/Quick_Install.html#h4-Usingocamlbrew
 
-Execute:
-$ mkdir -p ~/ocaml/site-lib
-$ cat >~ocaml/findlib.conf <<EOF
-destdir="$HOME/ocaml/site-lib"                                         
-path="/usr/lib/ocaml/site-lib:$HOME/ocaml/site-lib"                    
-ocamlc="ocamlc.opt"                                                           
-ocamlopt="ocamlopt.opt"
-EOF
+Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
+manager called opam. As soon as opam is in place, you can install the
+packages as follows:
 
-Set in either ~/.bashrc or ~/.zshrc the variable:
-export OCAMLFIND_CONF=$HOME/ocaml/findlib.conf
+$ opam install ounit ocamlgraph
 
-Since you have done that, the new packages will be installed to your local
-directory ~/ocaml/site-lib
+(Do not forget to include the line
+'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
+in your ~/.bashrc or ~/.zshrc before doing that)
 
 6. MISC
 

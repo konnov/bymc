@@ -4,9 +4,9 @@
 
 function check_version {
   # primitive version check to do conditional compilation
-  if [ "$1" -lt "3" -o "$2" -lt "11" ]; then
+  if [ "$1" -le "3" -a "$2" -lt "11" ]; then
       # slitaz does have ocaml 3.10.2
-      echo "Your ocaml is too old. Please upgrade it to version 3.11.0"
+      echo "Your ocaml ($1.$2.$3) is too old. Please upgrade it to version 3.11.0"
       exit 1
   fi
 }
