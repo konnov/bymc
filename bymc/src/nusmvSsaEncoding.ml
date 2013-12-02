@@ -183,13 +183,14 @@ let module_of_proc rt out_is_arg prog =
 
     (* process id is chosen non-deterministically for each step *)
     let pid = new_var "_pid" in
+    pid#set_proc_name mono_proc_name;
     let pidt = new data_type SpinTypes.TINT in
     pidt#set_range 0 nprocs;
 
     let new_type_tab = (Program.get_type_tab prog)#copy in
     new_type_tab#set_type pid pidt;
     let new_sym_tab = new symb_tab mono_proc_name in
-    new_sym_tab#add_symb pid#get_name (pid :> symb);
+    new_sym_tab#add_symb pid#mangled_name (pid :> symb);
 
     (* we need only the computation region (from every process) *)
     let get_comp p =
@@ -295,6 +296,11 @@ let create_proc_mods rt out_is_arg intabs_prog =
         List.fold_left to_shared_param [] (List.rev args) in
     let local_params = 
         List.fold_left to_local_param [] (List.rev args) in
+
+    trace Trc.nse (fun _ ->
+        "local_params: " ^
+            (str_join ", " (List.map var_qname (List.map fst local_params))));
+
     let inst = SModInst("p_" ^ proc_name, proc_name,
         (List.map (fun (v, _) -> Var v) (shared_params @ local_params)))
     in
@@ -306,17 +312,17 @@ let create_proc_mods rt out_is_arg intabs_prog =
         then List.map (fun v -> (attach_out v, tt#get_type v)) shared
         else []
     in
+    let pid = (nst#lookup (proc_name ^ "___pid"))#as_var in
     ([SVar (shared_in @ shared_out); SVar local_params; inst],
-        [mod_type], nst, ntt)
+        [mod_type], nst, ntt, pid)
 
 
 (* partially copied from nusmvCounterClusterPass *)
 (* TODO: deal with many process types *)
-let module_of_counter rt proc_syms proc_types ctrabs_prog p num =
+let module_of_counter rt proc_syms proc_types ctrabs_prog pid p num =
     let ctr_ctx = rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
     let dom = rt#caches#analysis#get_pia_dom in
     let tt = Program.get_type_tab ctrabs_prog in
-    let pid = (proc_syms#lookup "_pid")#as_var in
     let dec_tbl =
         NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx PLUS in
     let inc_tbl =
@@ -423,9 +429,8 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
     
 
 
-let create_counter_mods rt proc_syms proc_types ctrabs_prog =
+let create_counter_mods rt proc_syms proc_types ctrabs_prog pid =
     let dom = rt#caches#analysis#get_pia_dom in
-    let pid = (proc_syms#lookup "_pid")#as_var in
     let create_vars l p =
         let ctr_ctx =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
@@ -465,8 +470,9 @@ let create_counter_mods rt proc_syms proc_types ctrabs_prog =
     let nprocs = List.length procs in
     let main_sects = List.fold_left create_vars [] procs in
     let mods =
-        List.map2 (module_of_counter rt
-            proc_syms proc_types ctrabs_prog) procs (range 0 nprocs) in
+        List.map2 (module_of_counter rt proc_syms
+                   proc_types ctrabs_prog pid)
+        procs (range 0 nprocs) in
     (main_sects, mods)
 
 
@@ -674,11 +680,11 @@ let hide_vars names sections =
 
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
-    let main_sects, proc_mod_defs, proc_st, proc_tt =
+    let main_sects, proc_mod_defs, proc_st, proc_tt, pid =
         create_proc_mods rt false intabs_prog in
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods =
-        create_counter_mods rt proc_st proc_tt ctrabs_prog in
+        create_counter_mods rt proc_st proc_tt ctrabs_prog pid in
     let forms = create_counter_specs rt ctrabs_prog in
     let globals = collect_globals (main_sects @ ctr_main) in
     let non_spurious = create_counter_non_spurious rt ctrabs_prog globals in
@@ -700,7 +706,7 @@ let transform rt out_name intabs_prog ctrabs_prog =
 
 let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
-    let main_sects, proc_mod_defs, _, _ =
+    let main_sects, proc_mod_defs, _, _, _ =
         create_proc_mods rt true intabs_prog in
     let exec_procs = exec_of_ctrabs_procs rt intabs_prog ctrabs_prog in
     let invs = reach_inv_of_ctrabs rt ctrabs_prog in

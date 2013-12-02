@@ -9,4 +9,5 @@
 let smt = "SMT" (* smt *)
 let ssa = "SSA" (* ssa *)
 let cmd = "CMD" (* pipeCmd *)
+let nse = "NSE" (* nusmvSsaEncoding *)
 

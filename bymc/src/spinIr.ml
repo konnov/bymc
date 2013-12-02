@@ -193,7 +193,11 @@ label name_i num_i =
     end
 
 
+(* convenience functions *)
 let new_var name = new var name (fresh_id ())    
+
+let var_qname v = v#qual_name
+let var_name v = v#name
 
 module VarType =
     struct
