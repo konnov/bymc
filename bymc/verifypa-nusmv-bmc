@@ -23,5 +23,6 @@ done
 
 # run the tool
 DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bmc \
+    ONE_SHOT=$ONE_SHOT \
     `dirname $0`/cegar "$@"
 

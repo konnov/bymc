@@ -46,7 +46,8 @@ let to_xducer solver caches prog new_type_tab p =
     if may_log DEBUG
     then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
     Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
-    let transd = cfg_to_constraints p new_sym_tab new_type_tab cfg in
+    let transd =
+        cfg_to_constraints p#get_name new_sym_tab new_type_tab cfg in
     write_exprs p#get_name transd;
     let new_proc = proc_replace_body p transd in
     new_proc#add_all_symb new_sym_tab#get_symbs;

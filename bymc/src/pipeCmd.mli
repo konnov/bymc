@@ -10,6 +10,10 @@ exception Comm_error of string
 
 type cmd_stat
 
+(* an empty instance *)
+val null: unit -> cmd_stat
+val is_null: cmd_stat -> bool
+
 (* create a new process using Unix.create_process, connect it with a pipe
   and associate a communicating thread with it *)
 val create: string -> string array -> string -> cmd_stat

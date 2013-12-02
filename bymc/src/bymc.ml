@@ -12,11 +12,17 @@ open PromelaParserPlugin
 open Plugin
 open Program
 
+let version = "ByMC-0.3.0-dev"
+let banner =
+    sprintf
+        "*** This is %s. More details at: http://forsyte.at/software/bymc ***"
+        version
 
 let main () =
     try
+        printf "\n%s\n\n" banner;
         let opts = parse_options in
-        current_verbosity_level := if opts.verbose then DEBUG else INFO;
+        Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
         let solver = new Smt.yices_smt in
         solver#start;
