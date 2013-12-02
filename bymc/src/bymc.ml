@@ -15,7 +15,7 @@ open Program
 let version = "ByMC-0.3.0-dev"
 let banner =
     sprintf
-        "*** This is %s. More details at: http://forsyte.at/software/bymc ***"
+        "*** This is %s. Homepage: http://forsyte.at/software/bymc ***"
         version
 
 let main () =
