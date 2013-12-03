@@ -274,17 +274,27 @@ let assign_s = function
 
 let section_s s =
     let vf v = v#mangled_name in
+    let preprocess es =
+            let not_const1 = function
+            | Const 1 -> false
+            | _ -> true
+            in
+        List.filter not_const1 es
+    in
     match s with
     | SAssign assigns ->
             "ASSIGN\n" ^ (str_join "\n" (List.map assign_s assigns))
 
     | STrans es ->
+            let es = preprocess es in
             "TRANS\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
 
     | SInit es ->
+            let es = preprocess es in
             "INIT\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
 
     | SInvar es ->
+            let es = preprocess es in
             "INVAR\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
 
     | SVar decls ->
