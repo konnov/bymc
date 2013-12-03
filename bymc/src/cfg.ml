@@ -70,11 +70,14 @@ class ['t] basic_block =
         method set_seq s = seq <- s
         method get_seq = seq
 
-        method set_succ s = succ <- s
+        method set_succ s =
+            succ <- List.sort (fun b c -> b#label - c#label) s
         method get_succ = succ
         method succ_labs = List.map (fun bb -> bb#label) succ
 
-        method set_pred p = pred <- p
+        method set_pred p =
+            pred <- List.sort (fun b c -> b#label - c#label) p
+
         method get_pred = pred
         method pred_labs = List.map (fun bb -> bb#label) pred
         method find_pred_idx lab =
@@ -83,7 +86,7 @@ class ['t] basic_block =
             idx
 
         method set_succ_sync s =
-            succ <- s;
+            self#set_succ s;
             let add_self b =
                 let myself = (self :> 't basic_block) in
                 b#set_pred (myself :: b#get_pred)
@@ -120,6 +123,7 @@ class ['t] basic_block =
     
 
 let bb_lab bb = bb#label
+let cmp_blocks b c = b#label - c#label
 
 class ['t, 'attr] attr_basic_block a =
     object(self)
@@ -247,7 +251,7 @@ let remove_ineffective_blocks cfg =
         | _ -> false
     in
     let has_lab lab b = b#label = lab in
-    let cmp_blocks b c = b#label - c#label in
+
     let process_block bb =
         let relink_pred pbb =
             (* change the successors of the predecessors *)
