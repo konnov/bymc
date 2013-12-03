@@ -5,6 +5,7 @@
 
 open Printf
 
+open AbsSimple
 open Accums
 open Cfg
 open CfgSmt
@@ -76,9 +77,13 @@ let is_var_shared_in = function
     | SharedIn _ -> true
     | _ -> false
 
-let is_var_shared = function
-    | SharedIn _ -> true
+let is_var_shared_out = function
     | SharedOut _ -> true
+    | _ -> false
+
+let is_var_shared = function
+    | SharedIn (v, _) -> true
+    | SharedOut (v, _) -> true
     | _ -> false
 
 let ptov = function
@@ -171,7 +176,7 @@ let rename_vars tt shared seq =
 
 (* ====================== important functions *)
 
-let module_of_proc rt out_is_arg prog =
+let module_of_proc rt out_becomes_next prog =
     let procs = Program.get_procs prog in
     let nprocs = List.length procs in
     let shared = Program.get_shared prog in
@@ -200,21 +205,10 @@ let module_of_proc rt out_is_arg prog =
     in
 
     (* both locals and shared are the parameters of our module *)
-    let all_locals =
-        List.concat (List.map (fun p -> vars_of_syms p#get_symbs) procs)
-    in
     let make_options p i =
         let choose =
             MExpr (fresh_id (), (BinEx (ASGN, Var pid, Const i))) in
-        (* NOTE: one cannot do that as otherwise reachability breaks *)
-        (* initialize all the locals with zeroes *)
-        let init0 v =
-            MExpr (fresh_id (), BinEx (ASGN, Var v, Const 0)) in
-        let _, other =
-            List.partition (fun v -> v#proc_name = p#get_name) all_locals
-        in
-        let defaults = List.map init0 other in
-        MOptGuarded (choose :: defaults @ (get_comp p))
+        MOptGuarded (choose :: (get_comp p))
     in
     (* we have a single process for everything *)
     let mono_proc_code =
@@ -238,11 +232,24 @@ let module_of_proc rt out_is_arg prog =
     in
     let ntt, syms, exprs = to_ssa in
     let new_vars = vars_of_syms syms#get_symbs in
+    (* we have to constrain the variables with the invariant to cut out
+       the deadlock behaviour when the input variables do not match
+       the process code *)
+    let is_nuked v =
+        is_var_shared_out (partition_var ntt shared_set v) in
+    let invar =
+        if out_becomes_next
+        then List.map (nuke_vars is_nuked) exprs
+        else exprs
+    in
+    (* for the transition relation we either replace x_OUT with
+       next(x), or keep it as it is (for the reachability) *)
     let exprs =
-        if out_is_arg
-        then exprs
-        else List.map
-            (map_vars (replace_with_next syms ntt shared_set)) exprs in
+        if out_becomes_next
+        then List.map
+            (map_vars (replace_with_next syms ntt shared_set)) exprs
+        else exprs
+    in
     let pvars =
         List.sort proc_var_cmp
             (List.map (partition_var ntt shared_set) new_vars)
@@ -253,33 +260,36 @@ let module_of_proc rt out_is_arg prog =
         List.filter (fun v -> is_var_temp v || is_var_local_in v) pvars
     in
     let args =
-        if out_is_arg
-        then (* x_OUT stays as x_OUT *)
-            let f v = is_var_local_out v || is_var_shared v in
-            List.filter f pvars
-        else (* x_OUT becomes next(x) *)
+        if out_becomes_next
+        then (* x_OUT becomes next(x) *)
             let f v = is_var_local_out v || is_var_shared_in v in
             List.filter f pvars
+        else (* x_OUT stays as x_OUT *)
+            let f v = is_var_local_out v || is_var_shared v in
+            List.filter f pvars
     in
-    let invar = Var ((syms#lookup "at0")#as_var) in
+    let invar_at0 = Var ((syms#lookup "at0")#as_var) in
     let mod_type =
         SModule (mono_proc_name,
             List.map ptov args,
-            [SVar (List.map ptovt temps); SInvar [invar]; STrans exprs])
+            [SVar (List.map ptovt temps);
+             SInvar (invar_at0 :: invar);
+             STrans exprs])
     in
     (mono_proc_name, mod_type, args, new_sym_tab, new_type_tab)
 
 
-let create_proc_mods rt out_is_arg intabs_prog =
+let create_proc_mods rt out_becomes_next intabs_prog =
     let proc_name, mod_type, args, nst, ntt =
-        module_of_proc rt out_is_arg intabs_prog in
+        module_of_proc rt out_becomes_next intabs_prog in
     let to_shared_param l = function
         | SharedIn (v, t) ->
             (v#copy (strip_in v#get_name), t) :: l
         | SharedOut (v, t) ->
-            if out_is_arg
-            then (v, t) :: l
-            else (v#copy (strip_out v#get_name), t) :: l
+            if out_becomes_next
+            then (v#copy (strip_out v#get_name), t) :: l
+            else (v, t) :: l
+
         | _ -> l
     in
     let to_local_param l = function
@@ -308,9 +318,9 @@ let create_proc_mods rt out_is_arg intabs_prog =
     let shared = Program.get_shared intabs_prog in
     let shared_in = List.map (fun v -> (v, tt#get_type v)) shared in
     let shared_out =
-        if out_is_arg
-        then List.map (fun v -> (attach_out v, tt#get_type v)) shared
-        else []
+        if out_becomes_next
+        then []
+        else List.map (fun v -> (attach_out v, tt#get_type v)) shared
     in
     let pid = (nst#lookup (proc_name ^ "___pid"))#as_var in
     ([SVar (shared_in @ shared_out); SVar local_params; inst],
@@ -463,8 +473,8 @@ let create_counter_mods rt proc_syms proc_types ctrabs_prog pid =
                 :: invar
                 :: l
         in
-        List.fold_left per_idx
-            l (ctr_ctx#all_indices_for (fun _ -> true))
+        List.fold_left per_idx l
+            (ctr_ctx#all_indices_for (fun _ -> true))
     in
     let procs = Program.get_procs ctrabs_prog in
     let nprocs = List.length procs in
@@ -564,7 +574,7 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
 
 
 (* initialize the processes' variables to the initial values *)
-let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog =
+let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
     let init_of_proc l p =
         (* find all possible valuations of the local variables *)
         let ctr_ctx =
@@ -580,18 +590,30 @@ let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog =
         let ex = list_to_binex OR (List.map to_and init_vals) in
         ex :: l
     in
-    let bind_locals l p =
+    let bind_locals l p num =
         let ctr_ctx =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
         let bind lst v =
             let n = ctr_ctx#get_next v in
-            BinEx (EQ, UnEx (NEXT, Var v), Var n) :: lst
+            let enabled = BinEx (EQ, Var pid, Const num) in
+            let disabled = BinEx (NE, Var pid, Const num) in
+            let move_or_keep =
+                BinEx (AND,
+                    BinEx (IMPLIES,
+                           enabled, 
+                           BinEx (EQ, UnEx (NEXT, Var v), Var n)),
+                    BinEx (IMPLIES,
+                           disabled,
+                           BinEx (EQ, UnEx (NEXT, Var v), Var v))) in
+            move_or_keep :: lst
         in
         List.fold_left bind l ctr_ctx#var_vec
     in
     let procs = Program.get_procs intabs_prog in
+    let nprocs = List.length procs in
     let init_ess = List.fold_left init_of_proc [] procs in
-    let trans_ess = List.fold_left bind_locals [] procs in
+    let trans_ess =
+        List.fold_left2 bind_locals [] procs (range 0 nprocs) in
     [ SInit init_ess; STrans trans_ess ]
 
 
@@ -681,7 +703,7 @@ let hide_vars names sections =
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs, proc_st, proc_tt, pid =
-        create_proc_mods rt false intabs_prog in
+        create_proc_mods rt true intabs_prog in
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods =
         create_counter_mods rt proc_st proc_tt ctrabs_prog pid in
@@ -706,9 +728,10 @@ let transform rt out_name intabs_prog ctrabs_prog =
 
 let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
-    let main_sects, proc_mod_defs, _, _, _ =
-        create_proc_mods rt true intabs_prog in
-    let exec_procs = exec_of_ctrabs_procs rt intabs_prog ctrabs_prog in
+    let main_sects, proc_mod_defs, _, _, pid =
+        create_proc_mods rt false intabs_prog in
+    let exec_procs =
+        exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
     let invs = reach_inv_of_ctrabs rt ctrabs_prog in
     let all_main_sects = main_sects @ exec_procs in
     let tops = SModule ("main", [], all_main_sects) :: invs @ proc_mod_defs in
