@@ -47,6 +47,14 @@ let compute_consts exp =
     | BinEx (OR, _, Const 1) -> Const 1
     | BinEx (OR, Const 0, r) -> r
     | BinEx (OR, l, Const 0) -> l
+    | BinEx (IMPLIES, Const 0, _) -> Const 1
+    | BinEx (IMPLIES, Const 1, r) -> r
+    | BinEx (IMPLIES, l, Const 1) -> Const 1
+    | BinEx (IMPLIES, l, Const 0) -> UnEx (NEG, l)
+    | BinEx (EQUIV, Const 0, r) -> Const 0
+    | BinEx (EQUIV, l, Const 0) -> Const 0
+    | BinEx (EQUIV, Const 1, r) -> r
+    | BinEx (EQUIV, l, Const 1) -> l
     | UnEx (NEG, Const 1) -> Const 0
     | UnEx (NEG, Const 0) -> Const 1
 
