@@ -3,6 +3,8 @@
   counter as a module. This allows nusmv to use clusters, which are much
   more efficient for large models.
 
+  DEPRECATED: this is not actually as optimal as we thought.
+
   Igor Konnov, 2013
  *)
 
