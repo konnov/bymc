@@ -70,7 +70,7 @@ if __name__ == '__main__':
         print "Use: find-reach nusmv smv-filename hidden-filename"
         sys.exit(99)
 
-    status = os.system("%s -dcx -df -ils -is -v 1 main-ssa-reach.smv >%s" \
+    status = os.system("%s -dcx -df -AG -mono -ils -is -v 1 main-ssa-reach.smv >%s" \
             % (nusmv, OUT_FILENAME))
 
     if status != 0:
