@@ -187,8 +187,8 @@ let module_of_proc rt out_becomes_next elim_deadlocks prog =
         str_join "_" (List.map (fun p -> p#get_name) procs) in
 
     (* process id is chosen non-deterministically for each step *)
-    let pid = new_var "_pid" in
-    pid#set_proc_name mono_proc_name;
+    let pid = new_var "pid" in
+    pid#set_proc_name "z"; (* to make life easier *)
     let pidt = new data_type SpinTypes.TINT in
     pidt#set_range 0 nprocs;
 
@@ -325,7 +325,7 @@ let create_proc_mods rt out_becomes_next elim_deadlocks intabs_prog =
         then []
         else List.map (fun v -> (attach_out v, tt#get_type v)) shared
     in
-    let pid = (nst#lookup (proc_name ^ "___pid"))#as_var in
+    let pid = (nst#lookup "z__pid")#as_var in
     ([SVar (shared_in @ shared_out); SVar local_params; inst],
         [mod_type], nst, ntt, pid)
 
