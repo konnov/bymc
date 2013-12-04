@@ -176,7 +176,7 @@ let rename_vars tt shared seq =
 
 (* ====================== important functions *)
 
-let module_of_proc rt out_becomes_next prog =
+let module_of_proc rt out_becomes_next elim_deadlocks prog =
     let procs = Program.get_procs prog in
     let nprocs = List.length procs in
     let shared = Program.get_shared prog in
@@ -273,15 +273,16 @@ let module_of_proc rt out_becomes_next prog =
         SModule (mono_proc_name,
             List.map ptov args,
             [SVar (List.map ptovt temps);
-             SInvar (invar_at0 :: invar);
+             SInvar [invar_at0];
+             SInvar (if elim_deadlocks then invar else [Var nusmv_true]);
              STrans exprs])
     in
     (mono_proc_name, mod_type, args, new_sym_tab, new_type_tab)
 
 
-let create_proc_mods rt out_becomes_next intabs_prog =
+let create_proc_mods rt out_becomes_next elim_deadlocks intabs_prog =
     let proc_name, mod_type, args, nst, ntt =
-        module_of_proc rt out_becomes_next intabs_prog in
+        module_of_proc rt out_becomes_next elim_deadlocks intabs_prog in
     let to_shared_param l = function
         | SharedIn (v, t) ->
             (v#copy (strip_in v#get_name), t) :: l
@@ -703,7 +704,7 @@ let hide_vars names sections =
 let transform rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs, proc_st, proc_tt, pid =
-        create_proc_mods rt true intabs_prog in
+        create_proc_mods rt true true intabs_prog in
     let init_main = init_of_ctrabs rt intabs_prog ctrabs_prog in
     let ctr_main, ctr_mods =
         create_counter_mods rt proc_st proc_tt ctrabs_prog pid in
@@ -729,7 +730,7 @@ let transform rt out_name intabs_prog ctrabs_prog =
 let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
     let out = open_out (out_name ^ ".smv") in
     let main_sects, proc_mod_defs, _, _, pid =
-        create_proc_mods rt false intabs_prog in
+        create_proc_mods rt false false intabs_prog in
     let exec_procs =
         exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
     let invs = reach_inv_of_ctrabs rt ctrabs_prog in
