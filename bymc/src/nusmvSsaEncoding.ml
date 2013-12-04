@@ -274,6 +274,8 @@ let module_of_proc rt out_becomes_next elim_deadlocks prog =
             List.map ptov args,
             [SVar (List.map ptovt temps);
              SInvar [invar_at0];
+             (* the invariant explodes NuSMV-BDD,
+                avoid it for reachability *)
              SInvar (if elim_deadlocks then invar else [Var nusmv_true]);
              STrans exprs])
     in
