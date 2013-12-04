@@ -39,6 +39,21 @@ let teardown _ =
     ()
 
 
+let compare_used_vars used_set exp_ios exp_temps =
+    let nused = StringSet.cardinal used_set in
+    assert_equal ~msg:(sprintf "|used_set| = %d != %d"
+        nused (exp_temps + exp_ios))
+        (exp_temps + exp_ios) nused;
+    let check s (n_io, n_t) =
+        if "_IN" = (Str.last_chars s 3) || "_OUT" = (Str.last_chars s 4)
+        then (n_io + 1, n_t)
+        else (n_io, n_t + 1)
+    in
+    let n_io, n_t = StringSet.fold check used_set (0, 0) in
+    assert_equal ~msg:(sprintf "nr. IN/OUT = %d" exp_ios) exp_ios n_io;
+    assert_equal ~msg:(sprintf "nr. temporaries = %d" exp_temps) exp_temps n_t
+
+
 (* the scary bug I came up with on Nov 28, 2013 *)
 let test_optimize_ssa_in_out _ =
     let x = new_var "x" in
@@ -244,11 +259,53 @@ let test_mk_ssa _ =
     let used_set =
         List.fold_left collect StringSet.empty cfg_ssa#block_list
     in
-    assert_equal ~msg:"|used_set| = 4" 4 (StringSet.cardinal used_set);
-    assert_bool "x_IN in used_set" (StringSet.mem "x_IN" used_set);
-    assert_bool "x_OUT in used_set" (StringSet.mem "x_OUT" used_set);
-    assert_bool "x_T2 in used_set" (StringSet.mem "x_T2" used_set);
-    assert_bool "x_T6 in used_set" (StringSet.mem "x_T6" used_set)
+    compare_used_vars used_set 2 2
+
+
+(* Bugfix on 4.12.13: havoc must always introduce a new variable
+   (re-coloring eliminated them somewhere).
+ *)
+let test_mk_ssa_havoc _ =
+    let x = new_var "x" in
+    let id _ = fresh_id () in
+    (* this code is very similar to next_nrcvd in bcast-byz.pml *)
+    let code =
+        MIf (fresh_id (), [
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 1)) ];
+        ])
+        ::
+        MHavoc (fresh_id (), x)
+        ::
+        MIf (fresh_id (), [
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 1)) ];
+        ])
+        ::
+        MIf (fresh_id (), [
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 2)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 3)) ];
+        ])
+        :: []
+    in
+    let cfg = Cfg.remove_ineffective_blocks (mk_cfg (mir_to_lir code))
+    in
+    let nst = new symb_tab "" in
+    let ntt = new data_type_tab in
+    ntt#set_type x (mk_int_range 0 4);
+    let solver = new yices_smt in
+    solver#start;
+    let cfg_ssa = mk_ssa solver false [x] [] nst ntt cfg in
+    ignore (solver#stop);
+    Cfg.write_dot "ssa-test-havoc.dot" cfg_ssa;
+    let collect us b =
+        let used = stmt_list_used_vars b#get_seq in
+        List.fold_left (fun s v -> StringSet.add v#get_name s) us used
+    in
+    let used_set =
+        List.fold_left collect StringSet.empty cfg_ssa#block_list
+    in
+    compare_used_vars used_set 1 2
 
 
 let suite = "ssa-suite" >:::
@@ -258,6 +315,8 @@ let suite = "ssa-suite" >:::
         "test_reduce_indices_diamond"
             >:: (bracket setup test_reduce_indices_diamond teardown);
         "test_mk_ssa"
-            >:: (bracket setup test_mk_ssa teardown)
+            >:: (bracket setup test_mk_ssa teardown);
+        "test_mk_ssa_havoc"
+            >:: (bracket setup test_mk_ssa_havoc teardown)
     ]
 

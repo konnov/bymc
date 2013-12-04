@@ -646,9 +646,11 @@ let mk_ssa_cytron tolerate_undeclared_vars extern_vars intern_vars cfg =
             | Expr (id, Phi (v, rhs)) ->
                     Expr (id, Phi (intro_var v, rhs))
             | Havoc (id, v) ->
-                    (* just introduce a fresh one *)
-                    let _ = intro_var v in
-                    Skip id
+                    (* introduce a fresh version *)
+                    let nv = intro_var v in
+                    (* BUGFIX: Keep havoc, as it is going to be used
+                       in reduce_indices. See ssaTest#test_mk_ssa_havoc *)
+                    Havoc (id, nv)
             | _ as s -> s
         in
         let on_stmt lst s =
