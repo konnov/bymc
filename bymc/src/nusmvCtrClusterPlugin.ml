@@ -85,10 +85,10 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             log INFO (sprintf
                 "> writing ssa NuSMV model to %s.smv..." "main-ssa");
             let intabs_prog = pia_data_plugin#get_output in
-            NusmvSsaEncoding.transform 
-                rt "main-ssa" intabs_prog self#get_input;
             NusmvSsaEncoding.mk_counter_reach
                 rt "main-ssa-reach" intabs_prog self#get_input;
+            NusmvSsaEncoding.transform
+                rt "main-ssa" intabs_prog self#get_input;
             log INFO (sprintf
                 "> writing clusterized NuSMV model to %s.smv... SKIPPED" out_name);
             (*
