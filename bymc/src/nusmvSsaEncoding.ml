@@ -183,8 +183,7 @@ let module_of_proc rt out_becomes_next elim_deadlocks prog =
     let shared_set =
         List.fold_left (fun s v -> StringSet.add v#get_name s)
             StringSet.empty shared in
-    let mono_proc_name =
-        str_join "_" (List.map (fun p -> p#get_name) procs) in
+    let mono_proc_name = "Z" in (* a shorter name improves readability *)
 
     (* process id is chosen non-deterministically for each step *)
     let pid = new_var "pid" in
