@@ -59,6 +59,7 @@ module BlockGO = Graph.Oper.I(BlockG)
 (* the old implementation of a basic block, see block_t for the new version *)
 class ['t] basic_block =
     object(self)
+        val mutable m_label: int = 0
         val mutable seq: 't stmt list = []
         val mutable succ: 't basic_block list = []
         val mutable pred: 't basic_block list = []
@@ -67,7 +68,12 @@ class ['t] basic_block =
         (* this flag can be used to traverse along basic blocks *)
         val mutable visit_flag = false
 
-        method set_seq s = seq <- s
+        method set_seq s =
+            seq <- s;
+            m_label <- match s with
+                | Label (_, i) :: _ -> i
+                | _ -> raise (CfgError "Corrupted basic block, no leading label")
+
         method get_seq = seq
 
         method set_succ s =
@@ -100,13 +106,9 @@ class ['t] basic_block =
         method get_visit_flag = visit_flag
 
         (* deprecated, use label *)
-        method get_lead_lab =
-            self#label
+        method get_lead_lab = m_label
 
-        method label =
-            match seq with
-                | Label (_, i) :: _ -> i
-                | _ -> raise (CfgError "Corrupted basic block, no leading label")
+        method label = m_label
 
         method as_block_t =
             let b = new block_t in
