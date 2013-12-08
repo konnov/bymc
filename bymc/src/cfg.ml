@@ -147,7 +147,8 @@ class ['t, 'attr] attr_basic_block a =
 class ['t] control_flow_graph i_entry i_blocks =
     object(self)
         val m_blocks: (int, 't basic_block) Hashtbl.t = Hashtbl.create 1
-        val m_blocks_lst: 't basic_block list = i_blocks
+        val m_blocks_lst: 't basic_block list =
+            List.sort cmp_blocks i_blocks
         val m_entry: 't basic_block = i_entry
 
         initializer
