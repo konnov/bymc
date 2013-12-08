@@ -476,7 +476,9 @@ let reduce_indices solver bcfg_closure var =
     BlockG.iter_vertex add_bb_deps bcfg_closure;
 
     (* all assignment along one path depend on each other *)
-    trace Trc.ssa (fun _ -> "add_transitive_closure");
+    trace Trc.ssa (fun _ ->
+        sprintf "add_transitive_closure on %s, nodes=%d, edges=%d"
+        var#mangled_name (VarDigraph.nb_vertex depg) (VarDigraph.nb_edges depg));
     ignore (VarOper.add_transitive_closure ~reflexive:false depg);
     (* remove self-loops that can be introduced by transitive closure *)
     trace Trc.ssa (fun _ -> "print_dot");
@@ -716,7 +718,9 @@ let mk_ssa solver tolerate_undeclared_vars extern_vars intern_vars
     in
     let bcfg = cfg#as_block_graph in
     (* we need to track dependencies along paths *)
-    trace Trc.ssa (fun _ -> "add_transitive_closure");
+    trace Trc.ssa (fun _ ->
+        sprintf "add_transitive_closure of bcfg, nodes=%d, edges=%d"
+        (BlockG.nb_vertex bcfg) (BlockG.nb_edges bcfg));
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
 
     trace Trc.ssa (fun _ -> "reduce_indices");
