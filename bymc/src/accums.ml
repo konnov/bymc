@@ -395,7 +395,7 @@ let format_time_now () = format_time (Unix.time ())
  
 let short_time time =
   let tm = Unix.localtime time in
-  Printf.sprintf "%02d:%02d:%02d"
+  Printf.sprintf "%02d%02d%02d"
     tm.Unix.tm_hour
     tm.Unix.tm_min
     tm.Unix.tm_sec
