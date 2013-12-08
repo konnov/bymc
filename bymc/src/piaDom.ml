@@ -232,14 +232,14 @@ let sort_thresholds solver conds =
                 Hashtbl.replace rm_tbl c2 true
             end else if compare "<=" c1 c2
             then begin
-                log INFO (sprintf "    %s is subsumed by %s\n"
-                    (expr_s c2) (expr_s c1));
-                Hashtbl.replace rm_tbl c2 true
+                log INFO (sprintf "    %s <= %s\n"
+                    (expr_s c1) (expr_s c2));
+                (* DEPRECATED: Hashtbl.replace rm_tbl c2 true *)
             end else if compare "<=" c2 c1
             then begin
-                log INFO (sprintf "    %s is subsumed by %s\n"
-                    (expr_s c1) (expr_s c2));
-                Hashtbl.replace rm_tbl c1 true
+                log INFO (sprintf "    %s <= %s\n"
+                    (expr_s c2) (expr_s c1));
+                (* DEPRECATED: Hashtbl.replace rm_tbl c1 true *)
             end else
             raise (Abstraction_error m)
         end
