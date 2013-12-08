@@ -4,6 +4,8 @@
  * So it may have more bugs than the other modules!
  *
  * Igor Konnov, 2012-2013.
+ *
+ * TODO: hide all the implementation details under the interface.
  *)
 
 open Printf
@@ -50,10 +52,51 @@ module IIGraph =
     Graph.Imperative.Digraph.ConcreteBidirectionalLabeled
         (IntStruct)(IntStruct)
 
+module MatrixG = Graph.Imperative.Matrix.Digraph
+
 exception Var_not_found of string
 
 let mark_in = 0
 let mark_out = max_int
+
+(* Graph as an adjacency matrix. It seems to be much
+   more efficient when computing transitive closures.
+   NOTE: This is my first functor. Functors are cool!
+ *)
+module GraphAsMatrix =
+    functor (G: Graph.Sig.G) ->
+        struct
+            module V2I = Map.Make(G.V)
+            module I2V = IntMap
+            module MG = Graph.Imperative.Matrix.Digraph
+
+            type t = {
+                v2i: int V2I.t; i2v: G.V.t I2V.t; mg: MG.t
+            }
+
+            let make (g: G.t) =
+                let mg = MG.make (G.nb_vertex g) in
+                let add v (s, i) = (I2V.add i v s, i + 1) in
+                let i2v, _ = G.fold_vertex add g (I2V.empty, 0) in
+                let add v (s, i) = (V2I.add v i s, i + 1) in
+                let v2i, _ = G.fold_vertex add g (V2I.empty, 0) in
+                let add_edge f t =
+                    let fi = V2I.find f v2i in
+                    let ti = V2I.find t v2i in
+                    MG.add_edge mg fi ti
+                in
+                G.iter_edges add_edge g;
+                { v2i = v2i; i2v = i2v; mg = mg }
+
+            let to_v m i = I2V.find i m.i2v
+            let to_i m v = V2I.find v m.v2i
+            let mx_g m = m.mg
+        end
+
+
+module BlockGasM = GraphAsMatrix(BlockG)
+module MGO = Graph.Oper.I(BlockGasM.MG)
+
 
 let comp_dom_frontiers cfg =
     let df = Hashtbl.create (Hashtbl.length cfg#blocks) in
@@ -451,29 +494,38 @@ let print_dot filename var_graph =
 (* for every basic block, find the starting indices of the variables,
    i.e., such indices that have not been used in immediate dominators.
  *)
-let reduce_indices solver bcfg_closure var =
+let reduce_indices solver mx var =
     let get_bb_copies bb = get_var_copies var bb#seq in
     let depg = VarDigraph.create () in
     let add_vertex var = VarDigraph.add_vertex depg var in
-    BlockG.iter_vertex (fun bb -> List.iter add_vertex (get_bb_copies bb))
-    bcfg_closure;
-
+    let add_copies i =
+        let block = BlockGasM.to_v mx i in
+        let copies = get_bb_copies block in
+        List.iter add_vertex copies
+    in
+    trace Trc.ssa
+        (fun _ -> sprintf "add %d vertices to depg of %s"
+            (BlockGasM.MG.nb_vertex (BlockGasM.mx_g mx)) var#mangled_name);
+    BlockGasM.MG.iter_vertex add_copies (BlockGasM.mx_g mx);
+    
     (* add dependencies *)
     let add_dep v1 v2 =
         if v1#mark <> v2#mark
         then VarDigraph.add_edge depg v1 v2
     in
-    let add_bb_deps bb =
-        let copies = get_bb_copies bb in
+    let add_bb_deps src =
+        let copies = get_bb_copies (BlockGasM.to_v mx src) in
         (* all copies are dependent in the block *)
         List.iter (fun v -> List.iter (add_dep v) copies) copies;
         let add_succ succ =
-            let scopies = get_bb_copies succ in
+            let scopies = get_bb_copies (BlockGasM.to_v mx succ) in
             List.iter (fun v -> List.iter (add_dep v) scopies) copies
         in
-        List.iter add_succ (BlockG.succ bcfg_closure bb)
+        List.iter add_succ (BlockGasM.MG.succ (BlockGasM.mx_g mx) src)
     in
-    BlockG.iter_vertex add_bb_deps bcfg_closure;
+    trace Trc.ssa
+        (fun _ -> sprintf "add edges to depg of %s" var#mangled_name);
+    BlockGasM.MG.iter_vertex add_bb_deps mx.BlockGasM.mg;
 
     (* all assignment along one path depend on each other *)
     trace Trc.ssa (fun _ ->
@@ -492,7 +544,7 @@ let reduce_indices solver bcfg_closure var =
 
     (* try to find minimal coloring via binary search *)
     let ecoloring = Hashtbl.create 1 (*VarColoring.H.create 1*) in
-    let rec find_min_colors left right =
+    let rec find_min_colors left right = (* binary search *)
         let k = (left + right) / 2 in
         trace Trc.ssa (fun _ ->
             sprintf "%s: n=%d, left=%d, right=%d, k=%d\n"
@@ -716,16 +768,22 @@ let mk_ssa solver tolerate_undeclared_vars extern_vars intern_vars
         let ns = List.map map_s bb#get_seq in
         bb#set_seq ns
     in
+    (* We need to track dependencies along paths;
+       compute the graph closure. Additional hassle due to slow
+       computations on basic blocks (in ocamlgraph)
+     *)
     let bcfg = cfg#as_block_graph in
-    (* we need to track dependencies along paths *)
+    trace Trc.ssa (fun _ -> sprintf "bcfg to adjacency matrix");
+    let mx = BlockGasM.make bcfg in
     trace Trc.ssa (fun _ ->
-        sprintf "add_transitive_closure of bcfg, nodes=%d, edges=%d"
+        sprintf "add_transitive_closure of mx.mg, nodes=%d, edges=%d"
         (BlockG.nb_vertex bcfg) (BlockG.nb_edges bcfg));
-    ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
+    ignore (MGO.add_transitive_closure ~reflexive:false mx.BlockGasM.mg);
 
+    (* reduce the number of variable indices using coloring *)
     trace Trc.ssa (fun _ -> "reduce_indices");
-    List.iter (reduce_indices solver bcfg) intern_vars;
-    List.iter (reduce_indices solver bcfg) extern_vars;
+    List.iter (reduce_indices solver mx) intern_vars;
+    List.iter (reduce_indices solver mx) extern_vars;
     trace Trc.ssa (fun _ -> "optimize_ssa");
     (* remove redundant phi funcs *)
     ignore (optimize_ssa cfg (intern_vars @ extern_vars));
