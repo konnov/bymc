@@ -20,7 +20,8 @@ module IntMap = Map.Make (struct
  let compare a b = a - b
 end)
 
-module StringMap = Map.Make(String)
+module StringMap = Map.Make(String) (* deprecated: use StrMap *)
+module StrMap = Map.Make(String)
 module StrSet = Set.Make(String)
 
 (* short-hand functions *)
