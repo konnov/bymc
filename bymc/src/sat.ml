@@ -1,6 +1,6 @@
 (* Support for encoding of a problem in a SAT solver      *)
 (*                                                        *)
-(* Igor Konnov, 2011                                      *)
+(* Igor Konnov, 2011-2013                                      *)
 
 open Map
 module StringMap = Map.Make(String)
@@ -10,7 +10,7 @@ open Format
 (* a SAT formula *)
 type form =
     (* a user-defined variable that has a problem-specific name *)
-    Var of string
+  | Var of string
     (* an auxillary variable that does not have a name *)
   | Aux of int
   | Not of form
@@ -141,9 +141,8 @@ let is_literal f =
 
 let isa_clause s = s == Literal || s == Clause
 
-let rec is_clause f =
-  match f with
-      Var _ -> true
+let rec is_clause = function
+    | Var _ -> true
     | Aux _ -> true
     | Not (Var _) -> true
     | Not (Aux _) -> true
@@ -153,41 +152,43 @@ let rec is_clause f =
 
 let isa_cnf s = s == Literal || s == Clause || s == Cnf
 
-let rec string_of_form f =
-  match f with
-      True -> "T"
+let rec string_of_form = function
+    | True -> "T"
     | False -> "F"
     | Var x -> if x = "" then "<noname>" else x
     | Aux i -> "_" ^ (string_of_int i)
     | Not g -> "~" ^ string_of_form g
     | And children ->
-        "("
-        ^ (List.fold_left
-            (fun s g -> (if s = "" then s else s ^ " & ") ^ (string_of_form g))
-            "" children)
-        ^ ")"
+        let concat s g =
+            let pref = if s = "" then s else s ^ " & " in
+            pref ^ (string_of_form g)
+        in
+        "(" ^ (List.fold_left concat "" children) ^ ")"
+
     | Or children ->
-        "("
-        ^ (List.fold_left
-            (fun s g -> (if s = "" then s else s ^ " | ") ^ (string_of_form g))
-            "" children)
-        ^ ")"
+        let concat s g =
+            let pref = if s = "" then s else s ^ " | " in
+            pref ^ (string_of_form g)
+        in
+        "(" ^ (List.fold_left concat "" children) ^ ")"
 
 
-let rec propagate_not negation g =
+let rec propagate_not neg g =
     match g with
-      True -> if negation then False else g
-    | False -> if negation then True else g
-    | Var x -> if negation then Not(Var x) else g
-    | Aux i -> if negation then Not(Aux i) else g
-    | Not Var x -> if negation then Var x else g
-    | Not subf -> propagate_not (not negation) subf
+      True -> if neg then False else g
+    | False -> if neg then True else g
+    | Var x -> if neg then Not(Var x) else g
+    | Aux i -> if neg then Not(Aux i) else g
+    | Not Var x -> if neg then Var x else g
+    | Not subf -> propagate_not (not neg) subf
+
     | And children ->
-        let new_children = List.rev_map (propagate_not negation) children in
-        if negation then Or new_children else And new_children
+        let new_children = List.rev_map (propagate_not neg) children in
+        if neg then Or new_children else And new_children
+
     | Or children ->
-        let new_children = List.rev_map (propagate_not negation) children in
-        if negation then And new_children else Or new_children
+        let new_children = List.rev_map (propagate_not neg) children in
+        if neg then And new_children else Or new_children
 
 
 type level = TOP_AND | TOP_OR | DEEP
@@ -213,7 +214,7 @@ let rec tseitin pool level f =
   in
   (* the triple (wf_clauses, res_form, idx) is collected through the transformation *)
   match f with
-      True    -> ([], True)
+    | True    -> ([], True)
     | False   -> ([], False)
     | Var _   -> ([], f)
     | Aux _   -> ([], f)
@@ -294,27 +295,24 @@ let cnfify pool f =
 let rec cnf_to_lst f =
   let rec collect_single_clause g =
     match g with
-      True -> []
+    | True -> []
     | False ->
             raise (Invalid_argument "Trivially unsatisfiable formula: False is met!")
-      | Var _ -> [g]
-      | Aux _ -> [g]
-      | Not (Var _) -> [g]
-      | Not (Aux _) -> [g]
-      | Or children ->
-            List.fold_left
-                (fun cl c -> List.rev_append (collect_single_clause c) cl)
-                []
-                children
-      | g -> raise (Invalid_argument
-          ("Unexpected formula: " ^ (string_of_form g)))
+    | Var _ -> [g]
+    | Aux _ -> [g]
+    | Not (Var _) -> [g]
+    | Not (Aux _) -> [g]
+    | Or children ->
+        List.fold_left
+            (fun cl c -> List.rev_append (collect_single_clause c) cl)
+            [] children
+    | g -> raise (Invalid_argument
+            ("Unexpected formula: " ^ (string_of_form g)))
   in
   match f with
-      And children ->
+    | And children ->
         List.fold_left
-          (fun l c -> List.rev_append (cnf_to_lst c) l)
-          []
-          children
+            (fun l c -> List.rev_append (cnf_to_lst c) l) [] children
     | f -> [collect_single_clause f]
 
 

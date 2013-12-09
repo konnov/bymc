@@ -41,14 +41,14 @@ let rec bv_form_s = function
 
       | AND lst ->
             let concat s f =
-                let pref = if s <> "" then " & " else "" in
+                let pref = if s <> "" then s ^ " & " else "" in
                 (pref ^ "(" ^ (bv_form_s f) ^ ")")
             in
             List.fold_left concat "" lst
 
       | OR lst ->
             let concat s f =
-                let pref = if s <> "" then " | " else "" in
+                let pref = if s <> "" then s ^ " | " else "" in
                 (pref ^ "(" ^ (bv_form_s f) ^ ")")
             in
             List.fold_left concat "" lst
@@ -98,7 +98,7 @@ let rec format_bv_form ff = function
             Format.fprintf ff ")";
             false
         in
-        List.fold_left print true lst;
+        ignore (List.fold_left print true lst);
         Format.fprintf ff "@]"
       | OR lst ->
         Format.fprintf ff "@[<1>";
@@ -110,7 +110,7 @@ let rec format_bv_form ff = function
             Format.fprintf ff ")";
             false
         in
-        List.fold_left print true lst;
+        ignore (List.fold_left print true lst);
         Format.fprintf ff "@]"
       | ANNOTATION(text, subform) ->
         Format.fprintf ff "  /* %s */@\n" text;
