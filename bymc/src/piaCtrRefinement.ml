@@ -149,12 +149,12 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
     let xducer_asserts =
         activation @ (List.concat (List.map proc_asserts procs)) in
     let decls = expr_list_used_vars xducer_asserts in
-    (* uncomment to debug:
-    log INFO "    xducer asserts:";
-    List.iter (fun e -> log INFO (expr_s e)) xducer_asserts;
-    log INFO "    xducer decls:";
-    List.iter (fun v -> log INFO (sprintf "%s (%d)" v#qual_name v#id)) decls;
-    *)
+
+    trace Trc.pcr (fun _ -> sprintf " xducer asserts");
+    trace Trc.pcr (fun _ -> str_join "\n" (List.map expr_s xducer_asserts));
+    trace Trc.pcr (fun _ -> sprintf " xducer decls");
+    trace Trc.pcr (fun _ ->
+        str_join "\n" (List.map (fun v -> sprintf "%s#%d" v#qual_name v#id) decls));
 
     log INFO (sprintf "    adding %d declarations..." (List.length decls));
     let append_def v = solver#append_var_def v (type_tab#get_type v) in
