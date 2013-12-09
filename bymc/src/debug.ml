@@ -56,7 +56,7 @@ let log level message =
 let trace (mod_code: string) (text_fun: unit -> string) =
     if Hashtbl.mem enabled_trace_modules mod_code
     then begin
-        printf "*%s*%s* %s\n" (short_time_now ()) mod_code (text_fun ());
+        printf "@%s*%s* %s\n" (short_time_now ()) mod_code (text_fun ());
         flush stdout
     end
 
