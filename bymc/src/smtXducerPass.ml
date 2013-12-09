@@ -36,7 +36,7 @@ let to_xducer solver caches prog new_type_tab p =
     let reg_tbl = (caches#find_struc prog)#get_regions p#get_name in
     let loop_prefix = reg_tbl#get "loop_prefix" p#get_stmts in
     let loop_body = reg_tbl#get "loop_body" p#get_stmts in
-    let lirs = (mir_to_lir (loop_body @ loop_prefix)) in
+    let lirs = mir_to_lir (loop_body @ loop_prefix) in
     let globals =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let locals = (Program.get_all_locals prog) in
@@ -70,5 +70,37 @@ let do_xducers solver caches prog =
     new_type_tab#print;
     *)
 
+    new_prog
+
+
+let to_xducer_interleave solver caches prog =
+    let new_type_tab = (Program.get_type_tab prog)#copy in
+    let each_proc (ol, pl) p =
+        let reg_tbl = (caches#find_struc prog)#get_regions p#get_name in
+        let loop_prefix = reg_tbl#get "loop_prefix" p#get_stmts in
+        let loop_body = reg_tbl#get "loop_body" p#get_stmts in
+        ((MOptGuarded loop_body) :: ol, loop_prefix @ pl)
+    in
+    let procs = Program.get_procs prog in
+    let opts, suffix = List.fold_left each_proc ([], []) procs in
+    let lirs = mir_to_lir ((MIf (fresh_id (), opts)) :: suffix) in
+    let globals = (Program.get_shared prog) @ (Program.get_instrumental prog) in
+    let locals = (Program.get_all_locals prog) in
+    let new_name = "P" in
+    let new_sym_tab = new symb_tab new_name in
+    let cfg = mk_ssa solver true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
+    in
+    if may_log DEBUG
+    then print_detailed_cfg ("Loop of P in SSA: " ) cfg;
+    Cfg.write_dot "ssa_P.dot" cfg;
+    let transd = cfg_to_constraints new_name new_sym_tab new_type_tab cfg in
+    write_exprs new_name transd;
+    let new_proc = new proc new_name (Const 1) in
+    new_proc#add_all_symb new_sym_tab#get_symbs;
+    new_proc#set_stmts transd;
+    let new_prog =
+        (Program.set_type_tab new_type_tab
+            (Program.set_procs [new_proc] prog))
+    in
     new_prog
 

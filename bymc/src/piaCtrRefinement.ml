@@ -55,19 +55,17 @@ let create_path proc local_vars shared_vars n_steps =
         let es = List.map expr_of_m_stmt proc#get_stmts in
         List.map (map_vars (stick_var (map_to_step n))) es
     in
-    let move_or_skip step =
+    let move_or_skip step = map_xducer step in
+    (* the old way:
         let entry_loc = map_to_step step (CfgSmt.get_entry_loc proc) in
         (* if the process is enabled, use the transition relation,
            else keep the local variables *)
         BinEx (OR, Var entry_loc, skip_step local_vars step)
             :: (* by construction: at0 -> *) (map_xducer step)
-    in
-    let xducers =
-        List.concat (List.map move_or_skip (range 0 n_steps)) in
+            *)
+    let xducers = List.concat (List.map move_or_skip (range 0 n_steps)) in
     let connections =
-        List.map
-            (connect_steps tracked_vars)
-            (range 0 (n_steps - 1)) in
+        List.map (connect_steps tracked_vars) (range 0 (n_steps - 1)) in
     xducers @ connections
 
 
@@ -136,8 +134,7 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
     let type_tab = Program.get_type_tab xd_prog in
 
     let proc_asserts proc =
-        let c_ctx = ctr_ctx_tbl#get_ctx proc#get_name in
-        let local_vars = [c_ctx#get_ctr] in
+        let local_vars = ctr_ctx_tbl#all_counters in
         create_path proc local_vars shared_vars n_steps
     in
     (* put asserts from the control flow graph *)
@@ -145,9 +142,10 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
         "    getting declarations and assertions of %d transition relations..."
         (List.length (Program.get_procs xd_prog)));
     let procs = Program.get_procs xd_prog in
-    let activation = List.map (activate_process procs) (range 0 n_steps) in
-    let xducer_asserts =
-        activation @ (List.concat (List.map proc_asserts procs)) in
+    assert (1 = (List.length procs));
+    (*let activation = List.map (activate_process procs) (range 0 n_steps) in*)
+    let xducer_asserts = (* the old thing: activation @ *)
+        (List.concat (List.map proc_asserts procs)) in
     let decls = expr_list_used_vars xducer_asserts in
 
     trace Trc.pcr (fun _ -> sprintf " xducer asserts");
