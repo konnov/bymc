@@ -2,6 +2,10 @@
   The place where we do counter abstraction w.r.t. interval domain.
   This code was written in an ad-hoc way and requires refactoring.
 
+  NOTE: many decisions in this code were dictated by the need to check
+  the abstraction in Spin. Some operations can be done in a much more
+  efficient way symbolically.
+
   Igor Konnov 2012
  *)
 
@@ -274,7 +278,7 @@ let omit_local_assignments prog init_stmts =
     List.map tr init_stmts
 
 
-(* abstraction of functions different in VASS and our counter abstraction *)
+(* abstraction of functions different in VASS and in the (explicit) counter abstraction *)
 class virtual ctr_funcs =
     object
         method virtual introduced_vars:
@@ -289,6 +293,9 @@ class virtual ctr_funcs =
         method virtual mk_init:
             ctr_abs_ctx -> token expr -> token mir_stmt list -> token mir_stmt list
             -> token mir_stmt list
+
+        method virtual mk_counter_guard:
+            ctr_abs_ctx -> token mir_stmt list
 
         method virtual mk_counter_update:
             ctr_abs_ctx -> (var * var) list ->
@@ -348,6 +355,24 @@ class abs_ctr_funcs dom prog solver =
             @ 
             (mk_nondet_choice option_list)
                 @ self#mk_post_asserts c_ctx active_expr (Const (-1)) (Const 0)
+
+        method mk_counter_guard c_ctx =
+            let make_opt idx =
+                let guard =
+                    (BinEx (NE,
+                        BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx),
+                        Const 0))
+                in
+                MExpr (fresh_id (), guard) :: (* and then assignments *)
+                    (Hashtbl.fold
+                        (fun var value lst -> 
+                            MExpr (fresh_id (),
+                                   BinEx (ASGN, Var var, Const value)) :: lst)
+                        (c_ctx#unpack_from_const idx) [])
+            in
+            let indices = range 0 c_ctx#get_ctr_dim in
+            mk_nondet_choice (List.map make_opt indices)
+
 
         method mk_counter_update c_ctx prev_next_list prev_idx next_idx =
             let mk_one tok idx_ex = 
@@ -454,6 +479,16 @@ class vass_funcs dom prog solver =
             @ sum_eq_n :: other0
                 @ (self#mk_post_asserts c_ctx active_expr (Const 0) (Const 0))
 
+        (* on the SMT level we can always use free variables instead
+           of explicit enumeration of indices *)
+        method mk_counter_guard c_ctx =
+            let prevs = List.map fst c_ctx#prev_next_pairs in
+            let havocs = List.map (fun v -> MHavoc (fresh_id (), v)) prevs in
+            let access =
+                BinEx (ARR_ACCESS, Var c_ctx#get_ctr, c_ctx#pack_index_expr) in
+            let ne = MExpr (fresh_id (), BinEx (NE, access, Const 0)) in
+            havocs @ [ne]
+
         method mk_counter_update c_ctx prev_next_list prev_idx next_idx =
             (* XXX: use a havoc-like operator here *)
             (* it is very important that we add delta instead of 1 here,
@@ -521,23 +556,6 @@ class vass_funcs dom prog solver =
 let do_counter_abstraction funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
-    let counter_guard c_ctx =
-        let make_opt idx =
-            let guard =
-                (BinEx (NE,
-                    BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx),
-                    Const 0))
-            in
-            MExpr (fresh_id (), guard) :: (* and then assignments *)
-                (Hashtbl.fold
-                    (fun var value lst -> 
-                        MExpr (fresh_id (),
-                               BinEx (ASGN, Var var, Const value)) :: lst)
-                    (c_ctx#unpack_from_const idx) [])
-        in
-        let indices = range 0 c_ctx#get_ctr_dim in
-        mk_nondet_choice (List.map make_opt indices)
-    in
     let replace_update c_ctx active_expr update atomics stmts =
         (* all local variables should be reset to 0 *)
         let new_update =
@@ -604,7 +622,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
                 @ (funcs#mk_pre_loop c_ctx p#get_active_expr)
                 @ invs
                 @ [mk_comment (p#get_name ^ ": pick a process")]
-                @ counter_guard c_ctx
+                @ (funcs#mk_counter_guard c_ctx)
                 @ [mk_comment (p#get_name ^ ": begin step")]
                 @ new_comp_upd
             in
