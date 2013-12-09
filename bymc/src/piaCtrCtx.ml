@@ -22,12 +22,14 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         val mutable m_var_vec: (var * int) list = []
         val ctr_var = new_var ("bymc_k" ^ abbrev_name)
         val mutable ctr_dim: int = -1
-        val mutable m_next_vars: (var, var) Hashtbl.t = Hashtbl.create 1
+        (* Pairs of the variable before the loop body and after the loop body.
+           This list is usually tiny. *)
+        val mutable m_next_vars: (var * var) list = []
 
         method init_next_vars =
             let reg_tab = extract_skel proc#get_stmts in
             let update = reg_tab#get "update" proc#get_stmts in
-            m_next_vars <- find_copy_pairs (mir_to_lir update)
+            m_next_vars <- hashtbl_as_list (find_copy_pairs (mir_to_lir update))
         
         initializer
             self#init_next_vars;
@@ -76,12 +78,11 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
 
         method var_vec = List.map fst m_var_vec
 
-        method get_next v =
-            try Hashtbl.find m_next_vars v
-            with Not_found -> raise (Failure ("no next var for " ^v#get_name))
+        method get_next (prev: var): var =
+            try snd (List.find (fun (p, n) -> p#id = prev#id) m_next_vars)
+            with Not_found -> raise (Failure ("no next var for " ^ prev#qual_name))
 
-        method prev_next_pairs =
-            hashtbl_as_list m_next_vars
+        method prev_next_pairs = m_next_vars
 
         method unpack_from_const i =
             let valuation = Hashtbl.create (List.length m_var_vec) in
