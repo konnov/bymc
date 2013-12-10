@@ -41,13 +41,13 @@ let to_xducer solver caches prog new_type_tab p =
         (Program.get_shared prog) @ (Program.get_instrumental prog) in
     let locals = (Program.get_all_locals prog) in
     let new_sym_tab = new symb_tab "tmp" in
-    let cfg = mk_ssa solver true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
-    in
+    let cfg = Cfg.remove_ineffective_blocks (mk_cfg lirs) in
+    let ssa = mk_ssa solver true globals locals new_sym_tab new_type_tab cfg in
     if may_log DEBUG
-    then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) cfg;
-    Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) cfg;
+    then print_detailed_cfg ("Loop of " ^ p#get_name ^ " in SSA: " ) ssa;
+    Cfg.write_dot (sprintf "ssa_%s.dot" p#get_name) ssa;
     let transd =
-        cfg_to_constraints p#get_name new_sym_tab new_type_tab cfg in
+        cfg_to_constraints p#get_name new_sym_tab new_type_tab ssa in
     write_exprs p#get_name transd;
     let new_proc = proc_replace_body p transd in
     new_proc#add_all_symb new_sym_tab#get_symbs;
@@ -88,12 +88,12 @@ let to_xducer_interleave solver caches prog =
     let locals = (Program.get_all_locals prog) in
     let new_name = "P" in
     let new_sym_tab = new symb_tab new_name in
-    let cfg = mk_ssa solver true globals locals new_sym_tab new_type_tab (mk_cfg lirs)
-    in
+    let cfg = Cfg.remove_ineffective_blocks (mk_cfg lirs) in
+    let ssa = mk_ssa solver true globals locals new_sym_tab new_type_tab cfg in
     if may_log DEBUG
-    then print_detailed_cfg ("Loop of P in SSA: " ) cfg;
-    Cfg.write_dot "ssa_P.dot" cfg;
-    let transd = cfg_to_constraints new_name new_sym_tab new_type_tab cfg in
+    then print_detailed_cfg ("Loop of P in SSA: " ) ssa;
+    Cfg.write_dot "ssa_P.dot" ssa;
+    let transd = cfg_to_constraints new_name new_sym_tab new_type_tab ssa in
     write_exprs new_name transd;
     let new_proc = new proc new_name (Const 1) in
     new_proc#add_all_symb new_sym_tab#get_symbs;
