@@ -84,8 +84,10 @@ let block_to_constraints (proc_name: string)
     let n_pred = List.length bb#get_pred in
     let flow_succ =
         if n_succ > 1 && n_pred <> 0
-        then mkez (* predecessors activate *)
-            (BinEx (EQUIV, BinEx (NE, succ_var bb, Const 0), parents_activate))
+        then if is_nop parents_activate
+            then mkez (BinEx (NE, succ_var bb, Const 0))
+            else mkez (* predecessors activate *)
+                (BinEx (EQUIV, BinEx (NE, succ_var bb, Const 0), parents_activate))
         else mkez (Nop "") (* no succ variable for this block *)
     in
     (* convert statements *)
