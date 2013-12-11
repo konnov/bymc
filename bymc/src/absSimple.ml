@@ -25,7 +25,7 @@ let nuke_vars is_nuked exp =
     | BinEx (MINUS as t, l, r)
     | BinEx (MULT as t, l, r)
     | BinEx (DIV as t, l, r)
-    | BinEx (MOD as t, l, r) as e ->
+    | BinEx (MOD as t, l, r) ->
             let nl, nukel = red l and nr, nuker = red r in
             if nukel || nuker
             then (Const 1, true)
@@ -36,7 +36,7 @@ let nuke_vars is_nuked exp =
     | BinEx (LE as t, l, r)
     | BinEx (GE as t, l, r)
     | BinEx (LT as t, l, r)
-    | BinEx (GT as t, l, r) as e ->
+    | BinEx (GT as t, l, r) ->
             let nl, nukel = red l and nr, nuker = red r in
             if nukel || nuker
             then (Const 1, false)
