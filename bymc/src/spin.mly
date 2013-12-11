@@ -16,76 +16,26 @@
 
 %{
 
-(*
-#include "spin.h"
-#include <sys/types.h>
-#include <unistd.h>
-#include <stdarg.h>
+open Printf
 
-#define YYDEBUG	0
-#define Stop	nn(ZN,'@',ZN,ZN)
-#define PART0	"place initialized var decl of "
-#define PART1	"place initialized chan decl of "
-#define PART2	" at start of proctype "
+open Lexing
+open SpinIr
+open SpinlexGlue
+open SpinParserState
 
-static	Lextok *ltl_to_string(Lextok * );
-
-extern  Symbol	*context, *owner;
-extern	Lextok *for_body(Lextok *, int);
-extern	void for_setup(Lextok *, Lextok *, Lextok * );
-extern	Lextok *for_index(Lextok *, Lextok * );
-extern	Lextok *sel_index(Lextok *, Lextok *, Lextok * );
-extern  int	u_sync, u_async, dumptab, scope_level;
-extern	int	initialization_ok, split_decl;
-extern	short	has_sorted, has_random, has_enabled, has_pcvalue, has_np;
-extern	short	has_code, has_state, has_io;
-extern	void	count_runs(Lextok * );
-extern	void	no_internals(Lextok * );
-extern	void	any_runs(Lextok * );
-extern	void	ltl_list(char *, char * );
-extern	void	validref(Lextok *, Lextok * );
-extern	char	yytext[];
-
-int	Mpars = 0;	/* max nr of message parameters  */
-int	nclaims = 0;	/* nr of never claims */
-int	ltl_mode = 0;	/* set when parsing an ltl formula */
-int	Expand_Ok = 0, realread = 1, IArgs = 0, NamesNotAdded = 0;
-int	in_for = 0;
-char	*claimproc = (char * ) 0;
-char	*eventmap = (char * ) 0;
-static	char *ltl_name;
-
-static	int	Embedded = 0, inEventMap = 0, has_ini = 0;
-*)
-
-open Printf;;
-
-open Lexing;;
-open SpinIr;;
-open SpinlexGlue;;
-
-exception Not_implemented of string;;
-exception Parse_error of string;;
-
-(* we have to declare global objects, think of resetting them afterwards! *)
-let err_cnt = ref 0;;
-let met_else = ref false;;
-let fwd_labels = Hashtbl.create 10;;
-let lab_stack = ref [];;
-let global_scope = new symb_tab "";;
-let spec_scope = new symb_tab "spec";;
-let current_scope = ref global_scope;;
-let type_tab = new data_type_tab;;
+let met_else = ref false
+let fwd_labels = Hashtbl.create 10
+let lab_stack = ref []
 
 let push_new_labs () =
     let e = mk_uniq_label () in (* one label for entry to do *)
     let b = mk_uniq_label () in (* one label to break from do/if *)
     lab_stack := (e, b) :: !lab_stack
-;;
 
-let pop_labs () = lab_stack := List.tl !lab_stack ;;
 
-let top_labs () = List.hd !lab_stack;;
+let pop_labs () = lab_stack := List.tl !lab_stack 
+
+let top_labs () = List.hd !lab_stack
 
 (* it uses tokens, so we cannot move it outside *)
 let rec is_expr_symbolic e =
@@ -97,25 +47,25 @@ let rec is_expr_symbolic e =
         (List.mem op [PLUS; MINUS; MULT; DIV; MOD])
             && (is_expr_symbolic le) && (is_expr_symbolic re)
     | _ -> false
-;;
+
 
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
     let fname = if p.pos_fname != "" then p.pos_fname else "<filename>" in
     let col = max (p.pos_cnum - p.pos_bol + 1) 1 in
     (fname, p.pos_lnum, col)
-;;
+
 
 let parse_error s =
     let f, l, c = curr_pos() in
     Printf.printf "%s:%d,%d %s\n" f l c s;
-    err_cnt := !err_cnt + 1
-;;
+    ignore (inc_err_cnt (get_state ()))
+
 
 let fatal msg payload =
     let f, l, c = curr_pos() in
     raise (Failure (Printf.sprintf "%s:%d,%d %s %s\n" f l c msg payload))
-;;
+
 %}
 
 %token	ASSERT PRINT PRINTM
@@ -181,11 +131,13 @@ let fatal msg payload =
 %left	DOT
 %start program
 %type <token SpinIr.prog_unit list * SpinIr.data_type_tab> program
+%start expr
+%type <token SpinIr.expr> expr
 %%
 
 /** PROMELA Grammar Rules **/
 
-program	: units	EOF { ($1, type_tab) }
+program	: units	EOF { ($1, type_tab (get_state ())) }
 	;
 
 units	: unit      { $1 }
@@ -220,7 +172,8 @@ proc	: inst		/* optional instantiator */
 	  Opt_priority
 	  Opt_enabler
 	  body	{
-                let p = new proc !current_scope#tab_name $1 in
+                let my_scope = top_scope (get_state ()) in
+                let p = new proc my_scope#tab_name $1 in
                 let unpack e =
                     match e with    
                     | MDecl (_, v, i) -> v#add_flag HFormalPar; v
@@ -228,20 +181,18 @@ proc	: inst		/* optional instantiator */
                 in
                 p#set_args (List.map unpack $4);
                 p#set_stmts $8;
-                p#add_all_symb !current_scope#get_symbs;
-                current_scope := global_scope;
+                p#add_all_symb my_scope#get_symbs;
+                ignore (pop_scope (get_state ()));
                 Hashtbl.clear fwd_labels;
                 p
             }
         ;
 
 proctype_name: PROCTYPE NAME {
-        current_scope := new symb_tab $2;
-        !current_scope#set_parent global_scope
+        ignore (push_scope (get_state ()) (new symb_tab $2))
         }
     | D_PROCTYPE NAME {
-        current_scope := new symb_tab $2;
-        !current_scope#set_parent global_scope
+        ignore (push_scope (get_state ()) (new symb_tab $2))
         }
     ;
 
@@ -300,7 +251,7 @@ ltl_expr:
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
         { let v = new_var $1 in
-          type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
+          (type_tab (get_state ()))#set_type v (new data_type SpinTypes.TPROPOSITION);
           Var v }
     | FNAME AT FNAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
@@ -481,8 +432,8 @@ one_decl: vis TYPE var_list	{
             tp#set_nelems tp_rhs#nelems;
             tp#set_nbits tp_rhs#nbits;
             v#add_flag fl;
-            type_tab#set_type v tp;
-            !current_scope#add_symb v#get_name (v :> symb);
+            (type_tab (get_state ()))#set_type v tp;
+            (top_scope (get_state ()))#add_symb v#get_name (v :> symb);
             MDecl(fresh_id (), v, init)
         in
         List.map add_decl $3
@@ -566,19 +517,19 @@ ch_init : LBRACE CONST RBRACE OF
 
 vardcl  : NAME {
         let v = new_var $1 in
-        v#set_proc_name !current_scope#tab_name;
+        v#set_proc_name (top_scope (get_state ()))#tab_name;
         (v, new data_type SpinTypes.TUNDEF)
         }
     | NAME COLON CONST	{
         let v = new_var $1 in
-        v#set_proc_name !current_scope#tab_name;
+        v#set_proc_name (top_scope (get_state ()))#tab_name;
         let tp = new data_type SpinTypes.TUNDEF in
         tp#set_nbits $3;
         (v, tp)
         }
     | NAME LBRACE CONST RBRACE	{
         let v = new_var $1 in
-        v#set_proc_name !current_scope#tab_name;
+        v#set_proc_name (top_scope (get_state ()))#tab_name;
         let tp = new data_type SpinTypes.TUNDEF in
         tp#set_nelems $3;
         (v, tp)
@@ -590,10 +541,10 @@ varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
 
 pfld	: NAME {
             try
-                (!current_scope#lookup $1)#as_var
+                ((top_scope (get_state ()))#lookup $1)#as_var
             with Symbol_not_found _ ->
                 (* XXX: check that the current expression can use that *)
-                (spec_scope#lookup $1)#as_var
+                ((spec_scope (get_state ()))#lookup $1)#as_var
             }
     | NAME			/* { (* owner = ZS; *) } */
       LBRACE expr RBRACE
@@ -708,7 +659,7 @@ Special :
                 }
     | GOTO NAME		{
         try
-            let l = !current_scope#lookup $2 in
+            let l = (top_scope (get_state ()))#lookup $2 in
             [MGoto (fresh_id (), l#as_label#get_num)]
         with Symbol_not_found _ ->
             let label_no = mk_uniq_label () in
@@ -725,14 +676,14 @@ Special :
 | NAME COLON stmnt	{
     let label_no =
         try
-            let _ = (!current_scope)#lookup $1 in
+            let _ = (top_scope (get_state ()))#lookup $1 in
             fatal "" (sprintf "Label %s redeclared\n" $1)
         with Symbol_not_found _ ->
             if Hashtbl.mem fwd_labels $1
             then Hashtbl.find fwd_labels $1
             else mk_uniq_label ()
     in
-    !current_scope#add_symb
+    (top_scope (get_state ()))#add_symb
         $1 ((new label $1 label_no) :> symb);
     MLabel (fresh_id (), label_no) :: $3
     }
@@ -903,7 +854,7 @@ prop_arith_expr    :
 	| NAME
         {
             try
-                Var (global_scope#find_or_error $1)#as_var
+                Var ((global_scope (get_state ()))#find_or_error $1)#as_var
             with Not_found ->
                 fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
         }
@@ -1031,8 +982,8 @@ prop_decl:
     track_ap ATOMIC NAME ASGN atomic_prop {
         let v = new_var($3) in
         v#add_flag $1;
-        type_tab#set_type v (new data_type SpinTypes.TPROPOSITION);
-        spec_scope#add_symb v#get_name (v :> symb);
+        (type_tab (get_state ()))#set_type v (new data_type SpinTypes.TPROPOSITION);
+        (spec_scope (get_state ()))#add_symb v#get_name (v :> symb);
         MDeclProp (fresh_id (), v, $5)
     }
     ;

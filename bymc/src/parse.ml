@@ -132,6 +132,7 @@ let parse_promela filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
     let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
+    SpinParserState.reset_state ();
     let units, type_tab = Spin.program lfun lexbuf in
 
     (* postprocess: check late variable bindings and remove artifacts *)
@@ -152,4 +153,12 @@ let parse_promela filename basename dirname =
         end
     end;
     (Program.program_of_units type_tab units)
+
+
+let parse_expr sym_tab str =
+    let lexbuf = Lexing.from_string str in
+    lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "<string>" };
+    SpinParserState.reset_state ();
+    ignore (SpinParserState.push_scope (SpinParserState.get_state ()) sym_tab);
+    Spin.expr Spinlex.token lexbuf
 
