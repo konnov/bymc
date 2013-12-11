@@ -134,6 +134,7 @@ let token_s t =
       | INIT -> "INIT"
       | LTL -> "LTL"
       | DEFINE(n, v) -> (sprintf "DEFINE %s '%s'" n v)
+      | PRAGMA(n, v) -> (sprintf "PRAGMA %s \"%s\"" n v)
       | INCLUDE(filename) -> (sprintf "INCLUDE \"%s\"" filename)
       | MACRO_IF -> "MACRO_IF"
       | MACRO_IFDEF -> "MACRO_IFDEF"

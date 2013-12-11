@@ -1,5 +1,6 @@
 open Printf
 
+open Accums
 open Debug
 open Options
 open Parse
@@ -13,6 +14,9 @@ class promela_parser_plugin_t (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 
+        val mutable m_plugin_opts = StrMap.empty
+
+
         method transform rt _ =
             let opts = rt#caches#options in
             let filename, basename, dirname =
@@ -23,7 +27,15 @@ class promela_parser_plugin_t (plugin_name: string) =
                 else raise (Failure ("File not found: " ^ opts.filename))
             in
             log INFO (sprintf "> Parsing %s..." basename);
-            let prog = parse_promela filename basename dirname in
+            let prog, pragmas = parse_promela filename basename dirname in
+            m_plugin_opts <- self#find_options rt pragmas;
+            let new_plugin_opts =
+                StrMap.fold StrMap.add
+                    rt#caches#options.plugin_opts m_plugin_opts
+            in
+            rt#caches#set_options
+                { rt#caches#options with plugin_opts = new_plugin_opts };
+
             write_to_file false "original.prm"
                 (units_of_program prog) (get_type_tab prog)
                 (Hashtbl.create 10);
@@ -44,6 +56,12 @@ class promela_parser_plugin_t (plugin_name: string) =
                     (List.map var_to_smt (get_params prog))
                     (List.map smt_of_asrt (get_assumes prog))
             in
+            let new_plugin_opts =
+                StrMap.fold StrMap.add
+                    rt#caches#options.plugin_opts m_plugin_opts
+            in
+            rt#caches#set_options
+                { rt#caches#options with plugin_opts = new_plugin_opts };
             List.iter rt#solver#append smt_exprs;
             if not rt#solver#check
             then raise (Program.Program_error "Basic assertions are contradictory");
@@ -53,5 +71,15 @@ class promela_parser_plugin_t (plugin_name: string) =
         method decode_trail _ path = path
 
         method refine _ path = (false, self#get_output)
+
+        method find_options rt pragmas =
+            let add_opt s (n, t) =
+                if n = "option"
+                then let key, value = parse_plugin_opt t in
+                    StrMap.add key value s
+                else s
+            in
+            List.fold_left add_opt StrMap.empty pragmas
+
     end
 

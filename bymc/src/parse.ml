@@ -16,7 +16,7 @@ let prev_tok = ref EOF (* we have to remember the previous token *)
 
 (* XXX: why is aux_bufs a reference? *)
 (* lexer function decorated by a preprocessor *)
-let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
+let rec lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf =
     let tok = match !aux_bufs with
       | [] -> lex_fun lexbuf  (* read from the main buffer *)
 
@@ -25,14 +25,18 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
         if t != EOF then t
         else begin
             aux_bufs := tl;
-            lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+            lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
         end
     in
     let new_tok = match tok with
     (* TODO: handle macros with arguments like foo(x, y) *)
     | DEFINE(name, text) ->
         Hashtbl.add macro_tbl name text;
-        lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+
+    | PRAGMA(name, text) ->
+        pragmas := (name, text) :: !pragmas;
+        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
 
     | NAME id ->
         if Hashtbl.mem macro_tbl id
@@ -44,7 +48,7 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
             newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = bname};
             aux_bufs := newbuf :: !aux_bufs;
             (* TODO: fail decently on co-recursive macro definitions *)
-            lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+            lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
         else tok
 
     | INCLUDE filename -> (* scan another file *)
@@ -52,7 +56,7 @@ let rec lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf =
         let newbuf = Lexing.from_channel (open_in path) in
         newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = filename };
         aux_bufs := newbuf :: !aux_bufs;
-        lex_pp dirname macro_tbl aux_bufs lex_fun lexbuf
+        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
 
       (* TODO: if/endif + ifdef/endif + if-else-endif*)
     | MACRO_IF | MACRO_IFDEF | MACRO_ELSE | MACRO_ENDIF ->
@@ -131,7 +135,9 @@ let postprocess all_units u =
 let parse_promela filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
-    let lfun = lex_pp dirname (Hashtbl.create 10) (ref []) Spinlex.token in
+    let pragmas = ref [] in
+    let macros = Hashtbl.create 10 in
+    let lfun = lex_pp dirname macros pragmas (ref []) Spinlex.token in
     SpinParserState.reset_state ();
     let units, type_tab = Spin.program lfun lexbuf in
 
@@ -152,7 +158,7 @@ let parse_promela filename basename dirname =
             List.iter p units;
         end
     end;
-    (Program.program_of_units type_tab units)
+    (Program.program_of_units type_tab units, !pragmas)
 
 
 let parse_expr sym_tab str =

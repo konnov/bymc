@@ -9,8 +9,7 @@ open Spin
 open SpinIr
 open SpinTypes
 
-let token_s t =
-    match t with
+let token_s = function
       | ASSERT -> "ASSERT"
       | PRINT -> "PRINT"
       | PRINTM -> "PRINTM"
@@ -60,9 +59,9 @@ let token_s t =
       | EMPTY -> "EMPTY"
       | NFULL -> "NFULL"
       | NEMPTY -> "NEMPTY"
-      | CONST i -> (string_of_int i)
+      | CONST i -> string_of_int i
       | TYPE tp -> "TYPE" ^ (var_type_s tp)
-      | XU tp -> (xu_type_s tp)
+      | XU tp -> xu_type_s tp
       | NAME s -> "NAME " ^ s
       | UNAME s -> "UNAME " ^ s
       | PNAME s -> "PNAME " ^ s
@@ -73,13 +72,14 @@ let token_s t =
       | TRACE -> "TRACE"
       | INIT -> "INIT"
       | LTL -> "LTL"
-      | DEFINE(n, v) -> (sprintf "DEFINE %s '%s'" n v)
-      | INCLUDE(filename) -> (sprintf "INCLUDE \"%s\"" filename)
+      | DEFINE(n, v) -> sprintf "DEFINE %s '%s'" n v
+      | PRAGMA(n, v) -> sprintf "PRAGMA %s \"%s\"" n v
+      | INCLUDE(filename) -> sprintf "INCLUDE \"%s\"" filename
       | MACRO_IF -> "MACRO_IF"
       | MACRO_IFDEF -> "MACRO_IFDEF"
       | MACRO_ELSE -> "MACRO_ELSE"
       | MACRO_ENDIF -> "MACRO_ENDIF"
-      | MACRO_OTHER name -> (sprintf "#%s" name)
+      | MACRO_OTHER name -> sprintf "#%s" name
       | NOTRACE -> "NOTRACE"
       | NEVER -> "NEVER"
       | R_RCV -> "R_RCV"

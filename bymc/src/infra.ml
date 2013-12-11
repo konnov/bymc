@@ -80,7 +80,11 @@ class pass_caches (i_options: options_t) (i_analysis: analysis_cache) =
         val mutable m_struc_tab:
             (int, proc_struc) Hashtbl.t = Hashtbl.create 1
 
-        method options = i_options
+        val mutable m_options: options_t = i_options
+
+        method options = m_options
+        method set_options o = m_options <- o
+
         method analysis = i_analysis
 
         method find_struc prog =

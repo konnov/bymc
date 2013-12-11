@@ -1,15 +1,15 @@
 {
-    open Printf;;
+    open Printf
 
-    open SpinTypes;;
-    open Spin;;
-    open SpinlexGlue;;
+    open SpinTypes
+    open Spin
+    open SpinlexGlue
 
-    exception Unexpected_token of string;;
-    let string_chars s = String.sub s 1 ((String.length s) - 2) ;;
-    let strip_last_n s n = String.sub s 0 ((String.length s) - n) ;;
-    let pp_word s = String.sub s 1 ((String.length s) - 1) ;;
-    let strip_leading s = Str.global_replace (Str.regexp "^[ \t]+") "" s;;
+    exception Unexpected_token of string
+    let string_chars s = String.sub s 1 ((String.length s) - 2)
+    let strip_last_n s n = String.sub s 0 ((String.length s) - n)
+    let pp_word s = String.sub s 1 ((String.length s) - 1)
+    let strip_leading s = Str.global_replace (Str.regexp "^[ \t]+") "" s
 
     let new_line lexbuf =
         (* backport of Lexing.new_line to ocaml 3.10.2 *)
@@ -160,11 +160,18 @@ rule token = parse
     {
         let macro = (Lexing.lexeme lexbuf) in
         match macro with
-          "#include" -> INCLUDE (parse_include lexbuf)
+        | "#include" -> INCLUDE (parse_include lexbuf)
+
         | "#define" ->
             let name = (parse_name lexbuf) in
             let text = (strip_leading (parse_define lexbuf)) in
             DEFINE(name, text)
+
+        | "#pragma" ->
+            let name = parse_name lexbuf in
+            let text = strip_leading (parse_pragma lexbuf) in
+            PRAGMA(name, text)
+
         | "#ifdef" -> MACRO_IFDEF
         | "#if" -> MACRO_IF
         | "#else" -> MACRO_ELSE
@@ -195,7 +202,20 @@ and parse_include = parse
  | '\n'           { raise (Unexpected_token "End-of-line in #include") }
  | eof            { raise End_of_file }
  | _ as c
-    { raise (Unexpected_token (sprintf "Unrecognized char %c in #include after %s" c (Lexing.lexeme lexbuf))) }
+    { raise (Unexpected_token
+        (sprintf "Unrecognized char %c in #include after %s" c
+            (Lexing.lexeme lexbuf))) }
+
+and parse_pragma = parse
+   [' ' '\t']+    { parse_pragma lexbuf } (* skip spaces *)
+ | '"' [^ '"']* '"'
+    { (string_chars (Lexing.lexeme lexbuf)) }
+ | '\n'           { raise (Unexpected_token "End-of-line in #pragma") }
+ | eof            { raise End_of_file }
+ | _ as c
+    { raise (Unexpected_token
+        (sprintf "Unrecognized char %c in #pragma after %s" c
+            (Lexing.lexeme lexbuf))) }
 
 and parse_define = parse
  [' ' '\t']+      { parse_define lexbuf } (* skip spaces *)

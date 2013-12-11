@@ -100,6 +100,7 @@ let fatal msg payload =
 %token	UNTIL WEAK_UNTIL RELEASE	/* ltl */
 %token	NEXT IMPLIES EQUIV          /* ltl */
 %token  <string * string> DEFINE
+%token  <string * string> PRAGMA
 %token  <string> INCLUDE
 %token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
 %token  <string> MACRO_OTHER
