@@ -59,7 +59,7 @@ let curr_pos () =
 let parse_error s =
     let f, l, c = curr_pos() in
     Printf.printf "%s:%d,%d %s\n" f l c s;
-    ignore (inc_err_cnt (get_state ()))
+    inc_err_cnt ()
 
 
 let fatal msg payload =
@@ -137,7 +137,7 @@ let fatal msg payload =
 
 /** PROMELA Grammar Rules **/
 
-program	: units	EOF { ($1, type_tab (get_state ())) }
+program	: units	EOF { ($1, type_tab ()) }
 	;
 
 units	: unit      { $1 }
@@ -172,7 +172,7 @@ proc	: inst		/* optional instantiator */
 	  Opt_priority
 	  Opt_enabler
 	  body	{
-                let my_scope = top_scope (get_state ()) in
+                let my_scope = top_scope () in
                 let p = new proc my_scope#tab_name $1 in
                 let unpack e =
                     match e with    
@@ -182,17 +182,17 @@ proc	: inst		/* optional instantiator */
                 p#set_args (List.map unpack $4);
                 p#set_stmts $8;
                 p#add_all_symb my_scope#get_symbs;
-                ignore (pop_scope (get_state ()));
+                pop_scope ();
                 Hashtbl.clear fwd_labels;
                 p
             }
         ;
 
 proctype_name: PROCTYPE NAME {
-        ignore (push_scope (get_state ()) (new symb_tab $2))
+        push_scope (new symb_tab $2)
         }
     | D_PROCTYPE NAME {
-        ignore (push_scope (get_state ()) (new symb_tab $2))
+        push_scope (new symb_tab $2)
         }
     ;
 
@@ -251,7 +251,7 @@ ltl_expr:
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
     | FNAME                        
         { let v = new_var $1 in
-          (type_tab (get_state ()))#set_type v (new data_type SpinTypes.TPROPOSITION);
+          (type_tab ())#set_type v (new data_type SpinTypes.TPROPOSITION);
           Var v }
     | FNAME AT FNAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
@@ -432,8 +432,8 @@ one_decl: vis TYPE var_list	{
             tp#set_nelems tp_rhs#nelems;
             tp#set_nbits tp_rhs#nbits;
             v#add_flag fl;
-            (type_tab (get_state ()))#set_type v tp;
-            (top_scope (get_state ()))#add_symb v#get_name (v :> symb);
+            (type_tab ())#set_type v tp;
+            (top_scope ())#add_symb v#get_name (v :> symb);
             MDecl(fresh_id (), v, init)
         in
         List.map add_decl $3
@@ -517,19 +517,19 @@ ch_init : LBRACE CONST RBRACE OF
 
 vardcl  : NAME {
         let v = new_var $1 in
-        v#set_proc_name (top_scope (get_state ()))#tab_name;
+        v#set_proc_name (top_scope ())#tab_name;
         (v, new data_type SpinTypes.TUNDEF)
         }
     | NAME COLON CONST	{
         let v = new_var $1 in
-        v#set_proc_name (top_scope (get_state ()))#tab_name;
+        v#set_proc_name (top_scope ())#tab_name;
         let tp = new data_type SpinTypes.TUNDEF in
         tp#set_nbits $3;
         (v, tp)
         }
     | NAME LBRACE CONST RBRACE	{
         let v = new_var $1 in
-        v#set_proc_name (top_scope (get_state ()))#tab_name;
+        v#set_proc_name (top_scope ())#tab_name;
         let tp = new data_type SpinTypes.TUNDEF in
         tp#set_nelems $3;
         (v, tp)
@@ -541,10 +541,10 @@ varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
 
 pfld	: NAME {
             try
-                ((top_scope (get_state ()))#lookup $1)#as_var
+                ((top_scope ())#lookup $1)#as_var
             with Symbol_not_found _ ->
                 (* XXX: check that the current expression can use that *)
-                ((spec_scope (get_state ()))#lookup $1)#as_var
+                ((spec_scope ())#lookup $1)#as_var
             }
     | NAME			/* { (* owner = ZS; *) } */
       LBRACE expr RBRACE
@@ -659,7 +659,7 @@ Special :
                 }
     | GOTO NAME		{
         try
-            let l = (top_scope (get_state ()))#lookup $2 in
+            let l = (top_scope ())#lookup $2 in
             [MGoto (fresh_id (), l#as_label#get_num)]
         with Symbol_not_found _ ->
             let label_no = mk_uniq_label () in
@@ -676,14 +676,14 @@ Special :
 | NAME COLON stmnt	{
     let label_no =
         try
-            let _ = (top_scope (get_state ()))#lookup $1 in
+            let _ = (top_scope ())#lookup $1 in
             fatal "" (sprintf "Label %s redeclared\n" $1)
         with Symbol_not_found _ ->
             if Hashtbl.mem fwd_labels $1
             then Hashtbl.find fwd_labels $1
             else mk_uniq_label ()
     in
-    (top_scope (get_state ()))#add_symb
+    (top_scope ())#add_symb
         $1 ((new label $1 label_no) :> symb);
     MLabel (fresh_id (), label_no) :: $3
     }
@@ -854,7 +854,7 @@ prop_arith_expr    :
 	| NAME
         {
             try
-                Var ((global_scope (get_state ()))#find_or_error $1)#as_var
+                Var ((global_scope ())#find_or_error $1)#as_var
             with Not_found ->
                 fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
         }
@@ -982,8 +982,8 @@ prop_decl:
     track_ap ATOMIC NAME ASGN atomic_prop {
         let v = new_var($3) in
         v#add_flag $1;
-        (type_tab (get_state ()))#set_type v (new data_type SpinTypes.TPROPOSITION);
-        (spec_scope (get_state ()))#add_symb v#get_name (v :> symb);
+        (type_tab ())#set_type v (new data_type SpinTypes.TPROPOSITION);
+        (spec_scope ())#add_symb v#get_name (v :> symb);
         MDeclProp (fresh_id (), v, $5)
     }
     ;

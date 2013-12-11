@@ -31,22 +31,29 @@ let reset_state _ =
     current_parser_state := Some s
 
 
-let err_cnt s = s.err_cnt
-let inc_err_cnt s = { s with err_cnt = s.err_cnt + 1 }
+let err_cnt _ =
+    (get_state ()).err_cnt
 
-let global_scope s = s.global_scope
-let spec_scope s = s.spec_scope
+let inc_err_cnt _ =
+    let s = get_state () in
+    current_parser_state := Some { s with err_cnt = s.err_cnt + 1 }
 
-let top_scope s = List.hd s.scope_stack
+let global_scope _ = (get_state ()).global_scope
+let spec_scope _ = (get_state ()).spec_scope
 
-let push_scope s scope =
+let top_scope _ = List.hd ((get_state ())).scope_stack
+
+let push_scope scope =
+    let s = get_state () in
     scope#set_parent (List.hd s.scope_stack);
-    { s with scope_stack = scope :: s.scope_stack }
+    current_parser_state := Some { s with scope_stack = scope :: s.scope_stack }
 
-let pop_scope s =
+let pop_scope _ =
+    let s = get_state () in
     if (List.length s.scope_stack) > 1
-    then { s with scope_stack = List.tl s.scope_stack }
+    then current_parser_state :=
+        Some { s with scope_stack = List.tl s.scope_stack }
     else raise (State_error "Trying to pop the global scope")
 
-let type_tab s = s.type_tab
+let type_tab _ = (get_state ()).type_tab
 

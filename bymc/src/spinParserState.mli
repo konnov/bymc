@@ -16,15 +16,15 @@ type spin_parser_state_t
 val get_state: unit -> spin_parser_state_t
 val reset_state: unit -> unit
 
-val err_cnt: spin_parser_state_t -> int
-val inc_err_cnt: spin_parser_state_t -> spin_parser_state_t
+val err_cnt: unit -> int
+val inc_err_cnt: unit -> unit
 
-val global_scope: spin_parser_state_t -> symb_tab
-val spec_scope: spin_parser_state_t -> symb_tab
+val global_scope: unit -> symb_tab
+val spec_scope: unit -> symb_tab
 
-val top_scope: spin_parser_state_t -> symb_tab
-val push_scope: spin_parser_state_t -> symb_tab -> spin_parser_state_t
-val pop_scope: spin_parser_state_t -> spin_parser_state_t
+val top_scope: unit -> symb_tab
+val push_scope: symb_tab -> unit
+val pop_scope: unit -> unit
 
-val type_tab: spin_parser_state_t -> data_type_tab
+val type_tab: unit -> data_type_tab
 
