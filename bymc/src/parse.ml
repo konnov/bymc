@@ -194,7 +194,6 @@ let init_macros opts =
 let parse_promela opts filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
-    let pragmas = ref [] in
     let lexst = ref {
         dirname = dirname; macros = init_macros opts;
         prev_tok = EOF; pragmas = []; aux_bufs = []; macro_if_stack = [];
@@ -222,7 +221,7 @@ let parse_promela opts filename basename dirname =
             List.iter p units;
         end
     end;
-    (Program.program_of_units type_tab units, !pragmas)
+    (Program.program_of_units type_tab units, (!lexst).pragmas)
 
 
 let parse_expr sym_tab str =

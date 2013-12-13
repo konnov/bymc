@@ -10,6 +10,9 @@ open Accums
 
 module StringMap = Map.Make(String)
 
+let version = [0; 3; 0]
+let version_full = "ByMC-0.3.0-dev"
+
 type action_opt_t =
     | OptAbstract | OptRefine | OptSubstitute | OptNone
 

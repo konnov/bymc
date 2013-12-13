@@ -12,10 +12,10 @@ open PromelaParserPlugin
 open Plugin
 open Program
 
-let version = "ByMC-0.3.0-dev"
+
 let banner =
-    sprintf
-        "*** This is %s. Homepage: http://forsyte.at/software/bymc ***" version
+    sprintf "*** This is %s. Homepage: http://forsyte.at/software/bymc ***"
+        version_full
 
 let main () =
     try

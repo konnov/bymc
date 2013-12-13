@@ -16,7 +16,6 @@ class promela_parser_plugin_t (plugin_name: string) =
 
         val mutable m_plugin_opts = StrMap.empty
 
-
         method transform rt _ =
             let opts = rt#caches#options in
             let filename, basename, dirname =
@@ -29,6 +28,7 @@ class promela_parser_plugin_t (plugin_name: string) =
             log INFO (sprintf "> Parsing %s..." basename);
             let prog, pragmas = parse_promela opts filename basename dirname in
             m_plugin_opts <- self#find_options rt pragmas;
+            self#check_version;
             let new_plugin_opts =
                 StrMap.fold StrMap.add
                     rt#caches#options.plugin_opts m_plugin_opts
@@ -80,6 +80,22 @@ class promela_parser_plugin_t (plugin_name: string) =
                 else s
             in
             List.fold_left add_opt StrMap.empty pragmas
+
+        method check_version =
+            try
+                let req_s = StrMap.find "bymc.version" m_plugin_opts in
+                printf "req_s = %s\n" req_s;
+                let components = Str.split (Str.regexp_string ".") req_s in
+                let req = List.map int_of_string components in
+                let ver_s =
+                    str_join "." (List.map string_of_int Options.version) in
+                if req > Options.version
+                then raise (Program.Program_error
+                    (sprintf "This is version %s, but at least %s is required"
+                        ver_s req_s))
+            with Not_found ->
+                printf "no version\n";
+                ()
 
     end
 
