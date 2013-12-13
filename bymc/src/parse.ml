@@ -12,69 +12,118 @@ open Cfg
 
 let debug = false
 
-let prev_tok = ref EOF (* we have to remember the previous token *)
+type lex_state = {
+    dirname: string; macros: (string, string) Hashtbl.t;
+    prev_tok: token;
+    pragmas: (string * string) list; aux_bufs: lexbuf list;
+    macro_if_stack: bool list; is_enabled: bool
+}
 
 (* XXX: why is aux_bufs a reference? *)
 (* lexer function decorated by a preprocessor *)
-let rec lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf =
-    let tok = match !aux_bufs with
+let rec lex_pp (lexst: lex_state ref) lex_fun lexbuf =
+    let tok = match (!lexst).aux_bufs with
       | [] -> lex_fun lexbuf  (* read from the main buffer *)
 
       | b :: tl -> (* read from the auxillary buffer *)
         let t = lex_fun b in
         if t != EOF then t
         else begin
-            aux_bufs := tl;
-            lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+            lexst := { !lexst with aux_bufs = tl };
+            lex_pp lexst lex_fun lexbuf
         end
+    in
+    let if_macro ls is_ifdef name = 
+        let is_true = Hashtbl.mem ls.macros name in
+        let is_enabled = if is_ifdef then is_true else not is_true in
+        { ls with is_enabled = is_enabled;
+          macro_if_stack = (is_true :: ls.macro_if_stack) }
     in
     let new_tok = match tok with
     (* TODO: handle macros with arguments like foo(x, y) *)
     | DEFINE(name, text) ->
-        Hashtbl.add macro_tbl name text;
-        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+        Hashtbl.add (!lexst).macros name text;
+        lex_pp lexst lex_fun lexbuf
 
     | PRAGMA(name, text) ->
-        pragmas := (name, text) :: !pragmas;
-        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+        lexst := { !lexst with pragmas = (name, text) :: !lexst.pragmas };
+        lex_pp lexst lex_fun lexbuf
 
     | NAME id ->
-        if Hashtbl.mem macro_tbl id
+        if Hashtbl.mem (!lexst).macros id
         then (* substitute the contents and scan over it *)
-            let newbuf = Lexing.from_string (Hashtbl.find macro_tbl id) in
+            let newbuf = Lexing.from_string (Hashtbl.find (!lexst).macros id) in
             let bname = sprintf "%s:%d,%d" lexbuf.lex_curr_p.pos_fname
                 lexbuf.lex_curr_p.pos_lnum
                 (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol) in
             newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = bname};
-            aux_bufs := newbuf :: !aux_bufs;
+            lexst := { !lexst with aux_bufs = newbuf :: !lexst.aux_bufs };
             (* TODO: fail decently on co-recursive macro definitions *)
-            lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+            lex_pp lexst lex_fun lexbuf
         else tok
 
     | INCLUDE filename -> (* scan another file *)
-        let path = (Filename.concat dirname filename) in
+        let path = Filename.concat (!lexst).dirname filename in
         let newbuf = Lexing.from_channel (open_in path) in
         newbuf.lex_curr_p <- { newbuf.lex_curr_p with pos_fname = filename };
-        aux_bufs := newbuf :: !aux_bufs;
-        lex_pp dirname macro_tbl pragmas aux_bufs lex_fun lexbuf
+        lexst := { !lexst with aux_bufs = newbuf :: (!lexst).aux_bufs };
+        lex_pp lexst lex_fun lexbuf
 
-      (* TODO: if/endif + ifdef/endif + if-else-endif*)
-    | MACRO_IF | MACRO_IFDEF | MACRO_ELSE | MACRO_ENDIF ->
+    | MACRO_IFDEF name -> 
+        lexst := if_macro !lexst true name;
+        lex_pp lexst lex_fun lexbuf
+
+    | MACRO_IFNDEF name -> 
+        lexst := if_macro !lexst false name;
+        lex_pp lexst lex_fun lexbuf
+
+    | MACRO_ELSE ->
+        lexst := {
+            !lexst with is_enabled = not (!lexst).is_enabled;
+            macro_if_stack =
+                (not (!lexst).is_enabled) :: (List.tl (!lexst).macro_if_stack)
+        };
+        lex_pp lexst lex_fun lexbuf
+
+    | MACRO_ENDIF ->
+        let new_stack =
+            try List.tl !lexst.macro_if_stack
+            with Failure _ -> 
+                let pos = sprintf "%s:%d,%d" lexbuf.lex_curr_p.pos_fname
+                    lexbuf.lex_curr_p.pos_lnum
+                    (lexbuf.lex_curr_p.pos_cnum - lexbuf.lex_curr_p.pos_bol)
+                in
+                raise (SpinParserState.Parse_error
+                    (sprintf "%s #endif does not have matching #ifdef/ifndef" pos))
+        in
+        let is_enabled =
+            if (List.length new_stack) > 0 then List.hd new_stack else true in
+        lexst := {
+            !lexst with macro_if_stack = new_stack; is_enabled = is_enabled
+        };
+        lex_pp lexst lex_fun lexbuf
+
+      (* TODO: if/endif *)
+    | MACRO_IF ->
         raise (Failure (sprintf "%s is not supported" (token_s tok)))
 
     | MACRO_OTHER name ->
-        raise (Failure (sprintf "#%s is not supported" name))
+        raise (Failure (sprintf "%s is not supported" name))
 
     | SND ->
         (* x!y means "send a message", but !x means "not x". They have
         different associativity and priorities. Thus, they must be different.
         *)
-        if is_name !prev_tok then SND else NEG
+        if is_name (!lexst).prev_tok then SND else NEG
 
     | _ -> tok
     in
-    prev_tok := new_tok;
-    new_tok
+    if (!lexst).is_enabled
+    then begin
+        lexst := { !lexst with prev_tok = new_tok };
+        new_tok
+    end else
+        lex_pp lexst lex_fun lexbuf
 
 
 let postprocess all_units u =
@@ -132,14 +181,29 @@ let postprocess all_units u =
     | _ as u -> u
 
 
-let parse_promela filename basename dirname =
+let init_macros opts =
+    let macros = Hashtbl.create 8 in
+    let tool = match opts.Options.mc_tool with
+    | Options.ToolSpin -> "SPIN"
+    | Options.ToolNusmv -> "NUSMV"
+    in
+    Hashtbl.add macros tool "1";
+    macros
+
+
+let parse_promela opts filename basename dirname =
     let lexbuf = Lexing.from_channel (open_in filename) in
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = basename };
     let pragmas = ref [] in
-    let macros = Hashtbl.create 10 in
-    let lfun = lex_pp dirname macros pragmas (ref []) Spinlex.token in
+    let lexst = ref {
+        dirname = dirname; macros = init_macros opts;
+        prev_tok = EOF; pragmas = []; aux_bufs = []; macro_if_stack = [];
+        is_enabled = true
+    }
+    in
+    let ppfun = lex_pp lexst Spinlex.token in
     SpinParserState.reset_state ();
-    let units, type_tab = Spin.program lfun lexbuf in
+    let units, type_tab = Spin.program ppfun lexbuf in
 
     (* postprocess: check late variable bindings and remove artifacts *)
     let units = List.map (postprocess units) units in
@@ -147,7 +211,7 @@ let parse_promela filename basename dirname =
         (* DEBUGGING lex *)
         let t = ref EQ in
         while !t != EOF do
-            t := lfun lexbuf;
+            t := ppfun lexbuf;
             printf "%s\n" (token_s !t)
         done;
 

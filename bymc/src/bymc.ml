@@ -15,8 +15,7 @@ open Program
 let version = "ByMC-0.3.0-dev"
 let banner =
     sprintf
-        "*** This is %s. Homepage: http://forsyte.at/software/bymc ***"
-        version
+        "*** This is %s. Homepage: http://forsyte.at/software/bymc ***" version
 
 let main () =
     try
@@ -26,8 +25,7 @@ let main () =
         let caches = new pass_caches opts (new analysis_cache) in
         let solver = new Smt.yices_smt in
         solver#start;
-        let rt = new Runtime.runtime_t solver caches
-        in
+        let rt = new Runtime.runtime_t solver caches in
         begin
             match opts.action with
             | OptAbstract ->

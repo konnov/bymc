@@ -163,8 +163,8 @@ rule token = parse
         | "#include" -> INCLUDE (parse_include lexbuf)
 
         | "#define" ->
-            let name = (parse_name lexbuf) in
-            let text = (strip_leading (parse_define lexbuf)) in
+            let name = parse_name lexbuf in
+            let text = strip_leading (parse_define lexbuf) in
             DEFINE(name, text)
 
         | "#pragma" ->
@@ -172,7 +172,12 @@ rule token = parse
             let text = strip_leading (parse_pragma lexbuf) in
             PRAGMA(name, text)
 
-        | "#ifdef" -> MACRO_IFDEF
+        | "#ifdef" ->
+            MACRO_IFDEF (parse_name lexbuf)
+
+        | "#ifndef" ->
+            MACRO_IFNDEF (parse_name lexbuf)
+
         | "#if" -> MACRO_IF
         | "#else" -> MACRO_ELSE
         | "#endif" -> MACRO_ENDIF

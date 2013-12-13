@@ -137,7 +137,8 @@ let token_s t =
       | PRAGMA(n, v) -> (sprintf "PRAGMA %s \"%s\"" n v)
       | INCLUDE(filename) -> (sprintf "INCLUDE \"%s\"" filename)
       | MACRO_IF -> "MACRO_IF"
-      | MACRO_IFDEF -> "MACRO_IFDEF"
+      | MACRO_IFDEF name -> "MACRO_IFDEF " ^ name
+      | MACRO_IFNDEF name -> "MACRO_IFNDEF " ^ name
       | MACRO_ELSE -> "MACRO_ELSE"
       | MACRO_ENDIF -> "MACRO_ENDIF"
       | MACRO_OTHER name -> (sprintf "#%s" name)

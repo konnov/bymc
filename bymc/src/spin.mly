@@ -102,7 +102,9 @@ let fatal msg payload =
 %token  <string * string> DEFINE
 %token  <string * string> PRAGMA
 %token  <string> INCLUDE
-%token  MACRO_IF MACRO_IFDEF MACRO_ELSE MACRO_ENDIF
+%token  MACRO_IF MACRO_ELSE MACRO_ENDIF
+%token  <string> MACRO_IFDEF
+%token  <string> MACRO_IFNDEF
 %token  <string> MACRO_OTHER
 %token  EOF
 /* FORSYTE extensions { */

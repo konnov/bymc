@@ -27,7 +27,7 @@ class promela_parser_plugin_t (plugin_name: string) =
                 else raise (Failure ("File not found: " ^ opts.filename))
             in
             log INFO (sprintf "> Parsing %s..." basename);
-            let prog, pragmas = parse_promela filename basename dirname in
+            let prog, pragmas = parse_promela opts filename basename dirname in
             m_plugin_opts <- self#find_options rt pragmas;
             let new_plugin_opts =
                 StrMap.fold StrMap.add
