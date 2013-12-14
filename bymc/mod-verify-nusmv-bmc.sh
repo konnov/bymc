@@ -14,7 +14,7 @@ HIDDEN="main-ssa-hidden.txt"
 TIME="/usr/bin/time"
 
 function mc_compile_first {
-    if [ "$NO_REACH" != "1" ]; then
+    if [ "$NO_REACH" != "1" -a "$NO_INITIAL" != "1" ]; then
         rm -f "$HIDDEN"
         echo "GENERATING INITIAL ABSTRACTION..."
         CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
@@ -27,11 +27,15 @@ function mc_compile_first {
     else
         echo "SKIPPED REACHABILITY ANALYSIS..."
     fi
-    echo "GENERATING SMALLER ABSTRACTION..."
-    CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-    echo "[DONE]"
-    echo ""
+    if [ "$NO_INITIAL" != "1" ]; then
+        echo "GENERATING SMALLER ABSTRACTION..."
+        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+            || report_and_quit "Failure: ${TOOL} -a ${PROG}"
+        echo "[DONE]"
+        echo ""
+    else
+        echo "SKIPPED INITIAL ABSTRACTION..."
+    fi
 }
 
 function mc_verify_spec {
