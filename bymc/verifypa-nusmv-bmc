@@ -24,7 +24,7 @@ function help_and_exit() {
 eval set -- "$TEMPOPTS"
 while true ; do
     case "$1" in
-    -d|--depth) DEPTH=$2 ; shift 2 ;;
+    -l|--length) DEPTH=$2 ; shift 2 ;;
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
     --one-shot) ONE_SHOT=1 ; shift 1 ;;
     --no-reach) NO_REACH=1 ; shift 1 ;;
