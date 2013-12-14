@@ -1,4 +1,4 @@
-(* Analysis based on abstract interpretation *)
+(* Very simple analysis based on abstract interpretation *)
 
 open Printf
 
@@ -169,6 +169,8 @@ let transfer_roles stmt input =
                 Hashtbl.replace output var (eval init_expr)
         | Expr (_, expr) ->
                 let _ = eval expr in ()
+        | Havoc (_, v) ->
+            Hashtbl.replace output v UnboundedInt;
         | _ -> ()
     end;
     print_int_roles "input = " input;
