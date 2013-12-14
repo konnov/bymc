@@ -11,18 +11,24 @@ BYMC_FLAGS="--target nusmv"
 SRC_REACH="main-ssa-reach.smv"
 SRC="main-ssa.smv"
 HIDDEN="main-ssa-hidden.txt"
+TIME="/usr/bin/time"
 
 function mc_compile_first {
-    rm -f "$HIDDEN"
-    echo "Generating initial abstraction..."
-    CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-    echo "[DONE]"
-    echo "Checking reachability of the local states..."
-    ${BYMC_HOME}/nusmv-find-reach "${NUSMV}" "${SRC_REACH}" "${HIDDEN}"
-    echo "[DONE]"
-    echo "Generating smaller abstraction..."
-    CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+    if [ "$NO_REACH" != "1" ]; then
+        rm -f "$HIDDEN"
+        echo "GENERATING INITIAL ABSTRACTION..."
+        CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+            || report_and_quit "Failure: ${TOOL} -a ${PROG}"
+        echo "[DONE]"
+
+        echo "CHECKING REACHABILITY OF THE LOCAL STATES..."
+        $TIME ${BYMC_HOME}/nusmv-find-reach "${NUSMV}" "${SRC_REACH}" "${HIDDEN}"
+        echo "[DONE]"
+    else
+        echo "SKIPPED REACHABILITY ANALYSIS..."
+    fi
+    echo "GENERATING SMALLER ABSTRACTION..."
+    CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
         || report_and_quit "Failure: ${TOOL} -a ${PROG}"
     echo "[DONE]"
     echo ""
@@ -46,7 +52,7 @@ function mc_verify_spec {
     echo "quit" >>${SCRIPT}
 
     rm -f ${CEX}
-    ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}" | tee "${MC_OUT}" \
+    $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}" | tee "${MC_OUT}" \
         || report_and_quit "nusmv failed"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then

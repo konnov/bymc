@@ -5,10 +5,21 @@
 DEPTH=10
 NUSMV_VERBOSE=0
 ONE_SHOT=0
+NO_REACH=0
 
 # parse options
-TEMPOPTS=`getopt -o d:w: --long depth:,nusmv-verbose:,one-shot -n '$@' -- "$@"`
+TEMPOPTS=`getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+function help_and_exit() {
+    echo "use $0 [-l|--length k] [-w|--nusmv-verbose] --one-shot [-h|--help]"
+    echo "  -l|--length k: limit the BMC search with length k"
+    echo "  -w|--nusmv-verbose <level>: set the verbosity level"
+    echo "  --one-shot: instead of incremental BMC, check one-shot problem for the length"
+    echo "  --no-reach: skip reachability analysis (may re-use the previous one)"
+    echo "  -h|--help: show this help message"
+    exit 1
+}
 
 eval set -- "$TEMPOPTS"
 while true ; do
@@ -16,13 +27,15 @@ while true ; do
     -d|--depth) DEPTH=$2 ; shift 2 ;;
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
     --one-shot) ONE_SHOT=1 ; shift 1 ;;
+    --no-reach) NO_REACH=1 ; shift 1 ;;
+    -h|--help) help_and_exit ;;
     --) shift ; break ;;
-    *) echo "Internal error!" ; exit 1 ;;
+    *) echo "Internal error!" ; help_and_exit ;;
     esac
 done
 
 # run the tool
 DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bmc \
-    ONE_SHOT=$ONE_SHOT \
+    ONE_SHOT=$ONE_SHOT NO_REACH=$NO_REACH \
     `dirname $0`/cegar "$@"
 
