@@ -84,7 +84,6 @@ class promela_parser_plugin_t (plugin_name: string) =
         method check_version =
             try
                 let req_s = StrMap.find "bymc.version" m_plugin_opts in
-                printf "req_s = %s\n" req_s;
                 let components = Str.split (Str.regexp_string ".") req_s in
                 let req = List.map int_of_string components in
                 let ver_s =
@@ -94,7 +93,6 @@ class promela_parser_plugin_t (plugin_name: string) =
                     (sprintf "This is version %s, but at least %s is required"
                         ver_s req_s))
             with Not_found ->
-                printf "no version\n";
                 ()
 
     end
