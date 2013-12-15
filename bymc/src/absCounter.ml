@@ -20,6 +20,7 @@ open Cfg
 open Analysis
 open Ssa
 open SkelStruc
+open SpinIrEval
 open CfgSmt
 open Debug
 
@@ -68,6 +69,32 @@ let rec remove_bad_statements stmts =
     List.rev (List.fold_left filter [] stmts)
 
 
+(* try to evaluate a boolean expression locally and return the result *)
+let is_local_sat exp valuation =
+    let val_fun = function
+    | Var v ->
+    begin
+        try Hashtbl.find valuation v
+        with Not_found ->
+            let m = sprintf
+                "Variable %s is not local; impossible to locally evaluate %s"
+                v#qual_name (expr_s exp)
+            in
+            raise (Failure m)
+    end
+
+    | _ -> raise (Failure "Variable expected")
+    in
+    match eval_expr val_fun exp with
+    | Bool b -> b
+    | Int _ -> raise (Failure
+        ("Expected boolean, found int: %s" ^ (expr_s exp)))
+
+
+(* Translate an atomic proposition. The interesting cases are
+ all(...), some(...), and card(...) that are translated to
+ the expressions over counters.
+ *)
 let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     let mk_cons c_ctx tok sep indices =
         let add_cons e idx =
@@ -135,25 +162,6 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             then e (* leave intact, it is an expression over globals *)
             else mk_fun (eval_bool_expr e)
     in
-    let rec replace_card = function
-        | UnEx (CARD, BinEx (EQ, Var v, Const i)) ->
-            let is_ok valuation = (i = (Hashtbl.find valuation v)) in
-            let c_ctx = ctr_ctx_tbl#get_ctx v#proc_name in
-            let indices = c_ctx#all_indices_for is_ok in
-            let mk_sum l i =
-                let arr = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
-                if not_nop l then BinEx (PLUS, l, arr) else arr
-            in
-            List.fold_left mk_sum (Nop "") indices
-        | UnEx (CARD, _) as e ->
-            raise (Failure
-                (sprintf "Don't know how to handle card(%s)" (expr_s e)))
-        | BinEx (tok, lhs, rhs) ->
-            BinEx (tok, replace_card lhs, replace_card rhs)
-        | UnEx (tok, lhs) ->
-            UnEx (tok, replace_card lhs)
-        | _ as e -> e
-    in
     let find_proc_name e =
         let rec fnd = function
         | Var v -> v#proc_name
@@ -161,8 +169,9 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
         | BinEx (_, l, r) ->
                 let ln, rn = fnd l, fnd r in
                 if ln <> rn && ln <> "" && rn <> ""
-                then let m = (sprintf "2 procs in one property: %s <> %s" ln rn)
-                in raise (Failure m)
+                then let m = sprintf
+                    "Two processes in one property: %s <> %s" ln rn in
+                raise (Failure m)
                 else if ln <> "" then ln else rn
         | UnEx (_, l) -> fnd l
         | _ -> "" in
@@ -170,6 +179,26 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
         if name = ""
         then raise (Abstraction_error ("Atomic: No process name in " ^ (expr_s e)))
         else name
+    in
+    let rec replace_card = function
+        | UnEx (CARD, rhs) ->
+            let proc_name = find_proc_name rhs in
+            let c_ctx = ctr_ctx_tbl#get_ctx proc_name in
+            let indices = c_ctx#all_indices_for (is_local_sat rhs) in
+            let mk_sum l i =
+                let arr = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i)
+                in
+                if not_nop l then BinEx (PLUS, l, arr) else arr
+            in
+            List.fold_left mk_sum (Nop "") indices
+
+        | BinEx (tok, lhs, rhs) ->
+            BinEx (tok, replace_card lhs, replace_card rhs)
+
+        | UnEx (tok, lhs) ->
+            UnEx (tok, replace_card lhs)
+
+        | _ as e -> e
     in
     let join_two op l r =
         match (l, r) with

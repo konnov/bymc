@@ -28,6 +28,7 @@ let get_abs_trait
     let rec explore = function
         | Const _ -> ConstExpr
         | Var v -> var_trait_fun v
+        | UnEx (CARD, _) -> ConcExpr (* treat cardinalities as concrete *)
         | UnEx (tok, arg) -> explore arg
         | BinEx (PLUS, lhs, rhs)
         | BinEx (MINUS, lhs, rhs)
