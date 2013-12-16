@@ -12,7 +12,8 @@ class pia_data_ctx roles =
         method is_hack_shared = m_hack_shared
         method set_hack_shared b = m_hack_shared <- b
 
-        method must_keep_concrete = function
+        method must_keep_concrete (e: token expr) =
+            match e with
             | Var v ->
               begin
                 try m_hack_shared && is_shared_unbounded (roles#get_role v)
@@ -26,5 +27,5 @@ class pia_data_ctx roles =
             (not (self#must_keep_concrete (Var v)))
                 && (not (is_bounded r))
     end
-;;
+
 
