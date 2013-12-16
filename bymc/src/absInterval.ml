@@ -14,6 +14,39 @@ open Debug
 open AbsBasics
 open VarRole
 
+(* Introduce a placeholder variable for each sub-expression recognized
+   by 'is_shadow_f'. This is extremely useful for the abstractions,
+   when certain expressions must be preserved as they are.
+   The effect of this function can be restored with unshadow_expr.
+ *)
+let shadow_expr is_shadow_f exp =
+    let mapping = Hashtbl.create 1 in
+    let rec sub e =
+        if is_shadow_f e
+        then if Hashtbl.mem mapping e
+            then Var (Hashtbl.find mapping e)
+            else begin
+                let id = fresh_id () in
+                (* the name contains fresh_id to avoid collisions *)
+                let name =
+                    sprintf "_t%d_%d" (Hashtbl.length mapping) id in
+                let v = new var name id in
+                Hashtbl.add mapping e v;
+                Var v
+            end
+        else match e with
+            | UnEx (t, l) -> UnEx (t, sub l)
+            | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
+            | _ as e -> e
+    in
+    let shadowed = sub exp in
+    let inv_map = hashtbl_inverse mapping in
+    let unshadow_var v =
+        try Hashtbl.find inv_map v
+        with Not_found -> Var v
+    in
+    let unshadow_f e = map_vars unshadow_var e  in
+    (shadowed, hashtbl_vals mapping, unshadow_f)
 
 (*
   Abstraction of a function over a variable and symbolic parameters.  The
@@ -24,6 +57,7 @@ open VarRole
   
   XXX: the _res variable looks ad hoc.
   TODO: use abstract_pointwise_exprs instead?
+  TODO: use shadow_expr
  *)
 let mk_expr_abstraction solver dom is_leaf_fun expr =
     (* replace leaf expressions with a variable _argI *)
@@ -163,47 +197,27 @@ let abstract_pointwise dom solver atype coord_point_fun symb_expr =
 
 
 let abstract_pointwise_exprs dom solver atype leaf_fun expr =
-    (* this function has many similarities to mk_expr_abstraction *)
-    let mapping = Hashtbl.create 1 in
-    let rec sub e =
-        if leaf_fun e
-        then if Hashtbl.mem mapping e
-            then Var (Hashtbl.find mapping e)
-            else begin
-                let v = new_var (sprintf "_a%d" (Hashtbl.length mapping)) in
-                Hashtbl.add mapping e v;
-                Var v
-            end
-        else match e with
-            | UnEx (t, l) -> UnEx (t, sub l)
-            | BinEx (t, l, r) -> BinEx (t, sub l, sub r)
-            | _ as e -> e
-    in
-    let expr_w_args = sub expr in
-    let inv_map = hashtbl_inverse mapping in
-    let map_vars_back left abs_val =
-        if Hashtbl.mem inv_map left
-        then BinEx (EQ, Hashtbl.find inv_map left, Const abs_val)
-        else BinEx (EQ, Var left, Const abs_val)
-    in
+    let shadowed, _, unshadow_f = shadow_expr leaf_fun expr in
+    let eq left abs_val = BinEx (EQ, Var left, Const abs_val) in
     solver#push_ctx;
     (* introduce the variables to the SMT solver *)
     let append_def v =
         solver#append_var_def v (new data_type SpinTypes.TINT) in
-    List.iter append_def (expr_used_vars expr_w_args);
-    let abse = abstract_pointwise dom solver atype map_vars_back expr_w_args in
+    List.iter append_def (expr_used_vars shadowed);
+    let abse = abstract_pointwise dom solver atype eq shadowed in
     solver#pop_ctx;
-    abse
+    unshadow_f abse
 
 
 (* make an abstraction of an arithmetic relation: <, <=, >, >=, ==, != *)
 
 (* TODO: this is a superficial implementation.
-   One can first replace concrete variables with dummies, then make a pointwise
-   abstraction over an expression with "&&", "||", and arithmetics
-   and then replace the dummies with the constraints on concrete variables back.
+   One can first replace concrete variables with dummies, then create a
+   pointwise abstraction over an expression with "&&", "||", and
+   arithmetics and then replace the dummies with the constraints on
+   concrete variables back.
 
-   If we do it as said, then (d_i <= x < d_{i+1}) will be abstracted to
+   If we do it as above, then (d_i <= x < d_{i+1}) is abstracted to
    x = I_i, not to
    (x = I_i || ... || x = I_max) && (x = I_0 || ... || x = I_{i-1})
 *)
@@ -299,8 +313,8 @@ let translate_expr ctx dom solver atype expr =
         | BinEx (EQ, lhs, rhs)
         | BinEx (NE, lhs, rhs) as e ->
             let eff_op = if neg_sign
-            then (not_of_arith_rel (op_of_expr e))
-            else (op_of_expr e) in
+            then not_of_arith_rel (op_of_expr e)
+            else op_of_expr e in
             abstract_arith_rel ctx dom solver atype eff_op lhs rhs
 
         | UnEx  (ALL, lhs) ->
@@ -422,21 +436,36 @@ let translate_stmt rt roles type_tab new_type_tab stmt =
 (* 
   Abstract atomic expressions. We produce two types of expressions:
   universally abstracted and existentially abstracted.
-  See our TACAS submission (or Pnueli, Zuck 2001) on that.
+  See our ArXiV report (or Pnueli, Zuck 2001) on the idea.
  *)
 let rec trans_prop_decl solver caches prog atype atomic_expr =
     let ctx = caches#analysis#get_pia_data_ctx in
     let dom = caches#analysis#get_pia_dom in
     let roles = caches#analysis#get_var_roles prog in
+    let is_card = function
+        | UnEx (CARD, _) -> true
+        | _ -> false
+    in
     let tr_e e =
+        (* substitute card(...) with temporary variables *)
+        let e, shadows, unshadow_f = shadow_expr is_card e in
+        let add_card_role s = roles#add s SharedUnbounded in
+        (* XXX: polluting the role table *)
+        List.iter add_card_role shadows;
+
         let used_vars = expr_used_vars e in
         let locals = List.filter (fun v -> v#proc_name <> "") used_vars in
         let append_def v =
             solver#append_var_def v (Program.get_type prog v) in
+        let append_shadow_def v =
+            solver#append_var_def v (new data_type SpinTypes.TINT) in
         solver#push_ctx;
         List.iter append_def locals;
+        List.iter append_shadow_def shadows;
         List.iter append_def (Program.get_shared prog);
         let abs_ex = translate_expr ctx dom solver atype e in
+        (* return card(...) back *)
+        let abs_ex = unshadow_f abs_ex in
         solver#pop_ctx;
         abs_ex
     in
