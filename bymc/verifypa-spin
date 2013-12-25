@@ -1,4 +1,7 @@
 #!/bin/bash
 
+# TODO: move to the modular system
+# TODO: add --limit-time and --limit-mem
+
 TARGET_MC=spin `dirname $0`/cegar $@
 

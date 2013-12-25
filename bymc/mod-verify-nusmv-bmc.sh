@@ -17,7 +17,7 @@ function mc_compile_first {
     if [ "$NO_REACH" != "1" -a "$NO_INITIAL" != "1" ]; then
         rm -f "$HIDDEN"
         echo "GENERATING INITIAL ABSTRACTION..."
-        CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
             || report_and_quit "Failure: ${TOOL} -a ${PROG}"
         echo "[DONE]"
 
@@ -42,6 +42,7 @@ function mc_verify_spec {
     SCRIPT="script.nusmv"
     echo "set on_failure_script_quits" >$SCRIPT
     echo "go_bmc" >>$SCRIPT
+    echo "time" >>$SCRIPT
     if grep -q "INVARSPEC NAME ${PROP}" "${SRC}"; then
         echo "check_invar_bmc -k $DEPTH -a een-sorensson -P ${PROP}" \
             >>${SCRIPT}
@@ -52,6 +53,7 @@ function mc_verify_spec {
             echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
     fi
+    echo "time" >>$SCRIPT
     echo "show_traces -v -o ${CEX}" >>${SCRIPT}
     echo "quit" >>${SCRIPT}
 
@@ -72,7 +74,7 @@ function mc_verify_spec {
 }
 
 function mc_refine {
-    CAMLRUNPARAM="b" ${TOOL} -t ${CEX} ${PROG} 2>&1 | tee refinement.out
+    CAMLRUNPARAM="b" $TIME ${TOOL} -t ${CEX} ${PROG} 2>&1 | tee refinement.out
     echo ""
 }
 
