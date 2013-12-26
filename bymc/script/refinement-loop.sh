@@ -20,7 +20,7 @@ export CAMLRUNPARAM="b"
 PROG=`readlink -f $1`
 PROP=$2
 BYMC_HOME=`dirname $0`
-BYMC_HOME=`cd $BYMC_HOME; pwd`
+BYMC_HOME=`cd $BYMC_HOME/..; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
 

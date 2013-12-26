@@ -21,7 +21,7 @@ while true ; do
     --limit-time) PAN_FLAGS="$PAN_FLAGS -Q$(((59+$2)/60))" ;
         shift 2 ;;
     --limit-mem)
-        PANCC_FLAGS="$PANCC_FLAGS -DMEMLIM=$((1024*$2))" ;
+        PANCC_FLAGS="$PANCC_FLAGS -DMEMLIM=$2" ;
         shift 2 ;;
     -h|--help) help_and_exit ;;
     --) shift ; break ;;
@@ -30,5 +30,5 @@ while true ; do
 done
 
 TARGET_MC=spin PAN_FLAGS="$PAN_FLAGS" PANCC_FLAGS="$PANCC_FLAGS"\
-    `dirname $0`/cegar $@
+    `dirname $0`/script/refinement-loop.sh $@
 

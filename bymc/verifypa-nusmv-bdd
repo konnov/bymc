@@ -28,5 +28,5 @@ ulimit -SHt $TIME_LIMIT
 
 # run the tool
 DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bdd \
-    `dirname $0`/cegar "$@"
+    `dirname $0`/script/refinement-loop.sh "$@"
 
