@@ -1,7 +1,34 @@
 #!/bin/bash
 
-# TODO: move to the modular system
-# TODO: add --limit-time and --limit-mem
+PANCC_FLAGS="-DCOLLAPSE -DNOREDUCE"
 
-TARGET_MC=spin `dirname $0`/cegar $@
+TEMPOPTS=`getopt -o hd: --long help,depth:,limit-time:,limit-mem: -n '$@' -- "$@"`
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+function help_and_exit() {
+    echo "use $0 [-d|--depth k] [-h|--help]"
+    echo "  -d|--depth k: limit the DFS search with depth k"
+    echo "  --limit-time: limit (in seconds) Spin's cpu time"
+    echo "  --limit-mem: limit (in MB) Spin's virtual memory"
+    echo "  -h|--help: show this help message"
+    exit 1
+}
+
+eval set -- "$TEMPOPTS"
+while true ; do
+    case "$1" in
+    -d|--depth) PAN_FLAGS="$PAN_FLAGS -m$2" ; shift 2 ;;
+    --limit-time) PAN_FLAGS="$PAN_FLAGS -Q$(((59+$2)/60))" ;
+        shift 2 ;;
+    --limit-mem)
+        PANCC_FLAGS="$PANCC_FLAGS -DMEMLIM=$((1024*$2))" ;
+        shift 2 ;;
+    -h|--help) help_and_exit ;;
+    --) shift ; break ;;
+    *) echo "Internal error!" ; help_and_exit ;;
+    esac
+done
+
+TARGET_MC=spin PAN_FLAGS="$PAN_FLAGS" PANCC_FLAGS="$PANCC_FLAGS"\
+    `dirname $0`/cegar $@
 

@@ -71,11 +71,11 @@ trap "to_verdict" ERR EXIT
 
 # interpret the functions specific to model checker
 if [ "${TARGET_MC}" == "spin" ]; then
-    . "${BYMC_HOME}/mod-verify-spin.sh"
+    . "${BYMC_HOME}/script/mod-verify-spin.sh"
 elif [ "${TARGET_MC}" == "nusmv-bmc" ]; then
-    . "${BYMC_HOME}/mod-verify-nusmv-bmc.sh"
+    . "${BYMC_HOME}/script/mod-verify-nusmv-bmc.sh"
 elif [ "${TARGET_MC}" == "nusmv-bdd" ]; then
-    . "${BYMC_HOME}/mod-verify-nusmv-bdd.sh"
+    . "${BYMC_HOME}/script/mod-verify-nusmv-bdd.sh"
 else
     echo "Unsupported TARGET_MC='${TARGET_MC}'"
     exit 2

@@ -6,9 +6,6 @@
 
 SPIN=${SPIN:-spin}
 LTL2BA="$BYMC_HOME/../deps/ltl2ba-1.1/ltl2ba"
-#PANCC_FLAGS=${PANCC_FLAGS:-"-DVECTORSZ=2048 -DCOLLAPSE -DSC -DNOREDUCE"}
-PANCC_FLAGS=${PANCC_FLAGS:-"-DCOLLAPSE -DNOREDUCE"}
-PAN_FLAGS=${PAN_FLAGS:-"-m100000"}
 BYMC_FLAGS="--target spin"
 
 if [ ! -x "$LTL2BA" ]; then
@@ -19,7 +16,7 @@ if [ ! -x "$LTL2BA" ]; then
 fi
 
 function mc_compile_first {
-    CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+    ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
         || die "Failure: ${TOOL} -a ${PROG}"
 }
 
@@ -30,9 +27,10 @@ function mc_verify_spec {
     echo "Generating pan..."
     set -x # echo on
     ${SPIN} -a -N ${PROP}.never abs-counter.prm || die "spin failed"
-    (gcc ${rand} ${PANCC_FLAGS} -o ./pan pan.c \
-        && tee_or_die "${MC_OUT}" "pan failed" ./pan ${PAN_FLAGS} -a 2>&1
+    gcc ${rand} ${PANCC_FLAGS} -o ./pan pan.c 
     set +x # echo off
+    tee_or_die "${MC_OUT}" "pan failed" ./pan ${PAN_FLAGS} -a 2>&1
+
     # the status code of spin is the return value
     egrep -q "errors: +0" ${MC_OUT}
 }
