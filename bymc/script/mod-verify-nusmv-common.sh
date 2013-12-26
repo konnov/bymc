@@ -53,7 +53,7 @@ function common_mc_collect_stat () {
     elif grep -q "Specification is violated" ${MC_OUT}; then
         res="ERROR"
     else
-        res="UNKNOWN"
+        res="MAYBE"
     fi
 
     echo "10:Result=$res"
