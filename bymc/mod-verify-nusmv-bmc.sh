@@ -4,38 +4,12 @@
 #
 # Igor Konnov, 2013
 
-NUSMV=${NUSMV:-nusmv}
 DEPTH=${DEPTH:-10} # parse options?
-BYMC_FLAGS="--target nusmv"
 
-SRC_REACH="main-ssa-reach.smv"
-SRC="main-ssa.smv"
-HIDDEN="main-ssa-hidden.txt"
-TIME="/usr/bin/time"
+. $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
 function mc_compile_first {
-    if [ "$NO_REACH" != "1" -a "$NO_INITIAL" != "1" ]; then
-        rm -f "$HIDDEN"
-        echo "GENERATING INITIAL ABSTRACTION..."
-        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-            || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-        echo "[DONE]"
-
-        echo "CHECKING REACHABILITY OF THE LOCAL STATES..."
-        $TIME ${BYMC_HOME}/nusmv-find-reach "${NUSMV}" "${SRC_REACH}" "${HIDDEN}"
-        echo "[DONE]"
-    else
-        echo "SKIPPED REACHABILITY ANALYSIS..."
-    fi
-    if [ "$NO_INITIAL" != "1" ]; then
-        echo "GENERATING SMALLER ABSTRACTION..."
-        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-            || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-        echo "[DONE]"
-        echo ""
-    else
-        echo "SKIPPED INITIAL ABSTRACTION..."
-    fi
+    common_mc_compile_first
 }
 
 function mc_verify_spec {
@@ -58,8 +32,8 @@ function mc_verify_spec {
     echo "quit" >>${SCRIPT}
 
     rm -f ${CEX}
-    $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}" | tee "${MC_OUT}" \
-        || report_and_quit "nusmv failed"
+    tee_or_die "$MC_OUT" "nusmv failed"\
+        $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
         echo ""
@@ -69,17 +43,18 @@ function mc_verify_spec {
         echo ""
         true
     else
+        echo "Specification is violated." >>$MC_OUT
         false
     fi
 }
 
 function mc_refine {
-    CAMLRUNPARAM="b" $TIME ${TOOL} -t ${CEX} ${PROG} 2>&1 | tee refinement.out
-    echo ""
+    echo "mc_refine"
+    common_mc_refine
 }
 
 function mc_collect_stat {
-    # TODO: collect the statistics
-    mc_stat="|technique=nusmv-bmc"
+    res=common_mc_collect_stat
+    mc_stat="$res|technique=nusmv-bmc"
 }
 

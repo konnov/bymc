@@ -4,28 +4,10 @@
 #
 # Igor Konnov, 2013
 
-NUSMV=${NUSMV:-nusmv}
-BYMC_FLAGS="--target nusmv"
-
-SRC_REACH="main-ssa-reach.smv"
-SRC="main-ssa.smv"
-HIDDEN="main-ssa-hidden.txt"
-TIME="/usr/bin/time"
+. $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
 function mc_compile_first {
-    rm -f "$HIDDEN"
-    echo "Generating initial abstraction..."
-    CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-    echo "[DONE]"
-    echo "Checking reachability of the local states..."
-    $TIME ${BYMC_HOME}/nusmv-find-reach "${NUSMV}" "${SRC_REACH}" "${HIDDEN}"
-    echo "[DONE]"
-    echo "Generating smaller abstraction..."
-    CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
-    echo "[DONE]"
-    echo ""
+    common_mc_compile_first
 }
 
 function mc_verify_spec {
@@ -43,26 +25,30 @@ function mc_verify_spec {
     echo "quit" >>${SCRIPT}
 
     rm -f ${CEX}
-    $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}" | tee "${MC_OUT}" \
-        || report_and_quit "nusmv failed"
+    tee_or_die "${MC_OUT}" "nusmv failed" \
+        $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if grep -q "is true" ${MC_OUT}; then
         echo ""
-        echo "Specification holds true."
+        echo "Specification holds true." >>$MC_OUT
         echo ""
         true
+    elif grep -q "is false" ${MC_OUT}; then
+        echo ""
+        echo "Specification is violated." >>$MC_OUT
+        echo ""
+        false
     else
         false
     fi
 }
 
 function mc_refine {
-    CAMLRUNPARAM="b" $TIME ${TOOL} -t ${CEX} ${PROG} 2>&1 | tee refinement.out
-    echo ""
+    common_mc_refine
 }
 
 function mc_collect_stat {
-    # TODO: collect the statistics
-    mc_stat="|technique=nusmv-bdd"
+    res=`common_mc_collect_stat ""`
+    mc_stat="$res|technique=nusmv-bdd"
 }
 

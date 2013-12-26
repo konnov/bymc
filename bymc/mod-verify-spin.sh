@@ -20,19 +20,18 @@ fi
 
 function mc_compile_first {
     CAMLRUNPARAM="b" ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
-        || report_and_quit "Failure: ${TOOL} -a ${PROG}"
+        || die "Failure: ${TOOL} -a ${PROG}"
 }
 
 function mc_verify_spec {
     echo "Converting the spec: !`head ${PROP}.ltl`..."
     ${LTL2BA} -f "!`head ${PROP}.ltl`" >${PROP}.never \
-        || (report_and_quit "`cat ${PROP}.never`")
+        || die "`cat ${PROP}.never`"
     echo "Generating pan..."
     set -x # echo on
-    ${SPIN} -a -N ${PROP}.never abs-counter.prm || report_and_quit "spin failed"
+    ${SPIN} -a -N ${PROP}.never abs-counter.prm || die "spin failed"
     (gcc ${rand} ${PANCC_FLAGS} -o ./pan pan.c \
-        && ./pan ${PAN_FLAGS} -a 2>&1 | tee ${MC_OUT}) \
-        || report_and_quit "pan failed"
+        && tee_or_die "${MC_OUT}" "pan failed" ./pan ${PAN_FLAGS} -a 2>&1
     set +x # echo off
     # the status code of spin is the return value
     egrep -q "errors: +0" ${MC_OUT}
@@ -40,8 +39,7 @@ function mc_verify_spec {
 
 function mc_refine {
     ./pan -S | grep -v MSC | egrep '(^S\{|^X\{|START OF CYCLE)' > ${CEX} \
-    && CAMLRUNPARAM="b" ${TOOL} -t ${CEX} 2>&1 \
-        | tee refinement.out
+    && tee_or_die "refinement.out" "refinement error" ${TOOL} -t ${CEX} 2>&1
 
     echo -e "The trace in the ABSTRACT system (produced by spin):\n"
     echo -n "     0  "; head -n 1 ${CEX} # start with 0

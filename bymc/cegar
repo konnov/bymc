@@ -11,13 +11,63 @@ if [ "$#" -lt 2 ]; then
     exit 1
 fi
 
-trap "exit" SIGHUP SIGINT SIGTERM
+ORIG_DIR=`pwd`
 
-PROG=$1
+trap "cd $ORIG_DIR; exit" SIGHUP SIGINT SIGTERM
+set -e # fail on first error
+export CAMLRUNPARAM="b"
+
+PROG=`readlink -f $1`
 PROP=$2
 BYMC_HOME=`dirname $0`
+BYMC_HOME=`cd $BYMC_HOME; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
+
+cmd=""
+step="0"
+rand=""
+out=""
+
+START_TIME=0
+
+# an improved version of tee
+function tee_or_die {
+    FILE=$1
+    MSG=$2
+    shift 2
+    {
+        set -o pipefail
+        $@ 2>&1 | tee $FILE
+        RET=${PIPESTATUS}
+        if [ "$RET" -ne "0" ]; then
+            echo "$MSG" 1>&2
+            exit $RET
+        fi
+    }
+}
+
+function die {
+    echo "$1" 1>&2
+    cd $ORIG_DIR
+    exit 1
+}
+
+function to_verdict() {
+    if [ "$out" == "" ]; then
+        out="|00:exitcode=abort|01:valid=maybe|02:spurious=maybe"
+    fi
+
+    END_TIME=$(date +%s)
+    DIFF_TIME=$(($END_TIME-$START_TIME))
+
+    mc_collect_stat
+    common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+    cd $ORIG_DIR
+    echo "$out|$common|$mc_stat" >>verdict.txt
+}
+
+trap "to_verdict" ERR EXIT
 
 # interpret the functions specific to model checker
 if [ "${TARGET_MC}" == "spin" ]; then
@@ -31,50 +81,27 @@ else
     exit 2
 fi
 
-cmd=""
-step="0"
-rand=""
-out=""
-
-START_TIME=0
-
-function report_and_quit {
-    echo "$1" 1>&2
-    exit 1
-}
-
-function to_verdict() {
-    if [ "$out" == "" ]; then
-        out="|00:exitcode=quit|01:valid=maybe|02:spurious=maybe"
-    fi
-
-    END_TIME=$(date +%s)
-    DIFF_TIME=$(($END_TIME-$START_TIME))
-
-    mc_collect_stat
-    common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
-    echo "$out|$common|$mc_stat" >>verdict.txt
-}
-
-trap "to_verdict" ERR EXIT
-
-CUR_DIR=`pwd`
 cd $BYMC_HOME
 if [ -d "src" ]; then
     # source distribution, compile the latest version
     if [ "x$DEBUG" == "x" ]; then
-        ./make.sh || (cd $CUR_DIR; exit 1)
+        ./make.sh || (cd $ORIG_DIR; exit 1)
         TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
     else
-        BYTE="1" ./make.sh || (cd $CUR_DIR; exit 1)
+        BYTE="1" ./make.sh || (cd $ORIG_DIR; exit 1)
         TOOL="ocamldebug $BYMC_HOME/bymc.byte "
     fi
 else
     # binary distribution
     TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
 fi
+cd $ORIG_DIR
 
-cd $CUR_DIR
+mkdir -p "$ORIG_DIR/x"
+work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-`date \"+%y%m%d-%H%M\"`.XXXX"
+work_dir=`mktemp -d $work_dir_template`
+cd "$work_dir"
+echo "Changed directory to $work_dir"
 
 START_TIME=$(date +%s)
 
@@ -86,9 +113,10 @@ fi
 rm -rf ${MC_OUT} ${CEX} refinement.out
 
 while [ "$cmd" != "q" ]; do
-    mc_verify_spec
+    code=0
+    mc_verify_spec || code=$?
 
-    if [ "$?" == "0" ]; then
+    if [ "$code" == "0" ]; then
         echo "The property is verified in $step refinement steps"
         out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
         cmd="q"
