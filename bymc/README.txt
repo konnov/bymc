@@ -9,8 +9,10 @@ More details to be found at: http://forsyte.at/software/bymc/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (only if you want to run unit tests)
  * yices 1.x: http://yices.csl.sri.com/download.shtml
- * spin: http://spinroot.com/spin/Man/README.html#S2
- * gcc
+ * at least one of those:
+     - spin: http://spinroot.com/spin/Man/README.html#S2
+     - nusmv: http://nusmv.fbk.eu/NuSMV/download/getting-v2.html
+ * gcc (if you are going to use spin)
  * python
 
 If you do not know how to install ocaml and ocaml libraries in your system,
