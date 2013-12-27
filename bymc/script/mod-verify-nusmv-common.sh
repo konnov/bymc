@@ -10,7 +10,15 @@ BYMC_FLAGS="--target nusmv"
 SRC_REACH="main-ssa-reach.smv"
 SRC="main-ssa.smv"
 HIDDEN="main-ssa-hidden.txt"
-TIME="/usr/bin/time"
+
+if [ -x "/usr/bin/time" ]; then 
+    TIME="/usr/bin/time" # GNU time that shows memory usage
+elif [ -x "$HOME/bin/time" ]; then 
+    TIME="$HOME/bin/time"    # smth. compiled by the user
+else
+    TIME="time"          # shell time
+fi
+
 
 function common_mc_compile_first {
     if [ "$NO_REACH" != "1" -a "$NO_INITIAL" != "1" ]; then
