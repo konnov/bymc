@@ -55,6 +55,8 @@ function mc_refine {
 
 function mc_collect_stat {
     res=$(common_mc_collect_stat)
-    mc_stat="$res|technique=nusmv-bmc"
+    length=`grep "no counterexample found with bound" $MC_OUT | tail -n 1 \
+        | sed 's/.*bound *\([0-9]*\)/\1/'`
+    mc_stat="$res|11:technique=nusmv-bmc|12:bmc-len=$length"
 }
 

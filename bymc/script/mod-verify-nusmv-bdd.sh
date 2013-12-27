@@ -49,6 +49,6 @@ function mc_refine {
 
 function mc_collect_stat {
     res=$(common_mc_collect_stat)
-    mc_stat="$res|technique=nusmv-bdd"
+    mc_stat="$res|11:technique=nusmv-bdd"
 }
 
