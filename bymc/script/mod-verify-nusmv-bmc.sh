@@ -22,9 +22,9 @@ function mc_verify_spec {
             >>${SCRIPT}
     else
         if [ "$ONE_SHOT" != "1" ]; then
-            echo "check_ltlspec_bmc_inc -k $DEPTH -P ${PROP}" >>${SCRIPT}
+            echo "check_ltlspec_sbmc_inc -c -k $DEPTH -P ${PROP}" >>${SCRIPT}
         else
-            echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
+            echo "check_ltlspec_sbmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
     fi
     echo "time" >>$SCRIPT

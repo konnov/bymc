@@ -500,8 +500,8 @@ let create_counter_specs rt ctrabs_prog =
             match hidden_masked with
             | UnEx (ALWAYS, f) as tf ->
                 if Ltl.is_propositional type_tab f
-                then (* use a faster algorithm *)
-                    (SInvarSpec (name, f)) :: lst
+                then (SLtlSpec (name, tf)) :: lst
+                    (* sbmc is better:(SInvarSpec (name, f)) :: lst *)
                 else (SLtlSpec (name, tf)) :: lst
 
             | _ as tf ->
