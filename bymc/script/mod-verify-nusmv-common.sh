@@ -64,6 +64,12 @@ function common_mc_collect_stat () {
         res="MAYBE"
     fi
 
-    echo "10:Result=$res"
+    time_stat=`grep maxresident $MC_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    user=`echo $time_stat | cut -d ' ' -f 1`
+    sys=`echo $time_stat | cut -d ' ' -f 2`
+    elapsed=`echo $time_stat | cut -d ' ' -f 3`
+    maxres=`echo $time_stat | cut -d ' ' -f 4`
+
+    echo "10:Result=$res|12:nusmv-usersec=$user|13:nusmv-syssec=$sys|14:nusmv-elapsedsec=$elapsed|15:nusmv-maxreskb=$maxres"
 }
 

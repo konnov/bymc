@@ -57,6 +57,6 @@ function mc_collect_stat {
     res=$(common_mc_collect_stat)
     length=`grep "no counterexample found with bound" $MC_OUT | tail -n 1 \
         | sed 's/.*bound *\([0-9]*\)/\1/'`
-    mc_stat="$res|11:technique=nusmv-bmc|12:bmc-len=$length"
+    mc_stat="$res|11:technique=nusmv-bmc|21:bmc-len=$length"
 }
 
