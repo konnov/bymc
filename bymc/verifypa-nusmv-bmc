@@ -6,12 +6,13 @@ DEPTH=10
 NUSMV_VERBOSE=0
 ONE_SHOT=0
 NO_REACH=0
+COMPLETENESS=0
 MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 
 # parse options
-TEMPOPTS=`getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach,no-initial,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
+TEMPOPTS=`getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_exit() {
@@ -21,6 +22,7 @@ function help_and_exit() {
     echo "  --one-shot: instead of incremental BMC, check one-shot problem for the length"
     echo "  --no-reach: skip reachability analysis (may re-use the old one)"
     echo "  --no-initial: skip the initial abstraction, i.e., re-use the old one"
+    echo "  --completeness: enable the completeness check (by NuSMV)"
     echo "  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)"
     echo "  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)"
     echo "  --limit-stack: limit (in MB) stack of subprocesses (ulimit -v)"
@@ -36,6 +38,7 @@ while true ; do
     --one-shot) ONE_SHOT=1 ; shift 1 ;;
     --no-reach) NO_REACH=1 ; shift 1 ;;
     --no-initial) NO_INITIAL=1 ; shift 1 ;;
+    --completeness) COMPLETENESS=1 ; shift 1 ;;
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
     --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
     --limit-stack) STACK_LIMIT=$((1024*$2)) ; shift 2 ;;
@@ -53,7 +56,7 @@ echo ulimit -s $STACK_LIMIT
 ulimit -s $STACK_LIMIT
 
 # run the tool
-DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bmc \
-    ONE_SHOT=$ONE_SHOT NO_REACH=$NO_REACH NO_INITIAL=$NO_INITIAL \
-    `dirname $0`/script/refinement-loop.sh "$@"
+export TARGET_MC=nusmv-bmc
+export DEPTH NUSMV_VERBOSE ONE_SHOT NO_REACH NO_INITIAL COMPLETENESS
+`dirname $0`/script/refinement-loop.sh "$@"
 
