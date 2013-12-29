@@ -57,6 +57,9 @@ function mc_collect_stat {
     res=$(common_mc_collect_stat)
     length=`grep "no counterexample found with bound" $MC_OUT | tail -n 1 \
         | sed 's/.*bound *\([0-9]*\)/\1/'`
-    mc_stat="$res|11:technique=nusmv-bmc|21:bmc-len=$length"
+    last=`grep 'Creating the formula specific k-dependent constraints' $MC_OUT \
+        | perl -n -e 'if (/for k=(\d+)/) { print "$1\n" }' \
+        | tail -n 2 | head -n 1`
+    mc_stat="$res|11:technique=nusmv-bmc|21:bmc-len=$length|22:bmc-last-len=$last"
 }
 
