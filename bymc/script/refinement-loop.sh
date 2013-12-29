@@ -61,8 +61,8 @@ function to_verdict() {
     END_TIME=$(date +%s)
     DIFF_TIME=$(($END_TIME-$START_TIME))
 
-    mc_collect_stat
-    common="|03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
+    stat=$(mc_collect_stat)
+    common="03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME|$stat"
     cd $ORIG_DIR
     echo "$out|$common|$mc_stat" >>verdict.txt
 }

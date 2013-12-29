@@ -49,17 +49,16 @@ function mc_verify_spec {
 }
 
 function mc_refine {
-    echo "mc_refine"
     common_mc_refine
 }
 
 function mc_collect_stat {
-    res=$(common_mc_collect_stat)
+    res=`common_mc_collect_stat | sed 's/10:Result=SAT/10:Result=BSAT/'`
     length=`grep "no counterexample found with bound" $MC_OUT | tail -n 1 \
         | sed 's/.*bound *\([0-9]*\)/\1/'`
     last=`grep 'Creating the formula specific k-dependent constraints' $MC_OUT \
         | perl -n -e 'if (/for k=(\d+)/) { print "$1\n" }' \
         | tail -n 2 | head -n 1`
-    mc_stat="$res|11:technique=nusmv-bmc|21:bmc-len=$length|22:bmc-last-len=$last"
+    echo "$res|11:technique=nusmv-bmc|21:bmc-len=$length|22:bmc-last-len=$last"
 }
 
