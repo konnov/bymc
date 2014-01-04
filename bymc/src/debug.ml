@@ -53,6 +53,14 @@ let log level message =
       flush stdout;
     end
 
+let logtm level message =
+    if may_log level
+    then begin
+      Printf.printf "%s: %s %s\n"
+        (short_time_now ()) (verbosity_s level) message;
+      flush stdout;
+    end
+
 let trace (mod_code: string) (text_fun: unit -> string) =
     if Hashtbl.mem enabled_trace_modules mod_code
     then begin
