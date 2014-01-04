@@ -93,7 +93,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
                     else if intrinsic <> StringMap.empty
                     then trail := (Intrinsic intrinsic) :: !trail
                     else if Str.string_match loop_re line 0
-                        then loop_pos := 1 + (List.length !trail)
+                        then loop_pos := List.length !trail
                         else (printf "WARNING: no match for %s\n" line)
                 done
             with End_of_file ->
@@ -102,9 +102,9 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
 
             let path = List.rev !trail in
             let prefix = list_sub path 0 !loop_pos in
-            let lasso = list_sub path !loop_pos ((List.length path) - !loop_pos)
-            in
-            if may_log DEBUG
+            let lasso =
+                list_sub path !loop_pos ((List.length path) - !loop_pos) in
+            if may_log INFO
             then begin
                 let ps = function
                     | State es ->
