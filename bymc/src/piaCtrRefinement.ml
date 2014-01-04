@@ -123,7 +123,7 @@ let check_trail_asserts solver trail_asserts n_steps =
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     solver#push_ctx;
     List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
-    log INFO "    waiting for SMT...";
+    logtm INFO "    waiting for SMT...";
     let result = solver#check in
     solver#pop_ctx;
     (result, smt_rev_map)
@@ -456,11 +456,12 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     let core_exprs_and = list_to_binex AND core_exprs in
 
     if res then begin
-        log INFO
+        logtm INFO
             (sprintf "State %d of the loop is fair. See the trace." state_num);
         print_vass_trace prog rt#solver 2;
-    end else 
-        printf "core_exprs_s: %s\n" (expr_s core_exprs_and);
+    end else begin
+        printf "core_exprs_s: %s\n" (expr_s core_exprs_and)
+    end;
 
     rt#solver#set_collect_asserts false;
     rt#solver#set_need_evidence false;
@@ -565,6 +566,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         ctr_prog xducer_prog (prefix, loop) =
     let apath = annotate_path (prefix @ loop) in
     let num_states = List.length apath in
+    let loop_start = List.length (annotate_path prefix) in
     let total_steps = num_states - 1 in
     log INFO (sprintf "  %d step(s)" total_steps);
     if total_steps = 0
@@ -573,17 +575,18 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     log INFO "> Simulating counter example in VASS...";
 
     let check_trans st = 
-        let step_asserts = list_sub apath st 2 in
+        let next_st = if st = num_states - 1 then loop_start else st + 1 in
+        let step_asserts = [List.nth apath st; List.nth apath next_st] in
         rt#solver#push_ctx;
         rt#solver#append
-            (sprintf ";; Checking the transition %d -> %d" st (st + 1));
+            (sprintf ";; Checking the transition %d -> %d" st next_st);
         rt#solver#set_collect_asserts true;
         let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
         rt#solver#set_collect_asserts false;
         if not res
         then begin
-            log INFO
-                (sprintf "  The transition %d -> %d is spurious." st (st + 1));
+            logtm INFO
+                (sprintf "  The transition %d -> %d is spurious." st next_st);
             rt#solver#pop_ctx;
             (* speedup trick: pop out  here the transition relation
                saved in (A),
@@ -596,8 +599,8 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
                 refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
             (true, new_prog)
         end else begin
-            log INFO (sprintf "  The transition %d -> %d (of %d) is OK."
-                    st (st + 1) total_steps);
+            logtm INFO (sprintf "  The transition %d -> %d (of %d) is OK."
+                    st next_st total_steps);
             rt#solver#pop_ctx;
             (false, ctr_prog)
         end
@@ -609,13 +612,14 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     in
     (* Try to detect spurious transitions and unfair paths
        (discussed in the FMCAD13 paper) *)
-    log INFO "  Trying to find a spurious transition...";
+    logtm INFO "  Trying to find a spurious transition...";
     rt#solver#push_ctx; (* (A) *)
     rt#solver#set_need_evidence true; (* needed for refinement! *)
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
     simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1;
+    let last_state = if loop <> [] then num_states else num_states - 1 in
     let (refined, new_prog) =
-        List.fold_left find_first (false, ctr_prog) (range 0 (num_states - 1))
+        List.fold_left find_first (false, ctr_prog) (range 0 last_state)
     in
     if refined
     then begin
