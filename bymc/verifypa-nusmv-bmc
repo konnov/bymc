@@ -16,7 +16,8 @@ TEMPOPTS=`getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach,n
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_exit() {
-    echo "use $0 [-l|--length k] [-w|--nusmv-verbose] --one-shot [-h|--help]"
+    echo "use $0 <switches> prog spec"
+    echo " where the switches are"
     echo "  -l|--length k: limit the BMC search with length k"
     echo "  -w|--nusmv-verbose <level>: set the verbosity level"
     echo "  --one-shot: instead of incremental BMC, check one-shot problem for the length"
