@@ -104,7 +104,7 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
             let prefix = list_sub path 0 !loop_pos in
             let lasso =
                 list_sub path !loop_pos ((List.length path) - !loop_pos) in
-            if may_log INFO
+            if may_log DEBUG
             then begin
                 let ps = function
                     | State es ->

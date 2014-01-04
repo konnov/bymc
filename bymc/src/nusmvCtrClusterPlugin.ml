@@ -141,8 +141,13 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
             let path = List.rev !trail in
             let prefix = list_sub path 0 !loop_pos in
             List.iter (print_state prog) prefix;
-            let lasso = list_sub path !loop_pos ((List.length path) - !loop_pos)
-            in
+            let lasso =
+                list_sub path !loop_pos ((List.length path) - !loop_pos) in
+            (* in nusmv the last state is the duplicate of the first one *)
+            let lasso =
+                if lasso <> []
+                then List.rev (List.tl (List.rev lasso))
+                else lasso in
             printf "<<<<<START OF CYCLE>>>>>\n";
             List.iter (print_state prog) lasso;
 
