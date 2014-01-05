@@ -64,11 +64,19 @@ class pia_domain conds_i =
         method expr_is_concretization exp abs_val =
             (* given an abstract value abs_val, constrain exp to be a concretization
                of abs_val, i.e. create a boolean expression over exp *)
-            let (_, l, r) = List.find (fun (a, _, _) -> a = abs_val) cond_intervals in
-            let left = BinEx (GE, exp, l) in
-            if not_nop r
-            then BinEx (AND, left, BinEx (LT, exp, r))
-            else left
+            let eq (a, _, _) = (a = abs_val) in
+            let (_, l, r) = List.find eq cond_intervals in
+            match l, r with
+            | Const a, Const b ->
+                if b = a + 1
+                then BinEx (EQ, exp, Const a)
+                else BinEx (AND, BinEx (GE, exp, l), BinEx (LT, exp, r))
+
+            | _, Nop _ ->
+                BinEx (GE, exp, l) 
+
+            | _, _ ->
+                BinEx (AND, BinEx (GE, exp, l), BinEx (LT, exp, r))
 
         method find_abs_vals
                 (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)

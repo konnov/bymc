@@ -436,7 +436,10 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
 
     (* State 0 is fair and it is a concretization of the abstract state
        kept in state_asserts. State 1 is restricted only by the transition
-       relation, which also carries the invariants. *)
+       relation, which also carries the invariants.
+       In fact, we want to make a step to check, whether the fairness
+       contradicts the invariants.
+    *)
     let asserts, _, annot = state_asserts in
     let step_asserts = [(asserts, [fairness], annot); ([], [], StringMap.empty)]
     in
