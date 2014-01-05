@@ -25,8 +25,20 @@ function mc_verify_spec {
     echo "quit" >>${SCRIPT}
 
     rm -f ${CEX}
+    if [ "$REACH_REL" == "1" ]; then
+        ARGS=""
+    else
+        ARGS="-df"
+    fi
+    if [ "$MONO" == "1" ]; then
+        ARGS="$ARGS -mono"
+    else
+        ARGS="$ARGS"
+    fi
+
+    echo $TIME ${NUSMV} $ARGS -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     tee_or_die "${MC_OUT}" "nusmv failed" \
-        $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
+        $TIME ${NUSMV} $ARGS -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if grep -q "is true" ${MC_OUT}; then
         echo ""
