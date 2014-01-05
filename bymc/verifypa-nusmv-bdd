@@ -7,15 +7,17 @@ MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 MONO=""
 REACH_REL=""
+SOURCE=""
 
 # parse options
-TEMPOPTS=`getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,limit-time:,limit-mem: -n '$@' -- "$@"`
+TEMPOPTS=`getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMPOPTS"
 while true ; do
     case "$1" in
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
+    --source) SOURCE=$2 ; shift 2 ;;
     --rel-mono) MONO="1" ; shift ;;
     --rel-reach) REACH_REL="1" ; shift ;;
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
@@ -32,6 +34,6 @@ ulimit -SHt $TIME_LIMIT
 
 # run the tool
 DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bdd \
-    MONO=$MONO REACH_REL=$REACH_REL \
+    SOURCE=$SOURCE MONO=$MONO REACH_REL=$REACH_REL \
     `dirname $0`/script/refinement-loop.sh "$@"
 

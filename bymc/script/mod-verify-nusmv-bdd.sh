@@ -13,6 +13,10 @@ function mc_compile_first {
 function mc_verify_spec {
     SCRIPT="script.nusmv"
     echo "set on_failure_script_quits" >$SCRIPT
+    if [ "$SOURCE" != "" ]; then
+        cat <"$SOURCE" >>$SCRIPT
+    fi
+
     echo "go" >>$SCRIPT
     echo "time" >>$SCRIPT
     if grep -q "INVARSPEC NAME ${PROP}" "${SRC}"; then
