@@ -23,9 +23,14 @@ class pia_data_ctx roles =
             | _ -> false
 
         method var_needs_abstraction (v: var) =
+            let is_bounded_scratch =
+                match roles#get_role v with
+                | Scratch o -> is_bounded (roles#get_role o)
+                | _ -> false
+            in
             let r = roles#get_role v in
             (not (self#must_keep_concrete (Var v)))
-                && (not (is_bounded r))
+                && (not (is_bounded r)) && (not is_bounded_scratch)
     end
 
 
