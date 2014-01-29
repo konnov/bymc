@@ -575,6 +575,29 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
     List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
 
 
+let reach_transitions_of_ctrabs rt ctrabs_prog =
+    let create_reach lst p =
+        let ctr_ctx =
+            rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
+        let ctr = ctr_ctx#get_ctr in
+        let not_state varf i =
+            let vals = ctr_ctx#unpack_from_const i in
+            let f n v a = (BinEx (NE, Var (varf n), Const v)) :: a in
+            list_to_binex OR (Hashtbl.fold f vals [])
+        in
+        let idx_spec l pair = 
+            let li, ri = List.hd pair, List.hd (List.tl pair) in
+            let name = sprintf "t_%s_%d_to_%d" ctr#get_name li ri in
+            let prev = not_state (fun v -> v) li in
+            let next = not_state (fun v -> ctr_ctx#get_next v) ri in
+            (SInvarSpec (name, BinEx (OR, prev, next))) :: l
+        in
+        let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
+        List.fold_left idx_spec lst (mk_product all_indices 2)
+    in
+    List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
+
+
 (* initialize the processes' variables to the initial values *)
 let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
     let init_of_proc l p =
@@ -737,6 +760,21 @@ let mk_counter_reach rt out_name intabs_prog ctrabs_prog =
     let invs = reach_inv_of_ctrabs rt ctrabs_prog in
     let all_main_sects = main_sects @ exec_procs in
     let tops = SModule ("main", [], all_main_sects) :: invs @ proc_mod_defs in
+    List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
+    close_out out
+
+
+let mk_trans_reach rt out_name intabs_prog ctrabs_prog =
+    (* the difference from mk_counter_reach is that we do check transition
+    invariants *)
+    let out = open_out (out_name ^ ".smv") in
+    let main_sects, proc_mod_defs, _, _, pid =
+        create_proc_mods rt false true intabs_prog in
+    let exec_procs =
+        exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
+    let tinvs = reach_transitions_of_ctrabs rt ctrabs_prog in
+    let all_main_sects = main_sects @ exec_procs in
+    let tops = SModule ("main", [], all_main_sects) :: tinvs @ proc_mod_defs in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 
