@@ -582,20 +582,20 @@ let reach_transitions_of_ctrabs rt ctrabs_prog =
         let ctr = ctr_ctx#get_ctr in
         let not_state varf i =
             let vals = ctr_ctx#unpack_from_const i in
-            let f n v a = (BinEx (NE, Var (varf n), Const v)) :: a in
-            list_to_binex OR (Hashtbl.fold f vals [])
+            let f n v a = (BinEx (EQ, Var (varf n), Const v)) :: a in
+            list_to_binex AND (Hashtbl.fold f vals [])
         in
-        let idx_spec l pair = 
-            let li, ri = List.hd pair, List.hd (List.tl pair) in
-            let name = sprintf "t_%s_%d_to_%d" ctr#get_name li ri in
-            let prev = not_state (fun v -> v) li in
-            let next = not_state (fun v -> ctr_ctx#get_next v) ri in
-            (SInvarSpec (name, BinEx (OR, prev, next))) :: l
+        let idx_spec l i = 
+            let prev_name = sprintf "t_prev_%s_%d" ctr#get_name i in
+            let next_name = sprintf "t_next_%s_%d" ctr#get_name i in
+            let prev = not_state (fun v -> v) i in
+            let next = not_state (fun v -> ctr_ctx#get_next v) i in
+            (prev_name, prev) :: (next_name, next) :: l
         in
         let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
-        List.fold_left idx_spec lst (mk_product all_indices 2)
+        List.fold_left idx_spec lst all_indices
     in
-    List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
+    [SDefine (List.fold_left create_reach [] (Program.get_procs ctrabs_prog))]
 
 
 (* initialize the processes' variables to the initial values *)
@@ -702,6 +702,12 @@ let hide_vars names sections =
         let left = List.fold_left on_decl [] (List.rev decls) in
         if left <> [] then (SVar left) :: l else l
 
+    | SDefine defines ->
+        let ondef l (n, e) =
+            if is_vis n then (n, e) :: l else l
+        in
+        (SDefine (List.fold_left ondef [] defines)) :: l
+
     | SModInst (inst_name, mod_type, params) as mod_inst ->
         if (Str.string_before inst_name 2) = "p_"
                 && (not (is_vis (Str.string_after inst_name 2)))
@@ -774,7 +780,7 @@ let mk_trans_reach rt out_name intabs_prog ctrabs_prog =
         exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
     let tinvs = reach_transitions_of_ctrabs rt ctrabs_prog in
     let all_main_sects = main_sects @ exec_procs in
-    let tops = SModule ("main", [], all_main_sects) :: tinvs @ proc_mod_defs in
+    let tops = SModule ("main", [], all_main_sects @ tinvs) :: proc_mod_defs in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 

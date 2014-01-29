@@ -57,6 +57,8 @@ type section_t =
     | SInvar of token expr list (* the expressions are joined with & *)
     (* normal variable, not a module *)
     | SVar of (var * data_type) list
+    (* macro *)
+    | SDefine of (string * token expr) list
     (* module instance *)
     | SModInst of string * string * (token expr list)
 
@@ -303,6 +305,12 @@ let section_s s =
             let vd (v, tp) =
                 sprintf "%s: %s;" v#mangled_name (var_type_smv tp) in
             "VAR\n " ^ (str_join "\n " (List.map vd decls))
+
+    | SDefine defines ->
+            let e_s = expr_s (fun v -> v#mangled_name) in
+            let vd (n, e) =
+                sprintf "%s := %s;" n (e_s e)  in
+            "DEFINE\n " ^ (str_join "\n " (List.map vd defines))
 
     | SModInst (inst_name, mod_type, params) ->
             let ps = List.map (expr_s (fun v -> v#mangled_name)) params
