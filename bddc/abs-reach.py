@@ -22,10 +22,49 @@ class BddError(Exception):
 
 
 class Bdder:
-    def __init__(self, mgr, var_order):
+    def __init__(self, mgr, parser):
         self.mgr = mgr
-        self.var_order = var_order
-        self.bdd_map = {}
+        self.var_ord = parser.var_ord
+        self.vis_indices = set()
+        for (v, i) in self.var_ord.items():
+            segs = v.rsplit('.', 1)
+            if segs[0] in parser.visible:
+                self.vis_indices.add(i)
+
+    def get_free_cube(self):
+        cube = mgr.ReadOne()
+        for i in self.var_ord.values():
+            if i not in self.vis_indices:
+                cube = cube.And(mgr.IthVar(i))
+
+        return cube
+
+    def unfold_cube(self, cube):
+        tmpl = []
+        i = 0
+        twos = 0
+        for c in cube:
+            if i in self.vis_indices:
+                tmpl.append(c)
+                if c == 2:
+                    twos += 1
+            i += 1
+
+        # replace 2's with 0 and 1: this introduces more strings
+        cc = []
+        for i in range(0, pow(2, twos)):
+            pos = 1
+            t = []
+            for c in tmpl:
+                if c == 2:
+                    t.append(1 if (i & pos) != 0 else 0)
+                    pos *= 2 # for the next 2
+                else:
+                    t.append(c)
+
+            cc.append(tuple(t))
+
+        return cc
 
 
 class ParseError(Exception):
@@ -39,9 +78,11 @@ class Parser:
         self.node_label = {}
         self.node_edge0 = {}
         self.node_edge1 = {}
+        self.visible = set()
 
     def parse(self, filename):
-        # the regular expressions are tuned for the output of dump_fsm -r by NuSMV 2.5.4
+        # the regular expressions are tuned for the output
+        # of dump_fsm -r by NuSMV 2.5.4
         VAR_RE = re.compile('{ rank = same; " (.*) ";')
         FALSE_RE = re.compile('.*"([0-9a-f]+)" \[label = "FALSE"\];')
         TRUE_RE = re.compile('.*"([0-9a-f]+)" \[label = "TRUE"\];')
@@ -56,7 +97,7 @@ class Parser:
                 if m:
                     last_var = m.group(1)
                     self.var_ord[last_var] = len(self.var_ord)
-                    print "#%s = %d" % (last_var, self.var_ord[last_var])
+                    print "--> %2d -> %s" % (self.var_ord[last_var], last_var)
 
                 m = NODE_RE.match(line)
                 if m:
@@ -102,14 +143,13 @@ class Parser:
         # the root bdd is the goal
         return bdd_nodes[work[-1]]
 
-    def free_vars(self, mgr, visible):
-        cube = mgr.ReadOne()
-        for (v, i) in self.var_ord.items():
-            if v not in visible:
-                print ">>>> %s" % v
-                cube = cube.And(mgr.IthVar(i))
+    def read_visible(self, visible_filename):
+        self.visible = set()
+        with open(visible_filename, 'r') as f:
+            for l in f:
+                if l.strip() != "":
+                    self.visible.add(l.strip())
 
-        return cube
 
 
 if __name__ == "__main__":
@@ -124,23 +164,26 @@ if __name__ == "__main__":
     try:
         print "%s: parsing..." % cur_time()
         parser.parse(filename)
+        parser.read_visible(visible_filename)
     except ParseError, e:
         print "%s:%s" % (filename, str(e))
         sys.exit(1)
 
-    visible = set()
-    with open(visible_filename, 'r') as f:
-        for l in f:
-            if l.strip() != "":
-                visible.add(l.strip())
-
     mgr = pycudd.DdManager()
     mgr.SetDefault()
 
+    bdder = Bdder(mgr, parser)
+
     bdd = parser.to_bdd(mgr)
-    free_vars = parser.free_vars(mgr, visible)
+    free_vars = bdder.get_free_cube()
     ex_bdd = bdd.ExistAbstract(free_vars)
-    ex_bdd.PrintMinterm()
+    pycudd.set_iter_meth(0)
+    for cube in ex_bdd:
+        for ucube in bdder.unfold_cube(cube):
+            for c in ucube:
+                sys.stdout.write("%d" % c)
+
+            print ""
 
     mgr.GarbageCollect(1)
     #mgr.PrintStdOut()
