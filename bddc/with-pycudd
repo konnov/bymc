@@ -7,4 +7,4 @@ echo "PYCUDD=$PYCUDD"
 export LD_LIBRARY_PATH="$PYCUDD:$CUDD/lib:$LD_LIBRARY_PATH"
 export PYTHONPATH="$PYCUDD:$PYTHONPATH"
 
-python toBdd.py $1
+python $@
