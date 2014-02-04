@@ -575,27 +575,28 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
     List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
 
 
-let reach_transitions_of_ctrabs rt ctrabs_prog =
+let reach_transitions_of_ctrabs rt ctrabs_prog hidden_set =
     let create_reach lst p =
         let ctr_ctx =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
         let ctr = ctr_ctx#get_ctr in
         let not_state varf i =
             let vals = ctr_ctx#unpack_from_const i in
-            let f n v a = (BinEx (EQ, Var (varf n), Const v)) :: a in
-            list_to_binex AND (Hashtbl.fold f vals [])
+            let f n v a = (BinEx (NE, Var (varf n), Const v)) :: a in
+            list_to_binex OR (Hashtbl.fold f vals [])
         in
         let idx_spec l i = 
-            let prev_name = sprintf "t_prev_%s_%d" ctr#get_name i in
-            let next_name = sprintf "t_next_%s_%d" ctr#get_name i in
+            let counter = sprintf "%s_%dI" ctr#get_name i in
             let prev = not_state (fun v -> v) i in
             let next = not_state (fun v -> ctr_ctx#get_next v) i in
-            (prev_name, prev) :: (next_name, next) :: l
+            if StrSet.mem counter hidden_set
+            then prev :: next :: l
+            else l
         in
         let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
         List.fold_left idx_spec lst all_indices
     in
-    [SDefine (List.fold_left create_reach [] (Program.get_procs ctrabs_prog))]
+    [SInvar (List.fold_left create_reach [] (Program.get_procs ctrabs_prog))]
 
 
 (* initialize the processes' variables to the initial values *)
@@ -778,9 +779,16 @@ let mk_trans_reach rt out_name intabs_prog ctrabs_prog =
         create_proc_mods rt false true intabs_prog in
     let exec_procs =
         exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
-    let tinvs = reach_transitions_of_ctrabs rt ctrabs_prog in
+
     let all_main_sects = main_sects @ exec_procs in
-    let tops = SModule ("main", [], all_main_sects @ tinvs) :: proc_mod_defs in
+    let hidden = NusmvPass.create_or_read_names
+        rt#caches#options [] "main-ssa-hidden.txt"
+    in
+    let hidden_set =
+        List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in
+    let tinvs = reach_transitions_of_ctrabs rt ctrabs_prog hidden_set in
+    let main = SModule ("main", [], (all_main_sects @ tinvs)) in
+    let tops = main :: proc_mod_defs in
     List.iter (fun t -> fprintf out "%s\n" (top_s t)) tops;
     close_out out
 
