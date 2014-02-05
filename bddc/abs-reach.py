@@ -25,7 +25,7 @@ class Bdder:
     def __init__(self, mgr, parser):
         self.mgr = mgr
         self.var_ord = parser.var_ord
-        self.var_max = parser.var_max
+        self.var_bound = parser.var_bound
         # nr. of bits for each variable
         self.var_nbits = { v: 1 for v in parser.visible }
         self.vis_indices = set()
@@ -94,8 +94,8 @@ class Bdder:
             vec[i] = vec[i] + bit * exp
 
         i = 0
-        for m in self.var_max:
-            if vec[i] > m:
+        for m in self.var_bound:
+            if vec[i] >= m:
                 # strip the most significant bit, as in nusmv
                 j = 1
                 while 2 * j < m:
@@ -106,6 +106,13 @@ class Bdder:
             i += 1
 
         return tuple(vec)
+
+    def is_vec_self_loop(self, vec):
+        for i in range(0, len(vec), 2):
+            if vec[i] != vec[i + 1]:
+                return False
+        else:
+            return True
 
 
 class ParseError(Exception):
@@ -122,7 +129,7 @@ class Parser:
         self.node_edge1 = {}
         self.visible = set()
         self.visible_list = []
-        self.var_max = [] # the maximal values
+        self.var_bound = [] # the maximal values
 
     def parse(self, filename):
         # the regular expressions are tuned for the output
@@ -197,7 +204,7 @@ class Parser:
                     name, maxval = l.strip().split(":")
                     self.visible.add(name)
                     self.visible_list.append(name)
-                    self.var_max.append(int(maxval))
+                    self.var_bound.append(int(maxval))
 
 
 if __name__ == "__main__":
@@ -227,13 +234,26 @@ if __name__ == "__main__":
     ex_bdd = bdd.ExistAbstract(free_vars)
     pycudd.set_iter_meth(0)
     vecs = set() # to remove repetitions caused by overflow arithmetics
+    selfloops = set()
     for cube in ex_bdd:
         for ucube in bdder.unfold_cube(cube):
             vec = bdder.cube_to_vec(ucube)
-            vecs.add(vec)
+            if bdder.is_vec_self_loop(vec):
+                selfloops.add(vec)
+            else:
+                vecs.add(vec)
 
-    for vec in vecs:
-        print ".".join([str(v) for v in vec])
+    with open('flow.txt', 'w+') as f:
+        for vec in vecs:
+            print >>f, ".".join([str(v) for v in vec])
+
+    print "%d transitions are written to flow.txt" % len(vecs)
+
+    with open('selfloops.txt', 'w+') as f:
+        for vec in selfloops:
+            print >>f, ".".join([str(v) for v in vec])
+
+    print "%d transitions are written to selfloops.txt" % len(selfloops)
 
     mgr.GarbageCollect(1)
     #mgr.PrintStdOut()
