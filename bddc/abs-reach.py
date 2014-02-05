@@ -26,10 +26,17 @@ class Bdder:
         self.mgr = mgr
         self.var_ord = parser.var_ord
         self.vis_indices = set()
-        for (v, i) in self.var_ord.items():
-            segs = v.rsplit('.', 1)
-            if segs[0] in parser.visible:
+        self.vis_bits = []
+        self.nvis = len(parser.visible_list)
+        print "vis_bits: "
+        for i, v in enumerate(parser.var_list):
+            name, bit = v.rsplit('.', 1)
+            if name in parser.visible:
                 self.vis_indices.add(i)
+                index = parser.visible_list.index(name)
+                # the n-th bit contributes 2^n to name
+                print "(%d, %d)" % (index, pow(2, int(bit)))
+                self.vis_bits.append((index, pow(2, int(bit))))
 
     def get_free_cube(self):
         cube = mgr.ReadOne()
@@ -50,7 +57,7 @@ class Bdder:
                     twos += 1
             i += 1
 
-        # replace 2's with 0 and 1: this introduces more strings
+        # replace 2's with 0 and 1: this multiplies vectors
         cc = []
         for i in range(0, pow(2, twos)):
             pos = 1
@@ -66,6 +73,14 @@ class Bdder:
 
         return cc
 
+    # assemble bit values into integer assignments over visible variables
+    def cube_to_vec(self, cube):
+        vec = self.nvis * [0]
+        for bit, (i, exp) in zip(cube, self.vis_bits):
+            vec[i] = vec[i] + bit * exp
+
+        return tuple(vec)
+
 
 class ParseError(Exception):
     def __init__(self, m):
@@ -75,10 +90,12 @@ class ParseError(Exception):
 class Parser:
     def __init__(self):
         self.var_ord = {}
+        self.var_list = []
         self.node_label = {}
         self.node_edge0 = {}
         self.node_edge1 = {}
         self.visible = set()
+        self.visible_list = []
 
     def parse(self, filename):
         # the regular expressions are tuned for the output
@@ -97,6 +114,7 @@ class Parser:
                 if m:
                     last_var = m.group(1)
                     self.var_ord[last_var] = len(self.var_ord)
+                    self.var_list.append(last_var)
                     print "--> %2d -> %s" % (self.var_ord[last_var], last_var)
 
                 m = NODE_RE.match(line)
@@ -145,10 +163,12 @@ class Parser:
 
     def read_visible(self, visible_filename):
         self.visible = set()
+        self.visible_list = []
         with open(visible_filename, 'r') as f:
             for l in f:
                 if l.strip() != "":
                     self.visible.add(l.strip())
+                    self.visible_list.append(l.strip())
 
 
 
@@ -180,10 +200,8 @@ if __name__ == "__main__":
     pycudd.set_iter_meth(0)
     for cube in ex_bdd:
         for ucube in bdder.unfold_cube(cube):
-            for c in ucube:
-                sys.stdout.write("%d" % c)
-
-            print ""
+            vec = bdder.cube_to_vec(ucube)
+            print ".".join([str(v) for v in vec])
 
     mgr.GarbageCollect(1)
     #mgr.PrintStdOut()
