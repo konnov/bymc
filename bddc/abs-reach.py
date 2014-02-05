@@ -178,22 +178,36 @@ class Parser:
                     else:
                         self.node_edge0[src] = dst
 
-    # here we rely on the fact that the node ids are assigned in the post-traversal order
     def to_bdd(self, mgr):
         work = self.node_label.keys()
         work.sort()
         bdd_nodes = {}
         bdd_nodes[0] = mgr.ReadLogicZero()
         bdd_nodes[1] = mgr.ReadOne()
-        for n in work:
-            v = mgr.IthVar(self.var_ord[self.node_label[n]])
+        last = None
+        while work <> []:
+            n = work.pop()
+            if bdd_nodes.has_key(n):
+                continue
+
             left = self.node_edge1[n]
             right = self.node_edge0[n]
-            f = v.Ite(bdd_nodes[left], bdd_nodes[right])
-            bdd_nodes[n] = f
+            has_left = bdd_nodes.has_key(left)
+            has_right = bdd_nodes.has_key(right)
+            if has_left and has_right:
+                v = mgr.IthVar(self.var_ord[self.node_label[n]])
+                f = v.Ite(bdd_nodes[left], bdd_nodes[right])
+                bdd_nodes[n] = f
+                last = f
+            else:
+                work.append(n)
+                if not has_left:
+                    work.append(left)
+                if not has_right:
+                    work.append(right)
 
-        # the root bdd is the goal
-        return bdd_nodes[work[-1]]
+        # the last node was the root
+        return last
 
     def read_visible(self, visible_filename):
         self.visible = set()
