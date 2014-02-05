@@ -25,6 +25,7 @@ class Bdder:
     def __init__(self, mgr, parser):
         self.mgr = mgr
         self.var_ord = parser.var_ord
+        self.var_max = parser.var_max
         # nr. of bits for each variable
         self.var_nbits = { v: 1 for v in parser.visible }
         self.vis_indices = set()
@@ -92,6 +93,18 @@ class Bdder:
         for bit, (i, exp) in zip(cube, self.vis_bits):
             vec[i] = vec[i] + bit * exp
 
+        i = 0
+        for m in self.var_max:
+            if vec[i] > m:
+                # strip the most significant bit, as in nusmv
+                j = 1
+                while 2 * j < m:
+                    j *= 2
+
+                vec[i] = vec[i] - j
+
+            i += 1
+
         return tuple(vec)
 
 
@@ -109,6 +122,7 @@ class Parser:
         self.node_edge1 = {}
         self.visible = set()
         self.visible_list = []
+        self.var_max = [] # the maximal values
 
     def parse(self, filename):
         # the regular expressions are tuned for the output
@@ -180,9 +194,10 @@ class Parser:
         with open(visible_filename, 'r') as f:
             for l in f:
                 if l.strip() != "":
-                    self.visible.add(l.strip())
-                    self.visible_list.append(l.strip())
-
+                    name, maxval = l.strip().split(":")
+                    self.visible.add(name)
+                    self.visible_list.append(name)
+                    self.var_max.append(int(maxval))
 
 
 if __name__ == "__main__":
@@ -211,10 +226,14 @@ if __name__ == "__main__":
     free_vars = bdder.get_free_cube()
     ex_bdd = bdd.ExistAbstract(free_vars)
     pycudd.set_iter_meth(0)
+    vecs = set() # to remove repetitions caused by overflow arithmetics
     for cube in ex_bdd:
         for ucube in bdder.unfold_cube(cube):
             vec = bdder.cube_to_vec(ucube)
-            print ".".join([str(v) for v in vec])
+            vecs.add(vec)
+
+    for vec in vecs:
+        print ".".join([str(v) for v in vec])
 
     mgr.GarbageCollect(1)
     #mgr.PrintStdOut()
