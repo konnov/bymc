@@ -25,26 +25,39 @@ class Bdder:
     def __init__(self, mgr, parser):
         self.mgr = mgr
         self.var_ord = parser.var_ord
+        # nr. of bits for each variable
+        self.var_nbits = { v: 1 for v in parser.visible }
         self.vis_indices = set()
         self.vis_bits = []
         self.nvis = len(parser.visible_list)
-        print "vis_bits: "
+        # They do number bits from left to the right in NuSMV.
+        # We have to compute first how many bits every variable has.
+        for i, v in enumerate(parser.var_list):
+            name, bit = v.rsplit('.', 1)
+            if name in parser.visible:
+                self.var_nbits[name] = max(1 + int(bit), self.var_nbits[name])
+
         for i, v in enumerate(parser.var_list):
             name, bit = v.rsplit('.', 1)
             if name in parser.visible:
                 self.vis_indices.add(i)
                 index = parser.visible_list.index(name)
                 # the n-th bit contributes 2^n to name
-                print "(%d, %d)" % (index, pow(2, int(bit)))
-                self.vis_bits.append((index, pow(2, int(bit))))
+                exp = pow(2, int(self.var_nbits[name] - int(bit) - 1))
+                self.vis_bits.append((index, exp))
 
     def get_free_cube(self):
-        cube = mgr.ReadOne()
+        num = len(self.var_ord.values()) - len(self.vis_indices)
+        vs = pycudd.DdArray(num)
+        phase = pycudd.IntArray(num)
+        k = 0
         for i in self.var_ord.values():
             if i not in self.vis_indices:
-                cube = cube.And(mgr.IthVar(i))
+                vs[k] = mgr.IthVar(i)
+                phase[k] = 1
+                k += 1
 
-        return cube
+        return self.mgr.ComputeCube(vs, phase, num)
 
     def unfold_cube(self, cube):
         tmpl = []
@@ -115,7 +128,7 @@ class Parser:
                     last_var = m.group(1)
                     self.var_ord[last_var] = len(self.var_ord)
                     self.var_list.append(last_var)
-                    print "--> %2d -> %s" % (self.var_ord[last_var], last_var)
+                    #print "--> %2d -> %s" % (self.var_ord[last_var], last_var)
 
                 m = NODE_RE.match(line)
                 if m:
