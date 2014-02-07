@@ -23,7 +23,11 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
         val ctr_var = new_var ("bymc_k" ^ abbrev_name)
         val mutable ctr_dim: int = -1
         (* Pairs of the variable before the loop body and after the loop body.
-           This list is usually tiny. *)
+           This list is usually tiny.
+           TODO: move out this relation, as it can be used with any
+           finite-state process body. There is not so much special about
+           counter abstraction here.
+         *)
         val mutable m_next_vars: (var * var) list = []
 
         method init_next_vars =
