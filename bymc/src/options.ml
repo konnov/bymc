@@ -14,17 +14,14 @@ let version = [0; 3; 3]
 let version_full = "ByMC-0.3.3-dev"
 
 type action_opt_t =
-    | OptAbstract | OptRefine | OptSubstitute | OptVersion | OptNone
-
-type chain_opt_t =
-    | ChainPiaDataCtr | ChainSymbSkel
+    | OptAbstract | OptRefine | OptVersion | OptNone
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv
 
 type options_t =
     {
         action: action_opt_t; trail_name: string; filename: string;
-        chain: chain_opt_t;
+        chain: string;
         inv_name: string; param_assignments: int StringMap.t;
         mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool;
         plugin_opts: string StringMap.t
@@ -32,7 +29,7 @@ type options_t =
 
 let empty =
     { action = OptNone; trail_name = ""; filename = "";
-      chain = ChainPiaDataCtr;
+      chain = "piaDataCtr";
       inv_name = ""; (* TODO: remove? *)
       param_assignments = StringMap.empty;
       mc_tool = ToolSpin; bdd_pass = false; verbose = false;
@@ -59,11 +56,6 @@ let parse_plugin_opt str =
 
 let parse_options =
     let opts = ref {empty with filename = ""} in
-    let parse_chain = function
-    | "piaDataCtr" -> ChainPiaDataCtr
-    | "symbSkel" -> ChainSymbSkel
-    | _ as s -> raise (Failure ("Unknown chain: " ^ s))
-    in
     let parse_mc_tool = function
     | "spin" -> ToolSpin
     | "nusmv" -> ToolNusmv
@@ -71,8 +63,8 @@ let parse_options =
     in
     (Arg.parse
         [
-            ("--chain", (Arg.Symbol (["piaDataCtr"; "symbSkel"],
-                (fun s -> opts := {!opts with chain = parse_chain s}))),
+            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "symbSkel"],
+                (fun s -> opts := {!opts with chain = s}))),
                 " choose a transformation/refinement chain (default: piaDataCtr)."
             );
             ("-a", Arg.Unit (fun () -> opts := {!opts with action = OptAbstract}),
@@ -83,7 +75,8 @@ let parse_options =
             (* TODO: get rid of it,
                 it should fit into the standard chain workflow *)
             ("-s", Arg.String (fun s ->
-                opts := {!opts with action = OptSubstitute;
+                opts := {!opts with action = OptAbstract;
+                    chain = "concrete";
                     param_assignments = parse_key_values s}),
              "substitute parameters into the code and produce standard Promela.");
             ("--target", (Arg.Symbol (["spin"; "nusmv"],

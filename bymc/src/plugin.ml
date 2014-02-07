@@ -1,6 +1,6 @@
 (* Plugin infrastructure to allow the user running different workflows.
  *
- * Igor Konnov, 2013
+ * Igor Konnov, 2013-2014
  *)
 
 open Program
@@ -9,8 +9,9 @@ open Spin
 open SpinIr
 
 exception Plugin_error of string
+exception InputRequired of string
 
-(* the generic plugin *)
+(* a generic plugin *)
 class plugin_t (plugin_name: string) =
     object
         val mutable m_ready = false
@@ -69,6 +70,7 @@ class virtual analysis_plugin_t (plugin_name: string) =
 class plugin_chain_t =
     object(self)
         val mutable m_plugins: transform_plugin_t list = []
+        val mutable m_queue: transform_plugin_t list = []
         val mutable m_in = Program.empty
         val mutable m_out = Program.empty
 
@@ -108,7 +110,26 @@ class plugin_chain_t =
 
         method transform rt prog =
             m_in <- prog;
-            m_out <- (List.fold_left (self#apply_plugin rt) prog m_plugins);
+            if m_queue = []
+            then begin
+                m_queue <- m_plugins;
+                m_out <- m_in
+            end;
+            (* else we continue the transformation *)
+
+            (* this strange loop is needed, as a plugin may throw
+               InputRequired exception *)
+            let rec apply = function
+                | p :: tl ->
+                    (* InputRequired may be thrown here *)
+                    let out = self#apply_plugin rt m_out p in
+                    m_out <- out;
+                    m_queue <- tl;
+                    apply tl
+
+                | [] -> ()
+            in
+            apply m_queue;
             m_out
 
         method refine rt path =

@@ -38,16 +38,11 @@ let main () =
         begin
             match opts.action with
             | OptAbstract ->
-                let _ = do_abstraction rt in ()
+                let chain = ChainFactory.create_chain opts.chain in
+                let _ = do_abstraction rt chain in ()
 
             | OptRefine ->
-                new_refine rt
-
-            | OptSubstitute ->
-                let chain = new plugin_chain_t in
-                chain#add_plugin (new promela_parser_plugin_t "promelaParser");
-                chain#add_plugin (new instantiation_plugin_t "inst");
-                let _ = chain#transform rt Program.empty in ()
+                do_refine rt
 
             | _ -> printf "No options given. Bye.\n"
         end;

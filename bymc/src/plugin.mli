@@ -1,4 +1,19 @@
+(* Plugin infrastructure to interconnect different abstraction tasks
+ * into a chain. The chain can be saved to a file and restored later.
+ *
+ * Igor Konnov, 2013-2014
+ *)
+
 exception Plugin_error of string
+
+(* This is a special kind of an exception. 
+  By throwing it a plugin may indicate that it requires input
+  from an external tool (or the user). In this case the tool chain
+  saves its state and quits until run again with 'continue' option.
+  One can use it to interconnect several stages that require a
+  long-time external processing.
+ *)
+exception InputRequired of string
 
 class plugin_t: string ->
     object
