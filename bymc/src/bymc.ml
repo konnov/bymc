@@ -17,10 +17,19 @@ let banner =
     sprintf "*** This is %s. Homepage: http://forsyte.at/software/bymc ***"
         version_full
 
+let print_version_if_needed opts =
+    match opts.action with
+    | OptVersion ->
+        printf "%s\n" version_full;
+        Pervasives.exit 1
+    | _ -> ()
+
+
 let main () =
+    let opts = parse_options in
+    print_version_if_needed opts;
     try
         printf "\n%s\n\n" banner;
-        let opts = parse_options in
         Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
         let solver = new Smt.yices_smt in
@@ -30,14 +39,14 @@ let main () =
             match opts.action with
             | OptAbstract ->
                 let _ = do_abstraction rt in ()
+
             | OptRefine ->
                 new_refine rt
+
             | OptSubstitute ->
                 let chain = new plugin_chain_t in
-                chain#add_plugin
-                    (new promela_parser_plugin_t "promelaParser");
-                chain#add_plugin
-                    (new instantiation_plugin_t "inst");
+                chain#add_plugin (new promela_parser_plugin_t "promelaParser");
+                chain#add_plugin (new instantiation_plugin_t "inst");
                 let _ = chain#transform rt Program.empty in ()
 
             | _ -> printf "No options given. Bye.\n"
