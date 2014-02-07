@@ -21,6 +21,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
         val mutable m_ctr_abs_ctx_tbl: ctr_abs_ctx_tbl option = None
         val mutable m_ref_step = 0 (* refinement step *)
         val mutable m_vass = Program.empty
+        (* the data abstraction with shared variables kept unabstracted *)
+        val mutable m_semi_prog = Program.empty
 
         method transform rt prog =
             let caches = rt#caches in
@@ -48,16 +50,16 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
                 let pia_data = new pia_data_ctx roles in
                 pia_data#set_hack_shared true;
                 caches#analysis#set_pia_data_ctx pia_data;
-                let int_prog =
-                    do_interval_abstraction rt data_p#get_input proc_names in
+                m_semi_prog <-
+                    do_interval_abstraction rt data_p#get_input proc_names;
                 let vass =
-                    self#make_vass solver dom caches int_prog proc_names false
+                    self#make_vass solver dom caches m_semi_prog proc_names false
                 in
                 log INFO "  check the invariants";
                 check_all_invariants rt vass;
                 log INFO "  save the symbolic transition relation";
                 m_vass <-
-                    self#make_vass solver dom caches int_prog proc_names true;
+                    self#make_vass solver dom caches m_semi_prog proc_names true;
                 caches#analysis#set_pia_data_ctx old_pia_data
             end;
 
