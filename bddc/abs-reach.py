@@ -259,13 +259,13 @@ if __name__ == "__main__":
 
     with open('flow.txt', 'w+') as f:
         for vec in vecs:
-            print >>f, ".".join([str(v) for v in vec])
+            print >>f, ",".join([str(v) for v in vec])
 
     print "%d transitions are written to flow.txt" % len(vecs)
 
     with open('selfloops.txt', 'w+') as f:
         for vec in selfloops:
-            print >>f, ".".join([str(v) for v in vec])
+            print >>f, ",".join([str(v) for v in vec])
 
     print "%d transitions are written to selfloops.txt" % len(selfloops)
 
