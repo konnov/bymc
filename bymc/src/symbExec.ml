@@ -271,8 +271,8 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
 
     let path_cons = List.fold_left exec (Const 1) stmts in
     let path_cons = compute_consts path_cons in
-    let is_sat = check_sat solver type_tab path_cons
-    in
+    let is_sat = check_sat solver type_tab path_cons in
+
     (* XXX: the following code is a disaster, rewrite *)
     let hidden_path_cons = hide_non_zero sym_tab hidden_idx_fun path_cons in
     let is_hidden = not (check_sat solver type_tab hidden_path_cons) in

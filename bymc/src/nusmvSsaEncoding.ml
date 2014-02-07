@@ -1,6 +1,8 @@
 (*
  Translating processes in SSA and encoding them in NuSMV format.
  This is the third try to create an efficient encoding in NuSMV.
+
+ Igor Konnov, 2013
  *)
 
 open Printf
@@ -575,6 +577,9 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
     List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
 
 
+(* TODO: this function does not depend on the counter abstraction,
+  but it can work with any finite-state process.
+ *)
 let reach_transitions_of_ctrabs rt ctrabs_prog hidden_set =
     let create_reach lst p =
         let ctr_ctx =
@@ -600,6 +605,9 @@ let reach_transitions_of_ctrabs rt ctrabs_prog hidden_set =
 
 
 (* initialize the processes' variables to the initial values *)
+(* TODO: in principle, this does not have to deal with counter abstraction.
+   The function should work with any finite abstraction
+ *)
 let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
     let init_of_proc l p =
         (* find all possible valuations of the local variables *)
@@ -786,6 +794,7 @@ let mk_trans_reach rt out_name intabs_prog ctrabs_prog =
     in
     let hidden_set =
         List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in
+    (* TODO: remove, as we do not need it anymore *)
     let tinvs = reach_transitions_of_ctrabs rt ctrabs_prog hidden_set in
     let main = SModule ("main", [], (all_main_sects @ tinvs)) in
     let tops = main :: proc_mod_defs in

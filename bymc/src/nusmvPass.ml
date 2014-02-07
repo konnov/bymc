@@ -2,6 +2,9 @@
   This pass transforms Promela code into Nusmv representation using
   symbolic execution.
 
+  WARNING: This module has some useful functions inside, but this technique
+  is not we are currently using in the NuSMV encoding. See NusmvSsaEncoding.
+
   Igor Konnov, 2012
  *)
 
@@ -40,8 +43,7 @@ let intmap_vals m =
 type scope_vars_t = LocalShared | SharedOnly
 
 
-(* ======= The new symbolic implementation. ===========================
-           It is much more efficient than that one above.                 *)
+(* ======= The new symbolic implementation. =========================== *)
 
 let intro_old_copies new_type_tab new_sym_tab rev_tab collected var =
     let nv = new var (SymbExec.mk_input_name var) (fresh_id ()) in
