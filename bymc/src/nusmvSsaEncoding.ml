@@ -243,6 +243,21 @@ let collect_rhs solver type_tab dom ctr_ctx op =
     List.iter on_point points_lst;
     tbl
 
+let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
+
+let elim_array_access sym_tab exp =
+    let rec elim = function
+    | BinEx (ARR_ACCESS, Var arr, Const i) ->
+        Var ((sym_tab#lookup (indexed_var arr i))#as_var)
+    | BinEx (ARR_ACCESS, Var arr, idx_exp) ->
+        raise (NusmvEncoding_error
+            (sprintf "Expected a constant index, found: %s" (expr_s idx_exp)))
+    | BinEx (t, l, r) -> BinEx (t, elim l, elim r)
+    | UnEx (t, e) -> UnEx (t, elim e)
+    | _ as e -> e
+    in
+    elim exp
+
 
 (* ====================== important functions *)
 
@@ -563,7 +578,7 @@ let create_counter_specs rt ctrabs_prog =
     let atomics = Program.get_atomics_map ctrabs_prog in
     let create_spec sym_tab name ltl_form lst =
         let embedded = Ltl.embed_atomics type_tab atomics ltl_form in
-        let flat = SymbExec.elim_array_access sym_tab embedded in
+        let flat = elim_array_access sym_tab embedded in
         let hidden_masked = Simplif.compute_consts flat in
         if not (Ltl.is_fairness_form name)
         then begin

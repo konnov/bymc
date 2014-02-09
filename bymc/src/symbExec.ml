@@ -1,4 +1,9 @@
-(* Executing a path symbolically and collecting the constraints along it
+(*
+ * Executing a path symbolically and collecting the constraints
+ * along it.
+ *
+ * The code was tuned to a NuSMV encoding, which was later deprecated.
+ * It needs refactoring.
  *
  * Igor Konnov, 2013
  *)
@@ -17,12 +22,13 @@ type var_cons_tbl = (string, int) Hashtbl.t
 
 let is_input (v: var): bool =
     let n = v#mangled_name in
-    (String.length n) > 0 && (String.get n 0) = 'I'
+    let l = String.length n in
+    l > 3 && (String.sub n (l - 3) 3) = "_in"
 
 let not_input (v: var): bool = not (is_input v)
 
 let mk_input_name (v: var): string =
-    "I" ^ v#mangled_name
+    v#mangled_name ^ "_in"
 
 let mk_output_name (v: var): string =
     let n = v#mangled_name in
@@ -31,7 +37,7 @@ let mk_output_name (v: var): string =
     else v#mangled_name
 
 let get_input (sym_tab: symb_tab) (v: var): var =
-    let name = "I" ^ v#mangled_name in
+    let name = v#mangled_name ^ "_in" in
     let sym = sym_tab#lookup name in
     sym#as_var
 
@@ -118,6 +124,14 @@ let hide_non_zero sym_tab hidden_idx_fun exp =
         end
         else e
 
+    | BinEx (AND, l, r) ->
+        let nl, nr = rewrite l, rewrite r in
+        if nl = nr then nl else BinEx (AND, nl, nr)
+
+    | BinEx (OR, l, r) ->
+        let nl, nr = rewrite l, rewrite r in
+        if nl = nr then nl else BinEx (OR, nl, nr)
+
     | BinEx (t, l, r) ->
         BinEx (t, rewrite l, rewrite r)
 
@@ -182,8 +196,6 @@ let activate_hidden sym_tab shared hidden_idx_fun vals =
     List.iter try_activate hidden
 
 
-let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
-
 let smv_name sym_tab v =
     let oname = (get_output sym_tab v)#mangled_name in
     if is_input v
@@ -205,50 +217,26 @@ let print_path log =
     path_cnt := !path_cnt + 1
 
 
-let elim_array_access sym_tab exp =
-    let rec elim = function
-    | BinEx (ARR_ACCESS, Var arr, Const i) ->
-        Var ((sym_tab#lookup (indexed_var arr i))#as_var)
-    | BinEx (ARR_ACCESS, Var arr, idx_exp) ->
-        raise (SymbExec_error
-            (sprintf "Expected a constant index, found: %s" (expr_s idx_exp)))
-    | BinEx (t, l, r) -> BinEx (t, elim l, elim r)
-    | UnEx (t, e) -> UnEx (t, elim e)
-    | _ as e -> e
-    in
-    elim exp
-
-
+(* TODO: it is tuned to the nusmv encoding, refactor *)
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
         (shared: var list) (hidden_idx_fun: var -> int)
         (name_f: var -> string)
         (path: token basic_block list) (is_final: bool) =
-    let get_var = function
-    | Var v ->
-        v
-    | _ as e ->
-        raise (SymbExec_error (sprintf "Expected var, found: %s" (expr_s e)))
-    in
     let vals = Hashtbl.create 10 in
     let stmts = linearize_blocks path in
     let exec path_cons = function
-    | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, idx_exp), rhs)) ->
-        let sub_lhs = BinEx (ARR_ACCESS, Var arr, (sub_vars vals idx_exp)) in
-        let new_lhs = elim_array_access sym_tab sub_lhs in
-        let new_rhs = elim_array_access sym_tab (sub_vars vals rhs) in
-        let v = get_var new_lhs in
-        Hashtbl.replace vals v#id new_rhs;
-        path_cons
+    | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, _, _), _)) ->
+        raise (SymbExec_error ("Arrays are not supported anymore"))
 
     | Expr (_, BinEx (ASGN, Var v, rhs)) ->
-        let new_rhs = elim_array_access sym_tab (sub_vars vals rhs) in
+        let new_rhs = sub_vars vals rhs in
         Hashtbl.replace vals v#id new_rhs;
         path_cons
 
     | Assume (_, e)
     | Expr (_, e) ->
         let ne =
-            try sub_vars vals (elim_array_access sym_tab (sub_vars vals e))
+            try sub_vars vals e
             with SymbExec_error s ->
             begin
                 printf "The troublesome path is:\n";
@@ -265,7 +253,9 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let add_input v =
         Hashtbl.add vals v#id (Var (get_input sym_tab v))
     in
-    let all_vars = List.map (fun s -> s#as_var) sym_tab#get_symbs_rec in
+    let all_vars = List.map (fun s -> s#as_var)
+        (List.filter (fun s -> s#get_sym_type = SymVar) sym_tab#get_symbs_rec)
+    in
     let vars = List.filter not_input all_vars in
     List.iter add_input vars;
 
