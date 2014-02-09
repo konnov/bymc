@@ -21,23 +21,23 @@ exception SymbExec_error of string
 type var_cons_tbl = (string, int) Hashtbl.t
 
 let is_input (v: var): bool =
-    let n = v#mangled_name in
+    let n = v#get_name in
     let l = String.length n in
     l > 3 && (String.sub n (l - 3) 3) = "_in"
 
 let not_input (v: var): bool = not (is_input v)
 
 let mk_input_name (v: var): string =
-    v#mangled_name ^ "_in"
+    v#get_name ^ "_in"
 
 let mk_output_name (v: var): string =
-    let n = v#mangled_name in
+    let n = v#get_name in
     if is_input v
     then String.sub n 1 ((String.length n) - 1)
-    else v#mangled_name
+    else v#get_name
 
 let get_input (sym_tab: symb_tab) (v: var): var =
-    let name = v#mangled_name ^ "_in" in
+    let name = v#get_name ^ "_in" in
     let sym = sym_tab#lookup name in
     sym#as_var
 
@@ -97,118 +97,10 @@ let check_sat solver type_tab exp =
     end
 
 
-let hide_non_zero sym_tab hidden_idx_fun exp =
-    let find_idx v =
-        let ov = get_output sym_tab v in
-        hidden_idx_fun ov
-    in
-    let rec rewrite = function
-    | BinEx (EQ, Var v, Const i) as e ->
-        let idx = find_idx v in
-        if i > 0 && idx > 0
-        then Const 0 (* FALSE *)
-        else e
-
-    | BinEx (NE, Var v, Const i) as e ->
-        let idx = find_idx v in
-        if i = 0 && idx > 0
-        then Const 0 (* FALSE *)
-        else e
-
-    | BinEx (EQ, Var v, _)
-    | BinEx (NE, Var v, _) as e ->
-        let idx = find_idx v in
-        if idx > 0
-        then begin
-            Const 0 (* FALSE *)
-        end
-        else e
-
-    | BinEx (AND, l, r) ->
-        let nl, nr = rewrite l, rewrite r in
-        if nl = nr then nl else BinEx (AND, nl, nr)
-
-    | BinEx (OR, l, r) ->
-        let nl, nr = rewrite l, rewrite r in
-        if nl = nr then nl else BinEx (OR, nl, nr)
-
-    | BinEx (t, l, r) ->
-        BinEx (t, rewrite l, rewrite r)
-
-    | UnEx (t, r) ->
-        UnEx (t, rewrite r)
-
-    | _ as e -> e
-    in
-    compute_consts (rewrite exp)
-
-
-let abstract_hidden sym_tab hidden_idx_fun vals exp = 
-    let rec rewrite = function
-    | BinEx (EQ, Var v, _)
-    | BinEx (NE, Var v, _) as e ->
-        let idx = hidden_idx_fun (get_output sym_tab v) in
-        if idx > 0
-        then begin
-            let use_var = get_use sym_tab in
-            (* remember that this transition was hidden *)
-            Hashtbl.replace vals use_var#id (Const idx);
-            Const 1 (* TRUE *)
-        end
-        else e
-
-    | BinEx (t, l, r) ->
-        BinEx (t, rewrite l, rewrite r)
-
-    | UnEx (t, r) ->
-        UnEx (t, rewrite r)
-
-    | _ as e -> e
-    in
-    compute_consts (rewrite exp)
-
-
-let activate_hidden sym_tab shared hidden_idx_fun vals =
-    let try_activate v =
-        let exp = 
-            try Hashtbl.find vals v#id
-            with Not_found ->
-                raise (SymbExec_error (sprintf "%s not found" v#mangled_name))
-        in
-        let needs_activation =
-            match exp with
-            | Var arg ->
-                let ov = get_output sym_tab arg in
-                ov#id <> v#id
-            | _ ->
-                true
-        in
-        let use_var = get_use sym_tab in
-        if needs_activation
-        then begin
-            (* activate *)
-            Hashtbl.replace vals use_var#id (Const (hidden_idx_fun v));
-            (* deactivate *)
-            Hashtbl.replace vals v#id (Var (get_input sym_tab v))
-        end
-    in
-    let hidden = List.filter (fun v -> (hidden_idx_fun v) <> 0) shared in 
-    List.iter try_activate hidden
-
-
-let smv_name sym_tab v =
-    let oname = (get_output sym_tab v)#mangled_name in
-    if is_input v
-    then oname
-    else sprintf "next(%s)" oname
-
-
-let keep_name v = v#mangled_name
-
-
 let path_cnt = ref 0 (* DEBUGGING, remove it afterwards *)
-let print_path log =        
+let print_path log path_cons =
     fprintf log "-- PATH %d\n" !path_cnt;
+    fprintf log " -> %s\n" (expr_s path_cons);
     if (!path_cnt mod 1000) = 0
     then begin
         printf " visited %d paths...\n" !path_cnt;
@@ -217,17 +109,13 @@ let print_path log =
     path_cnt := !path_cnt + 1
 
 
-(* TODO: it is tuned to the nusmv encoding, refactor *)
 let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
-        (shared: var list) (hidden_idx_fun: var -> int)
-        (name_f: var -> string)
+        (shared: var list)
         (path: token basic_block list) (is_final: bool) =
     let vals = Hashtbl.create 10 in
     let stmts = linearize_blocks path in
+    (* please, no arrays here *)
     let exec path_cons = function
-    | Expr (_, BinEx (ASGN, BinEx (ARR_ACCESS, _, _), _)) ->
-        raise (SymbExec_error ("Arrays are not supported anymore"))
-
     | Expr (_, BinEx (ASGN, Var v, rhs)) ->
         let new_rhs = sub_vars vals rhs in
         Hashtbl.replace vals v#id new_rhs;
@@ -251,6 +139,7 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     | _ -> path_cons
     in
     let add_input v =
+        printf " -->>>> %s\n" v#get_name;
         Hashtbl.add vals v#id (Var (get_input sym_tab v))
     in
     let all_vars = List.map (fun s -> s#as_var)
@@ -259,61 +148,13 @@ let exec_path solver log (type_tab: data_type_tab) (sym_tab: symb_tab)
     let vars = List.filter not_input all_vars in
     List.iter add_input vars;
 
-    let path_cons = List.fold_left exec (Const 1) stmts in
-    let path_cons = compute_consts path_cons in
+    let path_cons =
+        compute_consts(List.fold_left exec (Const 1) stmts) in
     let is_sat = check_sat solver type_tab path_cons in
 
-    (* XXX: the following code is a disaster, rewrite *)
-    let hidden_path_cons = hide_non_zero sym_tab hidden_idx_fun path_cons in
-    let is_hidden = not (check_sat solver type_tab hidden_path_cons) in
-
-    if is_final && is_sat && not is_hidden
+    if is_final && is_sat
     then begin
-        print_path log;
-        let path_cons = abstract_hidden sym_tab hidden_idx_fun vals path_cons in
-        let path_s =
-            if is_c_true path_cons
-            then "TRUE"
-            else (Nusmv.expr_s name_f path_cons) in
-        let find_changes (unchanged, changed) v =
-            let exp = 
-                try Hashtbl.find vals v#id
-                with Not_found ->
-                    let m = sprintf "Value of %s not found" v#mangled_name in
-                    raise (SymbExec_error m)
-            in
-            match exp with
-            | Var arg ->
-                let oarg = get_output sym_tab arg in
-                if oarg#id = v#id
-                then (v :: unchanged), changed
-                else (unchanged, (name_f v, arg#mangled_name) :: changed)
-            | _ ->
-                (unchanged, (name_f v, Nusmv.expr_s name_f exp) :: changed)
-        in
-
-        (* nusmv syntax *)
-        activate_hidden sym_tab shared hidden_idx_fun vals;
-        let unchanged, changed = List.fold_left find_changes ([], []) shared in
-        let eqs = List.map (fun (v, e) -> sprintf "%s = %s" v e) changed in
-        let unchanged =
-            List.filter (fun v -> (hidden_idx_fun v) = 0) unchanged
-        in
-        let unchanged_eqs =
-            let mk_eq v = 
-                sprintf "%s = %s" (name_f (get_output sym_tab v))
-                    (name_f (get_input sym_tab v)) in
-            List.map mk_eq unchanged
-        in
-        let eq_s = if eqs <> [] then "  " ^ (str_join " & " eqs) else ""
-        in
-        let unchg_s =
-            if unchanged <> []
-            then "  " ^ (str_join " & " (List.filter str_nempty unchanged_eqs))
-            else ""
-        in
-        let strs = List.filter str_nempty [path_s; eq_s; unchg_s] in
-        fprintf log " | (%s)\n" (str_join " & " strs)
+        print_path log path_cons
     end;
-    is_sat && not is_hidden
+    is_sat
 

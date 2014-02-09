@@ -11,6 +11,7 @@ open Unix
 open Accums
 open Debug
 open Plugin
+open SkelStruc
 open SpinIr
 open SpinIrImp
 open VarRole
@@ -23,7 +24,9 @@ class symb_skel_plugin_t (plugin_name: string)
         inherit analysis_plugin_t plugin_name
 
         method transform rt prog =
-            List.iter (self#extract_proc rt prog) (Program.get_procs prog);
+            let sprog = ctr_plugin#semi_prog in
+            rt#caches#set_struc sprog (compute_struc sprog);
+            List.iter (self#extract_proc rt sprog) (Program.get_procs sprog);
             prog
 
         method test_input filename =
@@ -35,11 +38,9 @@ class symb_skel_plugin_t (plugin_name: string)
             let each_line a l =
                 let segs = Str.split (Str.regexp_string ",") l in
                 let vals = List.map str_i segs in
-                let h = Hashtbl.create (List.length prev_next) in
-                List.iter2 (Hashtbl.add h) prev_next vals;
-                printf "%s\n" l
+                (List.map2 (fun x y -> (x, y)) prev_next vals) :: a
             in
-            ignore (fold_file each_line () filename)
+            List.rev (fold_file each_line [] filename)
 
         method write_vars tt prev_next filename =
             let fout = open_out filename in
@@ -63,8 +64,8 @@ class symb_skel_plugin_t (plugin_name: string)
                 (sprintf "vis-%s.txt" proc#get_name);
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
-            self#read_transitions prev_next filename;
-            collect_constraints rt prog proc
+            let trs = self#read_transitions prev_next filename in
+            collect_constraints rt prog proc trs
 
         method update_runtime rt =
             ()
