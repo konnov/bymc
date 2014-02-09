@@ -14,7 +14,6 @@ open AbsInterval
 open AbsCounter
 open Infra
 open Ltl
-open NusmvCmd
 open PiaDataCtx
 open PiaCtrCtx
 open Plugin
@@ -27,9 +26,6 @@ open Spin
 open SpinIrImp
 open VarRole
 open Writer
-
-open NusmvPass
-open NusmvCounterClusterPass
 
 open Debug
 
