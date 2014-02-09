@@ -258,6 +258,7 @@ class symb_tab i_tab_name =
             | None -> Accums.hashtbl_vals tab
 
         method set_parent p = parent <- Some p
+        method set_parent_opt p = parent <- p
         method get_parent = parent
     end
 
