@@ -7,6 +7,7 @@
 
 open Printf
 
+open AbsBasics
 open AbsSimple
 open Accums
 open Cfg
@@ -176,6 +177,73 @@ let rename_vars tt shared seq =
     (hashtbl_vals tab, List.map each_stmt seq)
 
 
+let create_or_read_names (opts: Options.options_t)
+        (default: string list) (filename: string) =
+    (* XXX: we should definitely use batteries here *)
+    let sign = sprintf "#@source=%s" opts.Options.filename in
+    let no_file_or_wrong_sig =
+        try let fin = open_in filename in begin
+            try let line = input_line fin in
+                let correct = (line = sign) in
+                close_in fin;
+                not correct
+            with End_of_file -> close_in fin; true 
+        end with Sys_error _ -> true
+    in
+    let hidden =
+        if no_file_or_wrong_sig
+        then begin
+            let fout = open_out filename in
+            fprintf fout "%s\n" sign;
+            List.iter (fun s -> fprintf fout "#%s\n" s) default;
+            close_out fout;
+            []
+        end else 
+            let names = ref [] in
+            let fin = open_in filename in
+            ignore (input_line fin); (* skip the signature line *)
+            try while true; do
+                    let line = input_line fin in
+                    let skip = (String.length line) = 0 
+                        || (String.get line 0) = '#' in
+                    if not skip
+                    then names := (line :: !names)
+                done;
+                List.rev !names
+            with End_of_file ->
+                close_in fin;
+                List.rev !names
+    in
+    hidden
+
+let collect_rhs solver type_tab dom ctr_ctx op =
+    solver#push_ctx;
+    let x = ctr_ctx#get_ctr#fresh_copy "x" in
+    let y = ctr_ctx#get_ctr#fresh_copy "y" in
+    let ctr_tp = type_tab#get_type ctr_ctx#get_ctr in
+    let tp = new data_type SpinTypes.TINT in
+    tp#set_range_tuple ctr_tp#range;
+    solver#append_var_def x tp; 
+    solver#append_var_def y tp; 
+    let tbl = Hashtbl.create 10 in
+    let chg = BinEx (EQ, Var x, BinEx (op, Var y, Const 1)) in
+    let on_point p =
+        let add xv yv =
+            if Hashtbl.mem tbl xv
+            then Hashtbl.replace tbl xv (yv :: (Hashtbl.find tbl xv))
+            else Hashtbl.add tbl xv [yv]
+        in
+        match p with
+        | ((x1, v1) :: (_, v2) :: []) ->
+            if x1#id = x#id then add v1 v2 else add v2 v1
+        | _ -> raise (Failure "oops?")
+    in
+    let points_lst = dom#find_abs_vals ExistAbs solver chg in
+    solver#pop_ctx;
+    List.iter on_point points_lst;
+    tbl
+
+
 (* ====================== important functions *)
 
 let module_of_proc rt out_becomes_next elim_deadlocks prog =
@@ -338,9 +406,9 @@ let module_of_counter rt proc_syms proc_types ctrabs_prog pid p num =
     let dom = rt#caches#analysis#get_pia_dom in
     let tt = Program.get_type_tab ctrabs_prog in
     let dec_tbl =
-        NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx PLUS in
+        collect_rhs rt#solver tt dom ctr_ctx PLUS in
     let inc_tbl =
-        NusmvCounterClusterPass.collect_rhs rt#solver tt dom ctr_ctx MINUS in
+        collect_rhs rt#solver tt dom ctr_ctx MINUS in
     let prev_locals = List.map fst ctr_ctx#prev_next_pairs in
     let next_locals = List.map snd ctr_ctx#prev_next_pairs in
     let my_var v = v#copy ("my_" ^ v#get_name) in
@@ -755,8 +823,8 @@ let transform rt out_name intabs_prog ctrabs_prog =
             :: forms @ proc_mod_defs @ ctr_mods in
     let globals =
         List.map (fun v -> v#mangled_name) (collect_globals all_main_sects) in
-    let hidden = NusmvPass.create_or_read_names
-        rt#caches#options globals "main-ssa-hidden.txt"
+    let hidden =
+        create_or_read_names rt#caches#options globals "main-ssa-hidden.txt"
     in
     log INFO (sprintf "    %d variables are hidden\n" (List.length hidden));
     let hidden_set =
@@ -789,8 +857,8 @@ let mk_trans_reach rt out_name intabs_prog ctrabs_prog =
         exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid in
 
     let all_main_sects = main_sects @ exec_procs in
-    let hidden = NusmvPass.create_or_read_names
-        rt#caches#options [] "main-ssa-hidden.txt"
+    let hidden =
+        create_or_read_names rt#caches#options [] "main-ssa-hidden.txt"
     in
     let hidden_set =
         List.fold_left (fun s n -> StrSet.add n s) StrSet.empty hidden in

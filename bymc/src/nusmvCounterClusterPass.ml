@@ -23,6 +23,8 @@ open SpinIrImp
 open SymbExec
 open VarRole
 
+type scope_vars_t = LocalShared | SharedOnly
+
 let collect_local_ids in_locals out_locals =
     let gather s v =
         IntSet.add v#id s in
@@ -141,6 +143,46 @@ let write_counter_use solver caches sym_tab type_tab hidden hidden_idx_fun
     in
     let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
     List.iter create_module all_indices
+
+
+let intro_old_copies new_type_tab new_sym_tab rev_tab collected var =
+    let nv = new var (SymbExec.mk_input_name var) (fresh_id ()) in
+    (* this will not work as we need a flat name, i.e., one without
+       process name: *)
+    let _ = new_type_tab#set_type nv (new_type_tab#get_type var) in
+    new_sym_tab#add_symb nv#mangled_name (nv :> symb);
+    rev_tab#bind nv (Var var);
+    nv :: collected
+
+
+let transform_vars old_type_tab new_type_tab new_sym_tab rev_tab vars =
+(* XXX: similar to Simplif.flatten_array_decl *)
+    let flatten_array_var collected var =
+        let tp = old_type_tab#get_type var in
+        let decl_elem_var lst i =
+            let nv = var#fresh_copy (SymbExec.indexed_var var i) in
+            let nt = tp#copy in
+            nt#set_range_tuple tp#range;
+            nt#set_nelems 1;
+            new_type_tab#set_type nv nt;
+            new_sym_tab#add_symb nv#mangled_name (nv :> symb);
+            rev_tab#bind nv (BinEx (ARR_ACCESS, Var var, Const i));
+            nv :: lst
+        in
+        if tp#is_array
+        then List.fold_left decl_elem_var collected (range 0 tp#nelems)
+        else begin
+            new_type_tab#set_type var (old_type_tab#get_type var);
+            new_sym_tab#add_symb var#mangled_name (var :> symb);
+            rev_tab#bind var (Var var);
+            var :: collected
+        end
+    in
+    let unfolded = List.fold_left flatten_array_var [] vars in
+    let _ = List.fold_left
+            (intro_old_copies new_type_tab new_sym_tab rev_tab) [] unfolded in
+    List.rev unfolded
+
 
 
 let write_constraints solver caches sym_tab type_tab hidden_idx_fun
