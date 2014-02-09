@@ -44,10 +44,14 @@ let compute_consts exp =
     | BinEx (AND, _, Const 0) -> Const 0
     | BinEx (AND, Const 1, r) -> r
     | BinEx (AND, l, Const 1) -> l
+    | BinEx (AND, l, r) as e ->
+            if l = r then l else e 
     | BinEx (OR, Const 1, _) -> Const 1
     | BinEx (OR, _, Const 1) -> Const 1
     | BinEx (OR, Const 0, r) -> r
     | BinEx (OR, l, Const 0) -> l
+    | BinEx (OR, l, r) as e ->
+            if l = r then l else e 
     | BinEx (IMPLIES, Const 0, _) -> Const 1
     | BinEx (IMPLIES, Const 1, r) -> r
     | BinEx (IMPLIES, l, Const 1) -> Const 1
@@ -73,8 +77,13 @@ let compute_consts exp =
     | _ as e -> e
     in
     let rec explore = function
-    | BinEx (t, l, r) -> fold (BinEx (t, explore l, explore r))
-    | UnEx (t, e) -> fold (UnEx (t, explore e))
+    | BinEx (t, l, r) ->
+            let nl, nr = explore l, explore r in
+            fold (BinEx (t, nl, nr))
+
+    | UnEx (t, e) ->
+            fold (UnEx (t, explore e))
+
     | _ as e -> e
     in
     explore exp
