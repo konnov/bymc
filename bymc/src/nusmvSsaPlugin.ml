@@ -72,7 +72,7 @@ let print_state prog path_elem =
     printf "%s\n" state_s
 
 
-class nusmv_ctr_cluster_plugin_t (plugin_name: string)
+class nusmv_ssa_plugin_t (plugin_name: string)
         (out_name: string) (pia_data_plugin: pia_data_plugin_t) =
 
     object(self)
@@ -163,4 +163,5 @@ class nusmv_ctr_cluster_plugin_t (plugin_name: string)
 
         method refine _ path = (false, self#get_output)
     end
+
 

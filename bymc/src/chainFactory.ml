@@ -18,7 +18,7 @@ module Pia = struct
         pdom: PiaDomPlugin.pia_dom_plugin_t;
         pd: PiaDataPlugin.pia_data_plugin_t;
         pc: PiaCounterPlugin.pia_counter_plugin_t;
-        nv: NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t;
+        nv: NusmvSsaPlugin.nusmv_ssa_plugin_t;
         sn: SpinPlugin.spin_plugin_t;
     }
 
@@ -29,9 +29,9 @@ module Pia = struct
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pd = new PiaDataPlugin.pia_data_plugin_t "piaData" in
         let pc = new PiaCounterPlugin.pia_counter_plugin_t "piaCounter" pd in
-        let nv =
-            new NusmvCtrClusterPlugin.nusmv_ctr_cluster_plugin_t
-                "nusmvCounter" "main" pd in
+        let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t
+                "nusmvCounter" "main" pd
+        in
         let sn = new SpinPlugin.spin_plugin_t "spin" "abs-counter" in
         { pp = pp; vr = vr; pdom = pdom; pd = pd; pc = pc; nv = nv; sn = sn }
 
