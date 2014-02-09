@@ -228,8 +228,7 @@ class symb_tab i_tab_name =
             List.iter (fun s -> Hashtbl.replace tab s#get_name s) symb_list
 
         method lookup name =
-            try
-                Hashtbl.find tab name
+            try Hashtbl.find tab name
             with Not_found ->
                 match parent with
                 | None -> (* XXX: show the position in the file! *)
