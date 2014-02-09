@@ -13,8 +13,7 @@ type var_role =
     | BoundedInt of int * int | SharedBoundedInt of int * int
     | SharedUnbounded | LocalUnbounded | Scratch of var
 
-let var_role_s r =
-    match r with
+let var_role_s = function
     | BoundedInt (a, b) -> Printf.sprintf "bounded[%d, %d]" a b
     | SharedBoundedInt (a, b) -> Printf.sprintf "shared-bounded[%d, %d]" a b
     | SharedUnbounded -> "shared-unbounded"
@@ -42,6 +41,7 @@ let is_local_unbounded = function
 let is_shared_unbounded = function
     | SharedUnbounded -> true
     | _ -> false
+
 
 exception Role_error of string
 exception Var_not_found of string

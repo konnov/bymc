@@ -26,7 +26,7 @@ module StrSet = Set.Make(String)
 
 (* short-hand functions *)
 let int_s i = string_of_int i
-let string_i s = int_of_string s
+let str_i s = int_of_string s
 
 
 (* make a cartesian product of lst on itself n times *)
@@ -357,6 +357,15 @@ let get_some (o: 'a option): 'a =
     | Some x -> x
     | None -> raise (Failure "The argument is None, expected Some _")
 
+
+let fold_file line_fun a filename =
+    let fin = open_in filename in
+    let rec read l =
+        try read (line_fun l (input_line fin))
+        with End_of_file ->
+            close_in fin; l
+    in
+    read a
 
 (* stop watch class to measure time *)
 class stop_watch(is_wall: bool) =

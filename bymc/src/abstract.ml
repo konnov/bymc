@@ -60,11 +60,16 @@ let save_game (filename: string) (chain: plugin_chain_t) =
     close_out cout
 
 
-(* units -> interval abstraction -> counter abstraction *)
+(* transform the input as prescribed by the chain *)
 let do_abstraction rt chain =
     rt#solver#push_ctx;
     rt#solver#comment "do_abstraction";
-    let _ = chain#transform rt Program.empty in
+    begin
+        try ignore (chain#transform rt Program.empty)
+        with InputRequired s ->
+            printf "InputRequired: %s\n" s;
+            printf "(create the required input and continue)\n"
+    end;
     rt#solver#pop_ctx;
     save_game serialization_filename chain;
     chain#get_output
@@ -78,18 +83,4 @@ let do_refine rt =
     log INFO (if status
         then "(status trace-refined)"
         else "(status trace-no-refinement)")
-
-
-(* Extract the symbolic skeleton of a process.
-   This requires the set of reachable states built by NuSMV (dump_fsm -r)
-   and then abstracted by ../bddc/abs-reach.py.
- *)
-(*
-let extract_skel rt =
-    let plugins, pia_chain = load_game Pia.serialization_filename rt in
-    let bound_chain = new plugin_chain_t in
-    bound_chain#add_plugin (new SymbSkelPlugin.symb_skel_plugin_t "symbSkel");
-    let _ = bound_chain#transform rt plugins.Pia.pc#semi_prog in
-    bound_chain#get_output
-    *)
 

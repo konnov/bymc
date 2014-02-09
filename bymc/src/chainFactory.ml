@@ -68,14 +68,37 @@ module Conc = struct
 end
 
 
+module PiaSymb = struct
+    type plugins_t = {
+        pia: Pia.plugins_t;
+        sk: SymbSkelPlugin.symb_skel_plugin_t;
+    }
+
+    let mk_plugins () =
+        let pia = Pia.mk_plugins () in
+        let sk = new SymbSkelPlugin.symb_skel_plugin_t
+            "symbSkel" pia.Pia.pc in
+        { pia = pia; sk = sk }
+
+    let mk_chain plugins =
+        let chain = Pia.mk_chain plugins.pia in
+        chain#add_plugin plugins.sk;
+        chain
+end
+
+
 let mk_pia_data_counter_chain () =
     Pia.mk_chain (Pia.mk_plugins ())
 
 let mk_concrete_chain () =
     Conc.mk_chain (Conc.mk_plugins ())
 
+let mk_bound_chain () =
+    PiaSymb.mk_chain (PiaSymb.mk_plugins ())
+
 let create_chain = function
     | "piaDataCtr" -> mk_pia_data_counter_chain ()
     | "concrete" -> mk_concrete_chain ()
+    | "bound" -> mk_bound_chain ()
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))
 

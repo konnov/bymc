@@ -24,6 +24,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
         (* the data abstraction with shared variables kept unabstracted *)
         val mutable m_semi_prog = Program.empty
 
+        method semi_prog = m_semi_prog
+
         method transform rt prog =
             let caches = rt#caches in
             let solver = rt#solver in
