@@ -684,7 +684,10 @@ let reach_transitions_of_ctrabs rt ctrabs_prog hidden_set =
         let all_indices = ctr_ctx#all_indices_for (fun _ -> true) in
         List.fold_left idx_spec lst all_indices
     in
-    [SInvar (List.fold_left create_reach [] (Program.get_procs ctrabs_prog))]
+    let invs =
+        List.fold_left create_reach [] (Program.get_procs ctrabs_prog)
+    in
+    if invs <> [] then [SInvar invs] else []
 
 
 (* initialize the processes' variables to the initial values *)
