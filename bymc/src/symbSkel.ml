@@ -140,7 +140,7 @@ let propagate builder trs path_cons vals =
     List.iter (label_transition builder path_cons vals) trs
 
 
-let collect_constraints rt prog proc locals trs =
+let collect_constraints rt prog proc primary_vars trs =
     (* do symbolic exploration/simplification *)
     (* collect a formula along the path *)
     let get_comp p =
@@ -155,7 +155,7 @@ let collect_constraints rt prog proc locals trs =
     nst#add_all_symb proc#get_symbs;
     let shared = Program.get_shared prog in
     let all_vars = shared @ proc#get_locals in
-    let builder = ref (SkB.empty locals shared) in
+    let builder = ref (SkB.empty primary_vars shared) in
 
     let path_efun = enum_paths cfg in
     let num_paths =
