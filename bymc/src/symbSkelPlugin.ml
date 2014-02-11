@@ -38,7 +38,13 @@ class symb_skel_plugin_t (plugin_name: string)
             let each_line a l =
                 let segs = Str.split (Str.regexp_string ",") l in
                 let vals = List.map str_i segs in
-                (List.map2 (fun x y -> (x, y)) prev_next vals) :: a
+                let vv = List.combine prev_next vals in 
+                (* the even values are the values before,
+                   and the odd ones are the values after *)
+                let is_even (i, _) = (i mod 2) = 0 in
+                let pvals, nvals = List.partition is_even (lst_enum vv)
+                in
+                (List.map snd pvals, List.map snd nvals) :: a
             in
             List.rev (fold_file each_line [] filename)
 
