@@ -71,7 +71,8 @@ class symb_skel_plugin_t (plugin_name: string)
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
-            collect_constraints rt prog proc trs
+            let prev = List.map fst ctx#prev_next_pairs in
+            collect_constraints rt prog proc prev trs
 
         method update_runtime rt =
             ()
