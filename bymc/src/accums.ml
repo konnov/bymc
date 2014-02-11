@@ -184,6 +184,9 @@ let rec rev_range i j =
     if j <= i then [] else (j - 1) :: (rev_range i (j - 1))
 
 
+let lst_enum l = List.combine (range 0 (List.length l)) l
+
+
 let str_contains str substr =
     let re = Str.regexp_string substr in
     try ((Str.search_forward re str 0) >= 0) with Not_found -> false
