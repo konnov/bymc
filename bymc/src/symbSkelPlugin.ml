@@ -52,7 +52,7 @@ class symb_skel_plugin_t (plugin_name: string)
             let fout = open_out filename in
             let write v =
                 let t = tt#get_type v in
-                fprintf fout "%s:%d\n" v#get_name t#range_len
+                fprintf fout "%s:%d\n" v#mangled_name t#range_len
             in
             List.iter write prev_next;
             close_out fout
