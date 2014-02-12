@@ -104,7 +104,6 @@ let compute_unlocking solver sk =
     IGraph.dot_output g (sprintf "unlocking-%s.dot" sk.Sk.name);
     g
 
-
 let compute_diam solver sk =
     log INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let fg = compute_flow sk in
@@ -119,7 +118,7 @@ let compute_diam solver sk =
     log INFO (sprintf "> %d backward unlocking edges" nbackward);
     IGraph.dot_output diff
         (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
-    let bound = (1 + nflow) * nbackward in
+    let bound = (1 + nbackward) * nflow in
     log INFO (sprintf "> the bound for %s is %d" sk.Sk.name bound);
     bound
 
