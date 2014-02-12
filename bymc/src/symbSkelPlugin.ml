@@ -14,7 +14,6 @@ open Plugin
 open SkelStruc
 open SpinIr
 open SpinIrImp
-open VarRole
 
 open SymbSkel
 
@@ -23,10 +22,14 @@ class symb_skel_plugin_t (plugin_name: string)
     object(self)
         inherit analysis_plugin_t plugin_name
 
+        val mutable m_skels: Sk.skel_t list = [];
+
+        method skels = m_skels
+
         method transform rt prog =
             let sprog = ctr_plugin#semi_prog in
             rt#caches#set_struc sprog (compute_struc sprog);
-            List.iter (self#extract_proc rt sprog) (Program.get_procs sprog);
+            m_skels <- List.map (self#extract_proc rt sprog) (Program.get_procs sprog);
             prog
 
         method test_input filename =
@@ -75,7 +78,8 @@ class symb_skel_plugin_t (plugin_name: string)
             let sk = collect_constraints rt prog proc prev trs in
             let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
             Sk.print f proc#get_name sk;
-            close_out f
+            close_out f;
+            sk
 
         method update_runtime rt =
             ()

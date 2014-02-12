@@ -72,17 +72,21 @@ module PiaSymb = struct
     type plugins_t = {
         pia: Pia.plugins_t;
         sk: SymbSkelPlugin.symb_skel_plugin_t;
+        pb: PorBoundsPlugin.por_bounds_plugin_t;
     }
 
     let mk_plugins () =
         let pia = Pia.mk_plugins () in
         let sk = new SymbSkelPlugin.symb_skel_plugin_t
             "symbSkel" pia.Pia.pc in
-        { pia = pia; sk = sk }
+        let pb = new PorBoundsPlugin.por_bounds_plugin_t
+            "porBounds" sk in
+        { pia = pia; sk = sk; pb = pb }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
         chain#add_plugin plugins.sk;
+        chain#add_plugin plugins.pb;
         chain
 end
 
