@@ -75,7 +75,8 @@ let does_r_unlock_t solver shared r t =
     in
     (* the variable declarations may be moved out of the function *)
     List.iter (decl l0) shared; List.iter (decl l1) shared;
-    ignore (solver#append_expr r_pre0); (* r is enabled *)
+    if not (is_c_true r_pre0)
+    then ignore (solver#append_expr r_pre0); (* r is enabled *)
     ignore (solver#append_expr (UnEx (NEG, t_pre0))); (* t is not *)
     ignore (solver#append_expr r_post0); (* r fires *)
     ignore (solver#append_expr t_pre1); (* t becomes enabled *)
@@ -92,7 +93,8 @@ let compute_unlocking solver sk =
     List.iter add_rule (range 0 sk.Sk.nrules);
     let add_flow (i, r) =
         let each (j, t) =
-            if i <> j && does_r_unlock_t solver sk.Sk.shared r t
+            if i <> j && not (is_c_true t.Sk.guard)
+                && does_r_unlock_t solver sk.Sk.shared r t
             then IGraph.add_edge g
                 (IGraph.find_vertex g i) (IGraph.find_vertex g j)
         in
@@ -104,12 +106,21 @@ let compute_unlocking solver sk =
 
 
 let compute_diam solver sk =
+    log INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let fg = compute_flow sk in
+    let nflow = IGraph.nb_edges fg in
+    log INFO (sprintf "> %d flow edges" nflow);
     let fgc = IGraphOper.transitive_closure ~reflexive:false fg in
+    log INFO (sprintf "> constructing unlocking edges...");
     let ug = compute_unlocking solver sk in
+    log INFO (sprintf "> %d unlocking edges" (IGraph.nb_edges ug));
     let diff = IGraphOper.intersect ug (IGraphOper.complement fgc) in
+    let nbackward = IGraph.nb_edges diff in
+    log INFO (sprintf "> %d backward unlocking edges" nbackward);
     IGraph.dot_output diff
         (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
-    ()
+    let bound = (1 + nflow) * nbackward in
+    log INFO (sprintf "> the bound for %s is %d" sk.Sk.name bound);
+    bound
 
 

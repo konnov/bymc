@@ -18,7 +18,9 @@ class por_bounds_plugin_t (plugin_name: string)
         inherit analysis_plugin_t plugin_name
 
         method transform rt prog =
-            List.iter (PorBounds.compute_diam rt#solver) sk_plugin#skels;
+            List.iter
+                (fun s -> ignore (PorBounds.compute_diam rt#solver s))
+                sk_plugin#skels;
             prog
 
         method update_runtime rt =
