@@ -40,7 +40,7 @@ module Sk = struct
 
     let print out sk =
         fprintf out "skel %s {\n" sk.name;
-        fprintf out "  locals %s;\n"
+        fprintf out "  local %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
         fprintf out "  shared %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.shared));
