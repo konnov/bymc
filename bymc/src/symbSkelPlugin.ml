@@ -77,7 +77,7 @@ class symb_skel_plugin_t (plugin_name: string)
             let prev = List.map fst ctx#prev_next_pairs in
             let sk = collect_constraints rt prog proc prev trs in
             let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
-            Sk.print f proc#get_name sk;
+            Sk.print f sk;
             close_out f;
             sk
 

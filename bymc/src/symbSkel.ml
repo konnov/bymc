@@ -24,6 +24,7 @@ module Sk = struct
     type loc_t = int list (* variable assignments *)
 
     type skel_t = {
+        name: string; (* just a name *)
         nlocs: int; (* the number of locations *)
         locs: loc_t list; (* the list of locations *)
         locals: var list; (* the local variables *)
@@ -33,11 +34,12 @@ module Sk = struct
     }
 
     let empty locals shared =
-        { nlocs = 0; locs = []; locals = locals; shared = shared;
+        { name = ""; nlocs = 0; locs = [];
+          locals = locals; shared = shared;
           nrules = 0; rules = [] }
 
-    let print out name sk =
-        fprintf out "skel %s {\n" name;
+    let print out sk =
+        fprintf out "skel %s {\n" sk.name;
         fprintf out "  locals %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
         fprintf out "  shared %s;\n"
@@ -56,7 +58,7 @@ module Sk = struct
         fprintf out "  rules (%d) {:\n" sk.nrules;
         List.iter prule (lst_enum sk.rules);
         fprintf out "  }\n";
-        fprintf out "} /* %s */\n" name
+        fprintf out "} /* %s */\n" sk.name
 
 end
 
@@ -71,9 +73,10 @@ module SkB = struct
     let empty locals shared =
         { loc_map = Hashtbl.create 8; skel = Sk.empty locals shared }
 
-    let finish st =
+    let finish st name =
         { st.skel
-            with Sk.locs = List.rev st.skel.Sk.locs;
+            with Sk.name = name; 
+                Sk.locs = List.rev st.skel.Sk.locs;
                 Sk.rules = List.rev st.skel.Sk.rules;
         }
 
@@ -170,6 +173,6 @@ let collect_constraints rt prog proc primary_vars trs =
     in
     Printf.printf "    enumerated %d paths\n\n" num_paths;
     
-    let sk = SkB.finish !builder in
+    let sk = SkB.finish !builder proc#get_name in
     sk
 
