@@ -36,24 +36,27 @@ module Sk = struct
         { nlocs = 0; locs = []; locals = locals; shared = shared;
           nrules = 0; rules = [] }
 
-    let print sk =
-        printf "locals = [%s]\n"
-            (str_join "; " (List.map (fun v -> v#get_name) sk.locals));
-        printf "shared = [%s]\n"
-            (str_join "; " (List.map (fun v -> v#get_name) sk.shared));
-        printf "nlocs = %d; nrules = %d\n" sk.nlocs sk.nrules;
+    let print out name sk =
+        fprintf out "skel %s {\n" name;
+        fprintf out "  locals %s;\n"
+            (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
+        fprintf out "  shared %s;\n"
+            (str_join ", " (List.map (fun v -> v#get_name) sk.shared));
         let ploc (i, l) =
-            printf "  %d: [%s]\n" i (str_join "; " (List.map int_s l))
+            fprintf out "    loc%d: [%s];\n" i (str_join "; " (List.map int_s l))
         in
-        printf "locations:\n";
+        fprintf out "  locations (%d) {\n" sk.nlocs;
         List.iter ploc (lst_enum sk.locs);
+        fprintf out "  }\n\n";
         let prule (i, r) =
-            printf "  %d: %d -> %d if (%s) { %s }\n"
+            fprintf out "  %d: loc%d -> loc%d\n      when (%s)\n      do { %s };\n"
                 i r.src r.dst (expr_s r.guard)
                 (str_join "; " (List.map expr_s r.act))
         in
-        printf "rules:\n";
-        List.iter prule (lst_enum sk.rules)
+        fprintf out "  rules (%d) {:\n" sk.nrules;
+        List.iter prule (lst_enum sk.rules);
+        fprintf out "  }\n";
+        fprintf out "} /* %s */\n" name
 
 end
 
@@ -159,12 +162,10 @@ let collect_constraints rt prog proc primary_vars trs =
 
     let path_efun = enum_paths cfg in
     let num_paths =
-        path_efun (exec_path rt#solver ntt nst all_vars
-            (propagate builder trs))
+        path_efun (exec_path rt#solver ntt nst all_vars (propagate builder trs))
     in
     Printf.printf "    enumerated %d paths\n\n" num_paths;
     
     let sk = SkB.finish !builder in
-    Printf.printf "The skeleton is:\n";
-    Sk.print sk
+    sk
 

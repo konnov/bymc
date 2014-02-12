@@ -72,7 +72,10 @@ class symb_skel_plugin_t (plugin_name: string)
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
             let prev = List.map fst ctx#prev_next_pairs in
-            collect_constraints rt prog proc prev trs
+            let sk = collect_constraints rt prog proc prev trs in
+            let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
+            Sk.print f proc#get_name sk;
+            close_out f
 
         method update_runtime rt =
             ()
