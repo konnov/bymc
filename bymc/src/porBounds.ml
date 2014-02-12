@@ -38,7 +38,7 @@ let compute_flow sk =
     flowg
 
 
-let does_r_unlock solver shared r t =
+let does_r_unlock_t solver shared r t =
     let mk_layer i =
         let h = Hashtbl.create (List.length shared) in
         let add v =
@@ -48,24 +48,53 @@ let does_r_unlock solver shared r t =
         List.iter add shared;
         h
     in
-    let var_to_layer l v = Var (Hashtbl.find l v#id) in
+    let var_to_layer l v =
+        try
+            if not v#is_symbolic
+            then Var (Hashtbl.find l v#id)
+            else Var v (* keep the parameters *)
+        with Not_found ->
+            raise (Failure ("No layer variable for " ^ v#get_name ))
+    in
     let l0, l1 = mk_layer 0, mk_layer 1 in
     let e_to_l l e = map_vars (var_to_layer l) e in
     let mk_assign = function
         | BinEx (ASGN, lhs, rhs) ->
-            BinEx (ASGN, e_to_l l1 lhs, e_to_l l0 rhs)
+            BinEx (EQ, e_to_l l1 lhs, e_to_l l0 rhs)
         | _ as e -> e
     in
-    let r_eff = list_to_binex AND (List.map mk_assign r.Sk.act) in
-    false
+    let r_post0 = list_to_binex AND (List.map mk_assign r.Sk.act) in
+    let r_pre0 = e_to_l l0 r.Sk.guard in
+    let t_pre0 = e_to_l l0 t.Sk.guard in
+    let t_pre1 = e_to_l l1 t.Sk.guard in
+    solver#push_ctx;
+    let nat_type = new data_type SpinTypes.TUNSIGNED in
+    let decl h v =
+        let lv = Hashtbl.find h v#id in
+        solver#append_var_def lv nat_type
+    in
+    (* the variable declarations may be moved out of the function *)
+    List.iter (decl l0) shared; List.iter (decl l1) shared;
+    ignore (solver#append_expr r_pre0); (* r is enabled *)
+    ignore (solver#append_expr (UnEx (NEG, t_pre0))); (* t is not *)
+    ignore (solver#append_expr r_post0); (* r fires *)
+    ignore (solver#append_expr t_pre1); (* t becomes enabled *)
+    let res = solver#check in
+    solver#pop_ctx;
+    res
 
 
 let compute_unlocking solver sk =
     let g = IGraph.create () in
+    let add_rule i =
+        IGraph.add_vertex g (IGraph.V.create i)
+    in
+    List.iter add_rule (range 0 sk.Sk.nrules);
     let add_flow (i, r) =
         let each (j, t) =
-            if i <> j && does_r_unlock solver sk.Sk.shared r t
-            then () (* profit *)
+            if i <> j && does_r_unlock_t solver sk.Sk.shared r t
+            then IGraph.add_edge g
+                (IGraph.find_vertex g i) (IGraph.find_vertex g j)
         in
         List.iter each (lst_enum sk.Sk.rules)
     in
@@ -76,7 +105,11 @@ let compute_unlocking solver sk =
 
 let compute_diam solver sk =
     let fg = compute_flow sk in
+    let fgc = IGraphOper.transitive_closure ~reflexive:false fg in
     let ug = compute_unlocking solver sk in
+    let diff = IGraphOper.intersect ug (IGraphOper.complement fgc) in
+    IGraph.dot_output diff
+        (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
     ()
 
 
