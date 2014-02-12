@@ -71,7 +71,11 @@ module SkB = struct
     let empty locals shared =
         { loc_map = Hashtbl.create 8; skel = Sk.empty locals shared }
 
-    let finish st = st.skel
+    let finish st =
+        { st.skel
+            with Sk.locs = List.rev st.skel.Sk.locs;
+                Sk.rules = List.rev st.skel.Sk.rules;
+        }
 
     (* get location index or allocate a new one *)
     let get_loci st loc =
