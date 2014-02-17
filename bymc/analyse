@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# Run analyses that do not perform verification, e.g., compute bounds
+#
+# Igor Konnov, 2014
+
+
+# parse options
+TEMPOPTS=`getopt -o h --long help -n '$@' -- "$@"`
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+function help_and_exit() {
+    echo "use $0 <switches> prog spec"
+    echo " where the switches are"
+    echo "  -h|--help: show this help message"
+    exit 1
+}
+
+eval set -- "$TEMPOPTS"
+while true ; do
+    case "$1" in
+    -h|--help) help_and_exit ;;
+    --) shift ; break ;;
+    *) echo "Internal error!" ; help_and_exit ;;
+    esac
+done
+
+# run the tool
+export TARGET_MC=analysis
+`dirname $0`/script/refinement-loop.sh "$@"
+
