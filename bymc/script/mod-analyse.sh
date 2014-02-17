@@ -23,8 +23,7 @@ function mc_verify_spec {
     echo "time" >>${SCRIPT}
     echo "compute_reachable" >>${SCRIPT}
     echo "time" >>${SCRIPT}
-    # XXX: local-tr-Proc should not be hard-coded!
-    echo "dump_fsm -r -o local-tr-Proc.txt" >>${SCRIPT}
+    echo "dump_fsm -r -o reach.dot" >>${SCRIPT}
     echo "quit" >>${SCRIPT}
 
     SRC=main-ssa-trans.smv # XXX: it works only if we have one process
@@ -32,11 +31,21 @@ function mc_verify_spec {
     tee_or_die "${MC_OUT}" "nusmv failed" \
         $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
 
-    #TODO: run to-bdd here!
+    D=${BYMC_HOME}/../bddc
+    if [ ! -d "${D}" ]; then
+        echo "Directory ${D} is not found"
+        exit 1
+    fi
+
+    for f in vis-*.txt; do
+        ${D}/with-pycudd ${D}/abs-reach.py reach.dot $f
+        proc=`echo "$f" | sed 's/vis-\(.*\).txt/\1/'`
+        cp flow.txt "local-tr-${proc}.txt"
+    done
 
     mc_compile_first
 
-    true # we need another step
+    true
 }
 
 function mc_refine {
