@@ -118,7 +118,10 @@ let compute_diam solver sk =
     log INFO (sprintf "> %d backward unlocking edges" nbackward);
     IGraph.dot_output diff
         (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
-    let bound = (1 + nbackward) * nflow in
+    (* XXX: the bound is lower than that, find the identical conditions
+      instead of just backward edges
+     *)
+    let bound = (1 + nbackward) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d" sk.Sk.name bound);
     bound
 
