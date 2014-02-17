@@ -44,15 +44,19 @@ module Sk = struct
             (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
         fprintf out "  shared %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.shared));
+        let locid l =
+            sprintf "loc%s" (str_join "_" (List.map int_s l)) in
         let ploc (i, l) =
-            fprintf out "    loc%d: [%s];\n" i (str_join "; " (List.map int_s l))
+            fprintf out "    %s: [%s];\n"
+                (locid l) (str_join "; " (List.map int_s l))
         in
         fprintf out "  locations (%d) {\n" sk.nlocs;
         List.iter ploc (lst_enum sk.locs);
         fprintf out "  }\n\n";
         let prule (i, r) =
-            fprintf out "  %d: loc%d -> loc%d\n      when (%s)\n      do { %s };\n"
-                i r.src r.dst (expr_s r.guard)
+            let loc j = locid (List.nth sk.locs j) in
+            fprintf out "  %d: %s -> %s\n      when (%s)\n      do { %s };\n"
+                i (loc r.src) (loc r.dst) (expr_s r.guard)
                 (str_join "; " (List.map expr_s r.act))
         in
         fprintf out "  rules (%d) {:\n" sk.nrules;
