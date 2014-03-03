@@ -137,8 +137,11 @@ class proc_struc =
     end
 
 
+let empty_proc_struc () = new proc_struc
+
+
 let compute_struc prog = 
-    let struc = new proc_struc in
+    let struc = empty_proc_struc () in
     let extract_reg proc =
         let reg_tab = extract_skel proc#get_stmts in
         struc#set_regions proc#get_name reg_tab
