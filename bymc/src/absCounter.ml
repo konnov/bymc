@@ -696,7 +696,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (Program.set_atomics new_atomics
         (Program.set_ltl_forms new_ltl_forms
         Program.empty))))))) in
-    let new_struc = new SkelStruc.proc_struc in
+    let new_struc = empty_proc_struc () in
     let new_procs =
         let trp p =
             if not (List.mem p#get_name proc_names)
