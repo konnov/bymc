@@ -50,7 +50,7 @@ fi
 cd $CUR_DIR
 
 INSTANCE="spin-`basename $PROG .pml`-$PROP-$PARAM"
-EXEC_DIR="${CUR_DIR}/${INSTANCE}"
+EXEC_DIR="${CUR_DIR}/x/${INSTANCE}"
 SPIN_OUT="spin.out"
 SPIN_TRACE="spin.trace"
 
@@ -68,7 +68,7 @@ if [ ! -f "$SCRIPT" -o "$GEN_SCRIPT" == "" ]; then
     chmod u+x $SCRIPT
 fi
 
-cd $INSTANCE
+cd $EXEC_DIR
 $BYMC_HOME/bymc.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
 
 cd $CUR_DIR
@@ -80,8 +80,8 @@ else
 fi
 
 cat >>"$SCRIPT" <<EOF
-echo "Changed directory to $INSTANCE"
-cd "$INSTANCE"
+echo "Changed directory to $EXEC_DIR"
+cd "$EXEC_DIR"
 
 if [ "$PROP" != "safety" ]; then
   $SPIN -f "!\`head $PROP.ltl\`" >$PROP.never || (cat $PROP.never; exit 1)
@@ -121,7 +121,7 @@ EOF
 if [ "$GEN_SCRIPT" == "" ]; then
     . "$SCRIPT"
 
-    spin_data=`$BYMC_HOME/script/parse-spin-out.py ${CUR_DIR}/${INSTANCE}/$SPIN_OUT`
+    spin_data=`$BYMC_HOME/script/parse-spin-out.py ${EXEC_DIR}/$SPIN_OUT`
     common="|02:param=$PARAM|04:sys=$PROG_S|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME"
     echo "$out|$common|$spin_data" >>verdict-concrete.txt
 else
