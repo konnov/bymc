@@ -126,25 +126,40 @@ let extract_loop_sig prog reg_tbl proc =
 let get_prev_next loop_sig = loop_sig.prev_next
 
 
+let get_loop_next loop_sig prev =
+    try snd (List.find (fun (p, n) -> p#id = prev#id) loop_sig.prev_next)
+    with Not_found -> raise (Failure ("no next var for " ^ prev#qual_name))
+
+
 (*
   The structural information of the control flow and data
   flow. The structure is bound to a program id. If there is no
-  last version of the cache found, then the last one before the
-  given program version is found.
+  last version of the cache, then the last one before the
+  given program version is used.
  *)
 
 class proc_struc =
     object(self)
         val mutable m_reg_tbl:
             (string, region_tbl) Hashtbl.t = Hashtbl.create 1
+        val mutable m_loop_sig_tbl:
+            (string, loop_sig) Hashtbl.t = Hashtbl.create 1
 
-        method get_regions (proc_name: string): region_tbl =
+        method get_regions proc_name =
             try Hashtbl.find m_reg_tbl proc_name
             with Not_found ->
                 raise (Struc_error ("No regions for " ^ proc_name))
 
-        method set_regions (proc_name: string) (proc_regs: region_tbl) =
+        method set_regions proc_name proc_regs =
             Hashtbl.replace m_reg_tbl proc_name proc_regs
+
+        method get_loop_sig proc_name =
+            try Hashtbl.find m_loop_sig_tbl proc_name
+            with Not_found ->
+                raise (Struc_error ("No loop signature for " ^ proc_name))
+
+        method set_loop_sig proc_name lsig =
+            Hashtbl.replace m_loop_sig_tbl proc_name lsig
 
         method get_annotations =
             let main_tab = Hashtbl.create 10 in
@@ -173,7 +188,11 @@ let compute_struc prog =
     let struc = empty_proc_struc () in
     let extract_reg proc =
         let reg_tab = extract_skel proc#get_stmts in
-        struc#set_regions proc#get_name reg_tab
+        struc#set_regions proc#get_name reg_tab;
+        (*
+        let loop_sig = extract_loop_sig proc reg_tab proc in
+        struc#set_loop_sig proc#get_name loop_sig
+        *)
     in
     List.iter extract_reg (Program.get_procs prog);
     struc

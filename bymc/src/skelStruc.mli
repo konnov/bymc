@@ -9,6 +9,8 @@ class type proc_struc =
         method get_regions: string -> Regions.region_tbl
         method set_regions: string -> Regions.region_tbl -> unit
         method get_annotations: (int, SpinIr.annot_t) Hashtbl.t
+        method get_loop_sig: string -> loop_sig
+        method set_loop_sig: string -> loop_sig -> unit
     end
 
 val empty_proc_struc: unit -> proc_struc    
@@ -20,4 +22,6 @@ val extract_loop_sig: Program.program_t -> Regions.region_tbl
     -> Spin.token SpinIr.proc -> loop_sig
 
 val get_prev_next: loop_sig -> (SpinIr.var * SpinIr.var) list
+
+val get_loop_next: loop_sig -> SpinIr.var -> SpinIr.var
 
