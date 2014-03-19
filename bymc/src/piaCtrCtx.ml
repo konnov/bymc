@@ -13,12 +13,9 @@ open VarRole
 Counter abstraction context. Each process prototype has its own counter
 abstraction context as the abstraction depends on the local state space.
  *)
-class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
+class ctr_abs_ctx prog reg_tbl (spur_var: var) proc abbrev_name =
     (* TODO: rename to pia_ctr_ctx *)
     object(self)
-        val mutable control_vars: var list = []
-        val mutable control_size = 0
-        val mutable data_vars = []
         val mutable m_var_vec: (var * int) list = []
         val ctr_var = new_var ("bymc_k" ^ abbrev_name)
         val mutable ctr_dim: int = -1
@@ -29,53 +26,24 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
            counter abstraction here.
          *)
         val mutable m_next_vars: (var * var) list = []
-
-        method init_next_vars =
-            let reg_tab = extract_skel proc#get_stmts in
-            let update = reg_tab#get "update" proc#get_stmts in
-            m_next_vars <- hashtbl_as_list (find_copy_pairs (mir_to_lir update))
         
         initializer
-            self#init_next_vars;
-
-            let collect_locals filter_fun =
-                let rec collect lst = function
-                | MDecl (_, v, _) ->
-                    if filter_fun (role_tbl#get_role v)
-                    then v :: lst
-                    else lst
-                | _ -> lst
-                in
-                List.fold_left collect [] proc#get_stmts
+            let loop_sig = SkelStruc.extract_loop_sig prog reg_tbl proc in
+            m_next_vars <- SkelStruc.get_prev_next loop_sig;
+            let var_size v =
+                let t = Program.get_type prog v in
+                let l = t#range_len in
+                if l = 0
+                then raise (Abstraction_error ("Unknown size of variable " ^ v#qual_name))
+                else l
             in
-            let cvs = collect_locals is_bounded in
-            if cvs == []
-            then begin
-                let m = "No status variable (like pc) in "
-                    ^ proc#get_name ^ " found." in
-                raise (Abstraction_error m)
-            end;
-            control_vars <- cvs;
-            let var_dom_size v =
-                match role_tbl#get_role v with
-                | BoundedInt (a, b) -> (b - a) + 1
-                | _ -> 1
-            in
-            control_size <- List.fold_left ( * ) 1 (List.map var_dom_size control_vars);
-            let dvs = collect_locals is_local_unbounded in
-            data_vars <- dvs;
-            ctr_dim <-
-                ((ipow dom#length (List.length data_vars))  * control_size);
             m_var_vec <-
-                List.map (fun v -> (v, dom#length)) data_vars
-              @ List.map (fun v -> (v, var_dom_size v)) control_vars
+                List.map (fun v -> (v, var_size v)) (List.map fst m_next_vars);
+            ctr_dim <- List.fold_left ( * ) 1 (List.map snd m_var_vec)
            
         method proctype_name = proc#get_name
         method abbrev_name = abbrev_name
 
-        method get_control_vars = control_vars
-        method get_control_size = control_size
-        method get_locals = data_vars
         method get_ctr = ctr_var
         method get_ctr_dim = ctr_dim
         method get_spur = spur_var
@@ -135,7 +103,7 @@ class ctr_abs_ctx dom role_tbl (spur_var: var) proc abbrev_name =
 
 
 (* Collection of counter abstraction contexts: one for a process prototype. *)
-class ctr_abs_ctx_tbl dom role_tbl prog procs =
+class ctr_abs_ctx_tbl prog proc_struc procs =
     object(self)
         val mutable tbl: (string, ctr_abs_ctx) Hashtbl.t
             = Hashtbl.create (List.length procs)
@@ -148,7 +116,8 @@ class ctr_abs_ctx_tbl dom role_tbl prog procs =
             let mk p =
                 let pname = p#get_name in
                 let abbrev = str_shorten tbl pname in
-                let c_ctx = new ctr_abs_ctx dom role_tbl spur_var p abbrev in
+                let reg_tbl = proc_struc#get_regions pname in
+                let c_ctx = new ctr_abs_ctx prog reg_tbl spur_var p abbrev in
                 Hashtbl.add tbl pname c_ctx;
                 Hashtbl.add abbrev_tbl abbrev c_ctx
             in

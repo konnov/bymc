@@ -38,8 +38,8 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             in
             let is_included p = List.mem p#get_name proc_names in
             let procs = List.filter is_included (Program.get_procs prog) in
-
-            let ctx = new ctr_abs_ctx_tbl dom roles prog procs in
+            let proc_struc = caches#find_struc prog in
+            let ctx = new ctr_abs_ctx_tbl prog proc_struc procs in
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
 

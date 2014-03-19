@@ -15,12 +15,14 @@ exception Skel_error of string
 exception Struc_error of string
 
 type loop_sig = {
-    pc_vars: var list; data_vars: var list;
-    in_out: (var * var) list
+    (* relate the variables entering the loop to the variables leaving the loop,
+       e.g., ('pc', 'next_pc')
+     *)
+    prev_next: (var * var) list
 }
 
 let empty_loop_sig =
-    { pc_vars = []; data_vars = []; in_out = [] }
+    { prev_next = [] }
 
 
 (*
@@ -104,6 +106,24 @@ let extract_skel proc_body =
     reg_tbl#add "update" updates;
     reg_tbl#add "loop_body" loop_body;
     reg_tbl
+
+
+let extract_loop_sig prog reg_tbl proc =
+    let update = mir_to_lir (reg_tbl#get "update" proc#get_stmts) in
+    let prev_next = hashtbl_as_list (Analysis.find_copy_pairs update) in
+    let pn = (List.map fst prev_next) @ (List.map snd prev_next) in
+    if (List.length pn) <> (List.length proc#get_locals)
+    then begin
+        let missing = List.filter (fun v -> not (List.mem v pn)) proc#get_locals in
+        let missing_s = str_join ", " (List.map (fun v -> v#get_name) missing) in
+        raise (Skel_error
+            (sprintf "No `next' variables found for the variables of %s: %s"
+            proc#get_name missing_s))
+    end;
+    { prev_next = prev_next }
+
+
+let get_prev_next loop_sig = loop_sig.prev_next
 
 
 (*

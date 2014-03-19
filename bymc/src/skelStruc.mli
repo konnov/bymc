@@ -16,3 +16,8 @@ val empty_proc_struc: unit -> proc_struc
 val extract_skel: Spin.token SpinIr.mir_stmt list -> Regions.region_tbl    
 val compute_struc: Program.program_t -> proc_struc    
 
+val extract_loop_sig: Program.program_t -> Regions.region_tbl
+    -> Spin.token SpinIr.proc -> loop_sig
+
+val get_prev_next: loop_sig -> (SpinIr.var * SpinIr.var) list
+
