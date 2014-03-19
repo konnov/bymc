@@ -14,6 +14,15 @@ open SpinIrImp
 exception Skel_error of string
 exception Struc_error of string
 
+type loop_sig = {
+    pc_vars: var list; data_vars: var list;
+    in_out: (var * var) list
+}
+
+let empty_loop_sig =
+    { pc_vars = []; data_vars = []; in_out = [] }
+
+
 (*
   Here we check that a process body has the following structure:
  
