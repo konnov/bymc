@@ -3,6 +3,9 @@ type loop_sig
 
 val empty_loop_sig: loop_sig
 
+(* the following regions are currently extracted:
+    decl, init, loop_prefix, comp, update, loop_body
+ *)
 
 class type proc_struc =
     object
