@@ -21,9 +21,6 @@ class ctr_abs_ctx prog reg_tbl (spur_var: var) proc abbrev_name =
         val mutable ctr_dim: int = -1
         (* Pairs of the variable before the loop body and after the loop body.
            This list is usually tiny.
-           TODO: move out this relation, as it can be used with any
-           finite-state process body. There is not so much special about
-           counter abstraction here.
          *)
         val mutable m_next_vars: (var * var) list = []
         
@@ -34,7 +31,7 @@ class ctr_abs_ctx prog reg_tbl (spur_var: var) proc abbrev_name =
                 let t = Program.get_type prog v in
                 let l = t#range_len in
                 if l = 0
-                then raise (Abstraction_error ("Unknown size of variable " ^ v#qual_name))
+                then raise (Abstraction_error ("Unknown var size " ^ v#qual_name))
                 else l
             in
             m_var_vec <-
