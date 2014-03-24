@@ -61,20 +61,18 @@ class symb_skel_plugin_t (plugin_name: string)
             close_out fout
 
         method extract_proc rt prog proc =
-            (* TODO: we need only next_vars, no actual counter info *)
-            let tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
-            let ctx = tbl#get_ctx proc#get_name in
+            let reg_tbl = (rt#caches#find_struc prog)#get_regions proc#get_name in
+            let loop_sig = SkelStruc.extract_loop_sig prog reg_tbl proc in
+            let prev_next_pairs = SkelStruc.get_prev_next loop_sig in
             let tt = Program.get_type_tab prog in
             let unpair l (p, n) = n :: p :: l in
-            let prev_next =
-                List.rev (List.fold_left unpair [] ctx#prev_next_pairs)
-            in 
+            let prev_next = List.rev (List.fold_left unpair [] prev_next_pairs) in 
             self#write_vars tt prev_next
                 (sprintf "vis-%s.txt" proc#get_name);
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
-            let prev = List.map fst ctx#prev_next_pairs in
+            let prev = List.map fst prev_next_pairs in
             let sk = collect_constraints rt prog proc prev trs in
             let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
             Sk.print f sk;

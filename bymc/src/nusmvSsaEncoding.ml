@@ -424,8 +424,7 @@ let module_of_counter rt proc_syms proc_types ctrabs_prog pid p num =
         collect_rhs rt#solver tt dom ctr_ctx PLUS in
     let inc_tbl =
         collect_rhs rt#solver tt dom ctr_ctx MINUS in
-    let prev_locals = List.map fst ctr_ctx#prev_next_pairs in
-    let next_locals = List.map snd ctr_ctx#prev_next_pairs in
+    let prev_locals, next_locals = List.split ctr_ctx#prev_next_pairs in
     let my_var v = v#copy ("my_" ^ v#get_name) in
     let cmp_idx join cmp vars =
         let f pv v = BinEx (cmp, Var v, Var (my_var pv)) in
@@ -531,8 +530,7 @@ let create_counter_mods rt proc_syms proc_types ctrabs_prog pid =
     let create_vars l p =
         let ctr_ctx =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
-        let prev = List.map fst ctr_ctx#prev_next_pairs in
-        let next = List.map snd ctr_ctx#prev_next_pairs in
+        let prev, next = List.split ctr_ctx#prev_next_pairs in
         let ctr = ctr_ctx#get_ctr in
         let tp = new data_type SpinTypes.TINT in
         tp#set_range 0 dom#length;
