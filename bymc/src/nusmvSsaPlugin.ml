@@ -81,16 +81,17 @@ class nusmv_ssa_plugin_t (plugin_name: string)
         method is_disabled rt =
             rt#caches#options.Options.mc_tool <> Options.ToolNusmv
 
-        method transform rt prog =
+        method transform rt =
             log INFO (sprintf
                 "> writing ssa NuSMV model to %s.smv..." "main-ssa");
             let intabs_prog = pia_data_plugin#get_output in
+            let prog = self#get_input 0 in
             NusmvSsaEncoding.transform
-                rt "main-ssa" intabs_prog self#get_input;
+                rt "main-ssa" intabs_prog prog;
             NusmvSsaEncoding.mk_counter_reach
-                rt "main-ssa-reach" intabs_prog self#get_input;
+                rt "main-ssa-reach" intabs_prog prog;
             NusmvSsaEncoding.mk_trans_reach
-                rt "main-ssa-trans" intabs_prog self#get_input;
+                rt "main-ssa-trans" intabs_prog prog;
             log INFO (sprintf
                 "> writing clusterized NuSMV model to %s.smv... SKIPPED" out_name);
             log INFO "[DONE]";
@@ -101,7 +102,7 @@ class nusmv_ssa_plugin_t (plugin_name: string)
 
         (* we don't know yet how to refine the data abstraction *)
         method decode_trail rt _ =
-            let prog = self#get_input in
+            let prog = self#get_input0 in
             let syms = Program.get_sym_tab prog in
             let loop_re = Str.regexp ".*-- Loop starts here.*" in
             let state_re = Str.regexp ".*-> State: [0-9]+\\.[0-9]+ <-" in

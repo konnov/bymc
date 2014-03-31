@@ -32,15 +32,17 @@ class virtual transform_plugin_t: string ->
     object
         inherit plugin_t
 
-        method set_input: Program.program_t -> unit
-        method get_input: Program.program_t
+        method set_inputs: Program.program_t list -> unit
+        method get_input: int -> Program.program_t
+        method get_input0: Program.program_t
+        method get_input1: Program.program_t
 
         method set_output: Program.program_t -> unit
         method get_output: Program.program_t
 
         (* transform the program *)
         method virtual transform:
-            Runtime.runtime_t -> Program.program_t -> Program.program_t
+            Runtime.runtime_t -> Program.program_t
 
         (* update the caches with the computed results *)
         method virtual update_runtime:
@@ -68,9 +70,19 @@ class virtual analysis_plugin_t: string ->
     end
 
 
+(* this type specify the plugin's input from the other plugins *)
+type input_t =
+     (* take the output of the predecessor *)
+    | OutOfPred 
+     (* take the output of a plugin *)
+    | OutOfPlugin of string
+     (* take the output of several plugins *)
+    | OutOfPlugins of string list
+
+
 class plugin_chain_t:
     object
-        method add_plugin: (#transform_plugin_t as 'a) -> unit
+        method add_plugin: (#transform_plugin_t as 'a) -> input_t -> unit
 
         method find_plugin: string -> plugin_t
 

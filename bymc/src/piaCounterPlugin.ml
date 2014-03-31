@@ -21,16 +21,16 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
         val mutable m_ctr_abs_ctx_tbl: ctr_abs_ctx_tbl option = None
         val mutable m_ref_step = 0 (* refinement step *)
         val mutable m_vass = Program.empty
-        (* the data abstraction with shared variables kept unabstracted *)
-        val mutable m_semi_prog = Program.empty
 
-        method semi_prog = m_semi_prog
+        (* TODO: to be removed *)
+        method semi_prog = self#get_input1
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input0 in
+            let semiprog = self#get_input1 in
             let caches = rt#caches in
             let solver = rt#solver in
             let dom = caches#analysis#get_pia_dom in
-            let roles = caches#analysis#get_var_roles data_p#get_input in
             let proc_names = 
                 if self#has_opt rt "procs"
                 then Str.split (Str.regexp_string ",") (self#get_opt rt "procs")
@@ -46,23 +46,14 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             (* construct VASS *)
             if m_ref_step = 0
             then begin
-                let old_pia_data = caches#analysis#get_pia_data_ctx in
-                (* we need data abstraction with a hack,
-                   don't abstract shared *)
-                let pia_data = new pia_data_ctx roles in
-                pia_data#set_hack_shared true;
-                caches#analysis#set_pia_data_ctx pia_data;
-                m_semi_prog <-
-                    do_interval_abstraction rt data_p#get_input proc_names;
                 let vass =
-                    self#make_vass solver dom caches m_semi_prog proc_names false
+                    self#make_vass solver dom caches semiprog proc_names false
                 in
                 log INFO "  check the invariants";
                 check_all_invariants rt vass;
                 log INFO "  save the symbolic transition relation";
                 m_vass <-
-                    self#make_vass solver dom caches m_semi_prog proc_names true;
-                caches#analysis#set_pia_data_ctx old_pia_data
+                    self#make_vass solver dom caches semiprog proc_names true
             end;
 
             (* construct counter abstraction *)

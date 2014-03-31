@@ -13,7 +13,8 @@ class pia_dom_plugin_t (plugin_name: string) =
 
         val mutable m_dom: pia_domain option =  None
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input0 in
             let roles = rt#caches#analysis#get_var_roles prog in
             let pxz = (self#has_opt rt "pxz02")
                 && (self#get_opt rt "pxz02") <> "0" in

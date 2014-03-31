@@ -15,7 +15,8 @@ class instantiation_plugin_t (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input 0 in
             let opts = rt#caches#options in
             let units = units_of_program prog in
             let new_units = do_substitution opts.param_assignments units in

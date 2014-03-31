@@ -12,7 +12,8 @@ class var_role_plugin_t (plugin_name: string) =
             | Some r -> r
             | None -> raise (Plugin_error "No result computed")
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input0 in
             let r = identify_var_roles prog in
             m_roles <- Some r;
             prog

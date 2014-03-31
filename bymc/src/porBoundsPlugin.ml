@@ -17,11 +17,11 @@ class por_bounds_plugin_t (plugin_name: string)
     object(self)
         inherit analysis_plugin_t plugin_name
 
-        method transform rt prog =
+        method transform rt =
             List.iter
                 (fun s -> ignore (PorBounds.compute_diam rt#solver s))
                 sk_plugin#skels;
-            prog
+            self#get_input0
 
         method update_runtime rt =
             ()

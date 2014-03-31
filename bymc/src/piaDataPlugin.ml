@@ -5,15 +5,17 @@ open Plugin
 open Program
 open SkelStruc
 
-class pia_data_plugin_t (plugin_name: string) =
+class pia_data_plugin_t ?(keep_shared = false) (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 
         val mutable m_pia_data_ctx: pia_data_ctx option = None
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input0 in
             let caches = rt#caches in
             let ctx = new pia_data_ctx (caches#analysis#get_var_roles prog) in
+            ctx#set_hack_shared keep_shared;
             m_pia_data_ctx <- Some ctx;
             caches#analysis#set_pia_data_ctx ctx;
 
@@ -24,7 +26,10 @@ class pia_data_plugin_t (plugin_name: string) =
             log INFO "> Constructing interval abstraction";
             let intabs_prog =
                 do_interval_abstraction rt prog proc_names in
-            Writer.write_to_file false "abs-interval.prm"
+            let fname = if keep_shared
+                then "abs-interval-semi.prm"
+                else "abs-interval.prm" in
+            Writer.write_to_file false fname
                 (units_of_program intabs_prog) (get_type_tab intabs_prog)
                 (Hashtbl.create 10);
             log INFO "[DONE]";
@@ -32,8 +37,7 @@ class pia_data_plugin_t (plugin_name: string) =
 
         method update_runtime rt =
             (* update regions *)
-            rt#caches#set_struc
-                self#get_output (compute_struc self#get_output);
+            rt#caches#set_struc self#get_output (compute_struc self#get_output);
             (* update context *)
             match m_pia_data_ctx with
             | Some c -> rt#caches#analysis#set_pia_data_ctx c

@@ -19,7 +19,8 @@ class spin_plugin_t (plugin_name: string) (out_name: string) =
         method is_disabled (rt: runtime_t) =
             rt#caches#options.Options.mc_tool <> Options.ToolSpin
 
-        method transform rt prog =
+        method transform rt =
+            let prog = self#get_input0 in
             (* add the printf statement the init and after the step *)
             let new_procs =
                 List.map (self#add_printfs rt prog) (Program.get_procs prog) in

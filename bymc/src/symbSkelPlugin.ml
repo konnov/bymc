@@ -26,11 +26,11 @@ class symb_skel_plugin_t (plugin_name: string)
 
         method skels = m_skels
 
-        method transform rt prog =
+        method transform rt =
             let sprog = ctr_plugin#semi_prog in
             rt#caches#set_struc sprog (compute_struc sprog);
             m_skels <- List.map (self#extract_proc rt sprog) (Program.get_procs sprog);
-            prog
+            self#get_input0
 
         method test_input filename =
             try access filename [F_OK]

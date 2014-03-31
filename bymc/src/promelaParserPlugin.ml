@@ -16,7 +16,7 @@ class promela_parser_plugin_t (plugin_name: string) =
 
         val mutable m_plugin_opts = StrMap.empty
 
-        method transform rt _ =
+        method transform rt =
             let opts = rt#caches#options in
             let filename, basename, dirname =
                 if opts.filename <> ""
