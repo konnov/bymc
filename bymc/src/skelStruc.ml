@@ -198,18 +198,15 @@ let compute_struc prog =
     struc
 
 
-(* TODO: find out the values at the end of the init_stmts,
-   not the accumulated values
-   *)
 let comp_seq vars stmts =
-    let init_cfg = Cfg.mk_cfg (mir_to_lir stmts) in
+    let lirs = mir_to_lir stmts in
+    let init_cfg = Cfg.mk_cfg lirs in
     let module A = Analysis in
     let int_roles =
         A.visit_cfg (A.visit_basic_block A.transfer_roles)
             (A.join A.lub_int_role)
             (A.print_int_roles "local roles") init_cfg in
-    let init_sum =
-        A.join_all_locs (A.join A.lub_int_role) (A.mk_bottom_val ()) int_roles in
+    let last_loc_vals = Hashtbl.find int_roles (stmt_id (list_end lirs)) in
     let mk_prod left right =
         if left = []
         then List.map (fun x -> [x]) right
@@ -217,7 +214,7 @@ let comp_seq vars stmts =
             (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
     let mk_vals lst v =
         let r =
-            try Hashtbl.find init_sum v
+            try Hashtbl.find last_loc_vals v
             with Not_found ->
                 let m = (sprintf
                     "Variable %s is not assigned in the block" v#get_name) in
