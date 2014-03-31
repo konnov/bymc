@@ -30,7 +30,7 @@ module Pia = struct
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pdg =
             new PiaDataPlugin.pia_data_plugin_t ~keep_shared:true "piaDataShared" in
-        let pd = new PiaDataPlugin.pia_data_plugin_t ~keep_shared:true "piaData" in
+        let pd = new PiaDataPlugin.pia_data_plugin_t ~keep_shared:false "piaData" in
         let pc = new PiaCounterPlugin.pia_counter_plugin_t "piaCounter" pd in
         let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t
                 "nusmvCounter" "main" pd

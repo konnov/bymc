@@ -121,7 +121,6 @@ class plugin_chain_t =
             in
             List.iter update m_plugins
 
-            (* FIX *)
         method private apply_plugin rt pred_out (plugin, inpspec) =
             let inputs = match inpspec with
             | OutOfPred -> [pred_out]
@@ -133,9 +132,9 @@ class plugin_chain_t =
                 List.map (fun p -> p#get_output) plugins
             in
             plugin#set_inputs inputs;
-            let plugin_out = if plugin#is_disabled rt
-                then pred_out
-                else plugin#transform rt in
+            let plugin_out =
+                if plugin#is_disabled rt then pred_out else plugin#transform rt 
+            in
             plugin#set_ready;
             plugin#set_output plugin_out;
             if not (plugin#is_disabled rt)

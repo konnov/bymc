@@ -46,11 +46,15 @@ class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
             (* construct VASS *)
             if m_ref_step = 0
             then begin
+                (* TODO: the following MUST be set in piaDataPlugin only! *)
+                caches#analysis#get_pia_data_ctx#set_hack_shared true;
                 let vass =
                     self#make_vass solver dom caches semiprog proc_names false
                 in
                 log INFO "  check the invariants";
                 check_all_invariants rt vass;
+                (* TODO: the following MUST be set in piaDataPlugin only! *)
+                caches#analysis#get_pia_data_ctx#set_hack_shared false;
                 log INFO "  save the symbolic transition relation";
                 m_vass <-
                     self#make_vass solver dom caches semiprog proc_names true
