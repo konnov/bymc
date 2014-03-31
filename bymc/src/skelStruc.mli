@@ -28,3 +28,5 @@ val get_prev_next: loop_sig -> (SpinIr.var * SpinIr.var) list
 
 val get_loop_next: loop_sig -> SpinIr.var -> SpinIr.var
 
+val comp_seq: SpinIr.var list -> Spin.token SpinIr.mir_stmt list
+    -> (SpinIr.var * int) list list

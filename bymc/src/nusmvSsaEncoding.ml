@@ -475,7 +475,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         let init = reg_tab#get "init" p#get_stmts in
         let decl = reg_tab#get "decl" p#get_stmts in
         let init_vals =
-            AbsCounter.find_init_local_vals ctr_ctx decl init in
+            SkelStruc.comp_seq ctr_ctx#var_vec (decl @ init) in
         let size_dist_list =
             dom#scatter_abs_vals
                 rt#solver p#get_active_expr (List.length init_vals) in
@@ -701,7 +701,7 @@ let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
             (rt#caches#find_struc intabs_prog)#get_regions p#get_name in
         let init = reg_tab#get "init" p#get_stmts in
         let decl = reg_tab#get "decl" p#get_stmts in
-        let init_vals = AbsCounter.find_init_local_vals ctr_ctx decl init in
+        let init_vals = SkelStruc.comp_seq ctr_ctx#var_vec (decl @ init) in
         let to_and asgns =
             list_to_binex AND
                 (List.map (fun (v, i) -> BinEx (EQ, Var v, Const i)) asgns) in

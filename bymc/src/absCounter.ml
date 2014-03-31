@@ -249,42 +249,6 @@ let trans_quantifiers solver ctr_ctx_tbl prog stmt =
     map_expr_in_stmt map stmt
 
 
-(* TODO: find out the values at the end of the init_stmts,
-   not the accumulated values
-   *)
-let find_init_local_vals ctr_ctx decls init_stmts =
-    let init_cfg = Cfg.mk_cfg (mir_to_lir (decls @ init_stmts)) in
-    let int_roles =
-        visit_cfg (visit_basic_block transfer_roles)
-            (join lub_int_role) (print_int_roles "local roles") init_cfg in
-    let init_sum =
-        join_all_locs (join lub_int_role) (mk_bottom_val ()) int_roles in
-    let mk_prod left right =
-        if left = []
-        then List.map (fun x -> [x]) right
-        else List.concat
-            (List.map (fun r -> List.map (fun l -> l @ [r]) left) right) in
-    let mk_vals lst v =
-        let r =
-            try Hashtbl.find init_sum v
-            with Not_found ->
-                let m = (sprintf
-                    "Variable %s not found in the init section" v#get_name) 
-                in
-                raise (Abstraction_error m)
-        in
-        match r with
-        | IntervalInt (a, b) ->
-            let pairs =
-                List.map (fun i -> (v, i)) (range a (b + 1)) in
-            mk_prod lst pairs
-        | _ ->
-            let m = sprintf
-                "Unbounded after abstraction: %s" v#get_name in
-            raise (Abstraction_error m)
-    in
-    List.fold_left mk_vals [] ctr_ctx#var_vec
-
 
 (* remove assignments to local variables from the initialization section *)
 let omit_local_assignments prog init_stmts =
@@ -363,7 +327,8 @@ class abs_ctr_funcs dom prog solver =
 
 
         method mk_init c_ctx active_expr decls init_stmts =
-            let init_locals = find_init_local_vals c_ctx decls init_stmts in
+            let init_locals =
+                SkelStruc.comp_seq c_ctx#var_vec (decls @ init_stmts) in
             let size_dist_list =
                 dom#scatter_abs_vals
                     solver active_expr (List.length init_locals) in
@@ -481,7 +446,8 @@ class vass_funcs dom prog solver =
             self#mk_pre_asserts c_ctx active_expr prev_idx next_idx
 
         method mk_init c_ctx active_expr decls init_stmts =
-            let init_locals = find_init_local_vals c_ctx decls init_stmts in
+            let init_locals =
+                SkelStruc.comp_seq c_ctx#var_vec (decls @ init_stmts) in
             let has_val valuation =
                 let same_var (x, (i: int)) = (i = (Hashtbl.find valuation x)) in
                 let same_asgn lst = List.for_all same_var lst in
