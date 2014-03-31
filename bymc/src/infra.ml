@@ -104,11 +104,3 @@ class pass_caches (i_options: options_t) (i_analysis: analysis_cache) =
             Hashtbl.replace m_struc_tab (Program.prog_uid prog) s
     end
 
-
-(* deprecated *)
-type analysis_fun =
-    pass_caches -> program_t -> pass_caches
-
-type translation_fun =
-    pass_caches -> program_t -> (pass_caches * program_t)
-
