@@ -13,28 +13,25 @@ open Runtime
  *)
 module Pia = struct
     type plugins_t = {
-        pp: PromelaParserPlugin.promela_parser_plugin_t;
-        vr: VarRolePlugin.var_role_plugin_t;
+        pp: PromelaParserPlugin.pp_plugin_t;
+        vr: VarRolePlugin.vr_plugin_t;
         pdom: PiaDomPlugin.pia_dom_plugin_t;
-        pdg: PiaDataPlugin.pia_data_plugin_t;
-        pd: PiaDataPlugin.pia_data_plugin_t;
-        pc: PiaCounterPlugin.pia_counter_plugin_t;
+        pdg: PiaDataPlugin.pd_plugin_t;
+        pd: PiaDataPlugin.pd_plugin_t;
+        pc: PiaCounterPlugin.pc_plugin_t;
         nv: NusmvSsaPlugin.nusmv_ssa_plugin_t;
         sn: SpinPlugin.spin_plugin_t;
     }
 
     let mk_plugins () =
-        let pp =
-            new PromelaParserPlugin.promela_parser_plugin_t "promelaParser" in
-        let vr = new VarRolePlugin.var_role_plugin_t "varRoles" in
+        let pp = new PromelaParserPlugin.pp_plugin_t "promelaParser" in
+        let vr = new VarRolePlugin.vr_plugin_t "varRoles" in
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pdg =
-            new PiaDataPlugin.pia_data_plugin_t ~keep_shared:true "piaDataShared" in
-        let pd = new PiaDataPlugin.pia_data_plugin_t ~keep_shared:false "piaData" in
-        let pc = new PiaCounterPlugin.pia_counter_plugin_t "piaCounter" pd in
-        let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t
-                "nusmvCounter" "main" pd
-        in
+            new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
+        let pd = new PiaDataPlugin.pd_plugin_t ~keep_shared:false "piaData" in
+        let pc = new PiaCounterPlugin.pc_plugin_t "piaCounter" in
+        let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t "nusmvCounter" "main" in
         let sn = new SpinPlugin.spin_plugin_t "spin" "abs-counter" in
         { pp = pp; vr = vr; pdom = pdom; pdg = pdg; pd = pd;
             pc = pc; nv = nv; sn = sn }
@@ -47,19 +44,19 @@ module Pia = struct
         chain#add_plugin plugins.pdg OutOfPred;
         chain#add_plugin plugins.pd (OutOfPlugin "piaDom");
         chain#add_plugin plugins.pc (OutOfPlugins ["piaData"; "piaDataShared"]);
-        chain#add_plugin plugins.nv (OutOfPlugin "piaCounter");
+        chain#add_plugin plugins.nv (OutOfPlugins ["piaCounter"; "piaData"]);
         chain#add_plugin plugins.sn (OutOfPlugin "piaCounter");
         chain
 end
 
 module Conc = struct
     type plugins_t = {
-        pp: PromelaParserPlugin.promela_parser_plugin_t;
+        pp: PromelaParserPlugin.pp_plugin_t;
         inst: InstantiationPlugin.instantiation_plugin_t;
     }
 
     let mk_plugins () =
-        let pp = new PromelaParserPlugin.promela_parser_plugin_t
+        let pp = new PromelaParserPlugin.pp_plugin_t
             "promelaParser" in
         let inst = new InstantiationPlugin.instantiation_plugin_t
             "inst" in
@@ -82,15 +79,13 @@ module PiaSymb = struct
 
     let mk_plugins () =
         let pia = Pia.mk_plugins () in
-        let sk = new SymbSkelPlugin.symb_skel_plugin_t
-            "symbSkel" pia.Pia.pc in
-        let pb = new PorBoundsPlugin.por_bounds_plugin_t
-            "porBounds" sk in
+        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
+        let pb = new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
         { pia = pia; sk = sk; pb = pb }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
-        chain#add_plugin plugins.sk OutOfPred;
+        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.pb OutOfPred;
         chain
 end

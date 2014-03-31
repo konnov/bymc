@@ -14,7 +14,7 @@ open SpinIr
 open SpinIrImp
 open Writer
 
-class pia_counter_plugin_t (plugin_name: string) (data_p: pia_data_plugin_t) =
+class pc_plugin_t (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 

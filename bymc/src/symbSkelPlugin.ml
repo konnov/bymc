@@ -17,8 +17,7 @@ open SpinIrImp
 
 open SymbSkel
 
-class symb_skel_plugin_t (plugin_name: string)
-        (ctr_plugin: PiaCounterPlugin.pia_counter_plugin_t) =
+class symb_skel_plugin_t (plugin_name: string) =
     object(self)
         inherit analysis_plugin_t plugin_name
 
@@ -27,10 +26,10 @@ class symb_skel_plugin_t (plugin_name: string)
         method skels = m_skels
 
         method transform rt =
-            let sprog = ctr_plugin#semi_prog in
+            let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
             m_skels <- List.map (self#extract_proc rt sprog) (Program.get_procs sprog);
-            self#get_input0
+            sprog
 
         method test_input filename =
             try access filename [F_OK]

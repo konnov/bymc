@@ -1,7 +1,7 @@
 open Plugin
 open VarRole
 
-class var_role_plugin_t (plugin_name: string) =
+class vr_plugin_t (plugin_name: string) =
     object(self)
         inherit analysis_plugin_t plugin_name
 

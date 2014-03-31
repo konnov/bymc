@@ -72,9 +72,7 @@ let print_state prog path_elem =
     printf "%s\n" state_s
 
 
-class nusmv_ssa_plugin_t (plugin_name: string)
-        (out_name: string) (pia_data_plugin: pia_data_plugin_t) =
-
+class nusmv_ssa_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 
@@ -84,8 +82,8 @@ class nusmv_ssa_plugin_t (plugin_name: string)
         method transform rt =
             log INFO (sprintf
                 "> writing ssa NuSMV model to %s.smv..." "main-ssa");
-            let intabs_prog = pia_data_plugin#get_output in
-            let prog = self#get_input 0 in
+            let prog = self#get_input0 in
+            let intabs_prog = self#get_input1 in
             NusmvSsaEncoding.transform
                 rt "main-ssa" intabs_prog prog;
             NusmvSsaEncoding.mk_counter_reach

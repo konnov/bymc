@@ -5,7 +5,7 @@ open Plugin
 open Program
 open SkelStruc
 
-class pia_data_plugin_t ?(keep_shared = false) (plugin_name: string) =
+class pd_plugin_t ?(keep_shared = false) (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 

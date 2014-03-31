@@ -10,7 +10,7 @@ open SkelStruc
 open Spin
 open Writer
 
-class promela_parser_plugin_t (plugin_name: string) =
+class pp_plugin_t (plugin_name: string) =
     object(self)
         inherit transform_plugin_t plugin_name
 
