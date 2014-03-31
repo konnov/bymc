@@ -3,6 +3,20 @@
 ByMC is a tool for model checking fault-tolerant distributed algorithms.
 More details to be found at: http://forsyte.at/software/bymc/
 
+Should you have any questions, ask Igor Konnov <konnov@forsyte.at>
+
+
+CONTENTS
+
+1. PREREQUISITES
+2. COMPILING
+3. EXAMPLES
+4. RUNNING
+5. HOW TO INSTALL OCAML AND THE LIBRARIES?
+6. INSTALLING PYCUDD
+7. MISC
+
+
 1. PREREQUISITES
 
  * ocaml and ocamlbuild (not earlier than 3.11.0)
@@ -90,7 +104,19 @@ $ opam install ounit ocamlgraph
 'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
 in your ~/.bashrc or ~/.zshrc before doing that)
 
-6. MISC
+6. INSTALLING PYCUDD
 
-Should you have any questions, ask Igor Konnov <konnov@forsyte.at>
+PyCUDD is required when ./analysis is run with the property 'bound'.
+To compile pycudd:
+  $ cd ../deps/pycudd2.0.2/cudd-2.4.2
+  $ make # uncomment XCFLAGS for x86_64 in Makefile if needed
+  $ mkdir lib
+  $ make libso
+  $ cd ../pycudd
+  $ make
+
+
+7. MISC
+
+Nothing here yet
 
