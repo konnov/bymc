@@ -1,7 +1,13 @@
 #!/usr/bin/python
 #
 # Parse the BDD that represents the reachables states
-# (in the dot format produced by NuSMV) and abstract away some of the variables
+# (in the dot format produced by NuSMV) and abstract away some of the variables.
+#
+# This is not the most efficient way to do the job (for an effective implementation
+# one has to write a NuSMV plugin in C++), but it works pretty well for our
+# experiments.
+#
+# Igor Konnov, 2013
 
 import os
 import re
