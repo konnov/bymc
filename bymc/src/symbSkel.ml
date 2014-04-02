@@ -31,12 +31,13 @@ module Sk = struct
         shared: var list; (* the shared variables *)
         nrules: int; (* the number of rules *)
         rules: rule_t list; (* the rules *)
+        inits: token expr list; (* initialization expressions *)
     }
 
     let empty locals shared =
         { name = ""; nlocs = 0; locs = [];
           locals = locals; shared = shared;
-          nrules = 0; rules = [] }
+          nrules = 0; rules = []; inits = [] }
 
     let print out sk =
         fprintf out "skel %s {\n" sk.name;
@@ -52,6 +53,10 @@ module Sk = struct
         in
         fprintf out "  locations (%d) {\n" sk.nlocs;
         List.iter ploc (lst_enum sk.locs);
+        fprintf out "  }\n\n";
+        fprintf out "  inits (%d) {\n" (List.length sk.inits);
+        let pinit e = fprintf out "    %s;\n" (expr_s e) in
+        List.iter pinit sk.inits;
         fprintf out "  }\n\n";
         let prule (i, r) =
             let loc j = locid (List.nth sk.locs j) in
@@ -82,6 +87,7 @@ module SkB = struct
             with Sk.name = name; 
                 Sk.locs = List.rev st.skel.Sk.locs;
                 Sk.rules = List.rev st.skel.Sk.rules;
+                inits = st.skel.Sk.inits
         }
 
     (* get location index or allocate a new one *)
@@ -97,12 +103,20 @@ module SkB = struct
                 Sk.locs = loc :: !st.skel.Sk.locs }};
             idx
 
+    let get_nlocs st =
+        !st.skel.Sk.nlocs
+
     let add_rule st rule =
         let idx = !st.skel.Sk.nrules in
         st := { !st with skel = { !st.skel with Sk.nrules = idx + 1;
             Sk.rules = rule :: !st.skel.Sk.rules }};
         idx
             
+
+    let add_init st init_expr =
+        st := { !st with
+            skel = { !st.skel with Sk.inits = init_expr :: !st.skel.Sk.inits }
+        }
 end
 
 
@@ -154,6 +168,27 @@ let propagate builder trs path_cons vals =
     List.iter (label_transition builder path_cons vals) trs
 
 
+let make_init rt prog proc locals builder =
+    let reg_tab = (rt#caches#find_struc prog)#get_regions proc#get_name in
+    let body = proc#get_stmts in
+    let init_stmts = (reg_tab#get "decl" body) @ (reg_tab#get "init" body) in
+    let to_loci eqs =
+        let vals = List.map snd eqs in (* assignments to the locals *)
+        SkB.get_loci !builder vals
+    in
+    let locis = List.map to_loci (SkelStruc.comp_seq locals init_stmts) in
+    (* the counters that are initialized *)
+    let sum = list_to_binex PLUS (List.map (fun i -> Const i) locis) in
+    (* the counters that are initialized to zero *)
+    let locisset =
+        List.fold_left (fun s i -> IntSet.add i s) IntSet.empty locis in
+    let rest = List.filter
+        (fun i -> not (IntSet.mem i locisset)) (range 0 (SkB.get_nlocs builder)) in
+    (BinEx (EQ, sum, proc#get_active_expr))
+        :: (List.map (fun i -> BinEx (EQ, Const i, Const 0)) rest)
+            
+
+
 let collect_constraints rt prog proc primary_vars trs =
     (* do symbolic exploration/simplification *)
     (* collect a formula along the path *)
@@ -171,12 +206,18 @@ let collect_constraints rt prog proc primary_vars trs =
     let all_vars = shared @ proc#get_locals in
     let builder = ref (SkB.empty primary_vars shared) in
 
+    (* collect steps expressed via paths *)
     let path_efun = enum_paths cfg in
     let num_paths =
         path_efun (exec_path rt#solver ntt nst all_vars (propagate builder trs))
     in
     Printf.printf "    enumerated %d paths\n\n" num_paths;
+
+    (* collect initial conditions *)
+    let inits = make_init rt prog proc primary_vars builder in
+    List.iter (SkB.add_init builder) inits;
     
+    (* get the result *)
     let sk = SkB.finish !builder proc#get_name in
     sk
 

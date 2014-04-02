@@ -8,12 +8,6 @@ open Debug
 
 exception CfgError of string
 
-module IntSet = Set.Make(
-    struct
-        type t = int
-        let compare a b = a - b
-    end
-)
 
 (*
 A basic block that can be used with ocamlgraph.
