@@ -28,8 +28,14 @@ class symb_skel_plugin_t (plugin_name: string) =
         method transform rt =
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
-            m_skels <- List.map (self#extract_proc rt sprog) (Program.get_procs sprog);
-            sprog
+            let on_proc (skels, prog) proc =
+                let sk, new_prog = self#extract_proc rt prog proc in
+                (sk :: skels, new_prog)
+            in
+            let skels, new_prog =
+                List.fold_left on_proc ([], sprog) (Program.get_procs sprog) in
+            m_skels <- skels;
+            new_prog
 
         method test_input filename =
             try access filename [F_OK]
@@ -72,11 +78,11 @@ class symb_skel_plugin_t (plugin_name: string) =
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
             let prev = List.map fst prev_next_pairs in
-            let sk = collect_constraints rt prog proc prev trs in
+            let sk, new_prog = collect_constraints rt prog proc prev trs in
             let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
             Sk.print f sk;
             close_out f;
-            sk
+            sk, new_prog
 
         method update_runtime rt =
             ()

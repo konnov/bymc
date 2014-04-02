@@ -39,17 +39,18 @@ module Sk = struct
           locals = locals; shared = shared;
           nrules = 0; rules = []; inits = [] }
 
+    let locname l =
+        sprintf "loc%s" (str_join "_" (List.map int_s l))
+
     let print out sk =
         fprintf out "skel %s {\n" sk.name;
         fprintf out "  local %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
         fprintf out "  shared %s;\n"
             (str_join ", " (List.map (fun v -> v#get_name) sk.shared));
-        let locid l =
-            sprintf "loc%s" (str_join "_" (List.map int_s l)) in
         let ploc (i, l) =
             fprintf out "    %s: [%s];\n"
-                (locid l) (str_join "; " (List.map int_s l))
+                (locname l) (str_join "; " (List.map int_s l))
         in
         fprintf out "  locations (%d) {\n" sk.nlocs;
         List.iter ploc (lst_enum sk.locs);
@@ -59,7 +60,7 @@ module Sk = struct
         List.iter pinit sk.inits;
         fprintf out "  }\n\n";
         let prule (i, r) =
-            let loc j = locid (List.nth sk.locs j) in
+            let loc j = locname (List.nth sk.locs j) in
             fprintf out "  %d: %s -> %s\n      when (%s)\n      do { %s };\n"
                 i (loc r.src) (loc r.dst) (expr_s r.guard)
                 (str_join "; " (List.map expr_s r.act))
@@ -93,6 +94,16 @@ module SkB = struct
     (* get location index or allocate a new one *)
     let get_loci st loc =
         Hashtbl.find st.loc_map loc
+
+    let intro_loc_vars st type_tab =
+        let intro map loc =
+            let nv = new_var (Sk.locname loc) in
+            type_tab#set_type nv (new data_type SpinTypes.TINT);
+            IntMap.add (get_loci !st loc) nv map
+        in
+        let map = List.fold_left intro IntMap.empty (hashtbl_keys (!st).loc_map)
+        in
+        map, IntMap.fold (fun _ v l -> v :: l) map []
 
     let add_loc st loc =
         try get_loci !st loc
@@ -168,7 +179,7 @@ let propagate builder trs path_cons vals =
     List.iter (label_transition builder path_cons vals) trs
 
 
-let make_init rt prog proc locals builder =
+let make_init rt prog proc locals loc_map builder =
     let reg_tab = (rt#caches#find_struc prog)#get_regions proc#get_name in
     let body = proc#get_stmts in
     let init_stmts = (reg_tab#get "decl" body) @ (reg_tab#get "init" body) in
@@ -177,15 +188,25 @@ let make_init rt prog proc locals builder =
         SkB.get_loci !builder vals
     in
     let locis = List.map to_loci (SkelStruc.comp_seq locals init_stmts) in
+    let loc_var i = IntMap.find i loc_map in
     (* the counters that are initialized *)
-    let sum = list_to_binex PLUS (List.map (fun i -> Const i) locis) in
+    let init_sum =
+        list_to_binex PLUS (List.map (fun i -> Var (loc_var i)) locis) in
     (* the counters that are initialized to zero *)
     let locisset =
         List.fold_left (fun s i -> IntSet.add i s) IntSet.empty locis in
-    let rest = List.filter
+    let zerolocs = List.filter
         (fun i -> not (IntSet.mem i locisset)) (range 0 (SkB.get_nlocs builder)) in
-    (BinEx (EQ, sum, proc#get_active_expr))
-        :: (List.map (fun i -> BinEx (EQ, Const i, Const 0)) rest)
+    (* the globals are assigned as by declarations *)
+    let init_shared (v, e) =
+        match e with
+        | Nop _ -> BinEx (EQ, Var v, Const 0)
+        | Const _ -> BinEx (EQ, Var v, e)
+        | _ -> raise (Failure ("Unexpected initialization: " ^ (expr_s e)))
+    in
+    (BinEx (EQ, init_sum, proc#get_active_expr))
+        :: (List.map (fun i -> BinEx (EQ, Var (loc_var i), Const 0)) zerolocs)
+        @ (List.map init_shared (Program.get_shared_with_init prog))
             
 
 
@@ -193,31 +214,36 @@ let collect_constraints rt prog proc primary_vars trs =
     (* do symbolic exploration/simplification *)
     (* collect a formula along the path *)
     let get_comp p =
-        let reg_tab =
-            (rt#caches#find_struc prog)#get_regions p#get_name in
+        let reg_tab = (rt#caches#find_struc prog)#get_regions p#get_name in
         reg_tab#get "comp" p#get_stmts 
     in
     let all_stmts = mir_to_lir (get_comp proc) in
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg all_stmts) in
-    let ntt = (Program.get_type_tab prog)#copy in
-    let nst = new symb_tab proc#get_name in
-    nst#add_all_symb proc#get_symbs;
     let shared = Program.get_shared prog in
     let all_vars = shared @ proc#get_locals in
     let builder = ref (SkB.empty primary_vars shared) in
 
     (* collect steps expressed via paths *)
+    let tt = (Program.get_type_tab prog)#copy in
+    let st = new symb_tab proc#get_name in
+    st#add_all_symb proc#get_symbs;
     let path_efun = enum_paths cfg in
     let num_paths =
-        path_efun (exec_path rt#solver ntt nst all_vars (propagate builder trs))
+        path_efun (exec_path rt#solver tt st all_vars (propagate builder trs))
     in
     Printf.printf "    enumerated %d paths\n\n" num_paths;
 
     (* collect initial conditions *)
-    let inits = make_init rt prog proc primary_vars builder in
+    let ntt = (Program.get_type_tab prog)#copy in
+    let loc_map, loc_vars = SkB.intro_loc_vars builder ntt in
+    let inits = make_init rt prog proc primary_vars loc_map builder in
     List.iter (SkB.add_init builder) inits;
+
+    let new_prog =
+        (Program.set_shared (loc_vars @ shared)
+            (Program.set_type_tab ntt prog)) in
     
     (* get the result *)
     let sk = SkB.finish !builder proc#get_name in
-    sk
+    sk, new_prog
 
