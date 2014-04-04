@@ -152,8 +152,7 @@ let is_name = function
     | _ -> false
 
 
-let rec expr_s e =
-    match e with
+let rec expr_s = function
     | Nop comment -> sprintf "/* %s */" comment
     | Const i -> string_of_int i
     | Var v -> v#get_name
@@ -179,8 +178,7 @@ let rec expr_s e =
         sprintf "%s@%s" proc_name lab_name
 
 
-let rec expr_tree_s e =
-    match e with
+let rec expr_tree_s = function
     | Nop comment -> sprintf "Nop('%s')" comment
     | Const i -> sprintf "Const(%d)" i
     | Var v -> sprintf "Var(%s)" v#get_name
@@ -199,8 +197,7 @@ let rec expr_tree_s e =
 
 
 (* as expr_s but instead of assemblying a string, it prints using Format.fprintf *)
-let rec fprint_expr var_fun ff e =
-    match e with
+let rec fprint_expr var_fun ff = function
     | Nop comment ->
         Format.fprintf ff "skip@ /*@ %s@ */" comment
     | Const i ->
@@ -269,15 +266,13 @@ let fprint_expr_mangled ff e = fprint_expr (fun v -> v#mangled_name) ff e
 let fprint_expr_name ff e = fprint_expr (fun v -> v#get_name) ff e        
 
 
-let op_of_expr e =
-    match e with
+let op_of_expr = function
     | UnEx (tok, _) -> tok
     | BinEx (tok, _, _) -> tok
     | _ -> EOF
 
 
-let stmt_s s =
-    match s with
+let stmt_s = function
     | Skip id -> sprintf "<%3d> skip" id
     | Expr (id, e) -> sprintf "<%3d> (%s)" id (expr_s e)
     | Decl (id, v, e) ->
@@ -399,8 +394,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
     List.fold_right make_one stmts []
 
 
-let prog_unit_s u =
-    match u with
+let prog_unit_s = function
     | Proc p ->
         let act = if p#get_active_expr <> (Const 0)
             then Printf.sprintf "active[%s] " (expr_s p#get_active_expr)
