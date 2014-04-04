@@ -71,8 +71,7 @@ type top_t =
     (* TODO: | Compassion *)
 
 
-let token_s t =
-    match t with
+let token_s = function
       | ASSERT -> "ASSERT"
       | PRINT -> "PRINT"
       | PRINTM -> "PRINTM"
@@ -204,6 +203,7 @@ let token_s t =
       | POR -> "or"
       | PAND -> "and"
       | HAVOC -> "havoc"
+
 
 (* we need var_fun as variables can look either x or next(x) *)
 let expr_s var_fun e =
