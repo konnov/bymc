@@ -13,8 +13,9 @@ val is_scratch: var_role -> bool
 val is_local_unbounded: var_role -> bool
 val is_shared_unbounded: var_role -> bool
 
-class type var_role_tbl =
+class var_role_tbl:
     object
+        method add_from_hash: (SpinIr.var, var_role) Hashtbl.t -> unit
         method get_role: SpinIr.var -> var_role
         method add: SpinIr.var -> var_role -> unit
     end

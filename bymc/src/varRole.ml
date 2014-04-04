@@ -47,16 +47,16 @@ exception Role_error of string
 exception Var_not_found of string
 
 
-class var_role_tbl (i_roles: (var, var_role) Hashtbl.t) =
+class var_role_tbl =
     object
         val mutable m_tbl: (int, var_role) Hashtbl.t =
-            Hashtbl.create (Hashtbl.length i_roles)
+            Hashtbl.create 10
 
-        initializer
-            let add_by_id v var_role =
-                Hashtbl.replace m_tbl v#id var_role
-            in
-            Hashtbl.iter add_by_id i_roles
+
+        method add_from_hash (hashtab: (var, var_role) Hashtbl.t) =
+            let add_by_id v var_role = Hashtbl.replace m_tbl v#id var_role in
+            Hashtbl.iter add_by_id hashtab
+
 
         method get_role (v: var) =
             try Hashtbl.find m_tbl v#id
@@ -158,5 +158,7 @@ let identify_var_roles prog =
         log INFO (sprintf "   %s -> %s" v#qual_name (var_role_s r)) in
     List.iter print_var_role sorted;
 
-    new var_role_tbl roles
+    let tab = new var_role_tbl in
+    tab#add_from_hash roles;
+    tab
 
