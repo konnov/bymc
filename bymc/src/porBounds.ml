@@ -58,12 +58,16 @@ let does_r_unlock_t solver shared r t =
     in
     let l0, l1 = mk_layer 0, mk_layer 1 in
     let e_to_l l e = map_vars (var_to_layer l) e in
-    let mk_assign = function
-        | BinEx (ASGN, lhs, rhs) ->
-            BinEx (EQ, e_to_l l1 lhs, e_to_l l0 rhs)
-        | _ as e -> e
+    let rec assign_layers = function
+        | UnEx (NEXT, Var v) -> var_to_layer l1 v
+        | UnEx (NEXT, _) as e ->
+                raise (Failure ("malformed next: " ^ (expr_s e)))
+        | Var v -> var_to_layer l0 v
+        | UnEx (t, e) -> UnEx (t, assign_layers e)
+        | BinEx (t, l, r) -> BinEx (t, assign_layers l, assign_layers r)
+        | e -> e
     in
-    let r_post0 = list_to_binex AND (List.map mk_assign r.Sk.act) in
+    let r_post0 = list_to_binex AND (List.map assign_layers r.Sk.act) in
     let r_pre0 = e_to_l l0 r.Sk.guard in
     let t_pre0 = e_to_l l0 t.Sk.guard in
     let t_pre1 = e_to_l l1 t.Sk.guard in
