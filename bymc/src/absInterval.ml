@@ -450,7 +450,7 @@ let rec trans_prop_decl solver caches prog atype atomic_expr =
         (* substitute card(...) with temporary variables *)
         let e, shadows, unshadow_f = shadow_expr is_card e in
         let add_card_role s = roles#add s SharedUnbounded in
-        (* XXX: polluting the role table *)
+        (* TODO: polluting the role table, clean it afterwards *)
         List.iter add_card_role shadows;
 
         let used_vars = expr_used_vars e in
