@@ -73,7 +73,7 @@ let does_r_unlock_t solver shared r t =
         let lv = Hashtbl.find h v#id in
         solver#append_var_def lv nat_type
     in
-    (* the variable declarations may be moved out of the function *)
+    (* the variable declarations must be moved out of the function *)
     List.iter (decl l0) shared; List.iter (decl l1) shared;
     if not (is_c_true r_pre0)
     then ignore (solver#append_expr r_pre0); (* r is enabled *)

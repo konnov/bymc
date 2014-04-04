@@ -70,6 +70,11 @@ module Sk = struct
         fprintf out "  }\n";
         fprintf out "} /* %s */\n" sk.name
 
+    let to_file name sk =
+        let f = open_out name in
+        print f sk;
+        close_out f
+
 end
 
 
@@ -165,9 +170,10 @@ let label_transition builder path_cons vals (prev, next) =
         let dst = SkB.add_loc builder (List.map snd next) in
         let guard = npc in
         let to_asgn name rhs l =
+            (* use NuSMV style: next(x) = x + 1 *)
             try let v = List.find (fun v -> v#get_name = name)
                     !builder.SkB.skel.Sk.shared in
-                (BinEx (ASGN, Var v, rhs)) :: l
+                (BinEx (EQ, UnEx (NEXT, Var v), rhs)) :: l
             with Not_found -> l
         in
         let rule = { Sk.src = src; Sk.dst = dst; Sk.guard = guard;
@@ -204,6 +210,7 @@ let make_init rt prog proc locals loc_map builder =
         | Const _ -> BinEx (EQ, Var v, e)
         | _ -> raise (Failure ("Unexpected initialization: " ^ (expr_s e)))
     in
+    (* the resulting list of initialization expressions *)
     (BinEx (EQ, init_sum, proc#get_active_expr))
         :: (List.map (fun i -> BinEx (EQ, Var (loc_var i), Const 0)) zerolocs)
         @ (List.map init_shared (Program.get_shared_with_init prog))
@@ -236,6 +243,9 @@ let collect_constraints rt prog proc primary_vars trs =
     (* collect initial conditions *)
     let ntt = (Program.get_type_tab prog)#copy in
     let loc_map, loc_vars = SkB.intro_loc_vars builder ntt in
+    let vr = rt#caches#analysis#get_var_roles prog in
+    List.iter (fun v -> vr#add v VarRole.LocalUnbounded) loc_vars;
+    rt#caches#analysis#set_var_roles prog vr;
     let inits = make_init rt prog proc primary_vars loc_map builder in
     List.iter (SkB.add_init builder) inits;
 

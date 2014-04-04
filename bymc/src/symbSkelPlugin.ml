@@ -28,12 +28,15 @@ class symb_skel_plugin_t (plugin_name: string) =
         method transform rt =
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
-            let on_proc (skels, prog) proc =
+            let each_proc (skels, prog) proc =
                 let sk, new_prog = self#extract_proc rt prog proc in
+                let abs_sk = self#abstract_skel rt sprog sk in
+                Sk.to_file (sprintf "skel-int-%s.sk" proc#get_name) abs_sk;
                 (sk :: skels, new_prog)
             in
             let skels, new_prog =
-                List.fold_left on_proc ([], sprog) (Program.get_procs sprog) in
+                List.fold_left each_proc ([], sprog) (Program.get_procs sprog)
+            in
             m_skels <- skels;
             new_prog
 
@@ -65,6 +68,47 @@ class symb_skel_plugin_t (plugin_name: string) =
             List.iter write prev_next;
             close_out fout
 
+        method abstract_skel rt prog sk =
+            let ctx = rt#caches#analysis#get_pia_data_ctx in
+            let dom = rt#caches#analysis#get_pia_dom in
+            let roles = rt#caches#analysis#get_var_roles prog in
+            let tt = Program.get_type_tab prog in
+            ctx#set_roles roles; (* XXX: must piaDataPlugin do that? *)
+            let module AI = AbsInterval in
+            let is_shadow = function
+                | UnEx (Spin.NEXT, _) -> true
+                | _ -> false
+            in
+            let add_def v =
+                rt#solver#append_var_def v (tt#get_type v) in
+            let afun e =
+                (* hide next(x) under a temporary variable *)
+                let se, shadows, unshadow_f = AI.shadow_expr is_shadow e in
+                (* TODO: polluting the role table and type tables, clean it *)
+                let register v =
+                    roles#add v VarRole.SharedUnbounded;
+                    tt#set_type v (new data_type SpinTypes.TINT);
+                    add_def v
+                in
+                List.iter register shadows;
+                (* abstract *)
+                let ae =
+                    AI.translate_expr ctx dom rt#solver AbsBasics.ExistAbs se in
+                (* unhide next(x) *)
+                unshadow_f ae
+            in
+            let each_rule r =
+                let new_guard = afun r.Sk.guard in
+                let new_act = List.map afun r.Sk.act in
+                { r with Sk.guard = new_guard; Sk.act = new_act }
+            in
+            rt#solver#push_ctx;
+            List.iter add_def (Program.get_shared prog);
+            let new_rules = List.map each_rule sk.Sk.rules in
+            rt#solver#pop_ctx;
+            { sk with Sk.rules = new_rules }
+                
+
         method extract_proc rt prog proc =
             let reg_tbl = (rt#caches#find_struc prog)#get_regions proc#get_name in
             let loop_sig = SkelStruc.extract_loop_sig prog reg_tbl proc in
@@ -79,9 +123,7 @@ class symb_skel_plugin_t (plugin_name: string) =
             let trs = self#read_transitions prev_next filename in
             let prev = List.map fst prev_next_pairs in
             let sk, new_prog = collect_constraints rt prog proc prev trs in
-            let f = open_out (sprintf "skel-%s.sk" proc#get_name) in
-            Sk.print f sk;
-            close_out f;
+            Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             sk, new_prog
 
         method update_runtime rt =
