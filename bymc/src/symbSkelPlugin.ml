@@ -105,8 +105,9 @@ class symb_skel_plugin_t (plugin_name: string) =
             rt#solver#push_ctx;
             List.iter add_def (Program.get_shared prog);
             let new_rules = List.map each_rule sk.Sk.rules in
+            let new_inits = List.map afun sk.Sk.inits in
             rt#solver#pop_ctx;
-            { sk with Sk.rules = new_rules }
+            { sk with Sk.rules = new_rules; Sk.inits = new_inits }
                 
 
         method extract_proc rt prog proc =

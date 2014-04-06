@@ -8,7 +8,6 @@ open Printf
 open Accums
 open Spin
 open SpinIr
-open SpinIrImp
 open SymbExec
 
 open Cfg
@@ -42,6 +41,24 @@ module Sk = struct
     let locname l =
         sprintf "loc%s" (str_join "_" (List.map int_s l))
 
+    let rec expr_s = function
+        | UnEx (NEXT, Var v) -> v#get_name ^ "'"
+        | UnEx (NEXT, _) as e ->
+            raise (Failure ("Unexpected expression: " ^ (SpinIrImp.expr_s e)))
+        | UnEx (t, e) -> sprintf "(%s%s)" (SpinIrImp.token_s t) (expr_s e)
+        | BinEx (EQ as t, l, r)
+        | BinEx (NE as t, l, r)
+        | BinEx (LE as t, l, r)
+        | BinEx (GE as t, l, r)
+        | BinEx (LT as t, l, r)
+        | BinEx (GT as t, l, r) -> (* no parentheses here *)
+                sprintf "%s %s %s"
+                    (expr_s l) (SpinIrImp.token_s t) (expr_s r) 
+        | BinEx (t, l, r) ->
+                sprintf "(%s %s %s)"
+                    (expr_s l) (SpinIrImp.token_s t) (expr_s r) 
+        | _ as e -> SpinIrImp.expr_s e
+
     let print out sk =
         fprintf out "skel %s {\n" sk.name;
         fprintf out "  local %s;\n"
@@ -74,7 +91,6 @@ module Sk = struct
         let f = open_out name in
         print f sk;
         close_out f
-
 end
 
 
@@ -208,7 +224,7 @@ let make_init rt prog proc locals loc_map builder =
         match e with
         | Nop _ -> BinEx (EQ, Var v, Const 0)
         | Const _ -> BinEx (EQ, Var v, e)
-        | _ -> raise (Failure ("Unexpected initialization: " ^ (expr_s e)))
+        | _ -> raise (Failure ("Unexpected initialization: " ^ (SpinIrImp.expr_s e)))
     in
     (* the resulting list of initialization expressions *)
     (BinEx (EQ, init_sum, proc#get_active_expr))
@@ -224,7 +240,7 @@ let collect_constraints rt prog proc primary_vars trs =
         let reg_tab = (rt#caches#find_struc prog)#get_regions p#get_name in
         reg_tab#get "comp" p#get_stmts 
     in
-    let all_stmts = mir_to_lir (get_comp proc) in
+    let all_stmts = SpinIrImp.mir_to_lir (get_comp proc) in
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg all_stmts) in
     let shared = Program.get_shared prog in
     let all_vars = shared @ proc#get_locals in

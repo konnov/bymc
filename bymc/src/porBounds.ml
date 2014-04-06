@@ -61,7 +61,7 @@ let does_r_unlock_t solver shared r t =
     let rec assign_layers = function
         | UnEx (NEXT, Var v) -> var_to_layer l1 v
         | UnEx (NEXT, _) as e ->
-                raise (Failure ("malformed next: " ^ (expr_s e)))
+                raise (Failure ("malformed next: " ^ (SpinIrImp.expr_s e)))
         | Var v -> var_to_layer l0 v
         | UnEx (t, e) -> UnEx (t, assign_layers e)
         | BinEx (t, l, r) -> BinEx (t, assign_layers l, assign_layers r)
