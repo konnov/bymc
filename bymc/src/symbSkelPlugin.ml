@@ -27,7 +27,7 @@ class symb_skel_plugin_t (plugin_name: string) =
         method skels = m_skels
         (* TODO: decouple skeleton abstraction from
             the skeleton construction *)
-        method abs_skels = m_skels
+        method abs_skels = m_abs_skels
 
         method transform rt =
             let sprog = self#get_input0 in

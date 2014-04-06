@@ -16,7 +16,7 @@ open Ssa
 (* the symbolic skeleton *)
 module Sk = struct
     type rule_t = {
-        src: int; dst: int;
+        src: int; dst: int; (* indices in locs *)
         guard: token expr; act: token expr list
     }
     
