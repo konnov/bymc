@@ -64,6 +64,13 @@ class var_role_tbl =
                 raise (Var_not_found (sprintf "%s (id=%d)" v#qual_name v#id))
 
         method add (v: var) (r: var_role) = Hashtbl.replace m_tbl v#id r
+
+        method add_by_id id role = Hashtbl.replace m_tbl id role
+
+        method copy =
+            let new_tab = new var_role_tbl in
+            Hashtbl.iter (fun i r -> new_tab#add_by_id i r) m_tbl;
+            new_tab
     end
 
 

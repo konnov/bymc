@@ -30,7 +30,8 @@ class symb_skel_plugin_t (plugin_name: string) =
             rt#caches#set_struc sprog (compute_struc sprog);
             let each_proc (skels, prog) proc =
                 let sk, new_prog = self#extract_proc rt prog proc in
-                let abs_sk = self#abstract_skel rt sprog sk in
+                let roles = rt#caches#analysis#get_var_roles sprog in
+                let abs_sk = self#abstract_skel rt new_prog roles sk in
                 Sk.to_file (sprintf "skel-int-%s.sk" proc#get_name) abs_sk;
                 (sk :: skels, new_prog)
             in
@@ -68,11 +69,11 @@ class symb_skel_plugin_t (plugin_name: string) =
             List.iter write prev_next;
             close_out fout
 
-        method abstract_skel rt prog sk =
+        method abstract_skel rt new_prog roles sk =
             let ctx = rt#caches#analysis#get_pia_data_ctx in
             let dom = rt#caches#analysis#get_pia_dom in
-            let roles = rt#caches#analysis#get_var_roles prog in
-            let tt = Program.get_type_tab prog in
+            let tt = (Program.get_type_tab new_prog)#copy in
+            let roles = roles#copy in
             ctx#set_roles roles; (* XXX: must piaDataPlugin do that? *)
             let module AI = AbsInterval in
             let is_shadow = function
@@ -84,7 +85,6 @@ class symb_skel_plugin_t (plugin_name: string) =
             let afun e =
                 (* hide next(x) under a temporary variable *)
                 let se, shadows, unshadow_f = AI.shadow_expr is_shadow e in
-                (* TODO: polluting the role table and type tables, clean it *)
                 let register v =
                     roles#add v VarRole.SharedUnbounded;
                     tt#set_type v (new data_type SpinTypes.TINT);
@@ -103,7 +103,7 @@ class symb_skel_plugin_t (plugin_name: string) =
                 { r with Sk.guard = new_guard; Sk.act = new_act }
             in
             rt#solver#push_ctx;
-            List.iter add_def (Program.get_shared prog);
+            List.iter add_def (Program.get_shared new_prog);
             let new_rules = List.map each_rule sk.Sk.rules in
             let new_inits = List.map afun sk.Sk.inits in
             rt#solver#pop_ctx;

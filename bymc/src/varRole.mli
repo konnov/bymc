@@ -18,6 +18,9 @@ class var_role_tbl:
         method add_from_hash: (SpinIr.var, var_role) Hashtbl.t -> unit
         method get_role: SpinIr.var -> var_role
         method add: SpinIr.var -> var_role -> unit
+        (* TODO: hide it *)
+        method add_by_id: int -> var_role -> unit
+        method copy: var_role_tbl
     end
 
 
