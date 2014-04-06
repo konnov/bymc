@@ -22,23 +22,28 @@ class symb_skel_plugin_t (plugin_name: string) =
         inherit analysis_plugin_t plugin_name
 
         val mutable m_skels: Sk.skel_t list = [];
+        val mutable m_abs_skels: Sk.skel_t list = [];
 
         method skels = m_skels
+        (* TODO: decouple skeleton abstraction from
+            the skeleton construction *)
+        method abs_skels = m_skels
 
         method transform rt =
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
-            let each_proc (skels, prog) proc =
+            let each_proc (skels, askels, prog) proc =
                 let sk, new_prog = self#extract_proc rt prog proc in
                 let roles = rt#caches#analysis#get_var_roles sprog in
-                let abs_sk = self#abstract_skel rt new_prog roles sk in
-                Sk.to_file (sprintf "skel-int-%s.sk" proc#get_name) abs_sk;
-                (sk :: skels, new_prog)
+                let ask = self#abstract_skel rt new_prog roles sk in
+                Sk.to_file (sprintf "skel-int-%s.sk" proc#get_name) ask;
+                (sk :: skels, ask :: askels, new_prog)
             in
-            let skels, new_prog =
-                List.fold_left each_proc ([], sprog) (Program.get_procs sprog)
+            let skels, askels, new_prog =
+                List.fold_left each_proc ([], [], sprog) (Program.get_procs sprog)
             in
             m_skels <- skels;
+            m_abs_skels <- askels;
             new_prog
 
         method test_input filename =

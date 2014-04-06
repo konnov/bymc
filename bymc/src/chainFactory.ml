@@ -84,7 +84,7 @@ module PiaSymb = struct
         let pb =
             new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
         let module SSN = SymbSkelNusmvPlugin in
-        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" in
+        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" sk in
         { pia = pia; sk = sk; pb = pb; ssn = ssn }
 
     let mk_chain plugins =
