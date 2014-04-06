@@ -61,7 +61,7 @@ let module_of_proc rt prog skels =
        next(x), or keep it as it is (for the reachability) *)
     let exprs = [Var Nusmv.nusmv_true] (* TODO: use the skeleton here *)
     in
-    let args = (List.map vart shared) @ new_locals in
+    let args = (pid, pidt) :: (List.map vart shared) @ new_locals in
     let mod_type =
         Nusmv.SModule (mono_proc_name,
             (List.map (fun (v, _) -> v) args),
