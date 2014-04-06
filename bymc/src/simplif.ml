@@ -27,6 +27,60 @@ module StringSet = Set.Make(String)
 
 exception Simplif_error of string
 
+(* propagate negations of the tokens we know *)
+let propagate_not ?negate:(init_neg=false) exp =
+    let rec prop neg = function
+    | UnEx (NEG, e) ->
+        if neg then prop false e else prop true e
+
+    | BinEx (OR, l, r) ->
+        BinEx ((if neg then AND else OR), prop neg l, prop neg r)
+
+    | BinEx (AND, l, r) ->
+        BinEx ((if neg then OR else AND), prop neg l, prop neg r)
+
+    | BinEx (IMPLIES, l, r) ->
+        if neg
+        then BinEx (AND, prop false l, prop true r)
+        else BinEx (IMPLIES, prop false l, prop false r)
+
+    | BinEx (EQUIV, l, r) ->
+        if neg
+        then BinEx (OR,
+                BinEx (AND, prop false l, prop true r),
+                BinEx (AND, prop true l, prop false r))
+        else BinEx (EQUIV, l, r)
+
+    | BinEx (EQ as t, l, r)
+    | BinEx (NE as t, l, r)
+    | BinEx (GT as t, l, r)
+    | BinEx (LT as t, l, r)
+    | BinEx (GE as t, l, r)
+    | BinEx (LE as t, l, r) ->
+        BinEx ((if neg then not_of_arith_rel t else t), l, r)
+
+    | UnEx (ALWAYS, e) ->
+        UnEx ((if neg then EVENTUALLY else ALWAYS), prop neg e)
+
+    | UnEx (EVENTUALLY, e) ->
+        UnEx ((if neg then ALWAYS else EVENTUALLY), prop neg e)
+
+    | UnEx (NEXT, e) ->
+        UnEx (NEXT, prop neg e)
+
+    | BinEx (UNTIL, l, r) ->
+        if neg
+        then BinEx (OR,
+                UnEx (ALWAYS, prop true r),
+                BinEx (UNTIL, prop true r, prop true l))
+        else BinEx (UNTIL, l, r)
+
+    | _ as e ->
+        if neg then UnEx (NEG, e) else e
+    in
+    prop init_neg exp
+
+
 let compute_consts exp =
     let int_of_bool b = if b then 1 else 0 in
     let rec fold = function
@@ -143,7 +197,6 @@ let binding_to_eqs binding =
     VarMap.fold (fun k v a -> (eq k v) :: a) binding []
     (* the new code:
     List.map eq (VarMap.bindings binding) *)
-
 
 
 (* replace array accesses like  a[x+y] == i by a conjunction:
