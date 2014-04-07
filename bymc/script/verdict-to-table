@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -e
+
+out_name="`basename $1 .csv`.tex"
+
+if echo "$1" | grep -q concrete; then
+../tools/bymc/csv-to-tex.py $1 "$out_name" "04:sys,02:param,05:spec,01:valid,14:SpinTime,15:SpinMemory,12:Stored,13:Transitions,16:Depth"
+else
+../tools/bymc/csv-to-tex.py $1 "$out_name" "04:sys,05:spec,01:valid,14:SpinTime,15:SpinMemory,12:Stored,13:Transitions,16:Depth,03:refinements,06:total-sec"
+fi
+
+echo "Your table is delivered to $out_name"
