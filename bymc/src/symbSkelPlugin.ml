@@ -98,7 +98,10 @@ class symb_skel_plugin_t (plugin_name: string) =
                 List.iter register shadows;
                 (* abstract *)
                 let ae =
-                    AI.translate_expr ctx dom rt#solver AbsBasics.ExistAbs se in
+                    if se <> Const 1
+                    then AI.translate_expr ctx dom rt#solver AbsBasics.ExistAbs se
+                    else Const 1
+                in
                 (* unhide next(x) *)
                 unshadow_f ae
             in
