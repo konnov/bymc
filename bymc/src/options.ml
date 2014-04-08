@@ -22,7 +22,7 @@ type options_t =
     {
         action: action_opt_t; trail_name: string; filename: string;
         chain: string;
-        inv_name: string; param_assignments: int StringMap.t;
+        param_assignments: int StringMap.t;
         mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool;
         plugin_opts: string StringMap.t
     }
@@ -30,7 +30,6 @@ type options_t =
 let empty =
     { action = OptNone; trail_name = ""; filename = "";
       chain = "piaDataCtr";
-      inv_name = ""; (* TODO: remove? *)
       param_assignments = StringMap.empty;
       mc_tool = ToolSpin; bdd_pass = false; verbose = false;
       plugin_opts = StringMap.empty
