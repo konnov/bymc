@@ -27,7 +27,7 @@ done
 PROG=$1
 SPEC=$2
 shift 2
-export BYMC_FLAGS="$@"
+export BYMC_FLAGS="$@ $BYMC_FLAGS"
 
 
 # run the tool
