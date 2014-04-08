@@ -12,11 +12,11 @@ TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 
 # parse options
-TEMPOPTS=`getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hl:w: --long help,length:,nusmv-verbose:,one-shot,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_exit() {
-    echo "use $0 <switches> prog spec"
+    echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where the switches are"
     echo "  -l|--length k: limit the BMC search with length k"
     echo "  -w|--nusmv-verbose <level>: set the verbosity level"

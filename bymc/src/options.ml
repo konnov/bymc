@@ -13,6 +13,8 @@ module StringMap = Map.Make(String)
 let version = [0; 3; 3]
 let version_full = "ByMC-0.3.3-dev"
 
+let macro_prefix = "macro."
+
 type action_opt_t =
     | OptAbstract | OptRefine | OptVersion | OptNone
 
@@ -88,6 +90,12 @@ let parse_options =
                     (StringMap.add name value !opts.plugin_opts); }
                 ),
              "P.X=Y set option X of plugin P to Y.");
+            ("-D", Arg.String (fun s ->
+                let name, value = parse_plugin_opt (macro_prefix ^ s) in
+                opts := {!opts with plugin_opts =
+                    (StringMap.add name value !opts.plugin_opts); }
+                ),
+             "X=Y define a C-like macro X as Y.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "produce lots of verbose output (you are warned).");
             ("--version", Arg.Unit

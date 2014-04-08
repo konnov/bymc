@@ -1,16 +1,15 @@
 #!/bin/bash
 #
-# Run analyses that do not perform verification, e.g., compute bounds
+# Run analyses that do not perform verification, e.g., compute BMC bounds
 #
 # Igor Konnov, 2014
 
-
 # parse options
-TEMPOPTS=`getopt -o h --long help -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o h --long help -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_exit() {
-    echo "use $0 <switches> prog spec"
+    echo "use $0 <switches> prog spec bymc_options"
     echo " where the switches are"
     echo "  -h|--help: show this help message"
     exit 1
@@ -25,7 +24,13 @@ while true ; do
     esac
 done
 
+PROG=$1
+SPEC=$2
+shift 2
+export BYMC_FLAGS="$@"
+
+
 # run the tool
 export TARGET_MC=analysis
-`dirname $0`/script/refinement-loop.sh "$@"
+`dirname $0`/script/refinement-loop.sh $PROG $SPEC
 
