@@ -5,14 +5,24 @@
 # Igor Konnov, 2014
 
 NUSMV=${NUSMV:-nusmv}
+ANALYSIS_OUT="analysis.out"
+
+if [ -x "/usr/bin/time" ]; then 
+    TIME="/usr/bin/time" # GNU time that shows memory usage
+elif [ -x "$HOME/bin/time" ]; then 
+    TIME="$HOME/bin/time"    # smth. compiled by the user
+else
+    TIME="time"          # shell time
+fi
 
 function mc_compile_first {
     case "$PROP" in
-
-    bound) BYMC_FLAGS="--target nusmv --chain bound" ;;
-    *) echo "Unknown property to analyze: $PROP" ; exit 1 ;;
+      bound) BYMC_FLAGS="--target nusmv --chain bound" ;;
+      *) echo "Unknown property to analyze: $PROP" ; exit 1 ;;
     esac
-    ${TOOL} ${BYMC_FLAGS} -a ${PROG} || die "Failure: ${TOOL} -a ${PROG}"
+    echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
+    tee_or_die "${ANALYSIS_OUT}" "bymc failed" \
+        ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
 }
 
 function mc_verify_spec {
@@ -43,6 +53,7 @@ function mc_verify_spec {
         cp flow.txt "local-tr-${proc}.txt"
     done
 
+    # run again and compute the bounds this time
     mc_compile_first
 
     true
@@ -53,6 +64,17 @@ function mc_refine {
 }
 
 function mc_collect_stat {
-    mc_stat="$mc_stat|11:technique=analysis"
+    time_stat=`grep maxresident $MC_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    smv_user=`echo $time_stat | cut -d ' ' -f 1`
+    smv_sys=`echo $time_stat | cut -d ' ' -f 2`
+    smv_elapsed=`echo $time_stat | cut -d ' ' -f 3`
+    smv_maxres=`echo $time_stat | cut -d ' ' -f 4`
+    time_stat=`grep maxresident $ANALYSIS_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    b_user=`echo $time_stat | cut -d ' ' -f 1`
+    b_sys=`echo $time_stat | cut -d ' ' -f 2`
+    b_elapsed=`echo $time_stat | cut -d ' ' -f 3`
+    b_maxres=`echo $time_stat | cut -d ' ' -f 4`
+
+    echo "10:Result=OK|11:technique=analysis|12:nusmv-usersec=$smv_user|13:nusmv-syssec=$smv_sys|14:nusmv-elapsedsec=$smv_elapsed|15:nusmv-maxreskb=$smv_maxres|20:analysis-usersec=$b_user|21:analysis-syssec=$b_sys|22:analysis-elapsedsec=$b_elapsed|23:analysis-maxreskb=$b_maxres"
 }
 

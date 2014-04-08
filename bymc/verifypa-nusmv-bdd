@@ -10,7 +10,7 @@ REACH_REL=""
 SOURCE=""
 
 # parse options
-TEMPOPTS=`getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMPOPTS"

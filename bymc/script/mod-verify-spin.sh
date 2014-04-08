@@ -6,7 +6,7 @@
 
 SPIN=${SPIN:-spin}
 LTL2BA="$BYMC_HOME/../deps/ltl2ba-1.1/ltl2ba"
-BYMC_FLAGS="--target spin"
+BYMC_FLAGS="${BYMC_FLAGS} --target spin"
 
 if [ ! -x "$LTL2BA" ]; then
     echo "WARNING: $LTL2BA is not found. Please go to `dirname $LTL2BA` and run make."

@@ -5,7 +5,7 @@
 # Igor Konnov, 2013
 
 NUSMV=${NUSMV:-nusmv}
-BYMC_FLAGS="--target nusmv"
+BYMC_FLAGS="${BYMC_FLAGS} --target nusmv"
 
 SRC_REACH="main-ssa-reach.smv"
 SRC="main-ssa.smv"
@@ -24,7 +24,7 @@ function common_mc_compile_first {
     if [ "$NO_REACH" != "1" -a "$NO_INITIAL" != "1" ]; then
         rm -f "$HIDDEN"
         echo "GENERATING INITIAL ABSTRACTION..."
-        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+        CAMLRUNPARAM="b" $TIME ${TOOL} -a ${PROG} \
             || die "Failure: ${TOOL} -a ${PROG}"
         echo "[DONE]"
 
@@ -36,7 +36,7 @@ function common_mc_compile_first {
     fi
     if [ "$NO_INITIAL" != "1" ]; then
         echo "GENERATING SMALLER ABSTRACTION..."
-        CAMLRUNPARAM="b" $TIME ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+        CAMLRUNPARAM="b" $TIME ${TOOL} -a ${PROG} \
             || die "Failure: ${TOOL} -a ${PROG}"
         echo "[DONE]"
         echo ""

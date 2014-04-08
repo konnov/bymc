@@ -1,6 +1,7 @@
 open Lexing
 open Printf
 
+open Accums
 open Debug
 open Spinlex
 open Spin
@@ -188,6 +189,14 @@ let init_macros opts =
     | Options.ToolNusmv -> "NUSMV"
     in
     Hashtbl.add macros tool "1";
+    let add_macro_opt full_name value =
+        let pl = String.length Options.macro_prefix in
+        let nl = String.length full_name in
+        if nl > pl && ((String.sub full_name 0 pl) = Options.macro_prefix)
+        then let name = String.sub full_name pl (nl - pl) in
+            Hashtbl.replace macros name value
+    in
+    StrMap.iter add_macro_opt opts.Options.plugin_opts;
     macros
 
 
