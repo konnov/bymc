@@ -153,6 +153,14 @@ end
 
 
 let label_transition builder path_cons vals (prev, next) =
+    let assert_all_locals_eliminated e =
+        let each v =
+            if String.contains v#get_name '$'
+                && not (Hashtbl.mem vals v#get_name)
+            then raise (Failure (sprintf "Can't eliminate local %s" v#get_name))
+        in
+        List.iter each (expr_used_vars e)
+    in
     let load_prev h (x, i) =
         Hashtbl.replace h x#get_name (Const i)
     in
@@ -177,6 +185,7 @@ let label_transition builder path_cons vals (prev, next) =
     let h = Hashtbl.create 10 in
     List.iter (load_next h) next;
     let npc = sub_vars h npc in
+    assert_all_locals_eliminated npc;
     let inconsistent = List.exists is_inconsistent next in
     match npc, inconsistent with
     | Const 0, _ -> () (* the path conditions are violated *)
