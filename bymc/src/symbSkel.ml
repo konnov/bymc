@@ -105,10 +105,16 @@ module SkB = struct
         { loc_map = Hashtbl.create 8; skel = Sk.empty locals shared }
 
     let finish st name =
+        let cmp_rules a b =
+            if (a.Sk.src, a.Sk.dst) < (b.Sk.src, b.Sk.dst)
+            then -1
+            else if (a.Sk.src, a.Sk.dst) = (b.Sk.src, b.Sk.dst) then 0 else 1
+        in
+
         { st.skel
             with Sk.name = name; 
                 Sk.locs = List.rev st.skel.Sk.locs;
-                Sk.rules = List.rev st.skel.Sk.rules;
+                Sk.rules = List.sort cmp_rules st.skel.Sk.rules;
                 inits = st.skel.Sk.inits
         }
 
@@ -139,10 +145,12 @@ module SkB = struct
         !st.skel.Sk.nlocs
 
     let add_rule st rule =
-        let idx = !st.skel.Sk.nrules in
-        st := { !st with skel = { !st.skel with Sk.nrules = idx + 1;
-            Sk.rules = rule :: !st.skel.Sk.rules }};
-        idx
+        try list_find_pos rule !st.skel.Sk.rules (* we don't have many rules *)
+        with Not_found -> 
+            let idx = !st.skel.Sk.nrules in
+            st := { !st with skel = { !st.skel with Sk.nrules = idx + 1;
+                Sk.rules = rule :: !st.skel.Sk.rules }};
+            idx
             
 
     let add_init st init_expr =
