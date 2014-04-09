@@ -64,7 +64,7 @@ let parse_options =
     in
     (Arg.parse
         [
-            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bound"],
+            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"],
                 (fun s -> opts := {!opts with chain = s}))),
                 " choose a transformation/refinement chain (default: piaDataCtr)."
             );

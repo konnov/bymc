@@ -17,7 +17,7 @@ fi
 
 function mc_compile_first {
     case "$PROP" in
-      bound) BYMC_FLAGS="--target nusmv --chain bound" ;;
+      bounds) BYMC_FLAGS="--target nusmv --chain bounds" ;;
       *) echo "Unknown property to analyze: $PROP" ; exit 1 ;;
     esac
     echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
