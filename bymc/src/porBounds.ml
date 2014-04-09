@@ -127,24 +127,24 @@ let compute_diam solver sk =
     logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let fg = compute_flow sk in
     let nflow = IGraph.nb_edges fg in
-    logtm INFO (sprintf "> %d flow edges" nflow);
+    logtm INFO (sprintf "> %d transition flow dependencies" nflow);
     let not_fgc =
         IGraphOper.complement (IGraphOper.transitive_closure ~reflexive:false fg) in
-    logtm INFO (sprintf "> constructing unlocking edges...");
+    logtm INFO (sprintf "> constructing unlocking transition dependencies...");
     let ug = compute_unlocking Unlock solver sk in
-    logtm INFO (sprintf "> %d unlocking edges" (IGraph.nb_edges ug));
+    logtm INFO (sprintf "> %d unlocking transition dependencies" (IGraph.nb_edges ug));
     let diff = IGraphOper.intersect ug not_fgc in
     let nbackward = IGraph.nb_edges diff in
-    logtm INFO (sprintf "> %d backward unlocking edges" nbackward);
+    logtm INFO (sprintf "> %d backward unlocking transition dependencies" nbackward);
     IGraph.dot_output diff
         (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
 
-    logtm INFO (sprintf "> constructing locking edges...");
+    logtm INFO (sprintf "> constructing locking transition dependencies...");
     let lg = compute_unlocking Lock solver sk in
-    logtm INFO (sprintf "> %d locking edges" (IGraph.nb_edges lg));
+    logtm INFO (sprintf "> %d locking transition dependencies" (IGraph.nb_edges lg));
     let diff = IGraphOper.intersect (IGraphOper.mirror lg) not_fgc in
     let nforward = IGraph.nb_edges diff in
-    logtm INFO (sprintf "> %d forward locking edges" nforward);
+    logtm INFO (sprintf "> %d forward locking transition dependencies" nforward);
     IGraph.dot_output diff
         (sprintf "locking-flowplus-%s.dot" sk.Sk.name);
 
