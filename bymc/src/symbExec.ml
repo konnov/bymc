@@ -2,9 +2,6 @@
  * Executing a path symbolically and collecting the constraints
  * along it.
  *
- * The code was tuned to a NuSMV encoding, which was later deprecated.
- * It needs refactoring.
- *
  * Igor Konnov, 2013-2014
  *)
 
