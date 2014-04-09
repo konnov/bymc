@@ -22,8 +22,9 @@ function mc_verify_spec {
             >>${SCRIPT}
     else
         if [ "$COMPLETENESS" != "1" ]; then CF=""; else CF="-c"; fi
+        if [ "$NO_UNROLLING" != "1" ]; then VU=""; else VU="-N"; fi
         if [ "$ONE_SHOT" != "1" ]; then
-            echo "check_ltlspec_sbmc_inc $CF -k $DEPTH -P ${PROP}" >>${SCRIPT}
+            echo "check_ltlspec_sbmc_inc $CF $VU -k $DEPTH -P ${PROP}" >>${SCRIPT}
         else
             echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
