@@ -8,6 +8,9 @@ DEPTH=${DEPTH:-10} # parse options?
 
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
+LINGELING_TOOL="lingeling"
+LINGELING_OUT="lingeling.out"
+
 function mc_compile_first {
     common_mc_compile_first
 }
@@ -38,12 +41,45 @@ function mc_verify_spec {
         $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
-        echo ""
-        echo "No counterexample found with bounded model checking."
-        echo "WARNING: To guarantee completeness, make sure that DEPTH is set properly"
-        echo "as per completeness threshold"
-        echo ""
-        true
+        if [ "$LINGELING" -ne 0 ]; then
+            CNF="oneshot${LINGELING}"
+            # lingeling solves one-shot problems much faster!
+            echo "--------------------------------------"
+            echo " Finished refinement for length $DEPTH."
+            echo " Now running lingeling for length $LINGELING"
+            echo "--------------------------------------"
+            SCRIPT2="script-oneshot-lingeling.nusmv"
+            echo "set on_failure_script_quits" >$SCRIPT2
+            echo "go_bmc" >>$SCRIPT2
+            echo "time" >>$SCRIPT2
+            echo "gen_ltlspec_bmc_onepb -k $LINGELING -P ${PROP} -o ${CNF}" >>$SCRIPT2
+            echo "time" >>$SCRIPT2
+            echo "quit" >>$SCRIPT2
+            tee_or_die "$MC_OUT" "nusmv failed"\
+                $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "$SCRIPT2" "${SRC}"
+            set -o pipefail
+            $TIME ${LINGELING_TOOL} 2>&1 "${CNF}.dimacs" | tee ${LINGELING_OUT}
+            RET=${PIPESTATUS}
+
+            if [ "$RET" -eq 20 ]; then
+                echo "--------------------------------------"
+                echo "No counterexample found with bounded model checking."
+                echo "WARNING: To guarantee completeness, make sure that DEPTH is set properly"
+                echo "as per completeness threshold"
+                true
+            elif [ "$RET" -eq 10 ]; then
+                false
+            else
+                die "lingeling reported UNKNOWN"
+            fi
+        else
+            echo "--------------------------------------"
+            echo "No counterexample found with bounded model checking."
+            echo "WARNING: To guarantee completeness, make sure that DEPTH is set properly"
+            echo "as per completeness threshold"
+            echo ""
+            true
+        fi
     else
         echo "Specification is violated." >>$MC_OUT
         false
