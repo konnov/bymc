@@ -26,6 +26,7 @@ let write_vars ff skels =
     let collect_vars var_set sk =
         let add vs v = StrSet.add v#get_name vs in
         let var_set = List.fold_left add var_set sk.Sk.shared in
+        let var_set = List.fold_left add var_set sk.Sk.params in
         let add_loc vs l = StrSet.add (Sk.locname l) vs in
         List.fold_left add_loc var_set sk.Sk.locs
     in
@@ -61,15 +62,16 @@ let write_rule ff prog num r =
 let write_skel ff prog sk =
     List.iter2 (write_rule ff prog) (range 0 sk.Sk.nrules) sk.Sk.rules
 
+let model_name filename=
+    let base = Filename.chop_extension (Filename.basename filename) in
+    Str.global_replace (Str.regexp "[^A-Za-z0-9_]") "" base
+
 
 let write_to_file filename rt prog skels =
     let fo = open_out filename in
     let ff = Format.formatter_of_out_channel fo in
-    let name =
-        Filename.chop_extension
-            (Filename.basename rt#caches#options.Options.filename) in
-    Format.fprintf ff "model@ %s@ {@ " (String.uppercase name);
-
+    let mname = model_name rt#caches#options.Options.filename in
+    Format.fprintf ff "model@ %s@ {@ " (String.uppercase mname);
     Format.pp_open_hvbox ff 2;
 
     write_vars ff skels;
