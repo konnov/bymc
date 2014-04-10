@@ -26,16 +26,17 @@ module Sk = struct
         name: string; (* just a name *)
         nlocs: int; (* the number of locations *)
         locs: loc_t list; (* the list of locations *)
-        locals: var list; (* the local variables *)
-        shared: var list; (* the shared variables *)
+        locals: var list; (* local variables *)
+        shared: var list; (* shared variables *)
+        params: var list; (* parameters *)
         nrules: int; (* the number of rules *)
         rules: rule_t list; (* the rules *)
         inits: token expr list; (* initialization expressions *)
     }
 
-    let empty locals shared =
+    let empty locals shared params =
         { name = ""; nlocs = 0; locs = [];
-          locals = locals; shared = shared;
+          locals = locals; shared = shared; params = params;
           nrules = 0; rules = []; inits = [] }
 
     let locname l =
@@ -61,10 +62,13 @@ module Sk = struct
 
     let print out sk =
         fprintf out "skel %s {\n" sk.name;
+        let vname v = v#get_name in
         fprintf out "  local %s;\n"
-            (str_join ", " (List.map (fun v -> v#get_name) sk.locals));
+            (str_join ", " (List.map vname sk.locals));
         fprintf out "  shared %s;\n"
-            (str_join ", " (List.map (fun v -> v#get_name) sk.shared));
+            (str_join ", " (List.map vname sk.shared));
+        fprintf out "  parameters %s;\n"
+            (str_join ", " (List.map vname sk.params));
         let ploc (i, l) =
             fprintf out "    %s: [%s];\n"
                 (locname l) (str_join "; " (List.map int_s l))
@@ -101,8 +105,9 @@ module SkB = struct
         skel: Sk.skel_t;
     }
 
-    let empty locals shared =
-        { loc_map = Hashtbl.create 8; skel = Sk.empty locals shared }
+    let empty locals shared params =
+        { loc_map = Hashtbl.create 8;
+          skel = Sk.empty locals shared params}
 
     let finish st name =
         let cmp_rules a b =
@@ -260,8 +265,9 @@ let collect_constraints rt prog proc primary_vars trs =
     let all_stmts = SpinIrImp.mir_to_lir (get_comp proc) in
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg all_stmts) in
     let shared = Program.get_shared prog in
+    let params = Program.get_params prog in
     let all_vars = shared @ proc#get_locals in
-    let builder = ref (SkB.empty primary_vars shared) in
+    let builder = ref (SkB.empty primary_vars shared params) in
 
     (* collect steps expressed via paths *)
     let tt = (Program.get_type_tab prog)#copy in
