@@ -32,8 +32,13 @@ ulimit -SHv $MEM_LIMIT
 echo ulimit -SHt $TIME_LIMIT
 ulimit -SHt $TIME_LIMIT
 
+PROG=$1
+SPEC=$2
+shift 2
+export BYMC_FLAGS="$@ $BYMC_FLAGS"
+
 # run the tool
 DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bdd \
     SOURCE=$SOURCE MONO=$MONO REACH_REL=$REACH_REL \
-    `dirname $0`/script/refinement-loop.sh "$@"
+    `dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
 
