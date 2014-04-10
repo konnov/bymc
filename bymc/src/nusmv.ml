@@ -205,9 +205,13 @@ let token_s = function
       | HAVOC -> "havoc"
 
 
-(* we need var_fun as variables can look either x or next(x) *)
-let expr_s var_fun e =
-    let rec to_s ?in_bool:(inb=false) = function
+(* We need var_fun as variables can look either x or next(x).
+   Pass is_bool:true, whenever converting a boolean expression, and false
+   otherwise. This is required, as nusmv has different types for 0/1 and
+   FALSE/TRUE.
+ *)
+let expr_s ~is_bool var_fun e =
+    let rec to_s ?is_bool:(inb=false) = function
     | Nop comment ->
         (* make an explicit line break *)
         sprintf "TRUE -- %s\n" comment
@@ -219,7 +223,7 @@ let expr_s var_fun e =
 
     | Var v -> var_fun v
     | UnEx (CARD, f) -> sprintf "card(%s)" (to_s f)
-    | UnEx (NEG, f) -> sprintf "!(%s)" (to_s ~in_bool:true f)
+    | UnEx (NEG, f) -> sprintf "!(%s)" (to_s ~is_bool:true f)
     | UnEx (tok, f) -> sprintf "(%s(%s))" (token_s tok) (to_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (to_s arr) (to_s idx)
@@ -230,11 +234,11 @@ let expr_s var_fun e =
             sprintf "%s<-%s[%s] = %s" arr#get_name
                 old_arr#get_name (to_s idx) (to_s rhs)
     | BinEx (AND, f, g) ->
-        sprintf "(%s & %s)" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
+        sprintf "(%s & %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
     | BinEx (OR, f, g) ->
-        sprintf "(%s | %s)" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
+        sprintf "(%s | %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
     | BinEx (ASGN, f, g) ->
-        sprintf "%s = %s" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
+        sprintf "%s = %s" (to_s f) (to_s g)
     | BinEx (AT, proc, lab) ->
         (* initialized *)
         sprintf "bymc_loc = 1"
@@ -248,7 +252,7 @@ let expr_s var_fun e =
         (* initialized *)
         sprintf "bymc_loc = 1"
     in
-    to_s ~in_bool:true e
+    to_s ~is_bool:is_bool e
 
 
 let rec form_s = function
@@ -259,20 +263,14 @@ let rec form_s = function
     | UnEx (EVENTUALLY, f) -> sprintf " F (%s)" (form_s f)
     | UnEx (NEXT, f) -> sprintf " X (%s)" (form_s f)
     | BinEx (UNTIL, f, g) -> sprintf " ((%s) U (%s))" (form_s f) (form_s g)
-    | BinEx (EQ, f, g) ->
-            let vf v = v#mangled_name in
-            sprintf "(%s = %s)" (expr_s vf f) (expr_s vf g)
-    | BinEx (NE, f, g) ->
-            let vf v = v#mangled_name in
-            sprintf "(%s != %s)" (expr_s vf f) (expr_s vf g)
-    | _ as e -> expr_s (fun v -> v#mangled_name) e
+    | _ as e -> expr_s ~is_bool:true (fun v -> v#mangled_name) e
 
 
 let case_s (guard, es) =
     let vf v = v#mangled_name in
     sprintf "   %s : { %s };"
-        (expr_s vf guard)
-        (str_join ", " (List.map (expr_s vf) es))
+        (expr_s ~is_bool:true vf guard)
+        (str_join ", " (List.map (expr_s ~is_bool:false vf) es))
 
 
 let assign_s = function
@@ -300,15 +298,15 @@ let section_s s =
 
     | STrans es ->
             let es = preprocess es in
-            "TRANS\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+            "TRANS\n" ^ (str_join "\n  & " (List.map (expr_s ~is_bool:true vf) es))
 
     | SInit es ->
             let es = preprocess es in
-            "INIT\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+            "INIT\n" ^ (str_join "\n  & " (List.map (expr_s ~is_bool:true vf) es))
 
     | SInvar es ->
             let es = preprocess es in
-            "INVAR\n" ^ (str_join "\n  & " (List.map (expr_s vf) es))
+            "INVAR\n" ^ (str_join "\n  & " (List.map (expr_s ~is_bool:true vf) es))
 
     | SVar decls ->
             let vd (v, tp) =
@@ -316,13 +314,13 @@ let section_s s =
             "VAR\n " ^ (str_join "\n " (List.map vd decls))
 
     | SDefine defines ->
-            let e_s = expr_s (fun v -> v#mangled_name) in
+            let e_s = expr_s ~is_bool:false (fun v -> v#mangled_name) in
             let vd (n, e) =
                 sprintf "%s := %s;" n (e_s e)  in
             "DEFINE\n " ^ (str_join "\n " (List.map vd defines))
 
     | SModInst (inst_name, mod_type, params) ->
-            let ps = List.map (expr_s (fun v -> v#mangled_name)) params
+            let ps = List.map (expr_s ~is_bool:false (fun v -> v#mangled_name)) params
             in
             sprintf " %s: %s(%s);" inst_name mod_type (str_join ", " ps)
 
@@ -342,7 +340,7 @@ let top_s t =
         sprintf "INVARSPEC NAME %s := (%s);" name (form_s e)
 
     | SJustice e ->
-        sprintf "JUSTICE (%s);" (expr_s vf e)
+        sprintf "JUSTICE (%s);" (expr_s ~is_bool:true vf e)
 
 
 (* kind of a hack *)
