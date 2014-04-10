@@ -64,7 +64,7 @@ function mc_verify_spec {
             if [ "$RET" -eq 20 ]; then
                 echo "--------------------------------------"
                 echo "No counterexample found with bounded model checking."
-                echo "WARNING: To guarantee completeness, make sure that DEPTH is set properly"
+                echo "WARNING: To guarantee completeness, make sure that --lingeling is set properly"
                 echo "as per completeness threshold"
                 true
             elif [ "$RET" -eq 10 ]; then
@@ -75,7 +75,7 @@ function mc_verify_spec {
         else
             echo "--------------------------------------"
             echo "No counterexample found with bounded model checking."
-            echo "WARNING: To guarantee completeness, make sure that DEPTH is set properly"
+            echo "WARNING: To guarantee completeness, make sure that --length is set properly"
             echo "as per completeness threshold"
             echo ""
             true
