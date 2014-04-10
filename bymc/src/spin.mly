@@ -642,39 +642,21 @@ Special :
                     and opts = $2 in
                 met_else := false;
                 let do_s =
-                    [MLabel (fresh_id (), entry_lab);
+                    [MLabel (fresh_id (), sprintf "_lab%d" entry_lab);
                      MIf (fresh_id (), opts);
-                     MGoto (fresh_id (), entry_lab);
-                     MLabel (fresh_id (), break_lab)]
+                     MGoto (fresh_id (), sprintf "_lab%d" entry_lab);
+                     MLabel (fresh_id (), sprintf "_lab%d" break_lab)]
                 in
                 pop_labs ();                
                 do_s
 
-                (* $$ = nn($1, DO, ZN, ZN);
-                  $$->sl = $3->sl;
-                  prune_opts($$); *)
                 }
     | BREAK     {
                 let (_, blab) = top_labs () in
-                [MGoto (fresh_id (), blab)]
-                (* $$ = nn(ZN, GOTO, ZN, ZN);
-                  $$->sym = break_dest(); *)
+                [MGoto (fresh_id (), sprintf "_lab%d" blab)]
                 }
     | GOTO NAME		{
-        try
-            let l = (top_scope ())#lookup $2 in
-            [MGoto (fresh_id (), l#as_label#get_num)]
-        with Symbol_not_found _ ->
-            let label_no = mk_uniq_label () in
-            Hashtbl.add fwd_labels $2 label_no;
-            [MGoto (fresh_id (), label_no)] (* resolve it later *)
-     (* $$ = nn($2, GOTO, ZN, ZN);
-      if ($2->sym->type != 0
-      &&  $2->sym->type != LABEL) {
-        non_fatal("bad label-name %s",
-        $2->sym->name);
-      }
-      $2->sym->type = LABEL; *)
+        [MGoto (fresh_id (), $2)]
     }
 | NAME COLON stmnt	{
     let label_no =
@@ -686,9 +668,8 @@ Special :
             then Hashtbl.find fwd_labels $1
             else mk_uniq_label ()
     in
-    (top_scope ())#add_symb
-        $1 ((new label $1 label_no) :> symb);
-    MLabel (fresh_id (), label_no) :: $3
+    (top_scope ())#add_symb $1 ((new label $1 label_no) :> symb);
+    MLabel (fresh_id (), $1) :: $3
     }
 ;
 

@@ -317,12 +317,12 @@ let rec mir_stmt_s s =
             id v#flags_s v#get_name (expr_s e)
     | MDeclProp (id, v, ae) ->
             sprintf "<%3d> prop %s = %s" id v#get_name (atomic_expr_s ae)
-    | MLabel (id, l) -> sprintf "<%3d> %d: " id l
+    | MLabel (id, l) -> sprintf "<%3d> %s: " id l
     | MAtomic (id, stmts) ->
         sprintf "<%3d> atomic {\n%s\n }" id (seq_s stmts)
     | MD_step (id, stmts) ->
         sprintf "<%3d> d_step {\n%s\n }" id (seq_s stmts)
-    | MGoto (id, l) -> sprintf "<%3d> goto %d" id l
+    | MGoto (id, l) -> sprintf "<%3d> goto %s" id l
     | MIf (id, opts) ->
         let opt_s s = function
             | MOptGuarded seq -> sprintf "%s  :: %s" s (seq_s seq)
@@ -340,6 +340,14 @@ let rec mir_stmt_s s =
 
 
 let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
+    let labels = Hashtbl.create 10 in
+    let get_label_no label =
+        try Hashtbl.find labels label
+        with Not_found ->
+            let no = Hashtbl.length labels in
+            Hashtbl.replace labels label no;
+            no
+    in
     let mk_else_cond options =
         let get_guard e = function
         | MOptGuarded (MExpr (_, g) :: _) ->
@@ -367,8 +375,8 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
         | MD_step (id, seq) ->
             let new_seq = List.fold_right make_one seq [] in
             D_step_beg id :: new_seq @ D_step_end (fresh_id ()) :: tl
-        | MGoto (id, i) -> Goto (id, i) :: tl
-        | MLabel (id, i) -> Label (id, i) :: tl
+        | MGoto (id, label) -> Goto (id, get_label_no label) :: tl
+        | MLabel (id, label) -> Label (id, get_label_no label) :: tl
         | MDecl (id, v, i) -> Decl (id, v, i) :: tl
         | MExpr (id, e) -> Expr (id, e) :: tl
         | MSkip id -> Skip id :: tl

@@ -527,10 +527,10 @@ type 't mir_stmt =
     | MSkip of int
     | MExpr of int * 't expr
     | MDecl of int * var * 't expr
-    | MLabel of int * int
+    | MLabel of int * string
     | MAtomic of int * 't mir_stmt list
     | MD_step of int * 't mir_stmt list
-    | MGoto of int * int
+    | MGoto of int * string
     | MIf of int * 't mir_option list
     | MAssert of int * 't expr
     | MAssume of int * 't expr

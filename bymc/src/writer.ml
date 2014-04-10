@@ -99,7 +99,7 @@ let rec write_atomic_expr ff = function
         Format.pp_print_string ff ")"
 
 
-let rec write_stmt type_tab annot ff lvl indent_first lab_tab s =
+let rec write_stmt type_tab annot ff lvl indent_first s =
     let write = function
     | MSkip _ ->
         openb ff lvl indent_first;
@@ -167,29 +167,25 @@ let rec write_stmt type_tab annot ff lvl indent_first lab_tab s =
         closeb ff
 
     | MLabel (_, l) ->
-        if Hashtbl.mem lab_tab l
-        then Format.fprintf ff "%s:@\n" (Hashtbl.find lab_tab l)
-        else Format.fprintf ff "lab%d:@\n" l
+        Format.fprintf ff "%s:@\n" l
 
     | MAtomic (_, seq) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "atomic {";
         closeb ff;
-        List.iter (write_stmt type_tab annot ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab annot ff (lvl + 2) true) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
 
     | MD_step (_, seq) ->
         openb ff lvl indent_first;
         Format.pp_print_string ff "d_step {";
         closeb ff;
-        List.iter (write_stmt type_tab annot ff (lvl + 2) true lab_tab) seq;
+        List.iter (write_stmt type_tab annot ff (lvl + 2) true) seq;
         openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
 
     | MGoto (_, l) ->
         openb ff lvl indent_first;
-        if Hashtbl.mem lab_tab l
-        then Format.fprintf ff "goto %s;" (Hashtbl.find lab_tab l)
-        else Format.fprintf ff "goto lab%d;" l;
+        Format.fprintf ff "goto %s;" l;
         closeb ff
 
     | MIf (_, opts) ->
@@ -198,9 +194,9 @@ let rec write_stmt type_tab annot ff lvl indent_first lab_tab s =
             (function
                 | MOptGuarded seq ->
                     openb ff (lvl + 2) true; Format.fprintf ff "::@ @ @]";
-                    write_stmt type_tab annot ff (lvl + 4) false lab_tab (List.hd seq);
+                    write_stmt type_tab annot ff (lvl + 4) false (List.hd seq);
                     List.iter
-                        (write_stmt type_tab annot ff (lvl + 6) true lab_tab)
+                        (write_stmt type_tab annot ff (lvl + 6) true)
                         (List.tl seq);
 
                 | MOptElse seq ->
@@ -212,8 +208,8 @@ let rec write_stmt type_tab annot ff lvl indent_first lab_tab s =
                         match seq with
                         | [] -> ()
                         | hd :: tl ->
-                            write_stmt type_tab annot ff (lvl + 6) false lab_tab hd;
-                            List.iter (write_stmt type_tab annot ff (lvl + 4) true lab_tab) tl;
+                            write_stmt type_tab annot ff (lvl + 6) false hd;
+                            List.iter (write_stmt type_tab annot ff (lvl + 4) true) tl;
                     end
             ) opts;
         openb ff lvl true; Format.pp_print_string ff "fi;"; closeb ff;
@@ -294,12 +290,7 @@ let write_proc type_tab annot ff lvl p =
     closeb ff;
     (* end of proctype signature, the body begins *)
 
-    let labels = Hashtbl.create 10 in
-    Hashtbl.iter
-        (fun n l -> Hashtbl.add labels l#get_num n)
-        p#labels_as_hash;
-
-    List.iter (write_stmt type_tab annot ff (lvl + 2) true labels) p#get_stmts;
+    List.iter (write_stmt type_tab annot ff (lvl + 2) true) p#get_stmts;
     (* end the body *)
 
     openb ff lvl true; Format.pp_print_string ff "}"; closeb ff
@@ -309,7 +300,7 @@ let write_unit type_tab annot cout lvl u =
     let ff = Format.formatter_of_out_channel cout in
     match u with
     | Stmt s ->
-        write_stmt type_tab annot ff lvl true (Hashtbl.create 0) s
+        write_stmt type_tab annot ff lvl true s
     | Proc p ->
         write_proc type_tab annot ff lvl p
     | Ltl (name, exp) ->

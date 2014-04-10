@@ -597,7 +597,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
            the number of refinement steps! *)
         (* rebuild the regions, as some statements are removed *)
         let reg_tab = extract_skel body in
-        let main_lab = mk_uniq_label () in
+        let main_lab = sprintf "main%d" (mk_uniq_label ()) in
         let new_init =
             (funcs#mk_init c_ctx p#get_active_expr
                 (reg_tab#get "decl" body) (reg_tab#get "init" body))
