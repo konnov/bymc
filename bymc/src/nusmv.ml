@@ -207,13 +207,19 @@ let token_s = function
 
 (* we need var_fun as variables can look either x or next(x) *)
 let expr_s var_fun e =
-    let rec to_s = function
+    let rec to_s ?in_bool:(inb=false) = function
     | Nop comment ->
         (* make an explicit line break *)
         sprintf "TRUE -- %s\n" comment
-    | Const i -> string_of_int i
+    | Const i ->
+        (* convert 0 and 1 to false and true in nusmv *)
+        if inb
+        then (if i = 0 then "FALSE" else "TRUE")
+        else string_of_int i
+
     | Var v -> var_fun v
     | UnEx (CARD, f) -> sprintf "card(%s)" (to_s f)
+    | UnEx (NEG, f) -> sprintf "!(%s)" (to_s ~in_bool:true f)
     | UnEx (tok, f) -> sprintf "(%s(%s))" (token_s tok) (to_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
             sprintf "%s[%s]" (to_s arr) (to_s idx)
@@ -223,9 +229,12 @@ let expr_s var_fun e =
         ->
             sprintf "%s<-%s[%s] = %s" arr#get_name
                 old_arr#get_name (to_s idx) (to_s rhs)
-    | BinEx (AND, f, g) -> sprintf "(%s & %s)" (to_s f) (to_s g)
-    | BinEx (OR, f, g) -> sprintf "(%s | %s)" (to_s f) (to_s g)
-    | BinEx (ASGN, f, g) -> sprintf "%s = %s" (to_s f) (to_s g)
+    | BinEx (AND, f, g) ->
+        sprintf "(%s & %s)" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
+    | BinEx (OR, f, g) ->
+        sprintf "(%s | %s)" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
+    | BinEx (ASGN, f, g) ->
+        sprintf "%s = %s" (to_s ~in_bool:true f) (to_s ~in_bool:true g)
     | BinEx (AT, proc, lab) ->
         (* initialized *)
         sprintf "bymc_loc = 1"
@@ -239,7 +248,7 @@ let expr_s var_fun e =
         (* initialized *)
         sprintf "bymc_loc = 1"
     in
-    to_s e
+    to_s ~in_bool:true e
 
 
 let rec form_s = function
