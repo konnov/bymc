@@ -590,8 +590,13 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
             let bpos = (if p = 0 then tw else p) in
             let bpos = (if bpos > tw / 2 then bpos else tw) in
             assert (bpos > 0); (* otherwise, infinite rec. *)
-            (String.sub s 0 bpos) ^ "\\n    "
+            try
+              (String.sub s 0 bpos) ^ "\\n    "
                 ^ (break (String.sub s bpos ((String.length s) - bpos)) tw)
+            with Invalid_argument m ->
+                Printf.fprintf stderr "bpos=%d, tw=%d, len(s)=%d"
+                    bpos tw (String.length s);
+                raise (Invalid_argument m)
     in
     let rec write_bb bb =
         let label = String.concat "\n" (List.map stmt_s bb#get_seq) in
