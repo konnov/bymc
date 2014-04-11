@@ -140,6 +140,7 @@ while [ "$cmd" != "q" ]; do
             cmd="q"
         elif grep "trace-refined" refinement.out; then
             step=$((step+1))
+            echo "Refinement step #${step}."
             if [ "$DEBUG" != "" -o "$ASK" != "" ]; then
                 echo "Enter to continue, q<Enter> to exit"
                 read cmd
