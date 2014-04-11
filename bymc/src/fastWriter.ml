@@ -12,7 +12,7 @@ open SymbSkel
 
 module F = Format
 
-let ppn ff () = Format.pp_print_newline ff ()
+let ppn ff () = F.pp_print_newline ff ()
 
 let print_expr ?in_act:(ina=false) ff e =
     let rec p = function
@@ -26,7 +26,6 @@ let print_expr ?in_act:(ina=false) ff e =
 
     | UnEx (NEG, r) ->
         F.fprintf ff "!("; p r; F.fprintf ff ")"
-
 
     | BinEx (EQ, l, r) ->
         if ina
@@ -110,15 +109,16 @@ let model_name filename=
 
 let write_to_file filename rt prog skels =
     let fo = open_out filename in
-    let ff = Format.formatter_of_out_channel fo in
+    let ff = F.formatter_of_out_channel fo in
+    F.pp_set_margin ff 80;
     let mname = model_name rt#caches#options.Options.filename in
-    Format.fprintf ff "model@ %s@ {@ " (String.uppercase mname);
+    F.fprintf ff "model@ %s@ {@ " (String.uppercase mname);
 
     write_vars ff skels;
     F.fprintf ff "states normal;@\n@\n";
     List.iter (write_skel ff prog) skels;
 
     F.fprintf ff "}@\n";
-    Format.pp_print_flush ff ();
+    F.pp_print_flush ff ();
     close_out fo
 
