@@ -596,8 +596,6 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
             let bpos = (if bpos > tw / 2 then bpos else tw) in
             assert (bpos > 0); (* otherwise, infinite rec. *)
             try
-                Printf.fprintf stderr "bpos=%d, tw=%d, len(s)=%d\n"
-                    bpos tw (String.length s);
                 let b = (String.sub s 0 bpos) ^ "\\n    " in
                 let a = break (String.sub s bpos ((String.length s) - bpos)) tw
                 in
