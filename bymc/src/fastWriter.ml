@@ -79,13 +79,18 @@ let write_vars ff skels =
     F.fprintf ff ";@]@,"
 
 
-let write_rule ff prog num r =
+let write_rule ff prog sk num r =
     F.fprintf ff "@[<v 2>transition r%d := {@," num;
     F.fprintf ff "  from := normal;@,";
     F.fprintf ff "  to := normal;@,";
     F.fprintf ff "  guard := @[<hov 2>";
+    let src_name = Sk.locname (List.nth sk.Sk.locs r.Sk.src) in
+    let dst_name = Sk.locname (List.nth sk.Sk.locs r.Sk.dst) in
+    F.fprintf ff "%s > 0@ && " src_name;
     print_expr ff r.Sk.guard; F.fprintf ff "@];@,";
     F.fprintf ff "  action := @[<hov 2>";
+    F.fprintf ff "%s' = %s - 1,@, %s' = %s + 1,"
+        src_name src_name dst_name dst_name;
     let each_act n e =
         if n = 0
         then print_expr ff ~in_act:true e
@@ -98,9 +103,81 @@ let write_rule ff prog num r =
     F.fprintf ff "@];";
     F.fprintf ff "@]@,};@,"
 
-
 let write_skel ff prog sk =
-    List.iter2 (write_rule ff prog) (range 0 sk.Sk.nrules) sk.Sk.rules
+    List.iter2 (write_rule ff prog sk) (range 0 sk.Sk.nrules) sk.Sk.rules
+
+type spec_t = 
+    (* (p && <> !q) *)
+    | CondSafety of token expr (* p *) * token expr (* q *)
+    | Unsupported of token expr
+
+
+let classify_spec prog = function
+    (* (p -> [] q) *)
+    | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
+            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
+        then CondSafety (lhs, Ltl.normalize_form (UnEx (NEG, rhs)))
+        else Unsupported e
+
+    | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
+            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
+        then CondSafety (Ltl.normalize_form (UnEx (NEG, lhs)),
+                         Ltl.normalize_form (UnEx (NEG, rhs)))
+        else Unsupported e
+
+    | e -> Unsupported e
+
+
+let write_init_region ff prog skels init_form =
+    F.fprintf ff "@[<hov 2>state = normal";
+    let p_expr e =
+        F.fprintf ff "@ && @[<h>";
+        print_expr ff ~in_act:false e;
+        F.fprintf ff "@]"
+    in
+    List.iter p_expr (Program.get_assumes prog);
+    let each_skel sk = List.iter p_expr sk.Sk.inits in
+    List.iter each_skel skels;
+    F.fprintf ff ";@,"
+
+
+let write_bad_region ff prog skels bad_form =
+    F.fprintf ff "@[<hov 2>state = normal";
+    let p_expr e =
+        F.fprintf ff "@ && @[<h>";
+        print_expr ff ~in_act:false e;
+        F.fprintf ff "@]"
+    in
+    List.iter p_expr (Program.get_assumes prog);
+    let each_skel sk = List.iter p_expr sk.Sk.inits in
+    List.iter each_skel skels;
+    F.fprintf ff ";@,"
+
+
+let write_cond_safety ff prog skels name init_form bad_form =
+    F.fprintf ff "@[<v 2>strategy %s {@," (String.lowercase name);
+    F.fprintf ff "@[<v 2>Region init := {@,";
+    write_init_region ff prog skels init_form;
+    F.fprintf ff "@]@,};";
+    F.fprintf ff "@]@,}@,"
+
+
+let write_all_specs ff prog skels =
+    let each_spec name s =
+        match classify_spec prog s with
+        | Unsupported e ->
+            F.fprintf ff "@[<hov 2>/* %s is not supported:@," name;
+            print_expr ff ~in_act:false e;
+            F.fprintf ff " */@]@,@,";
+        | CondSafety (init, bad) ->
+            write_cond_safety ff prog skels name init bad
+    in
+    F.fprintf ff "@[<v 0>";
+    StrMap.iter each_spec (Program.get_ltl_forms prog);
+    F.fprintf ff "@]"
+
 
 let model_name filename=
     let base = Filename.chop_extension (Filename.basename filename) in
@@ -118,7 +195,8 @@ let write_to_file filename rt prog skels =
     F.fprintf ff "states normal;@\n@\n";
     List.iter (write_skel ff prog) skels;
 
-    F.fprintf ff "@]@,}";
+    F.fprintf ff "@]@,}@,@,";
+    write_all_specs ff prog skels;
     F.pp_print_flush ff ();
     close_out fo
 
