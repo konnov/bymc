@@ -94,10 +94,19 @@ let extract_skel proc_body =
         | MSkip _ -> false          (* ignore *)
         | _ -> true
     in
-    let rupdates, rcomp = Accums.list_div not_update (List.rev atomic_body) in
-    let updates = List.rev rupdates
-    and comp = List.rev rcomp in
-    
+    let is_update = function
+        | MLabel (_, s) -> s = "update"
+        | _ -> false
+    in
+    (* if there is a label 'update', then use it *)
+    let rcomp, _, rupdates = Accums.list_cut is_update atomic_body in
+    let comp, updates =
+        if rupdates <> []
+        then rcomp, rupdates
+        (* otherwise, collect all assignments from the tail *)
+        else let rupdates, rcomp = Accums.list_div not_update (List.rev atomic_body) in
+            (List.rev rcomp, List.rev rupdates)
+    in
     let reg_tbl = new region_tbl in
     reg_tbl#add "decl" decls;
     reg_tbl#add "init" inits;
