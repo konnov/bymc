@@ -74,29 +74,29 @@ let write_vars ff skels =
         then F.fprintf ff "%s" name
         else F.fprintf ff ",@ %s" name
     in
-    F.fprintf ff "var ";
+    F.fprintf ff "@[<hov 2>var ";
     List.iter2 each_var (range 0 (List.length vars)) vars;
-    F.fprintf ff ";@\n"
+    F.fprintf ff ";@]@,"
 
 
 let write_rule ff prog num r =
-    F.fprintf ff "transition@ r%d := {@\n" num;
-    F.fprintf ff "  from := normal;@\n";
-    F.fprintf ff "  to := normal;@\n";
+    F.fprintf ff "@[<v 2>transition r%d := {@," num;
+    F.fprintf ff "  from := normal;@,";
+    F.fprintf ff "  to := normal;@,";
     F.fprintf ff "  guard := @[<hov 2>";
-    print_expr ff r.Sk.guard; F.fprintf ff "];@\n";
-    F.fprintf ff "  action := @[<hv 2>";
+    print_expr ff r.Sk.guard; F.fprintf ff "@];@,";
+    F.fprintf ff "  action := @[<hov 2>";
     let each_act n e =
         if n = 0
         then print_expr ff ~in_act:true e
         else begin
-            F.fprintf ff ",@ ";
+            F.fprintf ff ",@,";
             print_expr ff ~in_act:true e
         end
     in
     List.iter2 each_act (range 0 (List.length r.Sk.act)) r.Sk.act;
-    F.fprintf ff ";@\n";
-    F.fprintf ff "};@\n@\n"
+    F.fprintf ff "@];";
+    F.fprintf ff "@]@,};@,"
 
 
 let write_skel ff prog sk =
@@ -112,13 +112,13 @@ let write_to_file filename rt prog skels =
     let ff = F.formatter_of_out_channel fo in
     F.pp_set_margin ff 80;
     let mname = model_name rt#caches#options.Options.filename in
-    F.fprintf ff "model@ %s@ {@ " (String.uppercase mname);
+    F.fprintf ff "@[<v 2>model %s {@," (String.uppercase mname);
 
     write_vars ff skels;
     F.fprintf ff "states normal;@\n@\n";
     List.iter (write_skel ff prog) skels;
 
-    F.fprintf ff "}@\n";
+    F.fprintf ff "@]@,}";
     F.pp_print_flush ff ();
     close_out fo
 
