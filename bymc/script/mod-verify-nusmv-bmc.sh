@@ -9,7 +9,7 @@ DEPTH=${DEPTH:-10} # parse options?
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
 LINGELING_TOOL=${LINGELING_TOOL:-lingeling}
-LINGELING_TOOL=`which $LINGELING_TOOL`
+LINGELING_TOOL=`which $LINGELING_TOOL` || die "$LINGELING_TOOL not found"
 LINGELING_OUT="lingeling.out"
 
 function mc_compile_first {
@@ -43,8 +43,6 @@ function mc_verify_spec {
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
         if [ "$LINGELING" -ne 0 ]; then
-            [ -x "$LINGELING_TOOL" ] || \
-                die "Command $LINGELING_TOOL to run lingeling is not found. TERMINATING."
             CNF="oneshot${LINGELING}"
             # lingeling solves one-shot problems much faster!
             echo "--------------------------------------"
