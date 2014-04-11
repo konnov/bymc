@@ -10,15 +10,53 @@ open Spin
 open SpinIr
 open SymbSkel
 
+module F = Format
+
 let ppn ff () = Format.pp_print_newline ff ()
 
-(* TODO: use Format.printf *)
-let rec expr_s = function
+let print_expr ?in_act:(ina=false) ff e =
+    let rec p = function
+    | BinEx (AND, l, r) ->
+        F.fprintf ff "("; p l;
+        F.fprintf ff ")@ && ("; p r; F.fprintf ff ")"
+
+    | BinEx (OR, l, r) ->
+        F.fprintf ff "("; p l; F.fprintf ff ")@ || "; 
+        F.fprintf ff "("; p r; F.fprintf ff ")"
+
+    | UnEx (NEG, r) ->
+        F.fprintf ff "!("; p r; F.fprintf ff ")"
+
+
     | BinEx (EQ, l, r) ->
-        Printf.sprintf "%s = %s" (expr_s l) (expr_s r)
-    | UnEx (NEXT, e) ->
-        Printf.sprintf "%s'" (expr_s e)
-    | _ as e -> SpinIrImp.expr_s e
+        if ina
+        then begin
+            p l; F.fprintf ff "@ = "; p r
+        end
+        else begin
+            F.fprintf ff "("; p l; F.fprintf ff "@ <= ";
+            p r; F.fprintf ff ")";
+            F.fprintf ff "@ || ("; p l; F.fprintf ff "@ >= "; p r;
+            F.fprintf ff ")";
+        end
+
+    | BinEx (NE, l, r) ->
+        F.fprintf ff "("; p l; F.fprintf ff "@ < ";
+        p r; F.fprintf ff ")";
+        F.fprintf ff "@ || ("; p l; F.fprintf ff "@ > ";
+        p r; F.fprintf ff ")"
+
+    | UnEx (NEXT, Var v) ->
+        F.fprintf ff "%s'" v#get_name
+
+    | UnEx (NEXT, _) ->
+        raise (Failure (Printf.sprintf "next(%s) is not supported"
+            (SpinIrImp.expr_s e)))
+
+    | _ as e ->
+        F.fprintf ff "%s" (SpinIrImp.expr_s e)
+    in
+    p e
 
 
 let write_vars ff skels =
@@ -34,29 +72,32 @@ let write_vars ff skels =
         StrSet.elements (List.fold_left collect_vars StrSet.empty skels) in
     let each_var i name =
         if i = 0
-        then Format.fprintf ff "%s" name
-        else Format.fprintf ff ",@ %s" name
+        then F.fprintf ff "%s" name
+        else F.fprintf ff ",@ %s" name
     in
-    Format.fprintf ff "var ";
+    F.fprintf ff "var ";
     List.iter2 each_var (range 0 (List.length vars)) vars;
-    Format.fprintf ff ";";
-    Format.pp_print_newline ff ()
+    F.fprintf ff ";@\n"
 
 
 let write_rule ff prog num r =
-    Format.fprintf ff "transition@ r%d := {" num; ppn ff ();
-    Format.fprintf ff "  from := normal;"; ppn ff ();
-    Format.fprintf ff "  to := normal;"; ppn ff ();
-    Format.fprintf ff "  guard := %s;" (expr_s r.Sk.guard); ppn ff ();
-    Format.fprintf ff "  action := ";
+    F.fprintf ff "transition@ r%d := {@\n" num;
+    F.fprintf ff "  from := normal;@\n";
+    F.fprintf ff "  to := normal;@\n";
+    F.fprintf ff "  guard := @[<hov 2>";
+    print_expr ff r.Sk.guard; F.fprintf ff "];@\n";
+    F.fprintf ff "  action := @[<hv 2>";
     let each_act n e =
         if n = 0
-        then Format.fprintf ff "%s" (expr_s e)
-        else Format.fprintf ff ",@ %s" (expr_s e)
+        then print_expr ff ~in_act:true e
+        else begin
+            F.fprintf ff ",@ ";
+            print_expr ff ~in_act:true e
+        end
     in
     List.iter2 each_act (range 0 (List.length r.Sk.act)) r.Sk.act;
-    Format.fprintf ff ";";
-    Format.fprintf ff "};"; ppn ff (); ppn ff ()
+    F.fprintf ff ";@\n";
+    F.fprintf ff "};@\n@\n"
 
 
 let write_skel ff prog sk =
@@ -72,15 +113,12 @@ let write_to_file filename rt prog skels =
     let ff = Format.formatter_of_out_channel fo in
     let mname = model_name rt#caches#options.Options.filename in
     Format.fprintf ff "model@ %s@ {@ " (String.uppercase mname);
-    Format.pp_open_hvbox ff 2;
 
     write_vars ff skels;
-    Format.fprintf ff "states normal;"; ppn ff (); ppn ff ();
+    F.fprintf ff "states normal;@\n@\n";
     List.iter (write_skel ff prog) skels;
 
-    Format.pp_close_box ff ();
-    Format.fprintf ff "}";
-    ppn ff ();
+    F.fprintf ff "}@\n";
     Format.pp_print_flush ff ();
     close_out fo
 
