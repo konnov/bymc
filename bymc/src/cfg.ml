@@ -579,6 +579,11 @@ let print_detailed_cfg title cfg =
 let write_dot (out_name: string) (cfg: 't control_flow_graph) =
     let fo = open_out out_name in
     let rec break s tw = 
+        (* protect debug output against ridiculously long strings *)
+        (* of course, the bug hit us right before the deadline *)
+        if (String.length s) > 10000
+        then (String.sub s 0 100) ^ "..."
+        else
         (* I am sure it can be done with Format if a day wasted *)
         if String.length s <= tw
         then s
@@ -591,10 +596,14 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
             let bpos = (if bpos > tw / 2 then bpos else tw) in
             assert (bpos > 0); (* otherwise, infinite rec. *)
             try
-              (String.sub s 0 bpos) ^ "\\n    "
-                ^ (break (String.sub s bpos ((String.length s) - bpos)) tw)
+                Printf.fprintf stderr "bpos=%d, tw=%d, len(s)=%d\n"
+                    bpos tw (String.length s);
+                let b = (String.sub s 0 bpos) ^ "\\n    " in
+                let a = break (String.sub s bpos ((String.length s) - bpos)) tw
+                in
+                b ^ a
             with Invalid_argument m ->
-                Printf.fprintf stderr "bpos=%d, tw=%d, len(s)=%d"
+                Printf.fprintf stderr "bpos=%d, tw=%d, len(s)=%d\n"
                     bpos tw (String.length s);
                 raise (Invalid_argument m)
     in
