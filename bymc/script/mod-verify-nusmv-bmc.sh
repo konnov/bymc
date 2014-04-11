@@ -8,7 +8,8 @@ DEPTH=${DEPTH:-10} # parse options?
 
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
-LINGELING_TOOL="lingeling"
+LINGELING_TOOL=${LINGELING_TOOL:-lingeling}
+LINGELING_TOOL=`which $LINGELING_TOOL`
 LINGELING_OUT="lingeling.out"
 
 function mc_compile_first {
