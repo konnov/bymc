@@ -583,8 +583,12 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
         if String.length s < tw
         then s
         else
-            let p = try String.rindex_from s (tw - 1) ' ' with Not_found -> tw in
+            let p =
+                try String.rindex_from s (tw - 1) ' '
+                with Not_found -> tw
+            in
             let bpos = (if p = 0 then tw else p) in
+            let bpos = (if bpos > tw / 2 then bpos else tw) in
             assert (bpos > 0); (* otherwise, infinite rec. *)
             (String.sub s 0 bpos) ^ "\\n    "
                 ^ (break (String.sub s bpos ((String.length s) - bpos)) tw)
