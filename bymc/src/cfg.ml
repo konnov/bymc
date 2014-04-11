@@ -580,7 +580,7 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
     let fo = open_out out_name in
     let rec break s tw = 
         (* I am sure it can be done with Format if a day wasted *)
-        if String.length s < tw
+        if String.length s <= tw
         then s
         else
             let p =
