@@ -24,6 +24,8 @@ BYMC_HOME=`cd $BYMC_HOME/..; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
 
+echo "" >$MC_OUT # create an empty output
+
 cmd=""
 step="0"
 rand=""

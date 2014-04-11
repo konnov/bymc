@@ -42,6 +42,8 @@ function mc_verify_spec {
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
         if [ "$LINGELING" -ne 0 ]; then
+            [ -x "$LINGELING_TOOL" ] || \
+                die "Command $LINGELING_TOOL to run lingeling is not found. TERMINATING."
             CNF="oneshot${LINGELING}"
             # lingeling solves one-shot problems much faster!
             echo "--------------------------------------"

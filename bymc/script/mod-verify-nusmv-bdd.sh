@@ -43,6 +43,7 @@ function mc_verify_spec {
     echo $TIME ${NUSMV} $ARGS -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     tee_or_die "${MC_OUT}" "nusmv failed" \
         $TIME ${NUSMV} $ARGS -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
+
     # the exit code of grep is the return code
     if grep -q "is true" ${MC_OUT}; then
         echo ""
