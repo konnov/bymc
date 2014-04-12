@@ -82,7 +82,7 @@ function mc_verify_spec {
 }
 
 function mc_refine {
-    echo ""
+    echo "error" >refinement.out
 }
 
 function mc_collect_stat {
@@ -107,6 +107,6 @@ function mc_collect_stat {
         res="MAYBE"
     fi
 
-    echo "10:Result=OK|11:technique=fast|31:fast-plugin=$FAST_PLUGIN|32:fast-usersec=$fast_user|33:fast-syssec=$fast_sys|34:fast-elapsedsec=$fast_elapsed|35:fast-maxreskb=$fast_maxres"
+    echo "10:Result=$res|11:technique=fast|31:fast-plugin=$FAST_PLUGIN|32:fast-usersec=$fast_user|33:fast-syssec=$fast_sys|34:fast-elapsedsec=$fast_elapsed|35:fast-maxreskb=$fast_maxres"
 }
 

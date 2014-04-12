@@ -30,6 +30,7 @@ rand=""
 out=""
 
 START_TIME=0
+INTERACTIVE=0
 
 # an improved version of tee
 function tee_or_die {
@@ -130,7 +131,7 @@ while [ "$cmd" != "q" ]; do
         mc_refine
         
         if grep "trace-no-refinement" refinement.out; then
-            if [ "$AUTO" == "" ]; then
+            if [ "$INTERACTIVE" != "0" ]; then
                 echo "Enter to try another trace, q<Enter> to exit"
                 rand="-DT_RAND"
                 read cmd
