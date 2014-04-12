@@ -86,8 +86,13 @@ let write_rule ff prog sk num r =
     F.fprintf ff "  guard := @[<hov 2>";
     let src_name = Sk.locname (List.nth sk.Sk.locs r.Sk.src) in
     let dst_name = Sk.locname (List.nth sk.Sk.locs r.Sk.dst) in
-    F.fprintf ff "%s > 0@ && " src_name;
-    print_expr ff r.Sk.guard; F.fprintf ff "@];@,";
+    F.fprintf ff "%s > 0@ " src_name;
+    if r.Sk.guard <> Const 1
+    then begin
+        F.fprintf ff "&& "; print_expr ff r.Sk.guard;
+
+    end;
+    F.fprintf ff "@];@,";
     F.fprintf ff "  action := @[<hov 2>";
     F.fprintf ff "%s' = %s - 1,@, %s' = %s + 1,"
         src_name src_name dst_name dst_name;
