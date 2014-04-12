@@ -33,17 +33,17 @@ let print_expr ?in_act:(ina=false) ff e =
             p l; F.fprintf ff "@ = "; p r
         end
         else begin
-            F.fprintf ff "("; p l; F.fprintf ff "@ <= ";
+            F.fprintf ff "(("; p l; F.fprintf ff "@ <= ";
             p r; F.fprintf ff ")";
-            F.fprintf ff "@ || ("; p l; F.fprintf ff "@ >= "; p r;
-            F.fprintf ff ")";
+            F.fprintf ff "@ && ("; p l; F.fprintf ff "@ >= "; p r;
+            F.fprintf ff "))";
         end
 
     | BinEx (NE, l, r) ->
-        F.fprintf ff "("; p l; F.fprintf ff "@ < ";
+        F.fprintf ff "(("; p l; F.fprintf ff "@ < ";
         p r; F.fprintf ff ")";
         F.fprintf ff "@ || ("; p l; F.fprintf ff "@ > ";
-        p r; F.fprintf ff ")"
+        p r; F.fprintf ff "))"
 
     | UnEx (NEXT, Var v) ->
         F.fprintf ff "%s'" v#get_name
@@ -130,37 +130,132 @@ let classify_spec prog = function
     | e -> Unsupported e
 
 
+let write_quant ff prog skels ~is_exist e =
+    let pname = Ltl.find_proc_name ~err_not_found:true e in
+    let sk =
+        try List.find (fun sk -> sk.Sk.name = pname) skels
+        with Not_found -> raise (Failure ("No skeleton " ^ pname))
+    in
+    let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
+    let is_matching_loc loc =
+        let lookup = List.combine var_names loc in
+        let val_fun = function
+            | Var v ->
+            begin
+                try List.assoc v#get_name lookup
+                with Not_found ->
+                    raise (Failure (Printf.sprintf "Var %s not found" v#get_name))
+            end
+
+            | e ->
+                raise (Failure ("val_fun(%s) is undefined" ^ (SpinIrImp.expr_s e)))
+        in
+        (SpinIrEval.Bool is_exist) = SpinIrEval.eval_expr val_fun e
+    in
+    let matching = List.filter is_matching_loc sk.Sk.locs in
+    (* exists *)
+    let each_loc not_first l =
+        (* exists: there is a non-zero location *)
+        if not_first && is_exist then F.fprintf ff "@ || ";
+        (* forall: all other locations are zero *)
+        if not_first && not is_exist then F.fprintf ff "@ && ";
+        if is_exist
+        then F.fprintf ff "(%s > 0)" (Sk.locname l)
+        else F.fprintf ff "(%s = 0)" (Sk.locname l);
+        true
+    in
+    F.fprintf ff "@[<hov 2>(";
+    ignore (List.fold_left each_loc false matching);
+    F.fprintf ff "@])"
+    
+
+let write_prop ff prog skels prop_form =
+    let atomics = Program.get_atomics_map prog in
+    let tt = Program.get_type_tab prog in
+    let rec pr_atomic neg = function
+        | PropGlob e ->
+            print_expr ff ~in_act:true e
+
+        | PropAll e ->
+            write_quant ff prog skels ~is_exist:false e
+
+        | PropSome e ->
+            write_quant ff prog skels ~is_exist:true e
+
+        | PropAnd (l, r) ->
+            F.fprintf ff "("; pr_atomic neg l;
+            F.fprintf ff ")@ && ("; pr_atomic neg r; F.fprintf ff ")"
+
+        | PropOr (l, r) ->
+            F.fprintf ff "("; pr_atomic neg l;
+            F.fprintf ff ")@ || ("; pr_atomic neg r; F.fprintf ff ")"
+    in
+    let rec pr neg = function
+    | BinEx (AND as t, l, r)
+    | BinEx (OR as t, l, r) ->
+        let op, nop = if t = AND then "&&", "||" else "||", "&&" in
+        F.fprintf ff "("; pr neg l;
+        F.fprintf ff ")@ %s (" (if neg then nop else op);
+        pr neg r; F.fprintf ff ")"
+
+    | UnEx (NEG, r) ->
+        pr (not neg) r
+
+    | Var v ->
+        let op = if neg then "!" else "" in
+        if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
+        then pr_atomic neg (StrMap.find v#get_name atomics)
+        else F.fprintf ff "%s%s" op v#get_name
+
+    | e ->
+        let ne = if neg then UnEx (NEG, e) else e in
+        print_expr ff ~in_act:true (Ltl.normalize_form ne)
+    in
+    pr false prop_form
+
+
 let write_init_region ff prog skels init_form =
     F.fprintf ff "@[<hov 2>state = normal";
     let p_expr e =
         F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:false e;
+        print_expr ff ~in_act:true e;
         F.fprintf ff "@]"
     in
     List.iter p_expr (Program.get_assumes prog);
     let each_skel sk = List.iter p_expr sk.Sk.inits in
-    List.iter each_skel skels;
-    F.fprintf ff ";@,"
+    List.iter each_skel skels
 
 
 let write_bad_region ff prog skels bad_form =
     F.fprintf ff "@[<hov 2>state = normal";
-    let p_expr e =
-        F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:false e;
-        F.fprintf ff "@]"
-    in
-    List.iter p_expr (Program.get_assumes prog);
-    let each_skel sk = List.iter p_expr sk.Sk.inits in
-    List.iter each_skel skels;
-    F.fprintf ff ";@,"
+    F.fprintf ff "@ && ";
+    write_prop ff prog skels bad_form
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
     F.fprintf ff "@[<v 2>strategy %s {@," (String.lowercase name);
     F.fprintf ff "@[<v 2>Region init := {@,";
     write_init_region ff prog skels init_form;
-    F.fprintf ff "@]@,};";
+    F.fprintf ff "@]@,};@,";
+    F.fprintf ff "@[<v 2>Region bad := {@,";
+    write_bad_region ff prog skels bad_form;
+    F.fprintf ff "@]@,};@,";
+    F.fprintf ff "Transitions t := {@[<hov>";
+    let rec each_rule i sk =
+        if i > 0 then F.fprintf ff ",@ ";
+        F.fprintf ff "r%d" i;
+        if i < (sk.Sk.nrules - 1)
+        then each_rule (i + 1) sk
+    in
+    List.iter (each_rule 0) skels;
+    F.fprintf ff "@]};@,";
+    F.fprintf ff "Region reach := post*(init, t);@,";
+    F.fprintf ff "Region result := reach && bad;@,";
+    F.fprintf ff "print(result);@,";
+    F.fprintf ff "if (isEmpty(result))@,";
+    F.fprintf ff "  then print(\"safe\");@,";
+    F.fprintf ff "  else print(\"unsafe\");@,";
+    F.fprintf ff "endif@,";
     F.fprintf ff "@]@,}@,"
 
 

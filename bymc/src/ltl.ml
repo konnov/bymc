@@ -169,3 +169,21 @@ let find_invariants (aprops: Spin.token atomic_expr Accums.StringMap.t):
     Accums.StringMap.fold collect_invariants aprops []
 
 
+let find_proc_name ?err_not_found:(complain=false) e =
+    let rec fnd = function
+    | Var v -> v#proc_name
+    | LabelRef (proc_name, _) -> proc_name
+    | BinEx (_, l, r) ->
+            let ln, rn = fnd l, fnd r in
+            if ln <> rn && ln <> "" && rn <> ""
+            then let m = (sprintf "2 procs in one property: %s <> %s" ln rn)
+            in raise (Failure m)
+            else if ln <> "" then ln else rn
+    | UnEx (_, l) -> fnd l
+    | _ -> ""
+    in
+    let name = fnd e in
+    if name = "" && complain
+    then raise (Failure ("No process name in property: " ^ (expr_s e)))
+    else name
+

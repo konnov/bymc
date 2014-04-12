@@ -41,18 +41,6 @@ let rec conc_expr pa exp =
 type quant = ForAll | Exist
 
 let conc_prop pa pmap prop = 
-    let rec find_proc_name = function
-        | Var v -> v#proc_name
-        | LabelRef (proc_name, _) -> proc_name
-        | BinEx (_, l, r) ->
-                let ln, rn = find_proc_name l, find_proc_name r in
-                if ln <> rn && ln <> "" && rn <> ""
-                then let m = (sprintf "2 procs in one property: %s <> %s" ln rn)
-                in raise (Failure m)
-                else if ln <> "" then ln else rn
-        | UnEx (_, l) -> find_proc_name l
-        | _ -> ""
-    in
     let rec mk_inst e idx =
         match e with
         | Var v ->
@@ -79,7 +67,7 @@ let conc_prop pa pmap prop =
         | BinEx (LT, l, r)
         | BinEx (GE, l, r)
         | BinEx (GT, l, r) as e ->
-                let pname = find_proc_name e in
+                let pname = Ltl.find_proc_name e in
                 if pname = ""
                 then e (* no process variables inside *)
                 else let count = find_proc pname in
@@ -101,14 +89,14 @@ let conc_prop pa pmap prop =
     in
     let rec tr_ae = function
     | PropAll e ->
-        let pname = find_proc_name e in
+        let pname = Ltl.find_proc_name e in
         if pname = ""
         then PropGlob e (* no process variables inside *)
         else let count = find_proc pname in
             let clones = List.map (mk_inst (conc_expr pa e)) (range 0 count) in
             PropGlob (list_to_binex AND clones)
     | PropSome e ->
-        let pname = find_proc_name e in
+        let pname = Ltl.find_proc_name e in
         if pname = ""
         then PropGlob e (* no process variables inside *)
         else let count = find_proc pname in

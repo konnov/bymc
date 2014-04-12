@@ -162,27 +162,9 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             then e (* leave intact, it is an expression over globals *)
             else mk_fun (eval_bool_expr e)
     in
-    let find_proc_name e =
-        let rec fnd = function
-        | Var v -> v#proc_name
-        | LabelRef (proc_name, _) -> proc_name
-        | BinEx (_, l, r) ->
-                let ln, rn = fnd l, fnd r in
-                if ln <> rn && ln <> "" && rn <> ""
-                then let m = sprintf
-                    "Two processes in one property: %s <> %s" ln rn in
-                raise (Failure m)
-                else if ln <> "" then ln else rn
-        | UnEx (_, l) -> fnd l
-        | _ -> "" in
-        let name = fnd e in
-        if name = ""
-        then raise (Abstraction_error ("Atomic: No process name in " ^ (expr_s e)))
-        else name
-    in
     let rec replace_card = function
         | UnEx (CARD, rhs) ->
-            let proc_name = find_proc_name rhs in
+            let proc_name = Ltl.find_proc_name ~err_not_found:true rhs in
             let c_ctx = ctr_ctx_tbl#get_ctx proc_name in
             let indices = c_ctx#all_indices_for (is_local_sat rhs) in
             let mk_sum l i =
