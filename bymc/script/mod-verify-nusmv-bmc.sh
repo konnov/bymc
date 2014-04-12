@@ -98,6 +98,9 @@ function mc_collect_stat {
     last=`grep 'Creating the formula specific k-dependent constraints' $MC_OUT \
         | perl -n -e 'if (/for k=(\d+)/) { print "$1\n" }' \
         | tail -n 2 | head -n 1`
-    echo "$res|11:technique=nusmv-bmc|21:bmc-len=$length|22:bmc-last-len=$last"
+    time_stat=`grep maxresident $LINGELING_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    lingeling_elapsed=`echo $time_stat | cut -d ' ' -f 3`
+    lingeling_maxres=`echo $time_stat | cut -d ' ' -f 4`
+    echo "$res|11:technique=nusmv-bmc|21:bmc-len=$length|22:bmc-last-len=$last|25:lingeling-elapsedsec=$lingeling_elapsed|26:lingeling-maxreskb=$lingeling_maxres"
 }
 
