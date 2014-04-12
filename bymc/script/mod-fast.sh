@@ -63,7 +63,7 @@ function mc_verify_spec {
     # run fast
     echo $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
     tee_or_die "${MC_OUT}" "fast failed" \
-        $TIME ${FAST} $ARGS --plugin=$FAST_PLUGIN -t
+        $TIME ${FAST} $ARGS --plugin=$FAST_PLUGIN -t model.fst
 
     # the exit code of grep is the return code
     if grep -q "specification is satisfied" ${MC_OUT}; then
