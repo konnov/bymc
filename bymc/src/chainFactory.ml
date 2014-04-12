@@ -70,7 +70,7 @@ module Conc = struct
 end
 
 
-module PiaSymb = struct
+module PiaBounds = struct
     type plugins_t = {
         pia: Pia.plugins_t;
         sk: SymbSkelPlugin.symb_skel_plugin_t;
@@ -97,18 +97,31 @@ module PiaSymb = struct
 end
 
 
-let mk_pia_data_counter_chain () =
-    Pia.mk_chain (Pia.mk_plugins ())
+module PiaFast = struct
+    type plugins_t = {
+        pia: Pia.plugins_t;
+        sk: SymbSkelPlugin.symb_skel_plugin_t;
+        fp: FastPlugin.fast_plugin_t;
+    }
 
-let mk_concrete_chain () =
-    Conc.mk_chain (Conc.mk_plugins ())
+    let mk_plugins () =
+        let pia = Pia.mk_plugins () in
+        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
+        let fp = new FastPlugin.fast_plugin_t "fast" sk in
+        { pia = pia; sk = sk; fp = fp }
 
-let mk_bounds_chain () =
-    PiaSymb.mk_chain (PiaSymb.mk_plugins ())
+    let mk_chain plugins =
+        let chain = Pia.mk_chain plugins.pia in
+        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
+        chain#add_plugin plugins.fp OutOfPred;
+        chain
+end
+
 
 let create_chain = function
-    | "piaDataCtr" -> mk_pia_data_counter_chain ()
-    | "concrete" -> mk_concrete_chain ()
-    | "bounds" -> mk_bounds_chain ()
+    | "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
+    | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
+    | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
+    | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))
 

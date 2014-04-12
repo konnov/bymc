@@ -44,7 +44,6 @@ class symb_skel_plugin_t (plugin_name: string) =
             in
             m_skels <- skels;
             m_abs_skels <- askels;
-            FastWriter.write_to_file "model.fst" rt new_prog m_skels;
             new_prog
 
         method test_input filename =
