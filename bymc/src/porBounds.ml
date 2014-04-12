@@ -123,6 +123,7 @@ let compute_unlocking lockt solver sk =
 
 
 let compute_diam solver sk =
+    logtm INFO (sprintf "> there are %d locations..." sk.Sk.nlocs);
     logtm INFO (sprintf "> there are %d rules..." sk.Sk.nrules);
     logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let fg = compute_flow sk in

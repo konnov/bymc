@@ -80,7 +80,11 @@ function mc_collect_stat {
         | perl -n -e 'if (/.*(\d+) backward unlocking.*/) { print "$1\n" }'`
     forward=`grep "forward locking" $ANALYSIS_OUT | tail -n 1 \
         | perl -n -e 'if (/.*(\d+) forward locking.*/) { print "$1\n" }'`
+    nlocs=`grep "locations" $ANALYSIS_OUT | tail -n 1 \
+        | perl -n -e 'if (/.*there are (\d+) locations.*/) { print "$1\n" }'`
+    nrules=`grep "rules" $ANALYSIS_OUT | tail -n 1 \
+        | perl -n -e 'if (/.*there are (\d+) rules*/) { print "$1\n" }'`
 
-    echo "10:Result=OK|11:technique=analysis|12:nusmv-usersec=$smv_user|13:nusmv-syssec=$smv_sys|14:nusmv-elapsedsec=$smv_elapsed|15:nusmv-maxreskb=$smv_maxres|20:analysis-usersec=$b_user|21:analysis-syssec=$b_sys|22:analysis-elapsedsec=$b_elapsed|23:analysis-maxreskb=$b_maxres|25:analysis-bound=$bound|26:analysis-backward=$backward|27:analysis-forward=$forward"
+    echo "10:Result=OK|11:technique=analysis|12:nusmv-usersec=$smv_user|13:nusmv-syssec=$smv_sys|14:nusmv-elapsedsec=$smv_elapsed|15:nusmv-maxreskb=$smv_maxres|20:analysis-usersec=$b_user|21:analysis-syssec=$b_sys|22:analysis-elapsedsec=$b_elapsed|23:analysis-maxreskb=$b_maxres|25:analysis-bound=$bound|26:analysis-backward=$backward|27:analysis-forward=$forward|28:analysis-nlocs=$nlocs|29:analysis-nrules=$nrules"
 }
 
