@@ -80,6 +80,8 @@ elif [ "${TARGET_MC}" == "nusmv-bdd" ]; then
     . "${BYMC_HOME}/script/mod-verify-nusmv-bdd.sh"
 elif [ "${TARGET_MC}" == "analysis" ]; then
     . "${BYMC_HOME}/script/mod-analyse.sh"
+elif [ "${TARGET_MC}" == "fast" ]; then
+    . "${BYMC_HOME}/script/mod-fast.sh"
 else
     echo "Unsupported TARGET_MC='${TARGET_MC}'"
     exit 2

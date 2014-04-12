@@ -1,6 +1,8 @@
 #!/bin/bash
 #
 # Run the abstraction refinement loop with nusmv in bmc mode
+#
+# Igor Konnov, 2013-2014
 
 DEPTH=10
 NUSMV_VERBOSE=0
