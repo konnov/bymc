@@ -22,7 +22,7 @@ else
 fi
 
 function mc_compile_first {
-    BYMC_FLAGS="--target nusmv --chain bounds"
+    BYMC_FLAGS="--target nusmv --chain fast"
     echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
     tee_or_die "${ANALYSIS_OUT}" "bymc failed" \
         ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}

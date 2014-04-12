@@ -24,8 +24,6 @@ BYMC_HOME=`cd $BYMC_HOME/..; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
 
-echo "" >$MC_OUT # create an empty output
-
 cmd=""
 step="0"
 rand=""
@@ -108,6 +106,8 @@ work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-`date \"+%y%m%d-%H%M\
 work_dir=`mktemp -d $work_dir_template`
 cd "$work_dir"
 echo "Changed directory to $work_dir"
+
+echo "" >$MC_OUT # create an empty output
 
 START_TIME=$(date +%s)
 
