@@ -253,8 +253,8 @@ let write_cond_safety ff prog skels name init_form bad_form =
     F.fprintf ff "Region result := reach && bad;@,";
     F.fprintf ff "print(result);@,";
     F.fprintf ff "if (isEmpty(result))@,";
-    F.fprintf ff "  then print(\"safe\");@,";
-    F.fprintf ff "  else print(\"unsafe\");@,";
+    F.fprintf ff "  then print(\"specification is satisfied\");@,";
+    F.fprintf ff "  else print(\"specification is violated\");@,";
     F.fprintf ff "endif@,";
     F.fprintf ff "@]@,}@,"
 

@@ -1,5 +1,7 @@
 (*
- * Computing execution bounds using partial order reduction.
+ * Transforming process skeletons into the FAST format.
+ *
+ * see http://tapas.labri.fr/trac/wiki/FASTer
  *
  * Igor Konnov, 2014
  *)
