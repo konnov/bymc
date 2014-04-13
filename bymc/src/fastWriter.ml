@@ -58,6 +58,67 @@ let print_expr ?in_act:(ina=false) ff e =
     p e
 
 
+(* Sometimes we have division over a constant. Eliminate it by multiplying by
+   the divisor.
+ *)
+let eliminate_div e =
+    let rec divisor = function
+        | BinEx (DIV, l, Const k) ->
+             k * (divisor l)
+        | BinEx (DIV, _, r) ->
+             raise (Failure "Division over non-constant")
+        | BinEx (MULT, l, r)
+        | BinEx (MINUS, l, r)
+        | BinEx (PLUS, l, r) ->
+             (divisor l) * (divisor r)
+        | _ -> 1
+    in
+    let rec mult div = function
+        | BinEx (DIV, l, Const k) ->
+             assert (div mod k = 0);
+             if k = div
+             then l
+             else mult (div / k) l
+        
+        | BinEx (MULT, l, r) ->
+             let ld, rd = divisor l, divisor r in
+             BinEx (MULT, mult (ld * div / rd) l, mult rd r)
+
+        | BinEx (MINUS as t, l, r)
+        | BinEx (PLUS as t, l, r) ->
+             BinEx (t, mult div l, mult div r)
+
+        | UnEx (t, r) ->
+             UnEx (t, mult div r)
+             
+        | Const k -> Const (k * div)
+        | Var v -> BinEx (MULT, Const div, Var v)
+        | e -> raise (Failure ("Unsupported: " ^ (SpinIrImp.expr_s e)))
+    in
+    let rec in_logical = function
+        | BinEx (AND as t, l, r)
+        | BinEx (OR as t, l, r) ->
+            BinEx (t, in_logical l, in_logical r)
+        | UnEx (NEG, r) ->
+            UnEx (NEG, in_logical r)
+
+        | BinEx (LT as t, l, r)
+        | BinEx (GT as t, l, r)
+        | BinEx (LE as t, l, r)
+        | BinEx (GE as t, l, r)
+        | BinEx (EQ as t, l, r)
+        | BinEx (NE as t, l, r) ->
+            let div = max (divisor l) (divisor r) in
+            if div > 1
+            then BinEx (t, mult div l, mult div r)
+            else BinEx (t, l, r)
+
+        | _ as e -> e
+    in
+    in_logical e
+
+
+
 let write_vars ff skels =
     (* XXX: the locations of several processes might clash *)
     let collect_vars var_set sk =
@@ -89,8 +150,8 @@ let write_rule ff prog sk num r =
     F.fprintf ff "%s > 0@ " src_name;
     if r.Sk.guard <> Const 1
     then begin
-        F.fprintf ff "&& "; print_expr ff r.Sk.guard;
-
+        F.fprintf ff "&& ";
+        print_expr ff (eliminate_div r.Sk.guard);
     end;
     F.fprintf ff "@];@,";
     F.fprintf ff "  action := @[<hov 2>";
@@ -223,7 +284,7 @@ let write_init_region ff prog skels init_form =
     F.fprintf ff "@[<hov 2>state = normal";
     let p_expr e =
         F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:true e;
+        print_expr ff ~in_act:true (eliminate_div e);
         F.fprintf ff "@]"
     in
     List.iter p_expr (Program.get_assumes prog);
