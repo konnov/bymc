@@ -289,7 +289,10 @@ let write_init_region ff prog skels init_form =
     in
     List.iter p_expr (Program.get_assumes prog);
     let each_skel sk = List.iter p_expr sk.Sk.inits in
-    List.iter each_skel skels
+    List.iter each_skel skels;
+    F.fprintf ff "@ && @[<h>";
+    write_prop ff prog skels init_form;
+    F.fprintf ff "@]"
 
 
 let write_bad_region ff prog skels bad_form =

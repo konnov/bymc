@@ -185,12 +185,25 @@ let label_transition builder path_cons vals (prev, next) =
         (* TODO: replace the expression on rhs with Const a *)
         | _ -> raise (SymbExec_error "Complex expression in rhs")
     in
-    let is_inconsistent (x, i) =
-        match Hashtbl.find vals x#get_name with
+    let is_inconsistent h (x, i) =
+        let rhs = Hashtbl.find vals x#get_name in
+        let of_const = function
+            | Const i -> i
+            | _ -> raise (Failure "Expected a constant")
+        in
+        let val_fun = function
+            | Var v ->
+                begin
+                    try of_const (Hashtbl.find h v#get_name)
+                    with Not_found -> raise (Failure (v#get_name ^ " not found"))
+                end
+            | _ as e -> raise (Invalid_argument (SpinIrImp.expr_s e))
+        in
+        match SpinIrEval.eval_expr val_fun rhs with 
             (* the next value of the transition contradicts
                to the computed value *)
-        | Const j -> j <> i
-        | _ -> false
+        | SpinIrEval.Int j -> j <> i
+        | SpinIrEval.Bool _ -> raise (Failure ("Unexpected bool"))
     in
     let h = Hashtbl.create 10 in
     List.iter (load_prev h) prev;
@@ -198,12 +211,21 @@ let label_transition builder path_cons vals (prev, next) =
     let h = Hashtbl.create 10 in
     List.iter (load_next h) next;
     let npc = sub_vars h npc in
+        Printf.printf "tr %s -> %s\n"
+            (str_join "." (List.map int_s (List.map snd prev)))
+            (str_join "." (List.map int_s (List.map snd next)));
+    Printf.printf "npc:: %s\n" (SpinIrImp.expr_s npc);
+    Hashtbl.iter (fun k v ->
+            Printf.printf "%s <- %s\n" k (SpinIrImp.expr_s v)) vals; 
     assert_all_locals_eliminated npc;
-    let inconsistent = List.exists is_inconsistent next in
+    let h = Hashtbl.create 10 in
+    List.iter (load_prev h) prev; List.iter (load_next h) next;
+    let inconsistent = List.exists (is_inconsistent h) next in
     match npc, inconsistent with
     | Const 0, _ -> () (* the path conditions are violated *)
     | _, true -> ()    (* the state after the execution is invalid *)
     | _ -> (* o.k. *)
+        Printf.printf "ADDED\n";
         let src = SkB.add_loc builder (List.map snd prev) in
         let dst = SkB.add_loc builder (List.map snd next) in
         let guard = npc in
@@ -220,6 +242,7 @@ let label_transition builder path_cons vals (prev, next) =
 
 
 let propagate builder trs path_cons vals =
+    Printf.printf "XXXXpath_cons:: %s\n" (SpinIrImp.expr_s path_cons);
     List.iter (label_transition builder path_cons vals) trs
 
 
