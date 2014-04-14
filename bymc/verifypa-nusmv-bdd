@@ -7,10 +7,11 @@ MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 MONO=""
 REACH_REL=""
+NO_JUSTICE=""
 SOURCE=""
 
 # parse options
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o w: --long nusmv-verbose:,rel-mono,rel-reach,no-justice,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 eval set -- "$TEMPOPTS"
@@ -20,6 +21,7 @@ while true ; do
     --source) SOURCE=$2 ; shift 2 ;;
     --rel-mono) MONO="1" ; shift ;;
     --rel-reach) REACH_REL="1" ; shift ;;
+    --no-justice) NO_JUSTICE="1" ; shift ;;
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
     --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
     --) shift ; break ;;
@@ -38,7 +40,7 @@ shift 2
 export BYMC_FLAGS="$@ $BYMC_FLAGS"
 
 # run the tool
-DEPTH=$DEPTH NUSMV_VERBOSE=$NUSMV_VERBOSE TARGET_MC=nusmv-bdd \
-    SOURCE=$SOURCE MONO=$MONO REACH_REL=$REACH_REL \
-    `dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
+export DEPTH NUSMV_VERBOSE SOURCE MONO REACH_REL NO_JUSTICE
+export TARGET_MC=nusmv-bdd
+`dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
 
