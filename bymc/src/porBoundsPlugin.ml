@@ -18,8 +18,10 @@ class por_bounds_plugin_t (plugin_name: string)
         inherit analysis_plugin_t plugin_name
 
         method transform rt =
+            let dom = rt#caches#analysis#get_pia_dom in
+            let dom_size = dom#length in
             List.iter
-                (fun s -> ignore (PorBounds.compute_diam rt#solver s))
+                (fun s -> ignore (PorBounds.compute_diam rt#solver dom_size s))
                 sk_plugin#skels;
             self#get_input0
 

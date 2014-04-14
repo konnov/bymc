@@ -122,7 +122,7 @@ let compute_unlocking lockt solver sk =
     graph
 
 
-let compute_diam solver sk =
+let compute_diam solver dom_size sk =
     logtm INFO (sprintf "> there are %d locations..." sk.Sk.nlocs);
     logtm INFO (sprintf "> there are %d rules..." sk.Sk.nrules);
     logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
@@ -155,6 +155,8 @@ let compute_diam solver sk =
     let bound = (1 + nbackward + nforward) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
         sk.Sk.name bound nbackward nforward sk.Sk.nrules);
+    log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
+        sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
     bound
 
 
