@@ -180,12 +180,14 @@ let label_transition builder path_cons vals (prev, next) =
     let load_next h (x, i) =
         match Hashtbl.find vals x#get_name with
         | Const b -> ()
-        | Var v -> (* this variable was introduced by havoc *)
-            Hashtbl.replace h v#get_name (Const i)
+        | Var v ->
+            if String.contains v#get_name '$'
+            (* this variable was introduced by havoc *)
+            then Hashtbl.replace h v#get_name (Const i)
         (* TODO: replace the expression on rhs with Const a *)
         | _ -> raise (SymbExec_error "Complex expression in rhs")
     in
-    let is_inconsistent h (x, i) =
+    let is_inconsistent h (x, value) =
         let rhs = Hashtbl.find vals x#get_name in
         let of_const = function
             | Const i -> i
@@ -202,7 +204,7 @@ let label_transition builder path_cons vals (prev, next) =
         match SpinIrEval.eval_expr val_fun rhs with 
             (* the next value of the transition contradicts
                to the computed value *)
-        | SpinIrEval.Int j -> j <> i
+        | SpinIrEval.Int j -> j <> value
         | SpinIrEval.Bool _ -> raise (Failure ("Unexpected bool"))
     in
     let h = Hashtbl.create 10 in
