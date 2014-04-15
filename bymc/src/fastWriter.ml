@@ -14,7 +14,59 @@ module F = Format
 
 let ppn ff () = F.pp_print_newline ff ()
 
-let print_expr ?in_act:(ina=false) ff e =
+type qtype = QAll | QExist | QCard
+
+let write_quant ff prog skels ~quant e =
+    let pname = Ltl.find_proc_name ~err_not_found:true e in
+    let sk =
+        try List.find (fun sk -> sk.Sk.name = pname) skels
+        with Not_found -> raise (Failure ("No skeleton " ^ pname))
+    in
+    let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
+    let is_matching_loc loc =
+        let lookup = List.combine var_names loc in
+        let val_fun = function
+            | Var v ->
+            begin
+                try List.assoc v#get_name lookup
+                with Not_found ->
+                    raise (Failure (Printf.sprintf "Var %s not found" v#get_name))
+            end
+
+            | e ->
+                raise (Failure ("val_fun(%s) is undefined" ^ (SpinIrImp.expr_s e)))
+        in
+        (* QAll needs negation *)
+        (SpinIrEval.Bool (quant <> QAll)) = SpinIrEval.eval_expr val_fun e
+    in
+    let matching = List.filter is_matching_loc sk.Sk.locs in
+    let each_loc not_first l =
+        match quant with
+        | QExist -> (* there is a non-zero location *)
+            if not_first then F.fprintf ff "@ || ";
+            F.fprintf ff "(%s > 0)" (Sk.locname l);
+            true
+
+        | QAll -> (* forall: all other locations are zero *)
+            if not_first then F.fprintf ff "@ && ";
+            F.fprintf ff "(%s = 0)" (Sk.locname l);
+            true
+
+        | QCard ->
+            if not_first then F.fprintf ff "@ + ";
+            F.fprintf ff "%s " (Sk.locname l);
+            true
+    in
+    if quant <> QCard then F.fprintf ff "@[<hov 2>(";
+    ignore (List.fold_left each_loc false matching);
+    if quant <> QCard then F.fprintf ff "@])"
+
+
+let print_def_expr ff e =
+    F.fprintf ff "%s" (SpinIrImp.expr_s e)
+
+
+let print_expr ?printex:(pex=print_def_expr) ?in_act:(ina=false) ff e =
     let rec p = function
     | BinEx (AND, l, r) ->
         F.fprintf ff "("; p l;
@@ -53,7 +105,7 @@ let print_expr ?in_act:(ina=false) ff e =
             (SpinIrImp.expr_s e)))
 
     | _ as e ->
-        F.fprintf ff "%s" (SpinIrImp.expr_s e)
+        pex ff e
     in
     p e
 
@@ -195,58 +247,33 @@ let classify_spec prog = function
 
     | e -> Unsupported e
 
-
-let write_quant ff prog skels ~is_exist e =
-    let pname = Ltl.find_proc_name ~err_not_found:true e in
-    let sk =
-        try List.find (fun sk -> sk.Sk.name = pname) skels
-        with Not_found -> raise (Failure ("No skeleton " ^ pname))
-    in
-    let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
-    let is_matching_loc loc =
-        let lookup = List.combine var_names loc in
-        let val_fun = function
-            | Var v ->
-            begin
-                try List.assoc v#get_name lookup
-                with Not_found ->
-                    raise (Failure (Printf.sprintf "Var %s not found" v#get_name))
-            end
-
-            | e ->
-                raise (Failure ("val_fun(%s) is undefined" ^ (SpinIrImp.expr_s e)))
-        in
-        (SpinIrEval.Bool is_exist) = SpinIrEval.eval_expr val_fun e
-    in
-    let matching = List.filter is_matching_loc sk.Sk.locs in
-    (* exists *)
-    let each_loc not_first l =
-        (* exists: there is a non-zero location *)
-        if not_first && is_exist then F.fprintf ff "@ || ";
-        (* forall: all other locations are zero *)
-        if not_first && not is_exist then F.fprintf ff "@ && ";
-        if is_exist
-        then F.fprintf ff "(%s > 0)" (Sk.locname l)
-        else F.fprintf ff "(%s = 0)" (Sk.locname l);
-        true
-    in
-    F.fprintf ff "@[<hov 2>(";
-    ignore (List.fold_left each_loc false matching);
-    F.fprintf ff "@])"
     
 
 let write_prop ff prog skels prop_form =
     let atomics = Program.get_atomics_map prog in
     let tt = Program.get_type_tab prog in
+    let rec expand_card = function
+        | UnEx (CARD, r) ->
+                write_quant ff prog skels ~quant:QCard r
+        | UnEx (t, r) ->
+                F.fprintf ff "%s" (SpinIrImp.token_s t);
+                expand_card r
+        | BinEx (t, l, r) ->
+                expand_card l;
+                F.fprintf ff "@ %s " (SpinIrImp.token_s t);
+                expand_card r
+        
+        | e -> print_def_expr ff e
+    in
     let rec pr_atomic neg = function
         | PropGlob e ->
-            print_expr ff ~in_act:true e
+            expand_card e
 
         | PropAll e ->
-            write_quant ff prog skels ~is_exist:false e
+            write_quant ff prog skels ~quant:QAll e
 
         | PropSome e ->
-            write_quant ff prog skels ~is_exist:true e
+            write_quant ff prog skels ~quant:QExist e
 
         | PropAnd (l, r) ->
             F.fprintf ff "("; pr_atomic neg l;
@@ -302,30 +329,23 @@ let write_bad_region ff prog skels bad_form =
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
-    F.fprintf ff "@[<v 2>strategy %s {@," (String.lowercase name);
-    F.fprintf ff "@[<v 2>Region init := {@,";
+    let suffix = String.lowercase name in
+    F.fprintf ff "@[<v 2>Region init_%s := {@," suffix;
     write_init_region ff prog skels init_form;
     F.fprintf ff "@]@,};@,";
-    F.fprintf ff "@[<v 2>Region bad := {@,";
+    F.fprintf ff "@[<v 2>Region bad_%s := {@," suffix;
     write_bad_region ff prog skels bad_form;
     F.fprintf ff "@]@,};@,";
-    F.fprintf ff "Transitions t := {@[<hov>";
-    let rec each_rule i sk =
-        if i > 0 then F.fprintf ff ",@ ";
-        F.fprintf ff "r%d" i;
-        if i < (sk.Sk.nrules - 1)
-        then each_rule (i + 1) sk
-    in
-    List.iter (each_rule 0) skels;
-    F.fprintf ff "@]};@,";
-    F.fprintf ff "Region reach := post*(init, t);@,";
-    F.fprintf ff "Region result := reach && bad;@,";
-    F.fprintf ff "print(result);@,";
-    F.fprintf ff "if (isEmpty(result))@,";
-    F.fprintf ff "  then print(\"specification is satisfied\");@,";
-    F.fprintf ff "  else print(\"specification is violated\");@,";
-    F.fprintf ff "endif@,";
-    F.fprintf ff "@]@,}@,"
+    F.fprintf ff "Region reach_%s := post*(init_%s, t);@," suffix suffix;
+    F.fprintf ff "Region result_%s := reach_%s && bad_%s;@,"
+        suffix suffix suffix;
+    F.fprintf ff "print(result_%s);@," suffix;
+    F.fprintf ff "if (isEmpty(result_%s))@," suffix;
+    F.fprintf ff "  then print(\"specification %s is satisfied\");@,"
+        (String.lowercase name);
+    F.fprintf ff "  else print(\"specification %s is violated\");@,"
+        (String.lowercase name);
+    F.fprintf ff "endif@,"
 
 
 let write_all_specs ff prog skels =
@@ -338,9 +358,20 @@ let write_all_specs ff prog skels =
         | CondSafety (init, bad) ->
             write_cond_safety ff prog skels name init bad
     in
+    F.fprintf ff "@[<v 2>strategy s1 {@,";
     F.fprintf ff "@[<v 0>";
+    F.fprintf ff "Transitions t := {@[<hov>";
+    let rec each_rule i sk =
+        if i > 0 then F.fprintf ff ",@ ";
+        F.fprintf ff "r%d" i;
+        if i < (sk.Sk.nrules - 1)
+        then each_rule (i + 1) sk
+    in
+    List.iter (each_rule 0) skels;
+    F.fprintf ff "@]};@,";
     StrMap.iter each_spec (Program.get_ltl_forms prog);
-    F.fprintf ff "@]"
+    F.fprintf ff "@]";
+    F.fprintf ff "@]@,}@,"
 
 
 let model_name filename=
