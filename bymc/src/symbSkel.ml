@@ -213,12 +213,24 @@ let label_transition builder path_cons vals (prev, next) =
     let h = Hashtbl.create 10 in
     List.iter (load_next h) next;
     let npc = sub_vars h npc in
-        Printf.printf "tr %s -> %s\n"
+
+    (* tracing... *)
+    let trace_print () =
+        Printf.sprintf "tr %s -> %s\n"
             (str_join "." (List.map int_s (List.map snd prev)))
-            (str_join "." (List.map int_s (List.map snd next)));
-    Printf.printf "npc:: %s\n" (SpinIrImp.expr_s npc);
-    Hashtbl.iter (fun k v ->
-            Printf.printf "%s <- %s\n" k (SpinIrImp.expr_s v)) vals; 
+            (str_join "." (List.map int_s (List.map snd next)))
+    in
+    Debug.trace Trc.syx trace_print;
+
+    Debug.trace Trc.syx
+        (fun _ -> Printf.sprintf "npc:: %s\n" (SpinIrImp.expr_s npc));
+    let trace_print k v =
+        let p () = Printf.sprintf "%s <- %s\n" k (SpinIrImp.expr_s v) in
+        Debug.trace Trc.syx p
+    in
+    Hashtbl.iter trace_print vals;
+    (* end of tracing *)
+
     assert_all_locals_eliminated npc;
     let h = Hashtbl.create 10 in
     List.iter (load_prev h) prev; List.iter (load_next h) next;
@@ -227,7 +239,7 @@ let label_transition builder path_cons vals (prev, next) =
     | Const 0, _ -> () (* the path conditions are violated *)
     | _, true -> ()    (* the state after the execution is invalid *)
     | _ -> (* o.k. *)
-        Printf.printf "ADDED\n";
+        Debug.trace Trc.syx (fun _ -> "ADDED");
         let src = SkB.add_loc builder (List.map snd prev) in
         let dst = SkB.add_loc builder (List.map snd next) in
         let guard = npc in
@@ -244,7 +256,8 @@ let label_transition builder path_cons vals (prev, next) =
 
 
 let propagate builder trs path_cons vals =
-    Printf.printf "XXXXpath_cons:: %s\n" (SpinIrImp.expr_s path_cons);
+    Debug.trace Trc.syx
+        (fun _ -> Printf.sprintf "path_cons = %s\n" (SpinIrImp.expr_s path_cons));
     List.iter (label_transition builder path_cons vals) trs
 
 
