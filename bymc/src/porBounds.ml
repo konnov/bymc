@@ -59,7 +59,7 @@ let compute_flow sk =
     flowg
 
 
-let does_r_affect_t solver shared lockt i r j t =
+let does_r_affect_t solver query_cache shared lockt i r j t =
     let mk_layer i =
         let h = Hashtbl.create (List.length shared) in
         let add v =
@@ -92,43 +92,54 @@ let does_r_affect_t solver shared lockt i r j t =
     let r_pre0 = e_to_l l0 r.Sk.guard in
     let t_pre0 = e_to_l l0 t.Sk.guard in
     let t_pre1 = e_to_l l1 t.Sk.guard in
-    solver#push_ctx;
-    let nat_type = new data_type SpinTypes.TUNSIGNED in
-    let decl h v =
-        let lv = Hashtbl.find h v#id in
-        solver#append_var_def lv nat_type
+
+    let is_cached, cached_result =
+        try (true, Hashtbl.mem query_cache (lockt, t_pre0, r_post0))
+        with Not_found -> (false, false)
     in
-    (* the variable declarations must be moved out of the function *)
-    List.iter (decl l0) shared; List.iter (decl l1) shared;
-    ignore (solver#comment (sprintf "does rule %d %s rule %d?"
-            i (if lockt = Unlock then "unlock" else "lock") j));
-    if not (is_c_true r_pre0)
-    then begin
-        ignore (solver#comment "r is enabled");
-        ignore (solver#append_expr r_pre0); (* r is enabled *)
-    end;
-    if lockt = Unlock
-    then begin
-        ignore (solver#comment "t is disabled");
-        ignore (solver#append_expr (UnEx (NEG, t_pre0))); (* t is not *)
-        ignore (solver#comment "r fires");
-        ignore (solver#append_expr r_post0); (* r fires *)
-        ignore (solver#comment "t is now enabled");
-        ignore (solver#append_expr t_pre1); (* t becomes enabled *)
-    end else if lockt = Lock
-    then begin
-        ignore (solver#comment "t is enabled");
-        ignore (solver#append_expr (t_pre0)); (* t is enabled *)
-        ignore (solver#comment "r fires");
-        ignore (solver#append_expr r_post0); (* r fires *)
-        ignore (solver#comment "t is now disabled");
-        ignore (solver#append_expr (UnEx (NEG, t_pre1))); (* t becomes disabled *)
-    end else begin
-        raise (Failure "Unsupported lock type")
-    end;
-    let res = solver#check in
-    solver#pop_ctx;
-    res
+    if is_cached
+    then cached_result
+    else begin
+        solver#push_ctx;
+        let nat_type = new data_type SpinTypes.TUNSIGNED in
+        let decl h v =
+            let lv = Hashtbl.find h v#id in
+            solver#append_var_def lv nat_type
+        in
+        (* the variable declarations must be moved out of the function *)
+        List.iter (decl l0) shared; List.iter (decl l1) shared;
+        ignore (solver#comment (sprintf "does rule %d %s rule %d?"
+                i (if lockt = Unlock then "unlock" else "lock") j));
+        if not (is_c_true r_pre0)
+        then begin
+            ignore (solver#comment "r is enabled");
+            ignore (solver#append_expr r_pre0); (* r is enabled *)
+        end;
+        if lockt = Unlock
+        then begin
+            ignore (solver#comment "t is disabled");
+            ignore (solver#append_expr (UnEx (NEG, t_pre0))); (* t is not *)
+            ignore (solver#comment "r fires");
+            ignore (solver#append_expr r_post0); (* r fires *)
+            ignore (solver#comment "t is now enabled");
+            ignore (solver#append_expr t_pre1); (* t becomes enabled *)
+        end else if lockt = Lock
+        then begin
+            ignore (solver#comment "t is enabled");
+            ignore (solver#append_expr (t_pre0)); (* t is enabled *)
+            ignore (solver#comment "r fires");
+            ignore (solver#append_expr r_post0); (* r fires *)
+            ignore (solver#comment "t is now disabled");
+            ignore (solver#append_expr (UnEx (NEG, t_pre1))); (* t becomes disabled *)
+        end else begin
+            raise (Failure "Unsupported lock type")
+        end;
+        let res = solver#check in
+        solver#pop_ctx;
+
+        Hashtbl.replace query_cache (lockt, t_pre0, r_post0) res;
+        res
+    end
 
 
 let compute_unlocking lockt is_to_keep solver sk =
@@ -137,10 +148,11 @@ let compute_unlocking lockt is_to_keep solver sk =
         IGraph.add_vertex graph (U.mkv i)
     in
     List.iter add_rule (range 0 sk.Sk.nrules);
+    let query_cache = Hashtbl.create 1024 in
     let add_flow (i, r) =
         let each (j, t) =
             if i <> j && not (is_c_true t.Sk.guard)
-                && does_r_affect_t solver sk.Sk.shared lockt i r j t
+                && does_r_affect_t solver query_cache sk.Sk.shared lockt i r j t
                 && is_to_keep i j
             then IGraph.add_edge_e graph (U.mke i 0 j)
         in
