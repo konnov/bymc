@@ -101,7 +101,7 @@ function mc_collect_stat {
         res="SAT"
     elif grep -q "specification is violated" ${MC_OUT}; then
         res="UNSAT"
-    elif grep -q "Abort" ${MC_OUT} || grep -q "ABORT" ${MC_OUT}; then
+    elif grep -q "Abort" ${MC_OUT} || grep -q "syntax error" ${MC_OUT}; then
         res="ABORT"
     else
         res="MAYBE"
