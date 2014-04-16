@@ -184,7 +184,72 @@ let compute_unlocking lockt is_to_keep solver sk =
         in
         List.fold_left each milestones (lst_enum sk.Sk.rules)
     in
-    List.fold_left collect_milestones ExprSet.empty (lst_enum sk.Sk.rules)
+    let mstones =
+        List.fold_left collect_milestones ExprSet.empty (lst_enum sk.Sk.rules)
+    in
+    let rec count_guarded rules m =
+        match rules with
+        | [] -> 0
+        | hd :: tl ->
+            if hd.Sk.guard = m
+            then 1 + (count_guarded tl m)
+            else count_guarded tl m
+    in
+    let map m =
+        let cnt = count_guarded sk.Sk.rules m in
+        if lockt = Lock
+        then (0, m, cnt) (* cnt rules will be locked after the milestone *)
+        else (cnt, m, 0) (* cnt rules are locked before the milestone *)
+    in
+    List.map map (ExprSet.elements mstones)
+
+
+let compute_cond_impl solver shared umiles lmiles =
+    let succ = Hashtbl.create 10 in
+    let is_succ lockt left (_, right, _) =
+        solver#push_ctx;
+        if lockt = Unlock
+        then ignore (solver#append_expr (BinEx (IMPLIES, left, right)))
+        else ignore (solver#append_expr (BinEx (IMPLIES, right, left)));
+        let res = solver#check in
+        solver#pop_ctx;
+        not res
+    in
+    let each_cond lockt (_, c, _) =
+        let followers =
+            (List.filter (is_succ Unlock c) umiles)
+            @ (List.filter (is_succ Lock c) lmiles) in
+        Hashtbl.replace succ c followers
+    in
+    solver#push_ctx;
+    let nat_type = new data_type SpinTypes.TUNSIGNED in
+    List.iter (fun v -> solver#append_var_def v nat_type) shared;
+    List.iter (each_cond Unlock) umiles;
+    List.iter (each_cond Lock) lmiles;
+    solver#pop_ctx;
+    succ
+
+
+let find_max_bound nrules miles succ =
+    let rec enum nsegs before after prefix (b, m, a) =
+        let nbefore = before + nrules - 1 - b * nsegs in
+        let nafter = after + a in
+        Printf.printf "nbefore = %d, nafter = %d\n" nbefore nafter;
+        let each_succ (b, s, a) =
+            if not (List.mem s prefix)
+            then enum (nsegs + 1) nbefore nafter (s :: prefix) (b, s, a)
+            else nbefore - nafter (* leaf *)
+        in
+        List.fold_left
+            (fun max_cost m -> max max_cost (each_succ m))
+            (nbefore - nafter) (Hashtbl.find succ m)
+    in
+    let each_branch max_cost (b, m, a) =
+        let cost = enum 1 nrules 0 [] (b, m, a) in
+        Printf.printf "cost = %d\n" cost;
+        max max_cost cost
+    in
+    List.fold_left each_branch 0 miles
 
 
 let collect_actions accum sk =
@@ -218,21 +283,35 @@ let compute_diam solver dom_size sk =
     in
     logtm INFO (sprintf "> constructing unlocking milestones...");
     let umiles = compute_unlocking Unlock is_backward solver sk in
-    let n_umiles = ExprSet.cardinal umiles in
+    let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
+    let print_milestone lockt (i, (before, m, after)) =
+        let ls = if lockt = Lock then "L" else "U" in
+        log INFO (sprintf "  %s%d (%d, %d): %s"
+            ls i before after (SpinIrImp.expr_s m))
+    in
+    List.iter (print_milestone Unlock) (lst_enum umiles);
 
     let is_forward i j = not (is_in_flowplus j i) (*&& (is_in_flowplus i j)*)
     in
     logtm INFO (sprintf "> constructing locking milestones...");
     let lmiles = compute_unlocking Lock is_forward solver sk in
-    let n_lmiles = ExprSet.cardinal lmiles in
+    let n_lmiles = List.length lmiles in
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
+    List.iter (print_milestone Lock) (lst_enum lmiles);
 
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
         sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules);
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
+
+    let miles_succ = compute_cond_impl solver sk.Sk.shared umiles lmiles in
+    let max_bound = find_max_bound sk.Sk.nrules (umiles @ lmiles) miles_succ in
+    log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
+    log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
+        sk.Sk.name (max_bound * (dom_size - 1)));
+
     bound
 
 
