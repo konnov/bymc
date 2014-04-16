@@ -209,8 +209,10 @@ let compute_cond_impl solver shared umiles lmiles =
     let is_succ lockt left (_, right, _) =
         solver#push_ctx;
         if lockt = Unlock
-        then ignore (solver#append_expr (BinEx (IMPLIES, left, right)))
-        else ignore (solver#append_expr (BinEx (IMPLIES, right, left)));
+        then ignore (solver#append_expr
+            (UnEx (NEG, (BinEx (IMPLIES, left, right)))))
+        else ignore (solver#append_expr
+            (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
         let res = solver#check in
         solver#pop_ctx;
         not res
@@ -246,7 +248,6 @@ let find_max_bound nrules miles succ =
     in
     let each_branch max_cost (b, m, a) =
         let cost = enum 1 nrules 0 [] (b, m, a) in
-        Printf.printf "cost = %d\n" cost;
         max max_cost cost
     in
     List.fold_left each_branch 0 miles
