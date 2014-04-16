@@ -79,7 +79,7 @@ function mc_collect_stat {
     cabound=`grep "the counter abstraction bound for" $ANALYSIS_OUT | tail -n 1 \
         | perl -n -e 'if (/.*bound for.*is (\d+) =.*/) { print "$1\n" }'`
     mcabound=`grep "the mild counter abstraction bound for" $ANALYSIS_OUT | tail -n 1 \
-        | perl -n -e 'if (/.*bound for.*is (\d+) =.*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*bound for.*is (\d+).*/) { print "$1\n" }'`
     backward=`grep "backward unlocking" $ANALYSIS_OUT | tail -n 1 \
         | perl -n -e 'if (/.*(\d+) backward unlocking.*/) { print "$1\n" }'`
     forward=`grep "forward locking" $ANALYSIS_OUT | tail -n 1 \
