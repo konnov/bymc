@@ -11,12 +11,13 @@ NO_REACH=0
 COMPLETENESS=0
 NO_UNROLLING=0
 LINGELING=0
+PLINGELING=0
 MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 
 # parse options
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_exit() {
@@ -26,6 +27,7 @@ function help_and_exit() {
     echo "  -w|--nusmv-verbose <level>: set the verbosity level"
     echo "  --one-shot: instead of incremental BMC, check one-shot problem for the length"
     echo "  --lingeling <large_k>: do refinement on k steps, then generate one shot problem for large_k steps and check it with lingeling"
+    echo "  --plingeling nworkers: use plingeling with nworkers"
     echo "  --no-reach: skip reachability analysis (may re-use the old one)"
     echo "  --no-initial: skip the initial abstraction, i.e., re-use the old one"
     echo "  --completeness: enable the completeness check (by NuSMV)"
@@ -44,6 +46,7 @@ while true ; do
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
     --one-shot) ONE_SHOT=1 ; shift 1 ;;
     --lingeling) LINGELING=$2 ; shift 2 ;;
+    --plingeling) PLINGELING=$2 ; shift 2 ;;
     --no-reach) NO_REACH=1 ; shift 1 ;;
     --no-initial) NO_INITIAL=1 ; shift 1 ;;
     --completeness) COMPLETENESS=1 ; shift 1 ;;
@@ -72,6 +75,6 @@ export BYMC_FLAGS="$@ $BYMC_FLAGS"
 # run the tool
 export TARGET_MC=nusmv-bmc
 export DEPTH NUSMV_VERBOSE ONE_SHOT NO_REACH NO_INITIAL COMPLETENESS
-export NO_UNROLLING LINGELING
+export NO_UNROLLING LINGELING PLINGELING
 `dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
 
