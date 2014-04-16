@@ -59,7 +59,29 @@ let compute_flow sk =
     flowg
 
 
-let does_r_affect_t solver query_cache shared lockt i r j t =
+module ExprSet = Set.Make (struct
+ type t = token expr
+ let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
+end)
+
+let rec collect_guard_conds cs = function
+    | BinEx (AND, l, r) ->
+        collect_guard_conds (collect_guard_conds cs l) r
+    | e ->
+        ExprSet.add e cs
+
+let collect_conditions accum sk =
+    let rec collect cs = function
+    | BinEx (AND, l, r) ->
+        collect (collect cs l) r
+    | e ->
+        ExprSet.add e cs
+    in
+    let rec each_rule set r = collect set r.Sk.guard in
+    List.fold_left each_rule accum sk.Sk.rules
+
+
+let does_r_affect_cond solver query_cache shared lockt r cond =
     let mk_layer i =
         let h = Hashtbl.create (List.length shared) in
         let add v =
@@ -90,11 +112,11 @@ let does_r_affect_t solver query_cache shared lockt i r j t =
     in
     let r_post0 = list_to_binex AND (List.map assign_layers r.Sk.act) in
     let r_pre0 = e_to_l l0 r.Sk.guard in
-    let t_pre0 = e_to_l l0 t.Sk.guard in
-    let t_pre1 = e_to_l l1 t.Sk.guard in
+    let cond0 = e_to_l l0 cond in
+    let cond1 = e_to_l l1 cond in
 
     let is_cached, cached_result =
-        try (true, Hashtbl.mem query_cache (lockt, t_pre0, r_post0))
+        try (true, Hashtbl.find query_cache (lockt, cond0, r_pre0, r_post0))
         with Not_found -> (false, false)
     in
     if is_cached
@@ -108,8 +130,6 @@ let does_r_affect_t solver query_cache shared lockt i r j t =
         in
         (* the variable declarations must be moved out of the function *)
         List.iter (decl l0) shared; List.iter (decl l1) shared;
-        ignore (solver#comment (sprintf "does rule %d %s rule %d?"
-                i (if lockt = Unlock then "unlock" else "lock") j));
         if not (is_c_true r_pre0)
         then begin
             ignore (solver#comment "r is enabled");
@@ -117,27 +137,27 @@ let does_r_affect_t solver query_cache shared lockt i r j t =
         end;
         if lockt = Unlock
         then begin
-            ignore (solver#comment "t is disabled");
-            ignore (solver#append_expr (UnEx (NEG, t_pre0))); (* t is not *)
+            ignore (solver#comment "cond is disabled");
+            ignore (solver#append_expr (UnEx (NEG, cond0))); (* cond is not *)
             ignore (solver#comment "r fires");
             ignore (solver#append_expr r_post0); (* r fires *)
             ignore (solver#comment "t is now enabled");
-            ignore (solver#append_expr t_pre1); (* t becomes enabled *)
+            ignore (solver#append_expr cond1); (* cond becomes enabled *)
         end else if lockt = Lock
         then begin
             ignore (solver#comment "t is enabled");
-            ignore (solver#append_expr (t_pre0)); (* t is enabled *)
+            ignore (solver#append_expr (cond0)); (* cond is enabled *)
             ignore (solver#comment "r fires");
             ignore (solver#append_expr r_post0); (* r fires *)
             ignore (solver#comment "t is now disabled");
-            ignore (solver#append_expr (UnEx (NEG, t_pre1))); (* t becomes disabled *)
+            ignore (solver#append_expr (UnEx (NEG, cond1))); (* cond becomes disabled *)
         end else begin
             raise (Failure "Unsupported lock type")
         end;
         let res = solver#check in
         solver#pop_ctx;
 
-        Hashtbl.replace query_cache (lockt, t_pre0, r_post0) res;
+        Hashtbl.replace query_cache (lockt, cond0, r_pre0, r_post0) res;
         res
     end
 
@@ -149,24 +169,39 @@ let compute_unlocking lockt is_to_keep solver sk =
     in
     List.iter add_rule (range 0 sk.Sk.nrules);
     let query_cache = Hashtbl.create 1024 in
-    let add_flow (i, r) =
-        let each (j, t) =
-            if i <> j && not (is_c_true t.Sk.guard)
-                && does_r_affect_t solver query_cache sk.Sk.shared lockt i r j t
-                && is_to_keep i j
-            then IGraph.add_edge_e graph (U.mke i 0 j)
+    let collect_milestones milestones (i, r) =
+        let each mset (j, t) =
+            if i <> j && not (is_c_true t.Sk.guard) && is_to_keep i j
+            then begin
+                let conds = collect_guard_conds ExprSet.empty t.Sk.guard in
+                let affected = ExprSet.filter
+                    (does_r_affect_cond solver query_cache sk.Sk.shared lockt r)
+                    conds
+                in
+                ExprSet.union affected mset
+            end
+            else mset
         in
-        List.iter each (lst_enum sk.Sk.rules)
+        List.fold_left each milestones (lst_enum sk.Sk.rules)
     in
-    List.iter add_flow (lst_enum sk.Sk.rules);
-    let fname = if lockt = Unlock then "unlocking" else "locking" in
-    IGraph.dot_output graph (sprintf "%s-%s.dot" fname sk.Sk.name);
-    graph
+    List.fold_left collect_milestones ExprSet.empty (lst_enum sk.Sk.rules)
+
+
+let collect_actions accum sk =
+    let rec each_rule set r = ExprSet.add (list_to_binex AND r.Sk.act) set in
+    List.fold_left each_rule accum sk.Sk.rules
 
 
 let compute_diam solver dom_size sk =
     logtm INFO (sprintf "> there are %d locations..." sk.Sk.nlocs);
     logtm INFO (sprintf "> there are %d rules..." sk.Sk.nrules);
+
+    let conds = collect_conditions ExprSet.empty sk in
+    logtm INFO (sprintf "> there are %d conditions..." (ExprSet.cardinal conds));
+
+    let actions = collect_actions ExprSet.empty sk in
+    logtm INFO (sprintf "> there are %d actions..." (ExprSet.cardinal actions));
+
     logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let fg = compute_flow sk in
     let nflow = IGraph.nb_edges fg in
@@ -179,29 +214,23 @@ let compute_diam solver dom_size sk =
            leave us any other choice... *)
         IGraph.mem_edge fgp (IGraph.find_vertex fgp i) (IGraph.find_vertex fgp j)
     in
-    let is_backward i j = not (is_in_flowplus i j) && (is_in_flowplus j i)
+    let is_backward i j = not (is_in_flowplus i j) (*&& (is_in_flowplus j i)*)
     in
-    logtm INFO (sprintf "> constructing unlocking transition dependencies...");
-    let ug = compute_unlocking Unlock is_backward solver sk in
-    logtm INFO (sprintf "> %d unlocking transition dependencies" (IGraph.nb_edges ug));
-    let nbackward = IGraph.nb_edges ug in
-    logtm INFO (sprintf "> %d backward unlocking transition dependencies" nbackward);
-    IGraph.dot_output ug (sprintf "unlocking-flowplus-%s.dot" sk.Sk.name);
+    logtm INFO (sprintf "> constructing unlocking milestones...");
+    let umiles = compute_unlocking Unlock is_backward solver sk in
+    let n_umiles = ExprSet.cardinal umiles in
+    logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
 
-    let is_forward i j = not (is_in_flowplus j i) && (is_in_flowplus i j)
+    let is_forward i j = not (is_in_flowplus j i) (*&& (is_in_flowplus i j)*)
     in
-    logtm INFO (sprintf "> constructing locking transition dependencies...");
-    let lg = compute_unlocking Lock is_forward solver sk in
-    logtm INFO (sprintf "> %d locking transition dependencies" (IGraph.nb_edges lg));
-    let nforward = IGraph.nb_edges lg in
-    logtm INFO (sprintf "> %d forward locking transition dependencies" nforward);
-    IGraph.dot_output lg (sprintf "locking-flowplus-%s.dot" sk.Sk.name);
+    logtm INFO (sprintf "> constructing locking milestones...");
+    let lmiles = compute_unlocking Lock is_forward solver sk in
+    let n_lmiles = ExprSet.cardinal lmiles in
+    logtm INFO (sprintf "> %d locking milestones" n_lmiles);
 
-    (* XXX: the bound is lower than that, find the identical conditions
-      instead of just backward edges *)
-    let bound = (1 + nbackward + nforward) * sk.Sk.nrules in
+    let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
-        sk.Sk.name bound nbackward nforward sk.Sk.nrules);
+        sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules);
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
     bound
