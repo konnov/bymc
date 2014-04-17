@@ -57,11 +57,17 @@ let update_sym_tab prog =
         @ (List.map var_to_symb (List.map fst prog.f_atomics))
         @ (map_to_symb prog.f_ltl_forms)
     in
-    prog.f_sym_tab#set_syms syms;
+    let new_sym_tab = new symb_tab (prog.f_sym_tab)#tab_name in
+    new_sym_tab#set_syms syms;
     (* XXX: processes are not copied but their attributes are updated! *)
-    let update_proc_tab p = p#set_parent prog.f_sym_tab in
-    List.iter update_proc_tab prog.f_procs;
-    prog
+    let copy_proc p =
+        let np = p#copy p#get_name in
+        np#set_parent new_sym_tab;
+        np
+    in
+    let new_procs = List.map copy_proc prog.f_procs in
+    { prog with f_sym_tab = new_sym_tab; f_procs = new_procs }
+
 
 let get_params prog =
     prog.f_params
