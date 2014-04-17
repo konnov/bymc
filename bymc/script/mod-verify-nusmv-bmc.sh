@@ -70,6 +70,7 @@ function mc_compile_first {
 function mc_verify_spec {
     if [ "$SKEL" == "1" ]; then
         SRC="main-sum.smv"
+        BYMC_FLAGS="--target nusmv --chain skelSmv"
     fi
 
     SCRIPT="script.nusmv"
@@ -143,6 +144,11 @@ function mc_verify_spec {
 }
 
 function mc_refine {
+    if [ "$SKEL" == "1" ]; then
+        SRC="main-sum.smv"
+        BYMC_FLAGS="--target nusmv --chain skelSmv"
+    fi
+
     common_mc_refine
 }
 

@@ -24,9 +24,7 @@ class skel_nusmv_plugin_t (plugin_name: string) (out_name: string)
         method update_runtime _ =
             ()
 
-        (* TODO: to be implemented *)
         method decode_trail _ path = path
 
         method refine _ path = (false, self#get_output)
-
     end

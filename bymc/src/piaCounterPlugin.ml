@@ -136,8 +136,9 @@ class pc_plugin_t (plugin_name: string) =
 
 
         method refine rt lasso =
+            let prog = self#get_output in
             let res, new_prog =
-                do_refinement rt m_ref_step self#get_output m_vass lasso in
+                do_refinement rt m_ref_step prog m_vass lasso in
             if res
             then begin
                 m_ref_step <- m_ref_step + 1;

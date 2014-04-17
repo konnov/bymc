@@ -3,6 +3,7 @@
  * Igor Konnov, 2013-2014
  *)
 
+open Debug
 open Program
 open Runtime
 open Spin
@@ -171,6 +172,7 @@ class plugin_chain_t =
                 then (true, trail, queue)
                 else if not (p#is_disabled rt)
                     then begin
+                        log INFO (Printf.sprintf "    > REFINE -> %s\n" p#name);
                         let new_trail = p#decode_trail rt trail in
                         let res, new_prog = p#refine rt new_trail in
                         if res
