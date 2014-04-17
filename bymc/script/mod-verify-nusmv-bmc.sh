@@ -19,11 +19,59 @@ fi
 
 LINGELING_OUT="lingeling.out"
 
+function comp_symb_skel {
+    OF="$BYMC_FLAGS"
+    BYMC_FLAGS="--target nusmv --chain skelSmv"
+    echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
+    tee_or_die "${ANALYSIS_OUT}" "bymc failed" \
+        ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
+    BYMC_FLAGS="$OF"
+}
+
+function abs_symb_skel {
+    # XXX: copied from mod-analyse
+    SCRIPT="skel-script.nusmv"
+    echo "set on_failure_script_quits" >${SCRIPT}
+    echo "go" >>${SCRIPT}
+    echo "time" >>${SCRIPT}
+    echo "compute_reachable" >>${SCRIPT}
+    echo "time" >>${SCRIPT}
+    echo "dump_fsm -r -o reach.dot" >>${SCRIPT}
+    echo "quit" >>${SCRIPT}
+
+    SRC=main-ssa-trans.smv # XXX: it works only if we have one process
+    echo $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
+    tee_or_die "${MC_OUT}" "nusmv failed" \
+        $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
+
+    D=${BYMC_HOME}/../bddc
+    if [ ! -d "${D}" ]; then
+        echo "Directory ${D} is not found"
+        exit 1
+    fi
+
+    for f in vis-*.txt; do
+        ${D}/with-pycudd ${D}/abs-reach.py reach.dot $f
+        proc=`echo "$f" | sed 's/vis-\(.*\).txt/\1/'`
+        cp flow.txt "local-tr-${proc}.txt"
+    done
+}
+
 function mc_compile_first {
     common_mc_compile_first
+
+    if [ "$SKEL" == "1" ]; then
+        comp_symb_skel
+        abs_symb_skel
+        comp_symb_skel
+    fi
 }
 
 function mc_verify_spec {
+    if [ "$SKEL" == "1" ]; then
+        SRC="main-sum.smv"
+    fi
+
     SCRIPT="script.nusmv"
     echo "set on_failure_script_quits" >$SCRIPT
     echo "go_bmc" >>$SCRIPT

@@ -118,10 +118,33 @@ module PiaFast = struct
 end
 
 
+module PiaSkelSmv = struct
+    type plugins_t = {
+        pia: Pia.plugins_t;
+        sk: SymbSkelPlugin.symb_skel_plugin_t;
+        ssn: SymbSkelNusmvPlugin.skel_nusmv_plugin_t;
+    }
+
+    let mk_plugins () =
+        let pia = Pia.mk_plugins () in
+        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
+        let module SSN = SymbSkelNusmvPlugin in
+        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" sk in
+        { pia = pia; sk = sk; ssn = ssn }
+
+    let mk_chain plugins =
+        let chain = Pia.mk_chain plugins.pia in
+        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
+        chain#add_plugin plugins.ssn (OutOfPlugins ["piaCounter"; "piaData"]);
+        chain
+end
+
+
 let create_chain = function
     | "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
     | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
     | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
     | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
+    | "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))
 
