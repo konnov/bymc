@@ -162,30 +162,30 @@ let does_r_affect_cond solver query_cache shared lockt r cond =
     end
 
 
-let compute_unlocking lockt is_to_keep solver sk =
+let compute_unlocking not_flowplus lockt solver sk =
     let graph = IGraph.create () in
     let add_rule i =
         IGraph.add_vertex graph (U.mkv i)
     in
     List.iter add_rule (range 0 sk.Sk.nrules);
     let query_cache = Hashtbl.create 1024 in
-    let collect_milestones milestones (i, r) =
-        let each mset (j, t) =
-            if i <> j && not (is_c_true t.Sk.guard) && is_to_keep i j
-            then begin
-                let conds = collect_guard_conds ExprSet.empty t.Sk.guard in
-                let affected = ExprSet.filter
-                    (does_r_affect_cond solver query_cache sk.Sk.shared lockt r)
-                    conds
-                in
-                ExprSet.union affected mset
-            end
-            else mset
-        in
-        List.fold_left each milestones (lst_enum sk.Sk.rules)
+    let collect_milestones src dst milestones =
+        let src, dst = if lockt = Lock then dst, src else src, dst in
+        let left = List.nth sk.Sk.rules (IGraph.V.label src) in
+        let right = List.nth sk.Sk.rules (IGraph.V.label dst) in
+        if src <> dst && not (is_c_true right.Sk.guard)
+        then begin
+            let conds = collect_guard_conds ExprSet.empty right.Sk.guard in
+            let affected = ExprSet.filter
+                (does_r_affect_cond solver query_cache sk.Sk.shared lockt left)
+                conds
+            in
+            ExprSet.union affected milestones
+        end
+        else milestones
     in
     let mstones =
-        List.fold_left collect_milestones ExprSet.empty (lst_enum sk.Sk.rules)
+        IGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
     in
     let rec count_guarded rules m =
         match rules with
@@ -195,18 +195,20 @@ let compute_unlocking lockt is_to_keep solver sk =
             then 1 + (count_guarded tl m)
             else count_guarded tl m
     in
-    let map m =
+    let map i m =
         let cnt = count_guarded sk.Sk.rules m in
         if lockt = Lock
-        then (0, m, cnt) (* cnt rules will be locked after the milestone *)
-        else (cnt, m, 0) (* cnt rules are locked before the milestone *)
+        (* cnt rules will be locked after the milestone *)
+        then (sprintf "L%d" i, 0, m, cnt)
+        (* cnt rules are locked before the milestone *)
+        else (sprintf "U%d" i, cnt, m, 0)
     in
-    List.map map (ExprSet.elements mstones)
+    List.map2 map (range 0 (ExprSet.cardinal mstones)) (ExprSet.elements mstones)
 
 
 let compute_cond_impl solver shared umiles lmiles =
     let succ = Hashtbl.create 10 in
-    let is_succ lockt left (_, right, _) =
+    let is_succ lockt (lname, _, left, _) (rname, _, right, _) =
         solver#push_ctx;
         if lockt = Unlock
         then ignore (solver#append_expr
@@ -215,12 +217,17 @@ let compute_cond_impl solver shared umiles lmiles =
             (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
         let res = solver#check in
         solver#pop_ctx;
-        not res
+        if not res && lname <> rname
+        then log INFO (sprintf
+            "Lock/Unlock subsumption: %s implies %s" lname rname);
+        res (* left does not imply right or vice versa *)
     in
-    let each_cond lockt (_, c, _) =
+    let each_cond lockt (lname, b, c, a) =
         let followers =
-            (List.filter (is_succ Unlock c) umiles)
-            @ (List.filter (is_succ Lock c) lmiles) in
+            if lockt = Unlock
+            then lmiles @ (List.filter (is_succ Unlock (lname, b, c, a)) umiles)
+            else umiles @ (List.filter (is_succ Lock (lname, b, c, a)) lmiles)
+        in
         Hashtbl.replace succ c followers
     in
     solver#push_ctx;
@@ -233,21 +240,26 @@ let compute_cond_impl solver shared umiles lmiles =
 
 
 let find_max_bound nrules miles succ =
-    let rec enum nsegs before after prefix (b, m, a) =
+    let rec enum nsegs before after prefix (n, b, m, a) =
         let nbefore = before + nrules - 1 - b * nsegs in
         let nafter = after + a in
-        Printf.printf "nbefore = %d, nafter = %d\n" nbefore nafter;
-        let each_succ (b, s, a) =
-            if not (List.mem s prefix)
-            then enum (nsegs + 1) nbefore nafter (s :: prefix) (b, s, a)
+        Printf.printf "%s%s, nbefore = %d (-%d), nafter = %d (+%d)\n"
+                (String.make (nsegs * 2) ' ') n nbefore (b * nsegs) nafter a;
+        let each_succ (nn, b, s, a) =
+            if not (List.mem nn prefix)
+            then enum (nsegs + 1) nbefore nafter (nn :: prefix) (nn, b, s, a)
             else nbefore - nafter (* leaf *)
         in
-        List.fold_left
+        let succs = Hashtbl.find succ m in
+        if succs = []
+        then nbefore - nafter
+        else List.fold_left
             (fun max_cost m -> max max_cost (each_succ m))
-            (nbefore - nafter) (Hashtbl.find succ m)
+            0 succs
     in
-    let each_branch max_cost (b, m, a) =
-        let cost = enum 1 nrules 0 [] (b, m, a) in
+    let each_branch max_cost (n, b, m, a) =
+        let cost = enum 1 nrules 0 [n] (n, b, m, a) in
+        log INFO (sprintf " --> cost = %d" cost);
         max max_cost cost
     in
     List.fold_left each_branch nrules miles
@@ -272,9 +284,10 @@ let compute_diam solver dom_size sk =
     let fg = compute_flow sk in
     let nflow = IGraph.nb_edges fg in
     logtm INFO (sprintf "> %d transition flow dependencies" nflow);
-    let fgp = IGraphOper.transitive_closure ~reflexive:false fg in
+    let fgp = IGraphOper.transitive_closure ~reflexive:true fg in
     IGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
     IGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
+    let not_flowplus = IGraphOper.complement fgp in
     let is_in_flowplus i j =
         (* find_vertex is inefficient, but the authors of ocamlgraph don't
            leave us any other choice... *)
@@ -283,23 +296,22 @@ let compute_diam solver dom_size sk =
     let is_backward i j = not (is_in_flowplus i j) (*&& (is_in_flowplus j i)*)
     in
     logtm INFO (sprintf "> constructing unlocking milestones...");
-    let umiles = compute_unlocking Unlock is_backward solver sk in
+    let umiles = compute_unlocking not_flowplus Unlock solver sk in
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
-    let print_milestone lockt (i, (before, m, after)) =
-        let ls = if lockt = Lock then "L" else "U" in
-        log INFO (sprintf "  %s%d (%d, %d): %s"
-            ls i before after (SpinIrImp.expr_s m))
+    let print_milestone lockt (name, before, m, after) =
+        log INFO (sprintf "  %s (%d, %d): %s"
+            name before after (SpinIrImp.expr_s m))
     in
-    List.iter (print_milestone Unlock) (lst_enum umiles);
+    List.iter (print_milestone Unlock) umiles;
 
     let is_forward i j = not (is_in_flowplus j i) (*&& (is_in_flowplus i j)*)
     in
     logtm INFO (sprintf "> constructing locking milestones...");
-    let lmiles = compute_unlocking Lock is_forward solver sk in
+    let lmiles = compute_unlocking not_flowplus Lock solver sk in
     let n_lmiles = List.length lmiles in
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
-    List.iter (print_milestone Lock) (lst_enum lmiles);
+    List.iter (print_milestone Lock) lmiles;
 
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
