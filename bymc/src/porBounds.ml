@@ -250,7 +250,7 @@ let find_max_bound nrules miles succ =
         let cost = enum 1 nrules 0 [] (b, m, a) in
         max max_cost cost
     in
-    List.fold_left each_branch 0 miles
+    List.fold_left each_branch nrules miles
 
 
 let collect_actions accum sk =
