@@ -318,8 +318,9 @@ let find_max_bound nrules guards_card umiles lmiles succ =
         else List.fold_left each_succ max_cost succs
     in
     let each_branch max_cost (n, m, t) =
+        logtm INFO (sprintf " -----> root %s (max_cost = %d)" n max_cost);
         let new_cost = build_paths estimate_path max_cost [(n, m, t)] in
-        Debug.trace Trc.bnd (fun _ -> sprintf " -----> cost = %d" new_cost);
+        logtm INFO (sprintf " -----> %s: cost = %d" n new_cost);
         max max_cost new_cost
     in
     List.fold_left each_branch nrules (umiles @ lmiles)
