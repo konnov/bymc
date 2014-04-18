@@ -86,7 +86,7 @@ function mc_verify_spec {
         if [ "$ONE_SHOT" != "1" ]; then
             echo "check_ltlspec_sbmc_inc $CF $VU -k $DEPTH -P ${PROP}" >>${SCRIPT}
         else
-            echo "gen_ltlspec_sbmc -k $DEPTH -l X -P ${PROP}" >>${SCRIPT}
+            echo "gen_ltlspec_sbmc -k $DEPTH -1 -P ${PROP}" >>${SCRIPT}
 #            echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
     fi
@@ -110,7 +110,7 @@ function mc_verify_spec {
             echo "set on_failure_script_quits" >$SCRIPT2
             echo "go_bmc" >>$SCRIPT2
             echo "time" >>$SCRIPT2
-            echo "gen_ltlspec_sbmc -k $LINGELING -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            echo "gen_ltlspec_sbmc -1 -k $LINGELING -P ${PROP} -o ${CNF}" >>${SCRIPT2}
             #echo "gen_ltlspec_bmc_onepb -k $LINGELING -P ${PROP} -o ${CNF}" >>$SCRIPT2
             echo "time" >>$SCRIPT2
             echo "quit" >>$SCRIPT2
