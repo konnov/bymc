@@ -64,9 +64,14 @@ module ExprSet = Set.Make (struct
  let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
 end)
 
-let rec collect_guard_conds cs = function
+module ExprMap = Map.Make (struct
+ type t = token expr
+ let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
+end)
+
+let rec collect_guard_elems cs = function
     | BinEx (AND, l, r) ->
-        collect_guard_conds (collect_guard_conds cs l) r
+        collect_guard_elems (collect_guard_elems cs l) r
     | e ->
         ExprSet.add e cs
 
@@ -165,7 +170,7 @@ let compute_unlocking not_flowplus lockt solver sk =
     (* every rule has a set of associated conditions *)
     let rule_to_conds = Hashtbl.create 1024 in
     let collect_rule_conds (i, r) =
-        let conds = collect_guard_conds ExprSet.empty r.Sk.guard in
+        let conds = collect_guard_elems ExprSet.empty r.Sk.guard in
         let with_no c = (cond_no c, c) in
         Hashtbl.replace rule_to_conds i
             (List.map with_no (ExprSet.elements conds))
@@ -211,30 +216,25 @@ let compute_unlocking not_flowplus lockt solver sk =
     let mstones =
         IGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
     in
-    (* count guards that are either milestones, or not *)
-    let rec count_guarded rules m =
-        match rules with
-        | [] -> 0
-        | hd :: tl ->
-            (* XXX: that makes everything imprecise! *)
-            if hd.Sk.guard = m
-            then 1 + (count_guarded tl m)
-            else count_guarded tl m
-    in
     let map i m =
-        let cnt = count_guarded sk.Sk.rules m in
         if lockt = Lock
-        (* cnt rules will be locked after the milestone *)
-        then (sprintf "L%d" i, 0, m, cnt)
-        (* cnt rules are locked before the milestone *)
-        else (sprintf "U%d" i, cnt, m, 0)
+        then (sprintf "L%d" i, m, lockt)
+        else (sprintf "U%d" i, m, lockt)
     in
     List.map2 map (range 0 (ExprSet.cardinal mstones)) (ExprSet.elements mstones)
 
 
+(* count how many times every guard (not a subformula of it!) appears in a rule *)
+let count_guarded map r =
+    let g = r.Sk.guard in
+    if ExprMap.mem g map
+    then ExprMap.add g (1 + (ExprMap.find g map)) map
+    else ExprMap.add g 1 map
+
+
 let compute_cond_impl solver shared umiles lmiles =
     let succ = Hashtbl.create 10 in
-    let is_succ lockt (lname, _, left, _) (rname, _, right, _) =
+    let is_succ lockt (lname, left, _) (rname, right, _) =
         solver#push_ctx;
         if lockt = Unlock
         then ignore (solver#append_expr
@@ -248,11 +248,11 @@ let compute_cond_impl solver shared umiles lmiles =
             "Lock/Unlock subsumption: %s implies %s" lname rname);
         res (* left does not imply right or vice versa *)
     in
-    let each_cond lockt (lname, b, c, a) =
+    let each_cond lockt (lname, c, t) =
         let followers =
             if lockt = Unlock
-            then lmiles @ (List.filter (is_succ Unlock (lname, b, c, a)) umiles)
-            else umiles @ (List.filter (is_succ Lock (lname, b, c, a)) lmiles)
+            then lmiles @ (List.filter (is_succ Unlock (lname, c, t)) umiles)
+            else umiles @ (List.filter (is_succ Lock (lname, c, t)) lmiles)
         in
         Hashtbl.replace succ c followers
     in
@@ -265,30 +265,64 @@ let compute_cond_impl solver shared umiles lmiles =
     succ
 
 
-let find_max_bound nrules miles succ =
-    let rec enum nsegs before after prefix (n, b, m, a) =
-        let nbefore = before + nrules - 1 - b * nsegs in
-        let nafter = after + a in
-        Printf.printf "%s%s, nbefore = %d (-%d), nafter = %d (+%d)\n"
-                (String.make (nsegs * 2) ' ') n nbefore (b * nsegs) nafter a;
-        let each_succ (nn, b, s, a) =
-            if not (List.mem nn prefix)
-            then enum (nsegs + 1) nbefore nafter (nn :: prefix) (nn, b, s, a)
-            else nbefore - nafter (* leaf *)
+let find_max_bound nrules guards_card umiles lmiles succ =
+    let exclude milestone guard card =
+        let conds = collect_guard_elems ExprSet.empty guard in
+        if ExprSet.mem milestone conds
+        then begin
+            Debug.trace Trc.bnd
+                (fun _ -> sprintf " threw away %d of %s\n"
+                    card (SpinIrImp.expr_s milestone));
+            0
+        end
+        else card
+    in
+    let count_cards _ card total = total + card in
+
+    let estimate_path max_cost path =
+        let rec throw_locked level lsegs rsegs mstones =
+            match mstones with
+            | [] -> lsegs @ rsegs (* one segment was to the right of m *)
+            | (n, m, t) :: tl ->
+                 Debug.trace Trc.bnd
+                    (fun _ -> Printf.sprintf " %s %s\n" (String.make level '>') n);
+                 if t = Unlock
+                 then let nlsegs =
+                     List.map (fun seg -> ExprMap.mapi (exclude m) seg) lsegs in
+                    throw_locked (level + 1) ((List.hd rsegs) :: nlsegs) (List.tl rsegs) tl
+                 else let nrsegs =
+                     List.map (fun seg -> ExprMap.mapi (exclude m) seg) rsegs in
+                    throw_locked (level + 1) ((List.hd nrsegs) :: lsegs) (List.tl nrsegs) tl
+        in
+        let nsegs = 1 + (List.length path) in
+        let segs =
+            throw_locked 1 [guards_card] (List.map (fun _ -> guards_card) (range 1 nsegs)) path in
+        let seg_cost seg = ExprMap.fold count_cards seg 0 in
+        let cost = List.fold_left (fun sum seg -> sum + (seg_cost seg)) 0 segs in
+        Debug.trace Trc.bnd
+            (fun _ -> sprintf " -----> nsegs = %d, cost = %d" nsegs cost);
+        max cost max_cost
+    in
+
+    (* construct alternations of conditions and call a function on a leaf *)
+    let rec build_paths f max_cost rev_prefix =
+        let n, m, _ = List.hd rev_prefix in
+        let each_succ cost (nn, s, t) =
+            if not (List.exists (fun (name, _, _) -> nn = name) rev_prefix)
+            then build_paths f cost ((nn, s, t) :: rev_prefix)
+            else (f cost (List.rev rev_prefix))
         in
         let succs = Hashtbl.find succ m in
         if succs = []
-        then nbefore - nafter
-        else List.fold_left
-            (fun max_cost m -> max max_cost (each_succ m))
-            0 succs
+        then f max_cost (List.rev rev_prefix)
+        else List.fold_left each_succ max_cost succs
     in
-    let each_branch max_cost (n, b, m, a) =
-        let cost = enum 1 nrules 0 [n] (n, b, m, a) in
-        log INFO (sprintf " --> cost = %d" cost);
-        max max_cost cost
+    let each_branch max_cost (n, m, t) =
+        let new_cost = build_paths estimate_path max_cost [(n, m, t)] in
+        Debug.trace Trc.bnd (fun _ -> sprintf " -----> cost = %d" new_cost);
+        max max_cost new_cost
     in
-    List.fold_left each_branch nrules miles
+    List.fold_left each_branch nrules (umiles @ lmiles)
 
 
 let collect_actions accum sk =
@@ -318,9 +352,8 @@ let compute_diam solver dom_size sk =
     let umiles = compute_unlocking not_flowplus Unlock solver sk in
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
-    let print_milestone lockt (name, before, m, after) =
-        log INFO (sprintf "  %s (%d, %d): %s"
-            name before after (SpinIrImp.expr_s m))
+    let print_milestone lockt (name, m, _) =
+        log INFO (sprintf "  %s: %s" name (SpinIrImp.expr_s m))
     in
     List.iter (print_milestone Unlock) umiles;
 
@@ -330,6 +363,13 @@ let compute_diam solver dom_size sk =
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
     List.iter (print_milestone Lock) lmiles;
 
+    let guards_card = List.fold_left count_guarded ExprMap.empty sk.Sk.rules in
+    let print_guard g n =
+        log INFO (sprintf "  guard (%s) -> %d times" (SpinIrImp.expr_s g) n)
+    in
+    ExprMap.iter print_guard guards_card;
+
+
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
         sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules);
@@ -337,7 +377,7 @@ let compute_diam solver dom_size sk =
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
     let miles_succ = compute_cond_impl solver sk.Sk.shared umiles lmiles in
-    let max_bound = find_max_bound sk.Sk.nrules (umiles @ lmiles) miles_succ in
+    let max_bound = find_max_bound sk.Sk.nrules guards_card umiles lmiles miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
         sk.Sk.name (max_bound * (dom_size - 1)));
