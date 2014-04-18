@@ -81,7 +81,7 @@ let collect_conditions accum sk =
     List.fold_left each_rule accum sk.Sk.rules
 
 
-let does_r_affect_cond solver query_cache shared lockt r cond =
+let does_r_affect_cond solver shared lockt r cond =
     let mk_layer i =
         let h = Hashtbl.create (List.length shared) in
         let add v =
@@ -115,82 +115,108 @@ let does_r_affect_cond solver query_cache shared lockt r cond =
     let cond0 = e_to_l l0 cond in
     let cond1 = e_to_l l1 cond in
 
-    let is_cached, cached_result =
-        try (true, Hashtbl.find query_cache (lockt, cond0, r_pre0, r_post0))
-        with Not_found -> (false, false)
+    solver#push_ctx;
+    let nat_type = new data_type SpinTypes.TUNSIGNED in
+    let decl h v =
+        let lv = Hashtbl.find h v#id in
+        solver#append_var_def lv nat_type
     in
-    if is_cached
-    then cached_result
-    else begin
-        solver#push_ctx;
-        let nat_type = new data_type SpinTypes.TUNSIGNED in
-        let decl h v =
-            let lv = Hashtbl.find h v#id in
-            solver#append_var_def lv nat_type
-        in
-        (* the variable declarations must be moved out of the function *)
-        List.iter (decl l0) shared; List.iter (decl l1) shared;
-        if not (is_c_true r_pre0)
-        then begin
-            ignore (solver#comment "r is enabled");
-            ignore (solver#append_expr r_pre0); (* r is enabled *)
-        end;
-        if lockt = Unlock
-        then begin
-            ignore (solver#comment "cond is disabled");
-            ignore (solver#append_expr (UnEx (NEG, cond0))); (* cond is not *)
-            ignore (solver#comment "r fires");
-            ignore (solver#append_expr r_post0); (* r fires *)
-            ignore (solver#comment "t is now enabled");
-            ignore (solver#append_expr cond1); (* cond becomes enabled *)
-        end else if lockt = Lock
-        then begin
-            ignore (solver#comment "t is enabled");
-            ignore (solver#append_expr (cond0)); (* cond is enabled *)
-            ignore (solver#comment "r fires");
-            ignore (solver#append_expr r_post0); (* r fires *)
-            ignore (solver#comment "t is now disabled");
-            ignore (solver#append_expr (UnEx (NEG, cond1))); (* cond becomes disabled *)
-        end else begin
-            raise (Failure "Unsupported lock type")
-        end;
-        let res = solver#check in
-        solver#pop_ctx;
-
-        Hashtbl.replace query_cache (lockt, cond0, r_pre0, r_post0) res;
-        res
-    end
+    (* the variable declarations must be moved out of the function *)
+    List.iter (decl l0) shared; List.iter (decl l1) shared;
+    if not (is_c_true r_pre0)
+    then begin
+        ignore (solver#comment "r is enabled");
+        ignore (solver#append_expr r_pre0); (* r is enabled *)
+    end;
+    if lockt = Unlock
+    then begin
+        ignore (solver#comment "cond is disabled");
+        ignore (solver#append_expr (UnEx (NEG, cond0))); (* cond is not *)
+        ignore (solver#comment "r fires");
+        ignore (solver#append_expr r_post0); (* r fires *)
+        ignore (solver#comment "t is now enabled");
+        ignore (solver#append_expr cond1); (* cond becomes enabled *)
+    end else if lockt = Lock
+    then begin
+        ignore (solver#comment "t is enabled");
+        ignore (solver#append_expr (cond0)); (* cond is enabled *)
+        ignore (solver#comment "r fires");
+        ignore (solver#append_expr r_post0); (* r fires *)
+        ignore (solver#comment "t is now disabled");
+        ignore (solver#append_expr (UnEx (NEG, cond1))); (* cond becomes disabled *)
+    end else begin
+        raise (Failure "Unsupported lock type")
+    end;
+    let res = solver#check in
+    solver#pop_ctx;
+    res
 
 
 let compute_unlocking not_flowplus lockt solver sk =
-    let graph = IGraph.create () in
-    let add_rule i =
-        IGraph.add_vertex graph (U.mkv i)
+    (* every condition is assigned a number *)
+    let conds_to_num = Hashtbl.create 1024 in
+    let cond_no c =
+        try Hashtbl.find conds_to_num c
+        with Not_found ->
+            let no = Hashtbl.length conds_to_num in
+            Hashtbl.add conds_to_num c no;
+            no
     in
-    List.iter add_rule (range 0 sk.Sk.nrules);
-    let query_cache = Hashtbl.create 1024 in
+    (* every rule has a set of associated conditions *)
+    let rule_to_conds = Hashtbl.create 1024 in
+    let collect_rule_conds (i, r) =
+        let conds = collect_guard_conds ExprSet.empty r.Sk.guard in
+        let with_no c = (cond_no c, c) in
+        Hashtbl.replace rule_to_conds i
+            (List.map with_no (ExprSet.elements conds))
+    in
+    let get_rule_conds i =
+        try Hashtbl.find rule_to_conds i
+        with Not_found -> raise (Failure ("No rule " ^ (int_s i)))
+    in
+    List.iter collect_rule_conds (lst_enum sk.Sk.rules);
+
+    (* this table keeps relation (rule, {UNLOCKS, DOESNOT}, conds) *)
+    let rule_to_conds = Hashtbl.create 1024 in
+    let is_cached ri ci = Hashtbl.mem rule_to_conds (ri, ci) in
+    let cache ri ci res = Hashtbl.replace rule_to_conds (ri, ci) res in
+
+    (* enumerate all the edges in not_flowplus and fill rule_to_conds *)
     let collect_milestones src dst milestones =
         let src, dst = if lockt = Lock then dst, src else src, dst in
-        let left = List.nth sk.Sk.rules (IGraph.V.label src) in
-        let right = List.nth sk.Sk.rules (IGraph.V.label dst) in
-        if src <> dst && not (is_c_true right.Sk.guard)
+        let left_no = IGraph.V.label src in
+        let left = List.nth sk.Sk.rules left_no in
+        let right_no = IGraph.V.label dst in
+        let right = List.nth sk.Sk.rules right_no in
+        if left_no <> right_no && not (is_c_true right.Sk.guard)
         then begin
-            let conds = collect_guard_conds ExprSet.empty right.Sk.guard in
-            let affected = ExprSet.filter
-                (does_r_affect_cond solver query_cache sk.Sk.shared lockt left)
-                conds
+            let conds = get_rule_conds right_no in
+            let each_cond mset (c_no, c) =
+                if not (is_cached left_no c_no)
+                then begin
+                    let res =
+                        does_r_affect_cond solver sk.Sk.shared lockt left c in
+                    cache left_no c_no res;
+                    if res
+                    then ExprSet.add c mset
+                    else mset
+                end
+                else mset
             in
-            ExprSet.union affected milestones
+            List.fold_left each_cond milestones conds
         end
         else milestones
     in
+
     let mstones =
         IGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
     in
+    (* count guards that are either milestones, or not *)
     let rec count_guarded rules m =
         match rules with
         | [] -> 0
         | hd :: tl ->
+            (* XXX: that makes everything imprecise! *)
             if hd.Sk.guard = m
             then 1 + (count_guarded tl m)
             else count_guarded tl m
@@ -288,13 +314,6 @@ let compute_diam solver dom_size sk =
     IGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
     IGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
     let not_flowplus = IGraphOper.complement fgp in
-    let is_in_flowplus i j =
-        (* find_vertex is inefficient, but the authors of ocamlgraph don't
-           leave us any other choice... *)
-        IGraph.mem_edge fgp (IGraph.find_vertex fgp i) (IGraph.find_vertex fgp j)
-    in
-    let is_backward i j = not (is_in_flowplus i j) (*&& (is_in_flowplus j i)*)
-    in
     logtm INFO (sprintf "> constructing unlocking milestones...");
     let umiles = compute_unlocking not_flowplus Unlock solver sk in
     let n_umiles = List.length umiles in
@@ -305,8 +324,6 @@ let compute_diam solver dom_size sk =
     in
     List.iter (print_milestone Unlock) umiles;
 
-    let is_forward i j = not (is_in_flowplus j i) (*&& (is_in_flowplus i j)*)
-    in
     logtm INFO (sprintf "> constructing locking milestones...");
     let lmiles = compute_unlocking not_flowplus Lock solver sk in
     let n_lmiles = List.length lmiles in
