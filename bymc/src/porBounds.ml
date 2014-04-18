@@ -4,6 +4,7 @@
  * Igor Konnov, 2014
  *)
 
+open Big_int
 open Printf
 
 open Accums
@@ -15,10 +16,62 @@ open SymbSkel
 module IGraph = Graph.Pack.Digraph
 module IGraphOper = Graph.Oper.I(IGraph)
 
+(* set membership as division by prime numbers *)
+module PSet = struct
+    type elt = big_int
+    type t = big_int
+
+    let before = ref (big_int_of_int 2) (* a number before the next prime *)
+
+    (* this is supposed to work with very small prime numbers *)
+    let new_thing () =
+        let rec is_prime num n2 d =
+            if ge_big_int d n2
+            then true
+            else if eq_big_int (mod_big_int num d) zero_big_int
+                then false
+                else is_prime num n2 (succ_big_int d)
+        in
+        let rec search num =
+            let n2 = succ_big_int (div_big_int num (big_int_of_int 2)) in
+            if is_prime num n2 (big_int_of_int 2)
+            then num
+            else search (succ_big_int num)
+        in
+        let new_prime = search (!before) in
+        before := succ_big_int new_prime;
+        new_prime
+
+    let str = string_of_big_int        
+
+    let empty = unit_big_int (* it corresponds to an empty set *)
+
+    let mem e set =
+        eq_big_int (mod_big_int set e) zero_big_int
+
+    let add e set =
+        if mem e set
+        then set 
+        else mult_big_int set e
+
+    let remove e set =
+        if mem e set
+        then div_big_int set e
+        else set
+
+    let compare = compare_big_int
+
+  end
+
+module PSetMap = Map.Make (struct
+ type t = PSet.t
+ let compare = PSet.compare
+end)
+
+
 (* as ocamlgraph does distinguish two vertices objects that are labelled the
    same, we have to create a universum of all these vertices (and edges).
  *)
-
 module U = struct
     let vertices = Hashtbl.create 1000
     let edges = Hashtbl.create 10000
@@ -60,11 +113,6 @@ let compute_flow sk =
 
 
 module ExprSet = Set.Make (struct
- type t = token expr
- let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
-end)
-
-module ExprMap = Map.Make (struct
  type t = token expr
  let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
 end)
@@ -218,23 +266,33 @@ let compute_unlocking not_flowplus lockt solver sk =
     in
     let map i m =
         if lockt = Lock
-        then (sprintf "L%d" i, m, lockt)
-        else (sprintf "U%d" i, m, lockt)
+        then (sprintf "L%d" i, PSet.new_thing (), m, lockt)
+        else (sprintf "U%d" i, PSet.new_thing (), m, lockt)
     in
     List.map2 map (range 0 (ExprSet.cardinal mstones)) (ExprSet.elements mstones)
 
 
+let print_milestone lockt (name, id, m, _) =
+    log INFO (sprintf "  %s (%s): %s" name (PSet.str id) (SpinIrImp.expr_s m))
+
+
 (* count how many times every guard (not a subformula of it!) appears in a rule *)
-let count_guarded map r =
-    let g = r.Sk.guard in
-    if ExprMap.mem g map
-    then ExprMap.add g (1 + (ExprMap.find g map)) map
-    else ExprMap.add g 1 map
+(* actually we use characteristic numbers that are products of primes *)
+let count_guarded milestones map r =
+    let mk_set conds =
+        List.fold_left (fun set (_, id, _, _) -> PSet.add id set)
+            PSet.empty
+            (List.filter (fun (_, _, m, _) -> ExprSet.mem m conds) milestones)
+    in
+    let cond_set = mk_set (collect_guard_elems ExprSet.empty r.Sk.guard) in
+    if PSetMap.mem cond_set map
+    then PSetMap.add cond_set (1 + (PSetMap.find cond_set map)) map
+    else PSetMap.add cond_set 1 map
 
 
 let compute_cond_impl solver shared umiles lmiles =
     let succ = Hashtbl.create 10 in
-    let is_succ lockt (lname, left, _) (rname, right, _) =
+    let is_succ lockt (lname, _, left, _) (rname, _, right, _) =
         solver#push_ctx;
         if lockt = Unlock
         then ignore (solver#append_expr
@@ -248,11 +306,11 @@ let compute_cond_impl solver shared umiles lmiles =
             "Lock/Unlock subsumption: %s implies %s" lname rname);
         res (* left does not imply right or vice versa *)
     in
-    let each_cond lockt (lname, c, t) =
+    let each_cond lockt (lname, id, c, t) =
         let followers =
             if lockt = Unlock
-            then lmiles @ (List.filter (is_succ Unlock (lname, c, t)) umiles)
-            else umiles @ (List.filter (is_succ Lock (lname, c, t)) lmiles)
+            then lmiles @ (List.filter (is_succ Unlock (lname, id, c, t)) umiles)
+            else umiles @ (List.filter (is_succ Lock (lname, id, c, t)) lmiles)
         in
         Hashtbl.replace succ c followers
     in
@@ -266,13 +324,12 @@ let compute_cond_impl solver shared umiles lmiles =
 
 
 let find_max_bound nrules guards_card umiles lmiles succ =
-    let exclude milestone guard card =
-        let conds = collect_guard_elems ExprSet.empty guard in
-        if ExprSet.mem milestone conds
+    let exclude m m_id guard_set card =
+        if PSet.mem m_id guard_set
         then begin
             Debug.trace Trc.bnd
                 (fun _ -> sprintf " threw away %d of %s\n"
-                    card (SpinIrImp.expr_s milestone));
+                    card (SpinIrImp.expr_s m));
             0
         end
         else card
@@ -283,21 +340,21 @@ let find_max_bound nrules guards_card umiles lmiles succ =
         let rec throw_locked level lsegs rsegs mstones =
             match mstones with
             | [] -> lsegs @ rsegs (* one segment was to the right of m *)
-            | (n, m, t) :: tl ->
+            | (n, id, m, t) :: tl ->
                  Debug.trace Trc.bnd
                     (fun _ -> Printf.sprintf " %s %s\n" (String.make level '>') n);
                  if t = Unlock
                  then let nlsegs =
-                     List.map (fun seg -> ExprMap.mapi (exclude m) seg) lsegs in
+                     List.map (fun seg -> PSetMap.mapi (exclude m id) seg) lsegs in
                     throw_locked (level + 1) ((List.hd rsegs) :: nlsegs) (List.tl rsegs) tl
                  else let nrsegs =
-                     List.map (fun seg -> ExprMap.mapi (exclude m) seg) rsegs in
+                     List.map (fun seg -> PSetMap.mapi (exclude m id) seg) rsegs in
                     throw_locked (level + 1) ((List.hd nrsegs) :: lsegs) (List.tl nrsegs) tl
         in
         let nsegs = 1 + (List.length path) in
         let segs =
             throw_locked 1 [guards_card] (List.map (fun _ -> guards_card) (range 1 nsegs)) path in
-        let seg_cost seg = ExprMap.fold count_cards seg 0 in
+        let seg_cost seg = PSetMap.fold count_cards seg 0 in
         let cost = List.fold_left (fun sum seg -> sum + (seg_cost seg)) 0 segs in
         Debug.trace Trc.bnd
             (fun _ -> sprintf " -----> nsegs = %d, cost = %d" nsegs cost);
@@ -306,10 +363,10 @@ let find_max_bound nrules guards_card umiles lmiles succ =
 
     (* construct alternations of conditions and call a function on a leaf *)
     let rec build_paths f max_cost rev_prefix =
-        let n, m, _ = List.hd rev_prefix in
-        let each_succ cost (nn, s, t) =
-            if not (List.exists (fun (name, _, _) -> nn = name) rev_prefix)
-            then build_paths f cost ((nn, s, t) :: rev_prefix)
+        let n, id, m, _ = List.hd rev_prefix in
+        let each_succ cost (nn, id, s, t) =
+            if not (List.exists (fun (name, _, _, _) -> nn = name) rev_prefix)
+            then build_paths f cost ((nn, id, s, t) :: rev_prefix)
             else (f cost (List.rev rev_prefix))
         in
         let succs = Hashtbl.find succ m in
@@ -317,9 +374,9 @@ let find_max_bound nrules guards_card umiles lmiles succ =
         then f max_cost (List.rev rev_prefix)
         else List.fold_left each_succ max_cost succs
     in
-    let each_branch max_cost (n, m, t) =
+    let each_branch max_cost (n, id, m, t) =
         logtm INFO (sprintf " -----> root %s (max_cost = %d)" n max_cost);
-        let new_cost = build_paths estimate_path max_cost [(n, m, t)] in
+        let new_cost = build_paths estimate_path max_cost [(n, id, m, t)] in
         logtm INFO (sprintf " -----> %s: cost = %d" n new_cost);
         max max_cost new_cost
     in
@@ -353,9 +410,6 @@ let compute_diam solver dom_size sk =
     let umiles = compute_unlocking not_flowplus Unlock solver sk in
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
-    let print_milestone lockt (name, m, _) =
-        log INFO (sprintf "  %s: %s" name (SpinIrImp.expr_s m))
-    in
     List.iter (print_milestone Unlock) umiles;
 
     logtm INFO (sprintf "> constructing locking milestones...");
@@ -364,11 +418,13 @@ let compute_diam solver dom_size sk =
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
     List.iter (print_milestone Lock) lmiles;
 
-    let guards_card = List.fold_left count_guarded ExprMap.empty sk.Sk.rules in
-    let print_guard g n =
-        log INFO (sprintf "  guard (%s) -> %d times" (SpinIrImp.expr_s g) n)
+    let guards_card =
+        List.fold_left (count_guarded (umiles @ lmiles)) PSetMap.empty sk.Sk.rules
     in
-    ExprMap.iter print_guard guards_card;
+    let print_guard g n =
+        log INFO (sprintf "  guard (%s) -> %d times" (PSet.str g) n)
+    in
+    PSetMap.iter print_guard guards_card;
 
 
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
