@@ -269,7 +269,7 @@ let make_init rt prog proc locals loc_map builder =
         let vals = List.map snd eqs in (* assignments to the locals *)
         SkB.get_loci !builder vals
     in
-    let locis = List.map to_loci (SkelStruc.comp_seq locals init_stmts) in
+    let locis = List.rev_map to_loci (SkelStruc.comp_seq locals init_stmts) in
     let loc_var i = IntMap.find i loc_map in
     (* the counters that are initialized *)
     let init_sum =

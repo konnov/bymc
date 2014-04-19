@@ -215,7 +215,12 @@ let comp_seq vars stmts =
         A.visit_cfg (A.visit_basic_block A.transfer_roles)
             (A.join A.lub_int_role)
             (A.print_int_roles "local roles") init_cfg in
-    let last_loc_vals = Hashtbl.find int_roles (stmt_id (list_end lirs)) in
+    let last_loc_vals =
+        let lid = stmt_id (list_end lirs) in
+        try Hashtbl.find int_roles lid
+        with Not_found ->
+            raise (Failure ("No static analysis for statement " ^ (int_s lid)))
+    in
     let mk_prod left right =
         if left = []
         then List.map (fun x -> [x]) right
