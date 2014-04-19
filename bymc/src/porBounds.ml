@@ -427,9 +427,9 @@ let compute_diam solver dom_size sk =
     PSetMap.iter print_guard guards_card;
 
 
-    let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules in
-    log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d"
-        sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules);
+    let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules + (n_lmiles + n_umiles) in
+    log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d + %d"
+        sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules (n_lmiles + n_umiles));
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
