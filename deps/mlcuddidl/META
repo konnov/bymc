@@ -1,6 +1,0 @@
-description = "Interface to CUDD BDD library, together with CUDD library"
-version = "2.2.0"
-archive(byte) = "cudd.cma"
-archive(native) = "cudd.cmxa"
-archive(native,debug) = "cudd.d.cmxa"
-archive(native,gprof) = "cudd.p.cmxa"
