@@ -1,0 +1,14 @@
+#!/bin/sh
+
+if [ "$1" = "" ]; then
+    echo "Specify the version first"
+    exit 1
+fi
+
+VERSION="$1"
+DATE=`date '+%Y%m%d'`
+NAME="bymc-src-${VERSION}-${DATE}"
+
+echo "git archive --prefix="${NAME}/" ${VERSION} | bzip2 > ${NAME}.tar.bz2"
+git archive --prefix="$NAME/" ${VERSION} | bzip2 > ${NAME}.tar.bz2
+
