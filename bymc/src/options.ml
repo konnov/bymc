@@ -10,8 +10,8 @@ open Accums
 
 module StringMap = Map.Make(String)
 
-let version = [0; 3; 3]
-let version_full = "ByMC-0.6.3-dev-concur14-rc9"
+let version = [0; 6; 5]
+let version_full = "ByMC-0.6.5-concur14-rc10"
 
 let macro_prefix = "macro."
 
