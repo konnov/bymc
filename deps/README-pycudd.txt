@@ -1,1 +1,1 @@
-pycude requires the following packages: swig, python-devel
+pycudd requires the following packages: swig, python-devel
