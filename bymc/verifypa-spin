@@ -5,7 +5,7 @@ PANCC_FLAGS="-DCOLLAPSE -DNOREDUCE"
 TEMPOPTS=`getopt -o hd: --long help,depth:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
-function help_and_exit() {
+function help_and_quit() {
     echo "use $0 [-d|--depth k] [-h|--help]"
     echo "  -d|--depth k: limit the DFS search with depth k"
     echo "  --limit-time: limit (in seconds) Spin's cpu time"
@@ -23,11 +23,15 @@ while true ; do
     --limit-mem)
         PANCC_FLAGS="$PANCC_FLAGS -DMEMLIM=$2" ;
         shift 2 ;;
-    -h|--help) help_and_exit ;;
+    -h|--help) help_and_quit ;;
     --) shift ; break ;;
-    *) echo "Internal error!" ; help_and_exit ;;
+    *) echo "Internal error!" ; help_and_quit ;;
     esac
 done
+
+if [ "$#" -lt 2 ]; then
+    help_and_quit
+fi
 
 TARGET_MC=spin PAN_FLAGS="$PAN_FLAGS" PANCC_FLAGS="$PANCC_FLAGS"\
     `dirname $0`/script/refinement-loop.sh $@

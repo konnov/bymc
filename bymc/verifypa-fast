@@ -13,7 +13,7 @@ TIME_LIMIT="unlimited"
 TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o h --long help,plugin:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
-function help_and_exit() {
+function help_and_quit() {
     echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where <switches> are"
     echo "  --plugin <plugin>: set fast engine to <plugin> (default: lash-msdf)"
@@ -29,11 +29,15 @@ while true ; do
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
     --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
     --plugin) FAST_PLUGIN=$2 ; shift 2 ;;
-    -h|--help) help_and_exit ;;
+    -h|--help) help_and_quit ;;
     --) shift ; break ;;
-    *) echo "Internal error!" ; help_and_exit ;;
+    *) echo "Internal error!" ; help_and_quit ;;
     esac
 done
+
+if [ "$#" -lt 2 ]; then
+    help_and_quit
+fi
 
 echo ulimit -SHv $MEM_LIMIT
 ulimit -SHv $MEM_LIMIT

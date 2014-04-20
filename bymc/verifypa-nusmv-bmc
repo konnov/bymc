@@ -21,7 +21,7 @@ STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,skel,voodoo,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
-function help_and_exit() {
+function help_and_quit() {
     echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where the switches are"
     echo "  -k|--length k: limit the BMC search with length k"
@@ -59,11 +59,15 @@ while true ; do
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
     --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
     --limit-stack) STACK_LIMIT=$((1024*$2)) ; shift 2 ;;
-    -h|--help) help_and_exit ;;
+    -h|--help) help_and_quit ;;
     --) shift ; break ;;
-    *) echo "Internal error!" ; help_and_exit ;;
+    *) echo "Internal error!" ; help_and_quit ;;
     esac
 done
+
+if [ "$#" -lt 2 ]; then
+    help_and_quit
+fi
 
 echo ulimit -SHv $MEM_LIMIT
 ulimit -SHv $MEM_LIMIT

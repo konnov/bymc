@@ -19,15 +19,20 @@ CONTENTS
 
 1. PREREQUISITES
 
+ * python 2.x
  * ocaml and ocamlbuild (not earlier than 3.11.0)
  * ocamlgraph: http://ocamlgraph.lri.fr/
- * ocamlunit (only if you want to run unit tests)
+ * ocamlunit (if you want to run unit tests)
  * yices 1.x: http://yices.csl.sri.com/download.shtml
  * at least one of those:
      - spin: http://spinroot.com/spin/Man/README.html#S2
      - nusmv: http://nusmv.fbk.eu/NuSMV/download/getting-v2.html
+     - faster: http://www.lsv.ens-cachan.fr/Software/fast/
+ * lingeling: http://fmv.jku.at/lingeling/
+     (if you want to run bounded model checking using lingeling)
  * gcc (if you are going to use spin)
- * python
+ * pycudd (Sec. 6, if you want to compute the bounds on the diameter or
+           check the algorithms with FASTer)
 
 If you do not know how to install ocaml and ocaml libraries in your system,
 check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
@@ -46,12 +51,14 @@ http://forsyte.at/software/bymc/#examples
 
 4. RUNNING
 
+4.1. SPIN
+
 # checking models with concrete parameters using spin
 ./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
 
-# parameterized model checking with the abstraction-refinement
+Parameterized model checking with the abstraction-refinement:
 
-./verifypa-spin ${fmcad13-benchmarks}/bcast-byz.pml relay
+./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
 (you can invoke verifypa-* scripts from any directory you want)
 
@@ -59,30 +66,50 @@ http://forsyte.at/software/bymc/#examples
 
 # if you want to provide an invariant, then introduce one like tx_inv
 # in bcast_symb.
-# The tool will check automatically if it is an invariant.
+# The tool will check automatically, whether it is an invariant.
 #
 # after that run cegar once more:
-./verifypa-spin ${fmcad13-benchmarks}/bcast-byz.pml relay
+./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
-# the manual execution of the tool chain (most likely, you don't need it!)
 
-OCAMLRUNPARAM=b ./bymc.native -a bcast-byz.pml
-view original.prm     # the original system as parsed by the tool
-view abs-interval.prm # the interval abstraction
-view abs-counter-general.prm  # the counter abstraction
-view abs-vass.prm     # the VASS representation used for refinement
-spin -a -N unforg.never abs-counter.prm
-gcc -o pan pan.c && ./pan -a -m1000000
-# see a counter example produced in Spin
-spin -t -N unforg.never abs-counter.prm | grep '{' >spin.trace
-view trace.ys         # the trace encoded in yices (SMT solver)
+4.2. NuSMV with BDDs
 
-# properties we usually check:
-{unforg,corr,relay}
+Parameterized model checking with the abstraction-refinement:
 
-# see a counter example in VASS and (perhaps) refine the system:
+./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay
 
-OCAMLRUNPARAM=b ./bymc.native -t spin.trace bcast-byz.pml
+
+4.3. NuSMV with BMC
+
+Parameterized model checking with the abstraction-refinement:
+
+./verifypa-nusmv-bmc -k length ${benchmarks}/bcast-byz.pml relay
+
+or using lingeling for <length2> steps
+    (refinement only up to <length> steps is supported):
+
+./verifypa-nusmv-bmc -k length --lingeling length2 \
+    ${benchmarks}/bcast-byz.pml relay
+
+or using lingeling for <length2> steps
+    (refinement only up to <length> steps is supported):
+
+./verifypa-nusmv-bmc -k length --lingeling length2 \
+    --plingeling num_workers \
+    ${benchmarks}/bcast-byz.pml relay
+
+
+4.4 NuSMV with FAST    
+
+./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
+
+
+4.5 COMPUTING DIAMETER (of PIA data abstraction)
+
+./analyse ${benchmarks}/bcast-byz.pml bounds
+
+gives bounds on the diameter of counter systems and counter abstractions
+
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
 
@@ -106,7 +133,7 @@ in your ~/.bashrc or ~/.zshrc before doing that)
 
 6. INSTALLING PYCUDD
 
-PyCUDD is required when ./analysis is run with the property 'bound'.
+PyCUDD is required when ./analysis is run with the property 'bounds'.
 To compile pycudd:
   $ cd ../deps/pycudd2.0.2/cudd-2.4.2
   $ make # uncomment XCFLAGS for x86_64 in Makefile if needed

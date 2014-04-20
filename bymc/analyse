@@ -11,7 +11,7 @@ if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 
-function help_and_exit() {
+function help_and_quit() {
     echo "use $0 [switches] prog spec bymc_options"
     echo " where spec is one of those: bounds"
     echo " and the switches are"
@@ -24,13 +24,17 @@ function help_and_exit() {
 eval set -- "$TEMPOPTS"
 while true ; do
     case "$1" in
-    -h|--help) help_and_exit ;;
+    -h|--help) help_and_quit ;;
     --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
     --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
     --) shift ; break ;;
-    *) echo "Internal error!" ; help_and_exit ;;
+    *) echo "Internal error!" ; help_and_quit ;;
     esac
 done
+
+if [ "$#" -lt 2 ]; then
+    help_and_quit
+fi
 
 PROG=$1
 SPEC=$2
