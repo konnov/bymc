@@ -3,7 +3,7 @@
 ByMC is a tool for model checking fault-tolerant distributed algorithms.
 More details to be found at: http://forsyte.at/software/bymc/
 
-Should you have any questions, ask Igor Konnov <konnov@forsyte.at>
+Should you have any questions, ask Igor Konnov <konnov at forsyte.at>
 
 
 CONTENTS
