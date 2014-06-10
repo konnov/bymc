@@ -1,11 +1,17 @@
 #!/bin/bash
 #
-# Functional tests
+# The script to extract and run functional tests.
+#
+# This script is as minimal as possible. No overgrown frameworks please.
+#
+# Igor Konnov, 2013-2014.
 
 bymc_dir=`dirname $0`
 export bymc_dir=`cd $bymc_dir/.. && pwd`
 export run_dir="$bymc_dir/_test-run"
 logfile="$run_dir/test.log"
+
+args="$@"
 
 if [ "${run_dir}" != "" -a -d "$run_dir" ]; then
     rm -rf "$run_dir"
@@ -20,7 +26,7 @@ done
 nok=0
 nfail=0
 
-for t in *.test; do
+for t in ${args:-*.test}; do
     tlog=`echo $t | sed 's/.test/.log/'`
     terr=`echo $t | sed 's/.test/.err/'`
     teva=`echo $t | sed 's/.test/.eval/'`

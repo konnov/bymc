@@ -14,14 +14,16 @@ disabled = False
 try:
     for l in f:
         if l.find('BEGIN-TEST') != -1:
-            out = open('%s-%d.test' % (prefix, test_no), 'w+')
+            name = l[l.rfind('BEGIN-TEST') + len('BEGIN-TEST') :].strip()
+            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
             out.write('testsource=%s\n' % filename)
-            eva = open('%s-%d.eval' % (prefix, test_no), 'w+')
+            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write('set -e\n')
         elif l.find('DISABLED-TEST') != -1:
+            name = l[l.rfind('DISABLED-TEST') + len('DISABLED-TEST') :].strip()
             disabled = True
-            out = open('%s-%d.test' % (prefix, test_no), 'w+')
-            eva = open('%s-%d.eval' % (prefix, test_no), 'w+')
+            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
+            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write("echo 'DISABLED. Failed, in order to keep you warned.' && exit 101")
         elif l.find('END-TEST') != -1:
             out.close()
