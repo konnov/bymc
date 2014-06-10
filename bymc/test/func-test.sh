@@ -36,7 +36,11 @@ for t in *.test; do
         nfail=$((nfail+1))
     else
         sh $teva $tlog >>$logfile
-        if [ "$?" != "0" ]; then
+        ret="$?"
+        if [ "$ret" == "101" ]; then
+            echo "DISABLED"
+            ndisabled=$((ndisabled+1))
+        elif [ "$ret" != "0" ]; then
             echo "FAILED"
             echo "FAILED. Check $tlog" >>$logfile
             nfail=$((nfail+1))
@@ -48,6 +52,6 @@ for t in *.test; do
     fi
 done
 
-echo "FAILED: $nfail OK: $nok"
+echo "FAILED: $nfail DISABLED: $ndisabled OK: $nok"
 echo "Check $logfile for details"
 
