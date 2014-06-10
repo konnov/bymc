@@ -69,11 +69,11 @@ ltl progex { [](prec_init -> <>ex1) }
 
 /*
 #BEGIN-TEST
-$bymc_dir/cegar ${testsource} unforg
+$bymc_dir/verifypa-spin ${testsource} unforg
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 #BEGIN-TEST
-$bymc_dir/cegar ${testsource} progall
+$bymc_dir/verifypa-spin ${testsource} progall
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
 */
