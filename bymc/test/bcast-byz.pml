@@ -121,16 +121,28 @@ ltl fairness { []<>(!in_transit) }
 #endif
 
 /*
-#BEGIN-TEST
+#BEGIN-TEST correct-unforg
 $bymc_dir/verifypa-spin ${testsource} unforg
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
-#BEGIN-TEST
+
+#BEGIN-TEST correct-relay
 $bymc_dir/verifypa-spin ${testsource} relay
 #EXPECT grep "verified in 9 refinement" ${testlog}
 #END-TEST
-#BEGIN-TEST
+
+#BEGIN-TEST correct-corr
 $bymc_dir/verifypa-spin ${testsource} corr
 #EXPECT grep "verified in 6 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST f_LE_t_P_1-unforg
+$bymc_dir/verifypa-spin ${testsource} unforg -D BUG=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST n_GE_3t-relay
+$bymc_dir/verifypa-spin ${testsource} relay -D NGE3T=1
+#EXPECT grep "no-refinement" ${testlog}
 #END-TEST
 */
