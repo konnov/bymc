@@ -42,8 +42,13 @@ for t in ${args:-*.test}; do
     echo "$t >$tlog" >>$logfile
     export testlog="$tlog"
     export AUTO=1
-    sh >"${tlog}" 2>${terr} $t
-    if [ ! -x "$t" -o "$?" != "0" ]; then
+    if [ -f "$t" ]; then
+        sh >"${tlog}" 2>${terr} $t
+    else
+        false
+    fi
+
+    if [ "$?" != "0" ]; then
         echo "FAILED"
         echo "FAILED to exec. Check $tlog" >>$logfile
         nfail=$((nfail+1))
