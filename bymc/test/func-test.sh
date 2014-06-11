@@ -29,6 +29,10 @@ nok=0
 nfail=0
 
 for t in ${args:-*.test}; do
+    if echo "$t" | grep -v -q -e '.test$'; then
+        t="$t.test" # in the case the test was specified manually
+    fi
+
     tlog=`echo $t | sed 's/.test/.log/'`
     terr=`echo $t | sed 's/.test/.err/'`
     teva=`echo $t | sed 's/.test/.eval/'`
@@ -38,7 +42,7 @@ for t in ${args:-*.test}; do
     export testlog="$tlog"
     export AUTO=1
     sh >"${tlog}" 2>${terr} $t
-    if [ "$?" != "0" ]; then
+    if [ ! -x "$t" -o "$?" != "0" ]; then
         echo "FAILED"
         echo "FAILED to exec. Check $tlog" >>$logfile
         nfail=$((nfail+1))
