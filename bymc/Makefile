@@ -20,11 +20,11 @@ compile: ${target}
 
 debug: ${debug_target}
 
-utest: clean
+test: clean
 	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte | ./script/ocaml-friendly
 	./unitTests.byte
 
-itest: clean
+integrate: clean
 	./test/func-test.sh
 
 dist:
