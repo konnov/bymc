@@ -41,7 +41,7 @@ check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
 
 # building (you need ocaml and ocamlbuild)
 cd bymc # (the directory with this README)
-./make.sh
+make
 
 3. EXAMPLES
 
