@@ -132,8 +132,9 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             not (eval_bool_expr l vals)
         | _ as e ->
             raise (Abstraction_error
-                (sprintf "Don't know how to do counter abstraction for %s"
-                    (expr_s e)))
+                (sprintf
+                  "Don't know how to do counter abstraction of %s in a property"
+                  (expr_s e)))
     in
     let is_global = function
     | Var v -> Program.is_global prog v
