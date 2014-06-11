@@ -11,7 +11,7 @@ function mc_compile_first {
 }
 
 function mc_verify_spec {
-    if [ "$NO_JUSTICE" -ne "0" ]; then
+    if [ "$NO_JUSTICE" != "0" ]; then
         perl -pi -e 's/JUSTICE /-- JUSTICE/g' main-ssa.smv
     fi
 
