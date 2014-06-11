@@ -27,9 +27,14 @@ done
 
 nok=0
 nfail=0
-ndisabled=0
+nskip=0
+ntodo=0
+ntotal=0
+
+start_time=`date '+%s'`
 
 for t in ${args:-*.test}; do
+    ntotal=$((ntotal+1))
     if echo "$t" | grep -v -q -e '.test$'; then
         t="$t.test" # in the case the test was specified manually
     fi
@@ -56,8 +61,11 @@ for t in ${args:-*.test}; do
         sh $teva $tlog >>$logfile
         ret="$?"
         if [ "$ret" == "101" ]; then
-            echo "DISABLED"
-            ndisabled=$((ndisabled+1))
+            echo "SKIPPED"
+            nskip=$((nskip+1))
+        elif [ "$ret" == "102" ]; then
+            echo "TODO"
+            ntodo=$((ntodo+1))
         elif [ "$ret" != "0" ]; then
             echo "FAILED"
             echo "FAILED. Check $tlog" >>$logfile
@@ -69,7 +77,19 @@ for t in ${args:-*.test}; do
         fi
     fi
 done
+end_time=`date '+%s'`
+diff_time=$((end_time - start_time))
 
-echo "FAILED: $nfail DISABLED: $ndisabled OK: $nok"
+echo ""
 echo "Check $logfile for details"
+echo ""
+
+echo "Ran: $ntotal tests in: $diff_time seconds"
+
+# try to be compatible with the format by ounit
+if [ "$nfail" -ne "0" ]; then
+    echo "FAILED: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo"
+else
+    echo "SUCCESS: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo"
+fi
 

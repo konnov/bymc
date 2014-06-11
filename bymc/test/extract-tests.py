@@ -19,12 +19,18 @@ try:
             out.write('testsource=%s\n' % filename)
             eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write('set -e\n')
-        elif l.find('DISABLED-TEST') != -1:
-            name = l[l.rfind('DISABLED-TEST') + len('DISABLED-TEST') :].strip()
+        elif l.find('SKIP-TEST') != -1:
+            name = l[l.rfind('SKIP-TEST') + len('SKIP-TEST') :].strip()
             disabled = True
             out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
             eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
-            eva.write("echo 'DISABLED. Failed, in order to keep you warned.' && exit 101")
+            eva.write("echo 'SKIP. Failed, in order to keep you warned.' && exit 101")
+        elif l.find('TODO-TEST') != -1:
+            name = l[l.rfind('TODO-TEST') + len('TODO-TEST') :].strip()
+            disabled = True
+            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
+            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
+            eva.write("echo 'TODO. Failed, in order to keep you warned.' && exit 102")
         elif l.find('END-TEST') != -1:
             out.close()
             eva.close()
