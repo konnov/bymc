@@ -9,7 +9,7 @@ trap "exit 255" SIGINT SIGTERM
 if [ "$#" -lt 3 ]; then
     echo "Not enough arguments"
     echo ""
-    echo "Use: run-concrete [--dry-run] param1=value1,param2=value2 promela_system property"
+    echo "Use: run-concrete [--dry-run] param1=value1,param2=value2 promela_system property [bymc_flags]"
     echo ""
     echo "  Set GEN_SCRIPT=1 to generate a compilation and execution script"
     exit 1
@@ -30,6 +30,8 @@ PARAM=$1
 BYMC_HOME=`dirname $0`
 BYMC_HOME=`cd $BYMC_HOME; pwd`
 PROG_S=`basename $PROG .pml`
+shift 3
+export BYMC_FLAGS="$BYMC_FLAGS $@"
 
 SPIN=${SPIN:-spin}
 PANCC_FLAGS=${PANCC_FLAGS:-"-DCOLLAPSE -DSC"}
@@ -69,7 +71,7 @@ if [ ! -f "$SCRIPT" -o "$GEN_SCRIPT" == "" ]; then
 fi
 
 cd $EXEC_DIR
-$BYMC_HOME/bymc.native -s "$PARAM" $PROG_FULL || (echo "FAILURE"; exit 1)
+$BYMC_HOME/bymc.native -s "$PARAM" $PROG_FULL "$BYMC_FLAGS" || (echo "FAILURE"; exit 1)
 
 cd $CUR_DIR
 
