@@ -128,12 +128,12 @@ $bymc_dir/verifypa-spin ${testsource} unforg
 
 #BEGIN-TEST correct-relay
 $bymc_dir/verifypa-spin ${testsource} relay
-#EXPECT grep "verified in 9 refinement" ${testlog}
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
 #END-TEST
 
 #BEGIN-TEST correct-corr
 $bymc_dir/verifypa-spin ${testsource} corr
-#EXPECT grep "verified in 6 refinement" ${testlog}
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
 #END-TEST
 
 #BEGIN-TEST f_LE_t_P_1-unforg

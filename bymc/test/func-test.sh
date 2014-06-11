@@ -11,6 +11,8 @@ export bymc_dir=`cd $bymc_dir/.. && pwd`
 export run_dir="$bymc_dir/_test-run"
 logfile="$run_dir/test.log"
 
+trap "exit 13" SIGHUP SIGINT SIGTERM
+
 args="$@"
 
 if [ "${run_dir}" != "" -a -d "$run_dir" ]; then
