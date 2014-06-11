@@ -175,4 +175,54 @@ $bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} corr
 $bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} corr
 #EXPECT grep "errors:.*1" ${testlog}
 #END-TEST
+
+#BEGIN-TEST correct-bdd-unforg
+$bymc_dir/verifypa-nusmv-bdd ${testsource} unforg
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-bdd-relay
+$bymc_dir/verifypa-nusmv-bdd ${testsource} relay
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-bdd-corr
+$bymc_dir/verifypa-nusmv-bdd ${testsource} corr
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST f_LE_t_P_1-bdd-unforg
+$bymc_dir/verifypa-nusmv-bdd ${testsource} unforg -D BUG=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST n_GE_3t-bdd-relay
+$bymc_dir/verifypa-nusmv-bdd ${testsource} relay -D NGE3T=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-bmc-unforg
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-bmc-relay
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-bmc-corr
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} corr
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST f_LE_t_P_1-bmc-unforg
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg -D BUG=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST n_GE_3t-bmc-relay
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay -D NGE3T=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
 */
