@@ -163,7 +163,7 @@ let test_reduce_indices_diamond _ =
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
     let solver = new yices_smt in
     solver#start;
-    ignore (reduce_indices solver bcfg x);
+    ignore (reduce_indices solver (Ssa.BlockGasM.make bcfg) x);
     ignore (solver#stop);
     begin
         match b1#get_seq with

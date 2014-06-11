@@ -44,7 +44,8 @@ let test_trans_proc_decl_two_var _ =
     Hashtbl.add h npc (Scratch(pc));
     Hashtbl.add h rx (LocalUnbounded);
     Hashtbl.add h nrx (Scratch(rx));
-    let roles = new var_role_tbl h in
+    let roles = new var_role_tbl in
+    roles#add_from_hash h;
 
     let proc = new proc "Proc" (Const 10) in
     proc#set_stmts [
@@ -52,7 +53,7 @@ let test_trans_proc_decl_two_var _ =
         MDecl (2, npc, Const 0);
         MDecl (3, rx, Const 0);
         MDecl (4, nrx, Const 0);
-        MLabel (10, 1);
+        MLabel (10, "foo");
         MAtomic (20, [
             MExpr (21, BinEx (ASGN, Var npc, Const 1));
             MExpr (22, BinEx (ASGN, Var pc, Var npc));
@@ -60,7 +61,7 @@ let test_trans_proc_decl_two_var _ =
             MExpr (24, BinEx (ASGN, Var npc, Const 0));
             MExpr (25, BinEx (ASGN, Var nrx, Const 0));
         ]);
-        MGoto (30, 1);
+        MGoto (30, "foo");
     ];
     let tt = new data_type_tab in
     tt#set_type pc (mk_int_range 0 2);
@@ -74,7 +75,7 @@ let test_trans_proc_decl_two_var _ =
             Proc (proc)
         ]
     in
-    let pia_ctx_tab = new ctr_abs_ctx_tbl dom roles prog [proc] in
+    let pia_ctx_tab = new ctr_abs_ctx_tbl prog (SkelStruc.compute_struc prog) [proc] in
 
     (* test *)
     let prop = PropSome (BinEx (AND,
@@ -107,7 +108,8 @@ let test_trans_proc_decl_three_var _ =
     Hashtbl.add h nrx (Scratch(rx));
     Hashtbl.add h flt (BoundedInt (0, 1));
     Hashtbl.add h nflt (Scratch(flt));
-    let roles = new var_role_tbl h in
+    let roles = new var_role_tbl in
+    roles#add_from_hash h;
 
     let proc = new proc "Proc" (Const 10) in
     proc#set_stmts [
@@ -117,7 +119,7 @@ let test_trans_proc_decl_three_var _ =
         MDecl (4, nrx, Const 0);
         MDecl (5, flt, Const 0);
         MDecl (6, nflt, Const 0);
-        MLabel (10, 1);
+        MLabel (10, "foo");
         MAtomic (20, [
             MExpr (21, BinEx (ASGN, Var npc, Const 1));
             MExpr (22, BinEx (ASGN, Var pc, Var npc));
@@ -127,7 +129,7 @@ let test_trans_proc_decl_three_var _ =
             MExpr (26, BinEx (ASGN, Var nrx, Const 0));
             MExpr (27, BinEx (ASGN, Var nflt, Const 0));
         ]);
-        MGoto (30, 1);
+        MGoto (30, "foo");
     ];
     let tt = new data_type_tab in
     tt#set_type pc (mk_int_range 0 2);
@@ -143,7 +145,7 @@ let test_trans_proc_decl_three_var _ =
             Proc (proc)
         ]
     in
-    let pia_ctx_tab = new ctr_abs_ctx_tbl dom roles prog [proc] in
+    let pia_ctx_tab = new ctr_abs_ctx_tbl prog (SkelStruc.compute_struc prog) [proc] in
 
     (* test *)
     let prop = PropSome (list_to_binex AND
@@ -160,7 +162,7 @@ let test_trans_proc_decl_three_var _ =
     | _ -> assert_failure "expected PropGlob"
 
 
-let suite = "ssa-suite" >:::
+let suite = "abs-counter-suite" >:::
     [
         "test_trans_proc_decl_two_var"
           >:: (bracket setup test_trans_proc_decl_two_var teardown);
