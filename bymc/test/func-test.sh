@@ -27,6 +27,7 @@ done
 
 nok=0
 nfail=0
+ndisabled=0
 
 for t in ${args:-*.test}; do
     if echo "$t" | grep -v -q -e '.test$'; then
