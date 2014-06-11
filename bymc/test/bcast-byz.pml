@@ -145,4 +145,34 @@ $bymc_dir/verifypa-spin ${testsource} unforg -D BUG=1
 $bymc_dir/verifypa-spin ${testsource} relay -D NGE3T=1
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
+
+#BEGIN-TEST concrete-correct-unforg
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} unforg
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST concrete-correct-unforg-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} unforg
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
+
+#BEGIN-TEST concrete-correct-relay
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} relay
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST concrete-correct-relay-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} relay
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
+
+#BEGIN-TEST concrete-correct-corr
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} corr
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST concrete-correct-corr-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} corr
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
 */
