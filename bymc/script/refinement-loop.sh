@@ -103,7 +103,7 @@ fi
 cd $ORIG_DIR
 
 mkdir -p "$ORIG_DIR/x"
-work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-`date \"+%y%m%d-%H%M\"`.XXXX"
+work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-`date \"+%y%m%d-%H%M\"`.XXXXXX"
 work_dir=`mktemp -d $work_dir_template`
 cd "$work_dir"
 echo "Changed directory to $work_dir"
