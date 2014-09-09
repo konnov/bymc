@@ -290,7 +290,10 @@ let count_guarded milestones map r =
     else PSetMap.add cond_set 1 map
 
 
-let compute_cond_impl solver shared umiles lmiles =
+(* for each condition find all the other conditions that are not immediately
+   unlocked/locked by it.
+ *)
+let find_successors solver shared umiles lmiles =
     let succ = Hashtbl.create 10 in
     let is_succ lockt (lname, _, left, _) (rname, _, right, _) =
         solver#push_ctx;
@@ -303,7 +306,7 @@ let compute_cond_impl solver shared umiles lmiles =
         solver#pop_ctx;
         if not res && lname <> rname
         then log INFO (sprintf
-            "Lock/Unlock subsumption: %s implies %s" lname rname);
+            "Lock/Unlock subsumption: %s always implies %s" lname rname);
         res (* left does not imply right or vice versa *)
     in
     let each_cond lockt (lname, id, c, t) =
@@ -323,14 +326,15 @@ let compute_cond_impl solver shared umiles lmiles =
     succ
 
 
+(* compute the length of the longest accelerated path *)
 let find_max_bound nrules guards_card umiles lmiles succ =
     let exclude m m_id guard_set card =
         if PSet.mem m_id guard_set
         then begin
             Debug.trace Trc.bnd
-                (fun _ -> sprintf " threw away %d of %s\n"
-                    card (SpinIrImp.expr_s m));
-            0
+                (fun _ ->
+                    sprintf " threw away %d of %s\n" card (SpinIrImp.expr_s m));
+                0
         end
         else card
     in
@@ -383,6 +387,34 @@ let find_max_bound nrules guards_card umiles lmiles succ =
     List.fold_left each_branch nrules (umiles @ lmiles)
 
 
+(* compute the tree of representative executions *)
+let compute_tree nrules guards_card umiles lmiles succ =
+    let construct path =
+        let p (name, _, _, _) = Printf.printf " [...] %s " name
+        in 
+        List.iter p path; Printf.printf " [...] \n";
+        0
+    in
+    (* construct alternations of conditions and call a function on a leaf *)
+    let rec build_paths f rev_prefix =
+        let n, id, m, _ = List.hd rev_prefix in
+        let each_succ _ (nn, id, s, t) =
+            if not (List.exists (fun (name, _, _, _) -> nn = name) rev_prefix)
+            then build_paths f ((nn, id, s, t) :: rev_prefix)
+            else f (List.rev rev_prefix)
+        in
+        let succs = Hashtbl.find succ m in
+        if succs = []
+        then f (List.rev rev_prefix)
+        else List.fold_left each_succ 0 succs
+    in
+    let each_branch paths (n, id, m, t) =
+        let new_cost = build_paths construct [(n, id, m, t)] in
+        [] :: paths
+    in
+    List.fold_left each_branch [] (umiles @ lmiles)
+
+
 let collect_actions accum sk =
     let rec each_rule set r = ExprSet.add (list_to_binex AND r.Sk.act) set in
     List.fold_left each_rule accum sk.Sk.rules
@@ -433,11 +465,14 @@ let compute_diam solver dom_size sk =
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
-    let miles_succ = compute_cond_impl solver sk.Sk.shared umiles lmiles in
+    let miles_succ = find_successors solver sk.Sk.shared umiles lmiles in
     let max_bound = find_max_bound sk.Sk.nrules guards_card umiles lmiles miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
         sk.Sk.name (max_bound * (dom_size - 1)));
+
+    log INFO (sprintf "> the tree...");
+    ignore (compute_tree sk.Sk.nrules guards_card umiles lmiles miles_succ);
 
     bound
 
