@@ -1,3 +1,4 @@
+
 0. WHAT IS THAT?
 
 ByMC is a tool for model checking fault-tolerant distributed algorithms.
