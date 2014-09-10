@@ -30,6 +30,7 @@ let teardown _ =
 
 let test_trans_proc_decl_two_var _ =
     (* setup *)
+    let prog = Parser.parse_promela Options.empty "t" "t" "" in
     let nsnt = new_var "nsnt"
         and pc = new_var "pc" and npc = new_var "npc"
         and rx = new_var "rx" and nrx = new_var "nrx" in
