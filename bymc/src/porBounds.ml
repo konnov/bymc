@@ -15,8 +15,14 @@ open SymbSkel
 
 module IGraph = Graph.Pack.Digraph
 module IGraphOper = Graph.Oper.I(IGraph)
+module IGTop = Graph.Topological.Make(IGraph)
 
-(* set membership as division by prime numbers *)
+(*
+  Set membership as division by prime numbers.
+  This was a clever exercise. However, it is much easier
+  (and probably more efficient) to use a bit vector instead of prime
+  numbers.
+ *)
 module PSet = struct
     type elt = big_int
     type t = big_int
@@ -100,10 +106,20 @@ type path_elem_t =
 
 
 let print_path path =
-    let p (name, _, _, _) =
-        Printf.printf " [...] %s " name
+    let p = function
+        | Mile (name, _, _, _) ->
+            Printf.printf " %s " name
+
+        | Seg  rs ->
+            Printf.printf " [ ";
+            let each_rule r =
+                Printf.printf " (%d -> %d)" r.Sk.src r.Sk.dst
+            in
+            List.iter each_rule rs;
+            Printf.printf " ] "
     in 
-    List.iter p path; Printf.printf " [...] \n"
+    List.iter p path;
+    Printf.printf "\n"
 
 
 let compute_flow sk =
@@ -124,6 +140,18 @@ let compute_flow sk =
     List.iter add_flow (lst_enum sk.Sk.rules);
     IGraph.dot_output flowg (sprintf "flow-%s.dot" sk.Sk.name);
     flowg
+
+
+(* create a single segment that consists of topologically sorted
+   rules. Every cycle is unfolded twice.
+ *)
+(* TODO: deal with the cycles! *)    
+let make_segment sk flowg =
+    let add n rules =
+        let rule = List.nth sk.Sk.rules (IGraph.V.label n) in
+        rule :: rules
+    in
+    List.rev (IGTop.fold add flowg [])
 
 
 module ExprSet = Set.Make (struct
@@ -408,8 +436,11 @@ let find_max_bound nrules guards_card umiles lmiles succ =
    The difference is that we do not represent ALL executions with SLPS,
    but only the representative ones.
  *)
-let compute_tree nrules guards_card umiles lmiles succ =
-    let make_path milestones = milestones in
+let compute_tree segment guards_card umiles lmiles succ =
+    let make_path milestones =
+        let each_mstone suffix m = (Seg segment) :: (Mile m) :: suffix in
+        List.rev (List.fold_left each_mstone [Seg segment] milestones)
+    in
 
     (* construct alternations of conditions and call a function on a leaf *)
     let rec build_paths f paths rev_prefix =
@@ -485,7 +516,8 @@ let compute_diam solver dom_size sk =
         sk.Sk.name (max_bound * (dom_size - 1)));
 
     log INFO (sprintf "> the tree...");
-    let paths = compute_tree sk.Sk.nrules guards_card umiles lmiles miles_succ
+    let full_segment = make_segment sk fg in
+    let paths = compute_tree full_segment guards_card umiles lmiles miles_succ
     in
     List.iter print_path paths;
 
