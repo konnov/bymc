@@ -92,6 +92,20 @@ end
 
 type lock_t = Lock | Unlock
 
+type mstone_t = string * PSet.elt * token expr * lock_t
+
+type path_elem_t =
+    | Mile of mstone_t
+    | Seg of Sk.rule_t list
+
+
+let print_path path =
+    let p (name, _, _, _) =
+        Printf.printf " [...] %s " name
+    in 
+    List.iter p path; Printf.printf " [...] \n"
+
+
 let compute_flow sk =
     let flowg = IGraph.create () in
     let outgoing = Hashtbl.create sk.Sk.nrules in
@@ -386,33 +400,32 @@ let find_max_bound nrules guards_card umiles lmiles succ =
     in
     List.fold_left each_branch nrules (umiles @ lmiles)
 
+(*
+   Compute the tree of representative executions.
 
-(* compute the tree of representative executions *)
+   Here we compute a semilinear regular path scheme (SLPS),
+   see, e.g., Flat counter automata almost everywhere.
+   The difference is that we do not represent ALL executions with SLPS,
+   but only the representative ones.
+ *)
 let compute_tree nrules guards_card umiles lmiles succ =
-    let construct path =
-        let p (name, _, _, _) = Printf.printf " [...] %s " name
-        in 
-        List.iter p path; Printf.printf " [...] \n";
-        0
-    in
+    let make_path milestones = milestones in
+
     (* construct alternations of conditions and call a function on a leaf *)
-    let rec build_paths f rev_prefix =
+    let rec build_paths f paths rev_prefix =
         let n, id, m, _ = List.hd rev_prefix in
-        let each_succ _ (nn, id, s, t) =
+        let each_succ ps (nn, id, s, t) =
             if not (List.exists (fun (name, _, _, _) -> nn = name) rev_prefix)
-            then build_paths f ((nn, id, s, t) :: rev_prefix)
-            else f (List.rev rev_prefix)
+            then build_paths f ps ((nn, id, s, t) :: rev_prefix)
+            else (f (List.rev rev_prefix)) :: ps
         in
         let succs = Hashtbl.find succ m in
         if succs = []
-        then f (List.rev rev_prefix)
-        else List.fold_left each_succ 0 succs
+        then (f (List.rev rev_prefix)) :: paths
+        else List.fold_left each_succ paths succs
     in
-    let each_branch paths (n, id, m, t) =
-        let new_cost = build_paths construct [(n, id, m, t)] in
-        [] :: paths
-    in
-    List.fold_left each_branch [] (umiles @ lmiles)
+    List.fold_left (build_paths make_path) []
+        (List.rev_map (fun m -> [m]) (umiles @ lmiles))
 
 
 let collect_actions accum sk =
@@ -472,7 +485,9 @@ let compute_diam solver dom_size sk =
         sk.Sk.name (max_bound * (dom_size - 1)));
 
     log INFO (sprintf "> the tree...");
-    ignore (compute_tree sk.Sk.nrules guards_card umiles lmiles miles_succ);
+    let paths = compute_tree sk.Sk.nrules guards_card umiles lmiles miles_succ
+    in
+    List.iter print_path paths;
 
     bound
 
