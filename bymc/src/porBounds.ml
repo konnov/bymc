@@ -1,5 +1,10 @@
 (*
- * Computing execution bounds using partial order reduction.
+ * Computing completeness bounds using partial orders.
+ *
+ * The idea is discussed in:
+ * 	 Igor Konnov, Helmut Veith, Josef Widder.
+ *   On the Completeness of Bounded Model Checking for Threshold-Based
+ *   Distributed Algorithms: Reachability. CONCUR'14.
  *
  * Igor Konnov, 2014
  *)
@@ -24,6 +29,11 @@ module PSetMap = Map.Make (struct
  let compare = PSet.compare
 end)
 
+module PSetEltMap = Map.Make (struct
+ type t = PSet.elt
+ let compare = PSet.compare_elt
+end)
+
 
 (* as ocamlgraph does distinguish two vertices objects that are labelled the
    same, we have to create a universum of all these vertices (and edges).
@@ -45,14 +55,39 @@ module U = struct
             Hashtbl.replace edges (i, lab, j) e; e
 end
 
-
 type lock_t = Lock | Unlock
 
 type mstone_t = string * PSet.elt * token expr * lock_t
 
+(* a cache for numerous dependencies we collect here *)
+module C = struct
+    type cache_t = {
+        (* control flow graph *)
+        fg: IGraph.t;
+        (* map a rule number to a set of conditions required to enable it *)
+        rule_pre: PSet.t IntMap.t;
+        (* map a rule number to a set of conditions it may unlock/lock *)
+        rule_post: PSet.t IntMap.t;
+        (* basic conditions to be unlocked *)
+        uconds: mstone_t list;
+        (* basic conditions to be locked *)
+        lconds: mstone_t list;
+        (* implication relation between the conditions of the same type *)
+        cond_imp: PSet.t PSetEltMap.t;
+    }
+
+    let empty = {
+        rule_pre = IntMap.empty; rule_post = IntMap.empty;
+        uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
+        fg = IGraph.create ()
+    }
+
+    let conds c = c.uconds @ c.lconds
+end
+
 type path_elem_t =
     | Mile of mstone_t
-    | Seg of Sk.rule_t list
+    | Seg of int (* rule_no *) list
 
 
 let print_path path =
@@ -62,10 +97,7 @@ let print_path path =
 
         | Seg  rs ->
             Printf.printf " [ ";
-            let each_rule r =
-                Printf.printf " (%d -> %d)" r.Sk.src r.Sk.dst
-            in
-            List.iter each_rule rs;
+            List.iter (fun r -> Printf.printf " %d " r) rs;
             Printf.printf " ] "
     in 
     List.iter p path;
@@ -97,10 +129,7 @@ let compute_flow sk =
  *)
 (* TODO: deal with the cycles! *)    
 let make_segment sk flowg =
-    let add n rules =
-        let rule = List.nth sk.Sk.rules (IGraph.V.label n) in
-        rule :: rules
-    in
+    let add n rules = (IGraph.V.label n) :: rules in
     List.rev (IGTop.fold add flowg [])
 
 
@@ -269,58 +298,116 @@ let print_milestone lockt (name, id, m, _) =
         (PSet.str (PSet.add id (PSet.empty))) (SpinIrImp.expr_s m))
 
 
+(* assign a set of condition ids to a rule *)
+let label_rule_with_conds milestones r =
+    let mk_set conds =
+        let matches (_, _, cond, _) = ExprSet.mem cond conds in
+        let matching_conds = List.filter matches milestones in
+        let add set (_, id, _, _) = PSet.add id set in
+        List.fold_left add PSet.empty matching_conds
+    in
+    let cond_set = mk_set (collect_guard_elems ExprSet.empty r.Sk.guard) in
+    (r, cond_set)
+
+
 (* count how many times every guard (not a subformula of it!) appears in a rule *)
 (* actually we use characteristic numbers that are products of primes *)
 let count_guarded milestones map r =
-    let mk_set conds =
-        List.fold_left (fun set (_, id, _, _) -> PSet.add id set)
-            PSet.empty
-            (List.filter (fun (_, _, m, _) -> ExprSet.mem m conds) milestones)
-    in
-    let cond_set = mk_set (collect_guard_elems ExprSet.empty r.Sk.guard) in
+    let _, cond_set = label_rule_with_conds milestones r in
     if PSetMap.mem cond_set map
     then PSetMap.add cond_set (1 + (PSetMap.find cond_set map)) map
     else PSetMap.add cond_set 1 map
 
 
-(* for each condition find all the other conditions that are not immediately
-   unlocked/locked by it.
- *)
-let find_successors solver shared umiles lmiles =
-    let succ = Hashtbl.create 10 in
-    let is_succ lockt (lname, _, left, _) (rname, _, right, _) =
-        solver#push_ctx;
-        if lockt = Unlock
-        then ignore (solver#append_expr
-            (UnEx (NEG, (BinEx (IMPLIES, left, right)))))
-        else ignore (solver#append_expr
-            (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
-        let res = solver#check in
-        solver#pop_ctx;
-        if not res && lname <> rname
-        then log INFO (sprintf
-            "Lock/Unlock subsumption: %s always implies %s" lname rname);
-        res (* left does not imply right or vice versa *)
+let cache_cond_implications solver shared cache =
+    let does_cond_imply (lname, _, left, llockt) (rname, _, right, rlockt) =
+        if llockt <> rlockt
+        then false (* do not compare conditions of different type *)
+        else begin
+            solver#push_ctx;
+            if llockt = Unlock
+            then ignore (solver#append_expr
+                (UnEx (NEG, (BinEx (IMPLIES, left, right)))))
+            else ignore (solver#append_expr
+                (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
+            let res = solver#check in
+            solver#pop_ctx;
+            not res
+        end
     in
-    let each_cond lockt (lname, id, c, t) =
-        let followers =
-            if lockt = Unlock
-            then lmiles @ (List.filter (is_succ Unlock (lname, id, c, t)) umiles)
-            else umiles @ (List.filter (is_succ Lock (lname, id, c, t)) lmiles)
-        in
-        Hashtbl.replace succ c followers
+    let each_cond map (name, id, exp, lockt) =
+        let locks = if lockt = Lock then cache.C.lconds else cache.C.uconds in
+        let implications =
+            List.filter (does_cond_imply (name, id, exp, lockt)) locks in
+        let add s (_, id, _, _) = PSet.add id s in
+        let set = List.fold_left add PSet.empty implications in
+        PSetEltMap.add id set map
     in
+    (* run the solver *)
     solver#push_ctx;
     let nat_type = new data_type SpinTypes.TUNSIGNED in
     List.iter (fun v -> solver#append_var_def v nat_type) shared;
-    List.iter (each_cond Unlock) umiles;
-    List.iter (each_cond Lock) lmiles;
+    let impl_map =
+        List.fold_left each_cond PSetEltMap.empty (cache.C.uconds @ cache.C.lconds) in
     solver#pop_ctx;
+    { cache with C.cond_imp = impl_map }
+
+
+(* find and cache various dependencies *)    
+let cache_deps solver sk =
+    let fg = compute_flow sk in
+    let nflow = IGraph.nb_edges fg in
+    logtm INFO (sprintf "> %d transition flow dependencies" nflow);
+    let fgp = IGraphOper.transitive_closure ~reflexive:true fg in
+    IGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
+    IGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
+    let not_flowplus = IGraphOper.complement fgp in
+    logtm INFO (sprintf "> constructing unlocking milestones...");
+    let umiles = compute_unlocking not_flowplus Unlock solver sk in
+    let n_umiles = List.length umiles in
+    logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
+    List.iter (print_milestone Unlock) umiles;
+
+    logtm INFO (sprintf "> constructing locking milestones...");
+    let lmiles = compute_unlocking not_flowplus Lock solver sk in
+    let n_lmiles = List.length lmiles in
+    logtm INFO (sprintf "> %d locking milestones" n_lmiles);
+    List.iter (print_milestone Lock) lmiles;
+
+    cache_cond_implications solver sk.Sk.shared
+        { C.empty with C.lconds = lmiles; C.uconds = umiles }
+
+
+(* for each condition find all the other conditions that are not immediately
+   unlocked/locked by it.
+ *)
+let find_successors cache =
+    let succ = Hashtbl.create 10 in
+    let is_succ l r =
+        let lname, lid, _, _ = l and rname, rid, _, _ = r in
+        let l_imp_r = PSet.mem rid (PSetEltMap.find lid cache.C.cond_imp) in
+        if l_imp_r && lname <> rname
+        then log INFO
+            (sprintf "Lock/Unlock subsumption: %s always implies %s" lname rname);
+        not l_imp_r (* the right condition may succeed the left one *)
+    in
+    let lconds = cache.C.lconds and uconds = cache.C.uconds in
+    let each_cond lockt (lname, id, c, t) =
+        let followers =
+            if lockt = Unlock
+            then lconds @ (List.filter (is_succ (lname, id, c, t)) uconds)
+            else uconds @ (List.filter (is_succ (lname, id, c, t)) lconds)
+        in
+        Hashtbl.replace succ c followers
+    in
+    List.iter (each_cond Unlock) uconds;
+    List.iter (each_cond Lock) lconds;
     succ
 
 
 (* compute the length of the longest accelerated path *)
-let find_max_bound nrules guards_card umiles lmiles succ =
+let find_max_bound nrules guards_card cache succ =
+    let umiles = cache.C.uconds and lmiles = cache.C.lconds in
     let exclude m m_id guard_set card =
         if PSet.mem m_id guard_set
         then begin
@@ -379,6 +466,27 @@ let find_max_bound nrules guards_card umiles lmiles succ =
     in
     List.fold_left each_branch nrules (umiles @ lmiles)
 
+
+(* filter out the locked rules *)    
+(* TODO: take the implications between the locks into account! *)
+let rec filter_path cache conds lockt path =
+    let rec f set = function
+    | [] -> []
+
+    | (Mile (_, id, _, lt) as m) :: tl ->
+        if lt <> lockt
+        then m :: (f set tl)
+        else m :: (f (PSet.add id set) tl) (* from now on id is locked *)
+
+    | (Seg rule_nos) :: tl ->
+        let not_locked rno =
+            PSet.is_empty (PSet.inter set (IntMap.find rno cache.C.rule_pre))
+        in
+        (Seg (List.filter not_locked rule_nos)) :: (f set tl)
+    in
+    f PSet.empty path
+
+
 (*
    Compute the tree of representative executions.
 
@@ -387,10 +495,17 @@ let find_max_bound nrules guards_card umiles lmiles succ =
    The difference is that we do not represent ALL executions with SLPS,
    but only the representative ones.
  *)
-let compute_tree segment guards_card umiles lmiles succ =
+let compute_tree sk cache succ =
+    let full_segment = make_segment sk cache.C.fg in
+    let uconds = cache.C.uconds and lconds = cache.C.lconds in
     let make_path milestones =
-        let each_mstone suffix m = (Seg segment) :: (Mile m) :: suffix in
-        List.rev (List.fold_left each_mstone [Seg segment] milestones)
+        let each_mstone suffix m = (Seg full_segment) :: (Mile m) :: suffix in
+        let full = List.rev (List.fold_left each_mstone [Seg full_segment] milestones)
+        in
+        let no_locked = filter_path cache lconds Lock full in
+        let no_unlocked =
+            List.rev (filter_path cache uconds Unlock (List.rev no_locked)) in
+        no_unlocked
     in
 
     (* construct alternations of conditions and call a function on a leaf *)
@@ -407,7 +522,7 @@ let compute_tree segment guards_card umiles lmiles succ =
         else List.fold_left each_succ paths succs
     in
     List.fold_left (build_paths make_path) []
-        (List.rev_map (fun m -> [m]) (umiles @ lmiles))
+        (List.rev_map (fun m -> [m]) (uconds @ lconds))
 
 
 let collect_actions accum sk =
@@ -426,50 +541,33 @@ let compute_diam solver dom_size sk =
     logtm INFO (sprintf "> there are %d actions..." (ExprSet.cardinal actions));
 
     logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
-    let fg = compute_flow sk in
-    let nflow = IGraph.nb_edges fg in
-    logtm INFO (sprintf "> %d transition flow dependencies" nflow);
-    let fgp = IGraphOper.transitive_closure ~reflexive:true fg in
-    IGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
-    IGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
-    let not_flowplus = IGraphOper.complement fgp in
-    logtm INFO (sprintf "> constructing unlocking milestones...");
-    let umiles = compute_unlocking not_flowplus Unlock solver sk in
-    let n_umiles = List.length umiles in
-    logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
-    List.iter (print_milestone Unlock) umiles;
-
-    logtm INFO (sprintf "> constructing locking milestones...");
-    let lmiles = compute_unlocking not_flowplus Lock solver sk in
-    let n_lmiles = List.length lmiles in
-    logtm INFO (sprintf "> %d locking milestones" n_lmiles);
-    List.iter (print_milestone Lock) lmiles;
+    let cache = cache_deps solver sk in
 
     let guards_card =
-        List.fold_left (count_guarded (umiles @ lmiles)) PSetMap.empty sk.Sk.rules
+        List.fold_left (count_guarded (C.conds cache)) PSetMap.empty sk.Sk.rules
     in
     let print_guard g n =
         log INFO (sprintf "  guard (%s) -> %d times" (PSet.str g) n)
     in
     PSetMap.iter print_guard guards_card;
 
-
+    let n_lmiles = List.length cache.C.lconds 
+    and n_umiles = List.length cache.C.uconds in
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules + (n_lmiles + n_umiles) in
     log INFO (sprintf "> the bound for %s is %d = (1 + %d + %d) * %d + %d"
         sk.Sk.name bound n_umiles n_lmiles sk.Sk.nrules (n_lmiles + n_umiles));
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
-    let miles_succ = find_successors solver sk.Sk.shared umiles lmiles in
-    let max_bound = find_max_bound sk.Sk.nrules guards_card umiles lmiles miles_succ in
+    let miles_succ = find_successors cache in
+    let max_bound = find_max_bound sk.Sk.nrules guards_card cache miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
         sk.Sk.name (max_bound * (dom_size - 1)));
 
     log INFO (sprintf "> the tree...");
-    let full_segment = make_segment sk fg in
-    let paths = compute_tree full_segment guards_card umiles lmiles miles_succ
-    in
+
+    let paths = compute_tree sk cache miles_succ in
     List.iter print_path paths;
 
     bound

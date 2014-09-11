@@ -34,6 +34,8 @@ let str = string_of_big_int
 
 let empty = unit_big_int (* it corresponds to an empty set *)
 
+let is_empty s = (0 = (compare_big_int s empty))
+
 let mem e set =
     eq_big_int (mod_big_int set e) zero_big_int
 
@@ -49,4 +51,9 @@ let remove e set =
 
 let compare = compare_big_int
 
+let compare_elt = compare_big_int
+
+let inter s1 s2 = gcd_big_int s1 s2
+
+let union s1 s2 = mult_big_int s1 s2
 
