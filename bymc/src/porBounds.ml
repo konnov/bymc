@@ -306,6 +306,7 @@ let compute_pre sk conds =
         let matching_mstones = List.filter is_included conds in
         let add set (_, id, _, _) = PSet.add id set in
         let cond_set = List.fold_left add PSet.empty matching_mstones in
+        printf "    pre of %d is %s\n" i (PSet.str cond_set);
         IntMap.add i cond_set map
     in
     List.fold_left2 add_set IntMap.empty (range 0 sk.Sk.nrules) sk.Sk.rules
@@ -486,7 +487,9 @@ let rec filter_path deps conds lockt path =
     | (Mile (_, id, _, lt) as m) :: tl ->
         if lt <> lockt
         then m :: (f set tl)
-        else m :: (f (PSet.add id set) tl) (* from now on id is locked *)
+        else (* from now on id is locked, and whatever implies
+                it is locked too *)
+            m :: (f (PSet.add id set) tl)
 
     | (Seg rule_nos) :: tl ->
         let not_locked rno =
