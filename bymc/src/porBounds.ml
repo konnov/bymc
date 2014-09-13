@@ -392,7 +392,7 @@ let count_guarded sk deps =
 
 
 (* for each condition find all the other conditions that are not immediately
-   unlocked/locked by it.
+   unlocked/locked by it. This gives us a tree of choices.
  *)
 let find_successors deps =
     let succ = Hashtbl.create 10 in
@@ -448,11 +448,14 @@ let find_max_bound nrules guards_card deps succ =
                      List.map (fun seg -> PSetMap.mapi (exclude m id) seg) rsegs in
                     throw_locked (level + 1) ((List.hd nrsegs) :: lsegs) (List.tl nrsegs) tl
         in
-        let nsegs = 1 + (List.length path) in
+        let nmiles = List.length path in
+        let nsegs = 1 + nmiles in
         let segs =
             throw_locked 1 [guards_card] (List.map (fun _ -> guards_card) (range 1 nsegs)) path in
         let seg_cost seg = PSetMap.fold count_cards seg 0 in
-        let cost = List.fold_left (fun sum seg -> sum + (seg_cost seg)) 0 segs in
+        let cost =
+            nmiles + List.fold_left (fun sum seg -> sum + (seg_cost seg)) 0 segs
+        in
         Debug.trace Trc.bnd
             (fun _ -> sprintf " -----> nsegs = %d, cost = %d" nsegs cost);
         max cost max_cost
