@@ -36,6 +36,12 @@ module PSetEltMap = Map.Make (struct
 end)
 
 
+module ExprSet = Set.Make (struct
+ type t = token expr
+ let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
+end)
+
+
 (* as ocamlgraph does distinguish two vertices objects that are labelled the
    same, we have to create a universum of all these vertices (and edges).
  *)
@@ -63,6 +69,11 @@ type lock_t = Lock | Unlock
     but a candidate for a milestone. Rename it.
  *)
 type mstone_t = string * PSet.elt * token expr * lock_t
+
+let print_milestone lockt (name, id, m, _) =
+    log INFO (sprintf "  %s (%s): %s" name
+        (PSet.str (PSet.add id (PSet.empty))) (SpinIrImp.expr_s m))
+
 
 (* a deps for numerous dependencies we collect here *)
 module D = struct
@@ -138,16 +149,12 @@ let make_segment sk flowg =
     List.rev (IGTop.fold add flowg [])
 
 
-module ExprSet = Set.Make (struct
- type t = token expr
- let compare a b = String.compare (SpinIrImp.expr_s a) (SpinIrImp.expr_s b)
-end)
-
 let rec collect_guard_elems cs = function
     | BinEx (AND, l, r) ->
         collect_guard_elems (collect_guard_elems cs l) r
     | e ->
         ExprSet.add e cs
+
 
 let collect_conditions accum sk =
     let rec collect cs = function
@@ -298,11 +305,6 @@ let compute_unlocking not_flowplus lockt solver sk =
     List.map2 map (range 0 (ExprSet.cardinal mstones)) (ExprSet.elements mstones)
 
 
-let print_milestone lockt (name, id, m, _) =
-    log INFO (sprintf "  %s (%s): %s" name
-        (PSet.str (PSet.add id (PSet.empty))) (SpinIrImp.expr_s m))
-
-
 (* assign a set of condition ids to a rule *)
 let compute_pre sk conds =
     let add_set map i r =
@@ -377,18 +379,6 @@ let compute_deps solver sk =
     in
     { D.lconds = lmiles; D.uconds = umiles;
       D.fg = fg; D.rule_pre = rule_pre; D.cond_imp = cond_imp }
-
-
-(* count how many times every guard (not a subformula of it!) appears in a rule *)
-(* actually we use characteristic numbers that are products of primes *)
-let count_guarded sk deps =
-    let each_rule map i r =
-        let pre = IntMap.find i deps.D.rule_pre in
-        if PSetMap.mem pre map
-        then PSetMap.add pre (1 + (PSetMap.find pre map)) map
-        else PSetMap.add pre 1 map
-    in
-    List.fold_left2 each_rule PSetMap.empty (range 0 sk.Sk.nrules) sk.Sk.rules
 
 
 (* for each condition find all the other conditions that are not immediately
@@ -572,6 +562,17 @@ let compute_slps_tree sk deps succ =
 let collect_actions accum sk =
     let rec each_rule set r = ExprSet.add (list_to_binex AND r.Sk.act) set in
     List.fold_left each_rule accum sk.Sk.rules
+
+
+(* count how many times every guard (not a subformula of it!) appears in a rule *)
+let count_guarded sk deps =
+    let each_rule map i r =
+        let pre = IntMap.find i deps.D.rule_pre in
+        if PSetMap.mem pre map
+        then PSetMap.add pre (1 + (PSetMap.find pre map)) map
+        else PSetMap.add pre 1 map
+    in
+    List.fold_left2 each_rule PSetMap.empty (range 0 sk.Sk.nrules) sk.Sk.rules
 
 
 let compute_diam solver dom_size sk =
