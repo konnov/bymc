@@ -105,19 +105,19 @@ type path_elem_t =
     | Seg of int (* rule_no *) list
 
 
-let print_path path =
+let print_path out path =
     let p = function
         | MaybeMile ((name, _, _, _), rule_nos) ->
             let rules_s = str_join " | " (List.map int_s rule_nos) in
-            Printf.printf " %s: (%s) " name rules_s
+            fprintf out " %s: (%s) " name rules_s
 
         | Seg  rs ->
-            Printf.printf " [ ";
-            List.iter (fun r -> Printf.printf " %d " r) rs;
-            Printf.printf " ] "
+            fprintf out " [ ";
+            List.iter (fun r -> fprintf out " %d " r) rs;
+            fprintf out " ] "
     in 
     List.iter p path;
-    Printf.printf "\n"
+    fprintf out "\n"
 
 
 let compute_flow sk =
@@ -313,7 +313,6 @@ let compute_pre sk conds =
         let matching_mstones = List.filter is_included conds in
         let add set (_, id, _, _) = PSet.add id set in
         let cond_set = List.fold_left add PSet.empty matching_mstones in
-        printf "    pre of %d is %s\n" i (PSet.str cond_set);
         IntMap.add i cond_set map
     in
     List.fold_left2 add_set IntMap.empty (range 0 sk.Sk.nrules) sk.Sk.rules
@@ -608,11 +607,13 @@ let compute_diam solver dom_size sk =
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
         sk.Sk.name (max_bound * (dom_size - 1)));
 
-    log INFO (sprintf "> the tree...");
+    log INFO (sprintf "> SLPS is written to slps-paths.txt");
 
     let paths = compute_slps_tree sk deps miles_succ in
-    List.iter print_path paths;
+    let out = open_out "slps-paths.txt" in
+    List.iter (print_path out) paths;
+    close_out out;
 
-    bound
+    paths
 
 
