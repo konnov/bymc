@@ -86,13 +86,13 @@ module D = struct
 end
 
 type path_elem_t =
-    | Mile of mstone_t
+    | MaybeMile of mstone_t
     | Seg of int (* rule_no *) list
 
 
 let print_path path =
     let p = function
-        | Mile (name, _, _, _) ->
+        | MaybeMile (name, _, _, _) ->
             Printf.printf " %s " name
 
         | Seg  rs ->
@@ -484,7 +484,7 @@ let rec filter_path deps conds lockt path =
     let rec f set = function
     | [] -> []
 
-    | (Mile (_, id, _, lt) as m) :: tl ->
+    | (MaybeMile (_, id, _, lt) as m) :: tl ->
         if lt <> lockt
         then m :: (f set tl)
         else (* from now on id is locked, and whatever implies it,
@@ -518,7 +518,7 @@ let compute_tree sk deps succ =
     let full_segment = make_segment sk deps.D.fg in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
     let make_path milestones =
-        let each_mstone suffix m = (Seg full_segment) :: (Mile m) :: suffix in
+        let each_mstone suffix m = (Seg full_segment) :: (MaybeMile m) :: suffix in
         let full = List.rev (List.fold_left each_mstone [Seg full_segment] milestones)
         in
         let no_locked = filter_path deps lconds Lock full in
