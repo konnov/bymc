@@ -71,8 +71,6 @@ module D = struct
         fg: IGraph.t;
         (* map a rule number to a set of conditions required to enable it *)
         rule_pre: PSet.t IntMap.t;
-        (* map a rule number to a set of conditions it may unlock/lock *)
-        rule_post: PSet.t IntMap.t;
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
         (* basic conditions to be locked *)
@@ -82,7 +80,7 @@ module D = struct
     }
 
     let empty = {
-        rule_pre = IntMap.empty; rule_post = IntMap.empty;
+        rule_pre = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
         fg = IGraph.create ()
     }
@@ -377,11 +375,8 @@ let compute_deps solver sk =
     let rule_pre = compute_pre sk (umiles @ lmiles) in
     let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
     in
-    { D.empty with D.lconds = lmiles; D.uconds = umiles;
-      D.fg = fg;
-      D.rule_pre = rule_pre;
-      (* TODO: rule_post *)
-      D.cond_imp = cond_imp }
+    { D.lconds = lmiles; D.uconds = umiles;
+      D.fg = fg; D.rule_pre = rule_pre; D.cond_imp = cond_imp }
 
 
 (* count how many times every guard (not a subformula of it!) appears in a rule *)
