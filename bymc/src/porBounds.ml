@@ -487,9 +487,15 @@ let rec filter_path deps conds lockt path =
     | (Mile (_, id, _, lt) as m) :: tl ->
         if lt <> lockt
         then m :: (f set tl)
-        else (* from now on id is locked, and whatever implies
-                it is locked too *)
-            m :: (f (PSet.add id set) tl)
+        else (* from now on id is locked, and whatever implies it,
+            is locked too *)
+            let collect rhs set (_, lhs, _, _) =
+                let imps = PSetEltMap.find lhs deps.D.cond_imp in
+                if PSet.mem rhs imps (* lhs -> rhs *)
+                then PSet.add lhs set
+                else set
+            in
+            m :: (f (List.fold_left (collect id) set conds) tl)
 
     | (Seg rule_nos) :: tl ->
         let not_locked rno =
