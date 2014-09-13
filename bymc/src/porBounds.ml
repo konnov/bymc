@@ -1,7 +1,8 @@
 (*
  * Computing completeness bounds using partial orders.
  *
- * The idea is discussed in:
+ * The idea is introduced in:
+ *
  * 	 Igor Konnov, Helmut Veith, Josef Widder.
  *   On the Completeness of Bounded Model Checking for Threshold-Based
  *   Distributed Algorithms: Reachability. CONCUR'14.
@@ -55,8 +56,12 @@ module U = struct
             Hashtbl.replace edges (i, lab, j) e; e
 end
 
+(* we have two lock types: unlocking (e.g., x >= t) and locking (e.g., x < f) *)
 type lock_t = Lock | Unlock
 
+(* TODO: this is not a milestone as per definition,
+    but a candidate for a milestone. Rename it.
+ *)
 type mstone_t = string * PSet.elt * token expr * lock_t
 
 (* a deps for numerous dependencies we collect here *)
@@ -86,14 +91,16 @@ module D = struct
 end
 
 type path_elem_t =
-    | MaybeMile of mstone_t
+    | MaybeMile
+        of (mstone_t (* cond. *) * int (* rule_no *) list (* assoc. rules *))
     | Seg of int (* rule_no *) list
 
 
 let print_path path =
     let p = function
-        | MaybeMile (name, _, _, _) ->
-            Printf.printf " %s " name
+        | MaybeMile ((name, _, _, _), rule_nos) ->
+            let rules_s = str_join " | " (List.map int_s rule_nos) in
+            Printf.printf " %s: (%s) " name rules_s
 
         | Seg  rs ->
             Printf.printf " [ ";
@@ -478,13 +485,12 @@ let find_max_bound nrules guards_card deps succ =
     List.fold_left each_branch nrules (umiles @ lmiles)
 
 
-(* filter out the locked rules *)    
-(* TODO: take the implications between the locks into account! *)
+(* filter out the locked/unlocked rules *)    
 let rec filter_path deps conds lockt path =
     let rec f set = function
     | [] -> []
 
-    | (MaybeMile (_, id, _, lt) as m) :: tl ->
+    | (MaybeMile ((_, id, _, lt), _) as m) :: tl ->
         if lt <> lockt
         then m :: (f set tl)
         else (* from now on id is locked, and whatever implies it,
@@ -506,6 +512,24 @@ let rec filter_path deps conds lockt path =
     f PSet.empty path
 
 
+(* add all possible rules that are labeled with a specific condition *)    
+let unfold_conds sk deps path =
+    (* TODO: more careful analysis is required to remove redundant rules *)
+    let is_guarded_with (_, cond_no, _, _) rule_no =
+        let conds = IntMap.find rule_no deps.D.rule_pre in
+        PSet.mem cond_no conds
+    in
+    let rec f = function
+    | [] -> []
+    | (Seg _) as s :: tl -> s :: (f tl)
+    | (MaybeMile (cond, _)) :: tl ->
+         let all_guarded_with = 
+             List.filter (is_guarded_with cond) (range 0 sk.Sk.nrules) in
+         (MaybeMile (cond, all_guarded_with)) :: (f tl)
+    in
+    f path
+
+
 (*
    Compute the tree of representative executions.
 
@@ -514,17 +538,20 @@ let rec filter_path deps conds lockt path =
    The difference is that we do not represent ALL executions with SLPS,
    but only the representative ones.
  *)
-let compute_tree sk deps succ =
+let compute_slps_tree sk deps succ =
     let full_segment = make_segment sk deps.D.fg in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
     let make_path milestones =
-        let each_mstone suffix m = (Seg full_segment) :: (MaybeMile m) :: suffix in
+        let each_mstone suffix m =
+            (Seg full_segment) :: (MaybeMile (m, [])) :: suffix in
         let full = List.rev (List.fold_left each_mstone [Seg full_segment] milestones)
         in
+        (* remove the rules from the segments that precede the conditions *)
         let no_locked = filter_path deps lconds Lock full in
         let no_unlocked =
             List.rev (filter_path deps uconds Unlock (List.rev no_locked)) in
-        no_unlocked
+        (* enumerate all rule corresponding to the conditions *)
+        unfold_conds sk deps no_unlocked
     in
 
     (* construct alternations of conditions and call a function on a leaf *)
@@ -584,7 +611,7 @@ let compute_diam solver dom_size sk =
 
     log INFO (sprintf "> the tree...");
 
-    let paths = compute_tree sk deps miles_succ in
+    let paths = compute_slps_tree sk deps miles_succ in
     List.iter print_path paths;
 
     bound
