@@ -19,11 +19,11 @@ module Sk = struct
         src: int; dst: int; (* indices in locs *)
         guard: token expr; act: token expr list
     }
-    
+
     type loc_t = int list (* variable assignments *)
 
     type skel_t = {
-        name: string; (* just a name *)
+        name: string; (* just a name, e.g., the process type *)
         nlocs: int; (* the number of locations *)
         locs: loc_t list; (* the list of locations *)
         locals: var list; (* local variables *)
@@ -32,15 +32,22 @@ module Sk = struct
         nrules: int; (* the number of rules *)
         rules: rule_t list; (* the rules *)
         inits: token expr list; (* initialization expressions *)
+        loc_vars: var IntMap.t;
+            (* variables that correspond to locations,
+               e.g., used in the initialization part *)
     }
 
     let empty locals shared params =
         { name = ""; nlocs = 0; locs = [];
           locals = locals; shared = shared; params = params;
-          nrules = 0; rules = []; inits = [] }
+          nrules = 0; rules = []; inits = []; loc_vars = IntMap.empty
+        }
 
     let locname l =
         sprintf "loc%s" (str_join "_" (List.map int_s l))
+
+    let locvar sk l =
+        IntMap.find l sk.loc_vars
 
     let rec expr_s = function
         | UnEx (NEXT, Var v) -> v#get_name ^ "'"
@@ -133,9 +140,11 @@ module SkB = struct
             type_tab#set_type nv (new data_type SpinTypes.TINT);
             IntMap.add (get_loci !st loc) nv map
         in
-        let map = List.fold_left intro IntMap.empty (hashtbl_keys (!st).loc_map)
+        let map =
+            List.fold_left intro IntMap.empty (hashtbl_keys (!st).loc_map)
         in
-        map, IntMap.fold (fun _ v l -> v :: l) map []
+        st := { !st with skel = { !st.skel with Sk.loc_vars = map }};
+        IntMap.fold (fun _ v l -> v :: l) map []
 
     let add_loc st loc =
         try get_loci !st loc
@@ -261,7 +270,7 @@ let propagate builder trs path_cons vals =
     List.iter (label_transition builder path_cons vals) trs
 
 
-let make_init rt prog proc locals loc_map builder =
+let make_init rt prog proc locals builder =
     let reg_tab = (rt#caches#find_struc prog)#get_regions proc#get_name in
     let body = proc#get_stmts in
     let init_stmts = (reg_tab#get "decl" body) @ (reg_tab#get "init" body) in
@@ -270,7 +279,7 @@ let make_init rt prog proc locals loc_map builder =
         SkB.get_loci !builder vals
     in
     let locis = List.rev_map to_loci (SkelStruc.comp_seq locals init_stmts) in
-    let loc_var i = IntMap.find i loc_map in
+    let loc_var i = Sk.locvar !builder.SkB.skel i in
     (* the counters that are initialized *)
     let init_sum =
         list_to_binex PLUS (List.map (fun i -> Var (loc_var i)) locis) in
@@ -319,11 +328,11 @@ let collect_constraints rt prog proc primary_vars trs =
 
     (* collect initial conditions *)
     let ntt = (Program.get_type_tab prog)#copy in
-    let loc_map, loc_vars = SkB.intro_loc_vars builder ntt in
+    let loc_vars = SkB.intro_loc_vars builder ntt in
     let vr = rt#caches#analysis#get_var_roles prog in
     List.iter (fun v -> vr#add v VarRole.LocalUnbounded) loc_vars;
     rt#caches#analysis#set_var_roles prog vr;
-    let inits = make_init rt prog proc primary_vars loc_map builder in
+    let inits = make_init rt prog proc primary_vars builder in
     List.iter (SkB.add_init builder) inits;
 
     let new_prog =
