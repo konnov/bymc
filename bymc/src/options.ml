@@ -1,17 +1,15 @@
-(* Tool options. As its number continues to grow,
-   it is easier to make them accessible to other modules.
+(* Tool options. As the number of options continues to grow,
+   this is one place to check the options and to access them from other modules.
 
-   Igor Konnov, 2013
+   Igor Konnov, 2013-2014
  *)
 
 open Str
 
 open Accums
 
-module StringMap = Map.Make(String)
-
-let version = [0; 6; 5]
-let version_full = "ByMC-0.6.5-concur14-rc10"
+let version = [0; 7; 0]
+let version_full = "ByMC-0.7.0-feature-SLPS"
 
 let macro_prefix = "macro."
 
@@ -24,28 +22,28 @@ type options_t =
     {
         action: action_opt_t; trail_name: string; filename: string;
         chain: string;
-        param_assignments: int StringMap.t;
+        param_assignments: int StrMap.t;
         mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool;
-        plugin_opts: string StringMap.t
+        plugin_opts: string StrMap.t
     }
 
 let empty =
     { action = OptNone; trail_name = ""; filename = "";
       chain = "piaDataCtr";
-      param_assignments = StringMap.empty;
+      param_assignments = StrMap.empty;
       mc_tool = ToolSpin; bdd_pass = false; verbose = false;
-      plugin_opts = StringMap.empty
+      plugin_opts = StrMap.empty
     }
 
 
 let parse_key_values str =
     let parse_pair map s =
         if string_match (regexp "\\([a-zA-Z0-9]+\\)=\\([0-9]+\\)") s 0
-        then StringMap.add (matched_group 1 s) (int_of_string (matched_group 2 s)) map
+        then StrMap.add (matched_group 1 s) (int_of_string (matched_group 2 s)) map
         else raise (Arg.Bad ("Wrong key=value pair: " ^ s))
     in
     let pairs = split (regexp ",") str in
-    List.fold_left parse_pair StringMap.empty pairs
+    List.fold_left parse_pair StrMap.empty pairs
 
 
 let parse_plugin_opt str =
@@ -87,13 +85,13 @@ let parse_options =
             ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =
-                    (StringMap.add name value !opts.plugin_opts); }
+                    (StrMap.add name value !opts.plugin_opts); }
                 ),
              "P.X=Y set option X of plugin P to Y.");
             ("-D", Arg.String (fun s ->
                 let name, value = parse_plugin_opt (macro_prefix ^ s) in
                 opts := {!opts with plugin_opts =
-                    (StringMap.add name value !opts.plugin_opts); }
+                    (StrMap.add name value !opts.plugin_opts); }
                 ),
              "X=Y define a C-like macro X as Y.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),

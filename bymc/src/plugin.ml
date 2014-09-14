@@ -27,12 +27,12 @@ class plugin_t (plugin_name: string) =
         method has_opt (rt: runtime_t) (name: string) =
             let fullname = plugin_name ^ "." ^ name in
             let options = (rt#caches#options).Options.plugin_opts in
-            Options.StringMap.mem fullname options
+            Accums.StrMap.mem fullname options
 
         method get_opt (rt: runtime_t) (name: string) =
             let fullname = plugin_name ^ "." ^ name in
             let options = (rt#caches#options).Options.plugin_opts in
-            try Options.StringMap.find fullname options
+            try Accums.StrMap.find fullname options
             with Not_found ->
                 raise (Plugin_error ("Plugin option " ^ fullname ^ " not found"))
     end
