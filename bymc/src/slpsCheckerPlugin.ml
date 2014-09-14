@@ -20,11 +20,15 @@ class slps_checker_plugin_t (plugin_name: string)
         inherit analysis_plugin_t plugin_name
 
         method transform rt =
+            let input = self#get_input0 in
+            let tt = Program.get_type_tab input in
             let paths = por_bounds_plugin#representative_paths in
             (* TODO: there must be only one skeleton for all process types! *)
             let each_sk error_found sk =
                 let each_path err p =
-                    if err then true else not (SlpsChecker.check_path rt sk p)
+                    if err
+                    then true
+                    else not (SlpsChecker.check_path rt tt sk p)
                 in
                 if error_found
                 then true
@@ -33,7 +37,7 @@ class slps_checker_plugin_t (plugin_name: string)
             log INFO "  > Running SlpsChecker...";
             if List.fold_left each_sk false sk_plugin#skels
             then Printf.printf "    > SLPS: counterexample found\n";
-            self#get_input0
+            input
 
         method update_runtime rt =
             ()
