@@ -95,7 +95,7 @@ module PiaBounds = struct
         chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.pb OutOfPred;
         chain#add_plugin plugins.slps OutOfPred;
-        chain#add_plugin plugins.ssn
+        chain#add_plugin plugins.ssn (* XXX: why is it here after all??? *)
             (OutOfPlugins ["piaCounter"; "piaData"]);
         chain
 end

@@ -105,6 +105,9 @@ type path_elem_t =
     | Seg of int (* rule_no *) list
 
 
+type path_t = path_elem_t list    
+
+
 let print_path out path =
     let p = function
         | MaybeMile ((name, _, _, _), rule_nos) ->
