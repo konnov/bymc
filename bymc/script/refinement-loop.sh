@@ -90,10 +90,10 @@ cd $BYMC_HOME
 if [ -d "src" ]; then
     # source distribution, compile the latest version
     if [ "x$DEBUG" == "x" ]; then
-        ./make.sh || (cd $ORIG_DIR; exit 1)
+        make || (cd $ORIG_DIR; exit 1)
         TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
     else
-        BYTE="1" ./make.sh || (cd $ORIG_DIR; exit 1)
+        BYTE="1" make || (cd $ORIG_DIR; exit 1)
         TOOL="ocamldebug $BYMC_HOME/bymc.byte "
     fi
 else
