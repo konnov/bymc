@@ -35,10 +35,10 @@ module F = struct
         nv
 
         (* TODO: myself 2015, please write a comment! *)
-    let copy_frame tt sk prev_frame is_var_updated_fun =
+    let advance_frame tt sk prev_frame is_var_updated_fun =
         let copy_var ctor_fun (map, vs, new_vs) basev v =
             if is_var_updated_fun v
-            then let nv = ctor_fun tt 0 v in
+            then let nv = ctor_fun tt (1 + prev_frame.no) basev in
                 (IntMap.add basev#id nv map, nv :: vs, nv :: new_vs)
             else (map, v :: vs, new_vs)
         in
@@ -49,21 +49,17 @@ module F = struct
         let map, shared, new_vars =
             List.fold_left2 (copy_var mk_shared_var)
                 (map, [], new_vars) (List.rev sk.Sk.shared) (List.rev prev_frame.shared_vars) in 
-        { no = 0; loc_vars = locs; shared_vars = shared;
+        { no = 1 + prev_frame.no; loc_vars = locs; shared_vars = shared;
             new_vars = new_vars; var_map = map }
 
     let init_frame tt sk =
         let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
         let empty_frame = {
-            no = 0; loc_vars = loc_vars; shared_vars = sk.Sk.shared;
+            no = -1; loc_vars = loc_vars; shared_vars = sk.Sk.shared;
             new_vars = []; var_map = IntMap.empty
         }
         in
-        copy_frame tt sk empty_frame (fun v -> true)
-
-    (*let next_frame tt sk prev_frame is_var_updated_fun =
-        *)
-        
+        advance_frame tt sk empty_frame (fun v -> true)
 
     let map_frame_vars frame nframe expr =
         let map_var fr v =
@@ -81,11 +77,13 @@ module F = struct
         sub expr
             
 
-    let assert_frame solver tt frame assertions =
+    let declare_frame solver tt frame =
         solver#comment (sprintf "frame %d" frame.no);
         let add_var v =
             solver#append_var_def v (tt#get_type v) in
-        List.iter add_var frame.new_vars;
+        List.iter add_var frame.new_vars
+
+    let assert_frame solver tt frame next_frame assertions =
         let add_expr e =
             ignore (solver#append_expr (map_frame_vars frame frame e)) in
         List.iter add_expr assertions
@@ -93,8 +91,17 @@ module F = struct
 end
 
 let encode_path_elem rt tt sk start_frame pathelem =
-    let each_rule frame rule =
-        let new_frame = frame in (* TODO *)
+    let each_rule frame rule_no =
+        let is_new_f v =
+            true
+        in
+        let new_frame = F.advance_frame tt sk frame is_new_f in
+        F.declare_frame rt#solver tt new_frame;
+        let rule = List.nth sk.Sk.rules rule_no in
+        F.assert_frame rt#solver tt frame new_frame
+            (* TODO: acceleration factor *)
+            (* TODO: guard must label only the milestones *)
+            (rule.Sk.guard :: rule.Sk.act);
         new_frame       
     in
     let each_path_elem = function
@@ -104,12 +111,12 @@ let encode_path_elem rt tt sk start_frame pathelem =
     each_path_elem pathelem
 
 
-
 let check_path rt tt sk path =
     rt#solver#push_ctx;
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
-    F.assert_frame rt#solver ntt initf sk.Sk.inits;
+    F.declare_frame rt#solver ntt initf;
+    F.assert_frame rt#solver ntt initf initf sk.Sk.inits;
     let lastf = List.fold_left (encode_path_elem rt tt sk) initf path in
     rt#solver#pop_ctx;
     false
