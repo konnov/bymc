@@ -34,21 +34,36 @@ module F = struct
         tt#set_type nv (tt#get_type proto);
         nv
 
-    let init_frame tt sk =
-        let copy_var f (map, vs) v =
-            let nv = f tt 0 v in
-            (IntMap.add v#id nv map, nv :: vs)
+        (* TODO: myself 2015, please write a comment! *)
+    let copy_frame tt sk prev_frame is_var_updated_fun =
+        let copy_var ctor_fun (map, vs, new_vs) basev v =
+            if is_var_updated_fun v
+            then let nv = ctor_fun tt 0 v in
+                (IntMap.add basev#id nv map, nv :: vs, nv :: new_vs)
+            else (map, v :: vs, new_vs)
         in
-        let loc_vars =
-            List.rev (List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs)) in
-        let map, locs =
-            List.fold_left (copy_var mk_loc_var)
-                (IntMap.empty, []) loc_vars in
-        let map, shared =
-            List.fold_left (copy_var mk_shared_var)
-                (map, []) (List.rev sk.Sk.shared) in 
+        let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
+        let map, locs, new_vars =
+            List.fold_left2 (copy_var mk_loc_var) (prev_frame.var_map, [], [])
+                (List.rev loc_vars) (List.rev prev_frame.loc_vars) in
+        let map, shared, new_vars =
+            List.fold_left2 (copy_var mk_shared_var)
+                (map, [], new_vars) (List.rev sk.Sk.shared) (List.rev prev_frame.shared_vars) in 
         { no = 0; loc_vars = locs; shared_vars = shared;
-            new_vars = locs @ shared; var_map = map }
+            new_vars = new_vars; var_map = map }
+
+    let init_frame tt sk =
+        let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
+        let empty_frame = {
+            no = 0; loc_vars = loc_vars; shared_vars = sk.Sk.shared;
+            new_vars = []; var_map = IntMap.empty
+        }
+        in
+        copy_frame tt sk empty_frame (fun v -> true)
+
+    (*let next_frame tt sk prev_frame is_var_updated_fun =
+        *)
+        
 
     let map_frame_vars frame nframe expr =
         let map_var fr v =
