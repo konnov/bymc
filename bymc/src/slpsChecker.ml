@@ -6,6 +6,7 @@
 open Printf
 
 open Accums
+open PorBounds
 open SpinIr
 open SymbSkel
 
@@ -76,12 +77,25 @@ module F = struct
 
 end
 
+let encode_path_elem rt tt sk start_frame pathelem =
+    let each_rule frame rule =
+        let new_frame = frame in (* TODO *)
+        new_frame       
+    in
+    let each_path_elem = function
+    | MaybeMile (_, _) -> start_frame
+    | Seg rules -> List.fold_left each_rule start_frame rules
+    in
+    each_path_elem pathelem
+
+
 
 let check_path rt tt sk path =
     rt#solver#push_ctx;
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
     F.assert_frame rt#solver ntt initf sk.Sk.inits;
+    let lastf = List.fold_left (encode_path_elem rt tt sk) initf path in
     rt#solver#pop_ctx;
     false
 
