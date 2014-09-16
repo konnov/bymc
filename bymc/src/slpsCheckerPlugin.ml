@@ -25,14 +25,20 @@ class slps_checker_plugin_t (plugin_name: string)
             let paths = por_bounds_plugin#representative_paths in
             (* TODO: there must be only one skeleton for all process types! *)
             let each_sk error_found sk =
-                let each_path err p =
+                let each_path err i p =
                     if err
                     then true
-                    else not (SlpsChecker.check_path rt tt sk p)
+                    else begin
+                        log INFO (sprintf "      > inspecting path scheme %d" i);
+                        let is_err = SlpsChecker.is_error_path rt tt sk p in
+                        log INFO (if is_err then "      [ERR]" else "      [OK]");
+                        is_err
+                    end
                 in
+                let npaths = List.length paths in
                 if error_found
                 then true
-                else List.fold_left each_path false paths
+                else List.fold_left2 each_path false (range 0 npaths) paths
             in
             log INFO "  > Running SlpsChecker...";
             if List.fold_left each_sk false sk_plugin#skels

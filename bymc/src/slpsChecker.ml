@@ -154,7 +154,7 @@ let encode_path_elem rt tt sk start_frame pathelem =
     each_path_elem pathelem
 
 
-let check_path rt tt sk path =
+let is_error_path rt tt sk path =
     rt#solver#push_ctx;
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
@@ -163,5 +163,5 @@ let check_path rt tt sk path =
     let lastf = List.fold_left (encode_path_elem rt tt sk) initf path in
     let is_sat = rt#solver#check in
     rt#solver#pop_ctx;
-    not is_sat
+    is_sat
 
