@@ -11,6 +11,12 @@ exception Ltl_error of string
 exception Fairness_error of string
 exception Prop_error of string
 
+type spec_t = 
+    (* (p && <> !q) *)
+    | CondSafety of token expr (* p *) * token expr (* q *)
+    | CondGeneral of token expr
+
+
 let is_propositional type_tab e =
     let rec isp = function
     | Var v -> (type_tab#get_type v)#basetype = TPROPOSITION
@@ -74,6 +80,24 @@ let normalize_form form =
                 raise (Ltl_error m)
     in
     norm false form
+
+
+let classify_spec prog = function
+    (* (p -> [] q) *)
+    | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (is_propositional (Program.get_type_tab prog) lhs)
+            && (is_propositional (Program.get_type_tab prog) rhs)
+        then CondSafety (lhs, normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
+    | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (is_propositional (Program.get_type_tab prog) lhs)
+            && (is_propositional (Program.get_type_tab prog) rhs)
+        then CondSafety (normalize_form (UnEx (NEG, lhs)),
+                         normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
+    | e -> CondGeneral e
 
 
 let embed_atomics type_tab aprops form =

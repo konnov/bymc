@@ -1,4 +1,4 @@
-(* Converting a symbolic skeleton into the format of FASTer 2.1.
+(* Convrting a symbolic skeleton into the format of FASTer 2.1.
  *
  * FAST: http://tapas.labri.fr/trac/wiki/FASTer
  *
@@ -224,31 +224,6 @@ let write_rule ff prog sk num r =
 let write_skel ff prog sk =
     List.iter2 (write_rule ff prog sk) (range 0 sk.Sk.nrules) sk.Sk.rules
 
-type spec_t = 
-    (* (p && <> !q) *)
-    | CondSafety of token expr (* p *) * token expr (* q *)
-    | Unsupported of token expr
-
-
-let classify_spec prog = function
-    (* (p -> [] q) *)
-    | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
-            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
-        then CondSafety (lhs, Ltl.normalize_form (UnEx (NEG, rhs)))
-        else Unsupported e
-
-    | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
-            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
-        then CondSafety (Ltl.normalize_form (UnEx (NEG, lhs)),
-                         Ltl.normalize_form (UnEx (NEG, rhs)))
-        else Unsupported e
-
-    | e -> Unsupported e
-
-    
-
 let write_prop ff prog skels prop_form =
     let atomics = Program.get_atomics_map prog in
     let tt = Program.get_type_tab prog in
@@ -350,12 +325,12 @@ let write_cond_safety ff prog skels name init_form bad_form =
 
 let write_all_specs ff prog skels =
     let each_spec name s =
-        match classify_spec prog s with
-        | Unsupported e ->
+        match Ltl.classify_spec prog s with
+        | Ltl.CondGeneral e ->
             F.fprintf ff "@[<hov 2>/* %s is not supported:@," name;
             print_expr ff ~in_act:false e;
             F.fprintf ff " */@]@,@,";
-        | CondSafety (init, bad) ->
+        | Ltl.CondSafety (init, bad) ->
             write_cond_safety ff prog skels name init bad
     in
     F.fprintf ff "@[<v 2>strategy s1 {@,";
