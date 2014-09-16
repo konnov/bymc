@@ -43,11 +43,14 @@ module Sk = struct
           nrules = 0; rules = []; inits = []; loc_vars = IntMap.empty
         }
 
+    let loc_by_no sk loc_no =
+        List.nth sk.locs loc_no
+
     let locname l =
         sprintf "loc%s" (str_join "_" (List.map int_s l))
 
-    let locvar sk l =
-        IntMap.find l sk.loc_vars
+    let locvar sk loc_no =
+        IntMap.find loc_no sk.loc_vars
 
     let rec expr_s = function
         | UnEx (NEXT, Var v) -> v#get_name ^ "'"

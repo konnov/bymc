@@ -16,15 +16,15 @@ let ppn ff () = F.pp_print_newline ff ()
 
 type qtype = QAll | QExist | QCard
 
-let write_quant ff prog skels ~quant e =
+let expand_quant prog skels ~quant e =
     let pname = Ltl.find_proc_name ~err_not_found:true e in
     let sk =
         try List.find (fun sk -> sk.Sk.name = pname) skels
         with Not_found -> raise (Failure ("No skeleton " ^ pname))
     in
     let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
-    let is_matching_loc loc =
-        let lookup = List.combine var_names loc in
+    let is_matching_loc loc_no =
+        let lookup = List.combine var_names (Sk.loc_by_no sk loc_no) in
         let val_fun = function
             | Var v ->
             begin
@@ -39,27 +39,25 @@ let write_quant ff prog skels ~quant e =
         (* QAll needs negation *)
         (SpinIrEval.Bool (quant <> QAll)) = SpinIrEval.eval_expr val_fun e
     in
-    let matching = List.filter is_matching_loc sk.Sk.locs in
-    let each_loc not_first l =
+    let matching = List.filter is_matching_loc (range 0 sk.Sk.nlocs) in
+    let each_loc accum l =
         match quant with
         | QExist -> (* there is a non-zero location *)
-            if not_first then F.fprintf ff "@ || ";
-            F.fprintf ff "(%s > 0)" (Sk.locname l);
-            true
+            let cmp =
+                BinEx (GT, Var (Sk.locvar sk l), Const 0) in
+            if is_nop accum then cmp else BinEx (OR, cmp, accum)
 
         | QAll -> (* forall: all other locations are zero *)
-            if not_first then F.fprintf ff "@ && ";
-            F.fprintf ff "(%s = 0)" (Sk.locname l);
-            true
+            let cmp =
+                BinEx (EQ, Var (Sk.locvar sk l), Const 0) in
+            if is_nop accum then cmp else BinEx (AND, cmp, accum)
 
         | QCard ->
-            if not_first then F.fprintf ff "@ + ";
-            F.fprintf ff "%s " (Sk.locname l);
-            true
+            if is_nop accum
+            then Var (Sk.locvar sk l)
+            else BinEx (PLUS, Var (Sk.locvar sk l), accum)
     in
-    if quant <> QCard then F.fprintf ff "@[<hov 2>(";
-    ignore (List.fold_left each_loc false matching);
-    if quant <> QCard then F.fprintf ff "@])"
+    List.fold_left each_loc (Nop "") matching
 
 
 let print_def_expr ff e =
@@ -224,60 +222,54 @@ let write_rule ff prog sk num r =
 let write_skel ff prog sk =
     List.iter2 (write_rule ff prog sk) (range 0 sk.Sk.nrules) sk.Sk.rules
 
-let write_prop ff prog skels prop_form =
+let expand_prop prog skels prop_form =
     let atomics = Program.get_atomics_map prog in
     let tt = Program.get_type_tab prog in
     let rec expand_card = function
         | UnEx (CARD, r) ->
-                write_quant ff prog skels ~quant:QCard r
+                expand_quant prog skels ~quant:QCard r
+
         | UnEx (t, r) ->
-                F.fprintf ff "%s" (SpinIrImp.token_s t);
-                expand_card r
+                UnEx (t, expand_card r)
+
         | BinEx (t, l, r) ->
-                expand_card l;
-                F.fprintf ff "@ %s " (SpinIrImp.token_s t);
-                expand_card r
-        
-        | e -> print_def_expr ff e
+                BinEx (t, expand_card l, expand_card r)
+
+        | e -> e
     in
     let rec pr_atomic neg = function
         | PropGlob e ->
             expand_card e
 
         | PropAll e ->
-            write_quant ff prog skels ~quant:QAll e
+            expand_quant prog skels ~quant:QAll e
 
         | PropSome e ->
-            write_quant ff prog skels ~quant:QExist e
+            expand_quant prog skels ~quant:QExist e
 
         | PropAnd (l, r) ->
-            F.fprintf ff "("; pr_atomic neg l;
-            F.fprintf ff ")@ && ("; pr_atomic neg r; F.fprintf ff ")"
+            BinEx (AND, pr_atomic neg l, pr_atomic neg r)
 
         | PropOr (l, r) ->
-            F.fprintf ff "("; pr_atomic neg l;
-            F.fprintf ff ")@ || ("; pr_atomic neg r; F.fprintf ff ")"
+            BinEx (OR, pr_atomic neg l, pr_atomic neg r)
     in
     let rec pr neg = function
     | BinEx (AND as t, l, r)
     | BinEx (OR as t, l, r) ->
-        let op, nop = if t = AND then "&&", "||" else "||", "&&" in
-        F.fprintf ff "("; pr neg l;
-        F.fprintf ff ")@ %s (" (if neg then nop else op);
-        pr neg r; F.fprintf ff ")"
+        let op, nop = if t = AND then AND, OR else OR, AND in
+        BinEx ((if neg then nop else op), pr neg l, pr neg r)
 
     | UnEx (NEG, r) ->
         pr (not neg) r
 
     | Var v ->
-        let op = if neg then "!" else "" in
         if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
         then pr_atomic neg (StrMap.find v#get_name atomics)
-        else F.fprintf ff "%s%s" op v#get_name
+        else if neg then UnEx (NEG, Var v) else Var v
 
     | e ->
         let ne = if neg then UnEx (NEG, e) else e in
-        print_expr ff ~in_act:true (Ltl.normalize_form ne)
+        Ltl.normalize_form ne
     in
     pr false prop_form
 
@@ -293,14 +285,14 @@ let write_init_region ff prog skels init_form =
     let each_skel sk = List.iter p_expr sk.Sk.inits in
     List.iter each_skel skels;
     F.fprintf ff "@ && @[<h>";
-    write_prop ff prog skels init_form;
+    print_expr ff ~in_act:true (expand_prop prog skels init_form);
     F.fprintf ff "@]"
 
 
 let write_bad_region ff prog skels bad_form =
     F.fprintf ff "@[<hov 2>state = normal";
     F.fprintf ff "@ && ";
-    write_prop ff prog skels bad_form
+    print_expr ff ~in_act:true (expand_prop prog skels bad_form)
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
