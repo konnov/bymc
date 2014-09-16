@@ -39,6 +39,11 @@ release:
 	git archive --prefix=bymc-src-${TAG}/ "${TAG}" \
         | bzip2 > bymc-src-${TAG}.tar.bz2
 
+doc:
+	mkdir -p _build/doc
+	ocamldoc -I _build/src -html -keep-code -colorize-code \
+		src/*.ml src/*.mli -d _build/doc
+
 clean:
 	$(info CLEANING)
 	ocamlbuild -clean
