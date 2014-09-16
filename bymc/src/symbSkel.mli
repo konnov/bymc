@@ -55,7 +55,7 @@ end
    as (prev, next) pairs. This representation usually comes from
    an abstraction.
  *)
-val collect_constraints:
+val of_transitions:
     (** @param rt runtime *)
     Runtime.runtime_t
     (** @param prog input program *)
@@ -69,4 +69,14 @@ val collect_constraints:
     -> ((SpinIr.var * int) list * (SpinIr.var * int) list) list
     (** @return the skeleton and the modified program *)
     -> Sk.skel_t * Program.program_t
+
+
+(** Transform program specifications into specifications over
+    the skeletons' counters.
+  *)
+val expand_props_in_ltl:
+    Program.program_t    (** @param prog input program *)
+    -> Sk.skel_t list (** @param skels input skeletons *)
+    -> (Spin.token SpinIr.expr) Accums.StrMap.t
+        (* @result LTL formulas with conditions over locations (counters) *)
 

@@ -1,8 +1,10 @@
-(* Convrting a symbolic skeleton into the format of FASTer 2.1.
+(** Converting a symbolic skeleton into the format of FASTer 2.1.
  *
  * FAST: http://tapas.labri.fr/trac/wiki/FASTer
  *
- * Igor Konnov, 2014
+ * TODO: multiple process types
+ *
+ * @author Igor Konnov, 2014
  *)
 
 open Accums
@@ -14,50 +16,6 @@ module F = Format
 
 let ppn ff () = F.pp_print_newline ff ()
 
-type qtype = QAll | QExist | QCard
-
-let expand_quant prog skels ~quant e =
-    let pname = Ltl.find_proc_name ~err_not_found:true e in
-    let sk =
-        try List.find (fun sk -> sk.Sk.name = pname) skels
-        with Not_found -> raise (Failure ("No skeleton " ^ pname))
-    in
-    let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
-    let is_matching_loc loc_no =
-        let lookup = List.combine var_names (Sk.loc_by_no sk loc_no) in
-        let val_fun = function
-            | Var v ->
-            begin
-                try List.assoc v#get_name lookup
-                with Not_found ->
-                    raise (Failure (Printf.sprintf "Var %s not found" v#get_name))
-            end
-
-            | e ->
-                raise (Failure ("val_fun(%s) is undefined" ^ (SpinIrImp.expr_s e)))
-        in
-        (* QAll needs negation *)
-        (SpinIrEval.Bool (quant <> QAll)) = SpinIrEval.eval_expr val_fun e
-    in
-    let matching = List.filter is_matching_loc (range 0 sk.Sk.nlocs) in
-    let each_loc accum l =
-        match quant with
-        | QExist -> (* there is a non-zero location *)
-            let cmp =
-                BinEx (GT, Var (Sk.locvar sk l), Const 0) in
-            if is_nop accum then cmp else BinEx (OR, cmp, accum)
-
-        | QAll -> (* forall: all other locations are zero *)
-            let cmp =
-                BinEx (EQ, Var (Sk.locvar sk l), Const 0) in
-            if is_nop accum then cmp else BinEx (AND, cmp, accum)
-
-        | QCard ->
-            if is_nop accum
-            then Var (Sk.locvar sk l)
-            else BinEx (PLUS, Var (Sk.locvar sk l), accum)
-    in
-    List.fold_left each_loc (Nop "") matching
 
 
 let print_def_expr ff e =
@@ -168,7 +126,6 @@ let eliminate_div e =
     in_logical e
 
 
-
 let write_vars ff skels =
     (* XXX: the locations of several processes might clash *)
     let collect_vars var_set sk =
@@ -222,57 +179,6 @@ let write_rule ff prog sk num r =
 let write_skel ff prog sk =
     List.iter2 (write_rule ff prog sk) (range 0 sk.Sk.nrules) sk.Sk.rules
 
-let expand_prop prog skels prop_form =
-    let atomics = Program.get_atomics_map prog in
-    let tt = Program.get_type_tab prog in
-    let rec expand_card = function
-        | UnEx (CARD, r) ->
-                expand_quant prog skels ~quant:QCard r
-
-        | UnEx (t, r) ->
-                UnEx (t, expand_card r)
-
-        | BinEx (t, l, r) ->
-                BinEx (t, expand_card l, expand_card r)
-
-        | e -> e
-    in
-    let rec pr_atomic neg = function
-        | PropGlob e ->
-            expand_card e
-
-        | PropAll e ->
-            expand_quant prog skels ~quant:QAll e
-
-        | PropSome e ->
-            expand_quant prog skels ~quant:QExist e
-
-        | PropAnd (l, r) ->
-            BinEx (AND, pr_atomic neg l, pr_atomic neg r)
-
-        | PropOr (l, r) ->
-            BinEx (OR, pr_atomic neg l, pr_atomic neg r)
-    in
-    let rec pr neg = function
-    | BinEx (AND as t, l, r)
-    | BinEx (OR as t, l, r) ->
-        let op, nop = if t = AND then AND, OR else OR, AND in
-        BinEx ((if neg then nop else op), pr neg l, pr neg r)
-
-    | UnEx (NEG, r) ->
-        pr (not neg) r
-
-    | Var v ->
-        if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
-        then pr_atomic neg (StrMap.find v#get_name atomics)
-        else if neg then UnEx (NEG, Var v) else Var v
-
-    | e ->
-        let ne = if neg then UnEx (NEG, e) else e in
-        Ltl.normalize_form ne
-    in
-    pr false prop_form
-
 
 let write_init_region ff prog skels init_form =
     F.fprintf ff "@[<hov 2>state = normal";
@@ -285,14 +191,14 @@ let write_init_region ff prog skels init_form =
     let each_skel sk = List.iter p_expr sk.Sk.inits in
     List.iter each_skel skels;
     F.fprintf ff "@ && @[<h>";
-    print_expr ff ~in_act:true (expand_prop prog skels init_form);
+    print_expr ff ~in_act:true init_form;
     F.fprintf ff "@]"
 
 
 let write_bad_region ff prog skels bad_form =
     F.fprintf ff "@[<hov 2>state = normal";
     F.fprintf ff "@ && ";
-    print_expr ff ~in_act:true (expand_prop prog skels bad_form)
+    print_expr ff ~in_act:true bad_form
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
@@ -336,7 +242,8 @@ let write_all_specs ff prog skels =
     in
     List.iter (each_rule 0) skels;
     F.fprintf ff "@]};@,";
-    StrMap.iter each_spec (Program.get_ltl_forms prog);
+    let expanded_forms = SymbSkel.expand_props_in_ltl prog skels in
+    StrMap.iter each_spec expanded_forms;
     F.fprintf ff "@]";
     F.fprintf ff "@]@,}@,"
 
