@@ -13,6 +13,14 @@ open SymbSkel
 open Plugin
 open PorBounds
 
+(*
+let can_handle_spec prog s =
+    match Ltl.classify_spec prog s with
+    | Ltl.CondSafety (_, _) -> true
+    | _ -> false
+    *)
+
+
 class slps_checker_plugin_t (plugin_name: string)
         (sk_plugin: SymbSkelPlugin.symb_skel_plugin_t)
         (por_bounds_plugin: PorBoundsPlugin.por_bounds_plugin_t) =
@@ -24,24 +32,38 @@ class slps_checker_plugin_t (plugin_name: string)
             let tt = Program.get_type_tab input in
             let paths = por_bounds_plugin#representative_paths in
             (* TODO: there must be only one skeleton for all process types! *)
-            let each_sk error_found sk =
-                let each_path err i p =
-                    if err
-                    then true
-                    else begin
-                        log INFO (sprintf "      > inspecting path scheme %d" i);
-                        let is_err = SlpsChecker.is_error_path rt tt sk p in
-                        log INFO (if is_err then "      [ERR]" else "      [OK]");
-                        is_err
+            assert ((List.length sk_plugin#skels) = 1);
+            let sk = List.hd sk_plugin#skels in
+            let specs = SymbSkel.expand_props_in_ltl input sk_plugin#skels in
+
+            let each_path err i path =
+                let each_form name form err =
+                    (*
+                    if not (can_handle_spec input form)
+                    then begin
+                        log INFO (sprintf "      > Spec %s is not supported" name);
+                        false
                     end
+                    else *) if SlpsChecker.is_error_path rt tt sk form path
+                    then begin
+                        log INFO (sprintf "      > Spec %s is violated" name);
+                        true
+                    end
+                    else false
                 in
-                let npaths = List.length paths in
-                if error_found
+                if err
                 then true
-                else List.fold_left2 each_path false (range 0 npaths) paths
+                else begin
+                    log INFO (sprintf "      > inspecting path scheme %d" i);
+                    let is_err = StrMap.fold each_form specs false in
+                    log INFO (if is_err then "      [ERR]" else "      [OK]");
+                    is_err
+                end
             in
             log INFO "  > Running SlpsChecker...";
-            if List.fold_left each_sk false sk_plugin#skels
+            let npaths = List.length paths in
+            let err = List.fold_left2 each_path false (range 0 npaths) paths in
+            if err
             then Printf.printf "    > SLPS: counterexample found\n";
             input
 

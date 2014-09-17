@@ -428,6 +428,7 @@ let expand_prop prog skels prop_form =
     in
     let rec pr neg = function
     | BinEx (AND as t, l, r)
+
     | BinEx (OR as t, l, r) ->
         let op, nop = if t = AND then AND, OR else OR, AND in
         BinEx ((if neg then nop else op), pr neg l, pr neg r)
