@@ -25,13 +25,13 @@ module F = struct
     }
 
     let mk_loc_var (tt: data_type_tab) frame_no proto =
-        let nv = proto#copy (sprintf "F%d_at_%s" frame_no proto#get_name) in
+        let nv = proto#fresh_copy (sprintf "F%d_at_%s" frame_no proto#get_name) in
         tt#set_type nv (tt#get_type proto);
         nv
 
 
     let mk_shared_var (tt: data_type_tab) frame_no proto =
-        let nv = proto#copy (sprintf "F%d_g_%s" frame_no proto#get_name) in
+        let nv = proto#fresh_copy (sprintf "F%d_g_%s" frame_no proto#get_name) in
         tt#set_type nv (tt#get_type proto);
         nv
 
@@ -130,6 +130,7 @@ let encode_path_elem rt tt sk start_frame pathelem =
         if is_milestone
         then F.assert_frame rt#solver tt frame new_frame [rule.Sk.guard];
 
+        (* accelerate actions! *)
         F.assert_frame rt#solver tt frame new_frame rule.Sk.act;
         (new_frame, new_frame :: fs)
     in
