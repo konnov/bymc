@@ -180,12 +180,14 @@ let encode_path_elem rt tt sk start_frame pathelem =
     each_path_elem pathelem
 
 
+    (*
 let extract_spec s =
     match Ltl.classify_spec s with
     | Ltl.CondSafety (init, bad) ->
         (init, bad)
 
     | Ltl.CondGeneral e ->
+            *)
 
 
 let is_error_path rt tt sk ltl_form path =
