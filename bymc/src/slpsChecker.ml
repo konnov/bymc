@@ -96,6 +96,25 @@ module F = struct
 
 end
 
+
+let accelerate_expr accel_var e =
+    let rec f = function
+        | UnEx (t, e) ->
+                UnEx (t, f e)
+
+        | BinEx (t, l, r) ->
+                BinEx (t, f l, f r)
+
+        | Const i ->
+                if i = 1
+                then Var accel_var
+                else BinEx (Spin.MULT, Const i, Var accel_var)
+
+        | e -> e
+    in
+    f e
+
+
 let collect_next_vars e =
     let rec f set = function
         | UnEx (Spin.NEXT, Var v) -> IntSet.add v#id set
@@ -120,18 +139,24 @@ let encode_path_elem rt tt sk start_frame pathelem =
         in
         let new_frame = F.advance_frame tt sk frame is_new_f in
         F.declare_frame rt#solver tt new_frame;
-        let move loc_var sign =
+        let move loc sign =
+            let prev = List.nth frame.F.loc_vars loc in
+            let next = List.nth new_frame.F.loc_vars loc in
             (* k'[loc] = k[loc] +/- accel *)
-            BinEx (Spin.EQ, UnEx (Spin.NEXT, Var loc_var),
-                BinEx (sign, Var loc_var, Var new_frame.F.accel_v))
+            BinEx (Spin.EQ, UnEx (Spin.NEXT, Var next),
+                BinEx (sign, Var prev, Var new_frame.F.accel_v))
         in
-        F.assert_frame rt#solver tt frame new_frame [move src_loc_v Spin.MINUS];
-        F.assert_frame rt#solver tt frame new_frame [move dst_loc_v Spin.PLUS];
-        if is_milestone
-        then F.assert_frame rt#solver tt frame new_frame [rule.Sk.guard];
+        F.assert_frame rt#solver tt frame new_frame [move rule.Sk.src Spin.MINUS];
+        F.assert_frame rt#solver tt frame new_frame [move rule.Sk.dst Spin.PLUS];
 
-        (* accelerate actions! *)
-        F.assert_frame rt#solver tt frame new_frame rule.Sk.act;
+        let guard = (* if acceleration factor > 0 then guard *)
+            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, Const 0), rule.Sk.guard) in
+        if is_milestone
+        then F.assert_frame rt#solver tt frame new_frame [guard];
+
+        let accelerated =
+            List.map (accelerate_expr new_frame.F.accel_v) rule.Sk.act in
+        F.assert_frame rt#solver tt frame new_frame accelerated;
         (new_frame, new_frame :: fs)
     in
     let rec sum = function
