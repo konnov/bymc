@@ -125,7 +125,7 @@ let collect_next_vars e =
     f IntSet.empty e
 
 
-let encode_path_elem rt tt bad_form sk start_frame pathelem =
+let encode_path_elem rt tt sk start_frame pathelem =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -166,9 +166,6 @@ let encode_path_elem rt tt bad_form sk start_frame pathelem =
     in
     let each_path_elem = function
     | MaybeMile (_, rules) ->
-            (* check, whether we have reached a bad state *)
-            rt#solver#comment "is segment bad?";
-            F.assert_frame rt#solver tt start_frame start_frame [bad_form];
 
             (* add the rules of potential milestones *)
             rt#solver#comment "potential milestones";
@@ -206,9 +203,21 @@ let is_error_path rt tt sk ltl_form path =
     rt#solver#comment "initial constraints from the spec";
     F.assert_frame rt#solver ntt initf initf [init_form];
 
-    let _ =
-        List.fold_left (encode_path_elem rt tt bad_form sk) initf path in
-    let is_sat = rt#solver#check in
+    let each_elem (frame, err_found) path_el =
+        if err_found
+        then frame, err_found
+        else begin
+            let after = encode_path_elem rt tt sk frame path_el in
+            (* check, whether we have reached a bad state *)
+            rt#solver#push_ctx;
+            rt#solver#comment "is segment bad?";
+            F.assert_frame rt#solver tt after after [bad_form];
+            let err = rt#solver#check in
+            rt#solver#pop_ctx;
+            after, err
+        end
+    in
+    let _, err = List.fold_left each_elem (initf, false) path in
     rt#solver#pop_ctx;
-    is_sat
+    err
 
