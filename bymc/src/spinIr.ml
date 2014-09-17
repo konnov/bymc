@@ -12,7 +12,6 @@
 open Printf
 open SpinTypes
 
-module StringSet = Set.Make(String)
 
 (* here we use a global variable to generate unique variables everywhere *)
 let label_next = ref 1
