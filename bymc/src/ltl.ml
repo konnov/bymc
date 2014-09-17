@@ -73,9 +73,28 @@ let normalize_form form =
 
         | BinEx(EQUIV, l, r) ->
                 BinEx(EQUIV, norm neg l, norm neg r)
+
+        | UnEx (EVENTUALLY as t, l)
+        | UnEx (ALWAYS as t, l) ->
+            let nop = if t = EVENTUALLY then ALWAYS else EVENTUALLY in
+            UnEx ((if neg then nop else t), norm neg l)
+
+        | BinEx (UNTIL, l, r) as e ->
+            if neg
+            then BinEx (RELEASE, norm neg r, norm neg l)
+            else e
+
+        | BinEx (RELEASE, r, l) as e ->
+            if neg
+            then BinEx (UNTIL, norm neg l, norm neg r)
+            else e
+
+        (* although we are not using nexttime, its negation is awesome *)
+        | UnEx (NEXT, l) ->
+            UnEx (NEXT, norm neg l)
         
         | _ as f ->
-                let m = (sprintf "Not a propositional formula: %s" (expr_s f))
+                let m = (sprintf "Unsupported temporal formula: %s" (expr_s f))
                 in
                 raise (Ltl_error m)
     in
