@@ -142,7 +142,7 @@ module SkB = struct
     let intro_loc_vars st type_tab =
         let intro map loc =
             let nv = new_var (Sk.locname loc) in
-            type_tab#set_type nv (new data_type SpinTypes.TINT);
+            type_tab#set_type nv (new data_type SpinTypes.TUNSIGNED);
             IntMap.add (get_loci !st loc) nv map
         in
         let map =
