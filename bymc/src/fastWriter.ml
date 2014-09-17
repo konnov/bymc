@@ -223,12 +223,14 @@ let write_cond_safety ff prog skels name init_form bad_form =
 
 let write_all_specs ff prog skels =
     let each_spec name s =
-        match Ltl.classify_spec prog s with
+        match Ltl.classify_spec (Program.get_type_tab prog) s with
         | Ltl.CondGeneral e ->
             F.fprintf ff "@[<hov 2>/* %s is not supported:@," name;
             print_expr ff ~in_act:false e;
             F.fprintf ff " */@]@,@,";
         | Ltl.CondSafety (init, bad) ->
+            let init = SymbSkel.expand_props_in_ltl prog skels init in
+            let bad = SymbSkel.expand_props_in_ltl prog skels bad in
             write_cond_safety ff prog skels name init bad
     in
     F.fprintf ff "@[<v 2>strategy s1 {@,";
@@ -242,8 +244,7 @@ let write_all_specs ff prog skels =
     in
     List.iter (each_rule 0) skels;
     F.fprintf ff "@]};@,";
-    let expanded_forms = SymbSkel.expand_props_in_ltl prog skels in
-    StrMap.iter each_spec expanded_forms;
+    StrMap.iter each_spec (Program.get_ltl_forms prog);
     F.fprintf ff "@]";
     F.fprintf ff "@]@,}@,"
 

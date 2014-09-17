@@ -20,13 +20,13 @@ let can_handle_spec prog _ s =
 
 
 let get_proper_specs prog skels =
-    let specs = SymbSkel.expand_props_in_ltl prog skels in
-    let good, bad = StrMap.partition (can_handle_spec prog) specs in
+    let forms = Program.get_ltl_forms prog in
+    let tt = Program.get_type_tab prog in
+    let good, bad = StrMap.partition (can_handle_spec tt) forms in
     let p name _ =
         printf "      > Skipped %s (not reachability)\n" name in
     StrMap.iter p bad;
-    good
-
+    SymbSkel.expand_props_in_ltl_forms prog skels good
 
 
 class slps_checker_plugin_t (plugin_name: string)

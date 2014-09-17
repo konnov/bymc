@@ -71,12 +71,26 @@ val of_transitions:
     -> Sk.skel_t * Program.program_t
 
 
-(** Transform program specifications into specifications over
+(** Transform a program specifications into specification over
     the skeletons' counters.
   *)
 val expand_props_in_ltl:
     Program.program_t    (** @param prog input program *)
     -> Sk.skel_t list (** @param skels input skeletons *)
+    -> Spin.token SpinIr.expr
+        (** @param LTL formula to expand *)
+    -> Spin.token SpinIr.expr
+        (* @result LTL formula with conditions over locations (counters) *)
+
+
+(** Transform program specifications into specifications over
+    the skeletons' counters.
+  *)
+val expand_props_in_ltl_forms:
+    Program.program_t    (** @param prog input program *)
+    -> Sk.skel_t list (** @param skels input skeletons *)
+    -> (Spin.token SpinIr.expr) Accums.StrMap.t
+        (** @param LTL formulas to expand *)
     -> (Spin.token SpinIr.expr) Accums.StrMap.t
         (* @result LTL formulas with conditions over locations (counters) *)
 

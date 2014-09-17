@@ -395,7 +395,7 @@ let expand_quant prog skels ~quant e =
 
 
 (** expand quantifiers in the propositional symbols *)
-let expand_prop prog skels prop_form =
+let expand_props_in_ltl prog skels prop_form =
     let atomics = Program.get_atomics_map prog in
     let tt = Program.get_type_tab prog in
     let rec expand_card = function
@@ -410,7 +410,7 @@ let expand_prop prog skels prop_form =
 
         | e -> e
     in
-    let rec pr_atomic neg = function
+    let rec pr_atomic = function
         | PropGlob e ->
             expand_card e
 
@@ -421,10 +421,10 @@ let expand_prop prog skels prop_form =
             expand_quant prog skels ~quant:QExist e
 
         | PropAnd (l, r) ->
-            BinEx (AND, pr_atomic neg l, pr_atomic neg r)
+            BinEx (AND, pr_atomic l, pr_atomic r)
 
         | PropOr (l, r) ->
-            BinEx (OR, pr_atomic neg l, pr_atomic neg r)
+            BinEx (OR, pr_atomic l, pr_atomic r)
     in
     let rec pr neg = function
     | BinEx (AND as t, l, r)
@@ -437,9 +437,27 @@ let expand_prop prog skels prop_form =
         pr (not neg) r
 
     | Var v ->
-        if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
-        then pr_atomic neg (StrMap.find v#get_name atomics)
-        else if neg then UnEx (NEG, Var v) else Var v
+        let e =
+            if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
+            then pr_atomic (StrMap.find v#get_name atomics)
+            else Var v
+        in
+        if neg then UnEx (NEG, e) else e
+
+    | UnEx (t, l) ->
+        let ne = UnEx (t, pr neg l) in
+        let ne =
+            if neg
+            then UnEx (NEG, UnEx (t, UnEx (NEG, pr neg l)))
+            else UnEx (t, pr false l) in
+        Ltl.normalize_form ne (* remove redundant negations *)
+
+    | BinEx (t, l, r) ->
+        let nl = if neg then UnEx (NEG, pr neg l) else pr neg l in
+        let nr = if neg then UnEx (NEG, pr neg r) else pr neg r in
+        let ne = BinEx (t, nl, nr) in
+        let ne = if neg then UnEx (NEG, ne) else ne in
+        Ltl.normalize_form ne (* remove redundant negations *)
 
     | e ->
         let ne = if neg then UnEx (NEG, e) else e in
@@ -449,6 +467,6 @@ let expand_prop prog skels prop_form =
 
 
 (* expand propositions in LTL formulas *)
-let expand_props_in_ltl prog skels =
-    StrMap.map (expand_prop prog skels) (Program.get_ltl_forms prog)
+let expand_props_in_ltl_forms prog skels ltl_forms =
+    StrMap.map (expand_props_in_ltl prog skels) ltl_forms
 

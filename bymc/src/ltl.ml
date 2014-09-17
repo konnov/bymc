@@ -101,17 +101,17 @@ let normalize_form form =
     norm false form
 
 
-let classify_spec prog = function
+let classify_spec type_tab = function
     (* (p -> [] q) *)
     | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (is_propositional (Program.get_type_tab prog) lhs)
-            && (is_propositional (Program.get_type_tab prog) rhs)
+        if (is_propositional type_tab lhs)
+            && (is_propositional type_tab rhs)
         then CondSafety (lhs, normalize_form (UnEx (NEG, rhs)))
         else CondGeneral e
 
     | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (is_propositional (Program.get_type_tab prog) lhs)
-            && (is_propositional (Program.get_type_tab prog) rhs)
+        if (is_propositional type_tab lhs)
+            && (is_propositional type_tab rhs)
         then CondSafety (normalize_form (UnEx (NEG, lhs)),
                          normalize_form (UnEx (NEG, rhs)))
         else CondGeneral e

@@ -125,7 +125,7 @@ let collect_next_vars e =
     f IntSet.empty e
 
 
-let encode_path_elem rt tt sk start_frame pathelem =
+let encode_path_elem rt tt bad_form sk start_frame pathelem =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -166,13 +166,21 @@ let encode_path_elem rt tt sk start_frame pathelem =
     in
     let each_path_elem = function
     | MaybeMile (_, rules) ->
+            (* check, whether we have reached a bad state *)
+            rt#solver#comment "is segment bad?";
+            F.assert_frame rt#solver tt start_frame start_frame [bad_form];
+
+            (* add the rules of potential milestones *)
+            rt#solver#comment "potential milestones";
             let endf, new_frames =
                 List.fold_left (each_rule true) (start_frame, []) rules in
+            (* only one of the rules should actually fire *)
             let constr = BinEx (Spin.EQ, Const 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
             endf
 
     | Seg rules ->
+            rt#solver#comment "next segment";
             let endf, _ =
                 List.fold_left (each_rule false) (start_frame, []) rules in
             endf
@@ -180,23 +188,26 @@ let encode_path_elem rt tt sk start_frame pathelem =
     each_path_elem pathelem
 
 
-    (*
-let extract_spec s =
-    match Ltl.classify_spec s with
-    | Ltl.CondSafety (init, bad) ->
-        (init, bad)
-
-    | Ltl.CondGeneral e ->
-            *)
+let extract_spec type_tab s =
+    match Ltl.classify_spec type_tab s with
+    | Ltl.CondSafety (init, bad) -> (init, bad)
+    | _ ->
+        let m = sprintf "unsupported LTL formula: %s" (SpinIrImp.expr_s s) in
+        raise (Ltl.Ltl_error m)
 
 
 let is_error_path rt tt sk ltl_form path =
+    let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
     F.declare_frame rt#solver ntt initf;
     F.assert_frame rt#solver ntt initf initf sk.Sk.inits;
-    let lastf = List.fold_left (encode_path_elem rt tt sk) initf path in
+    rt#solver#comment "initial constraints from the spec";
+    F.assert_frame rt#solver ntt initf initf [init_form];
+
+    let _ =
+        List.fold_left (encode_path_elem rt tt bad_form sk) initf path in
     let is_sat = rt#solver#check in
     rt#solver#pop_ctx;
     is_sat
