@@ -43,13 +43,13 @@ class symb: string ->
         method has_flag: hflag -> bool
 
         (** Mark symbol with a flag *)
-        method add_flag: hflag -> hflag list
+        method add_flag: hflag -> unit
 
         (** Get all flags the symbol is marked with *)
         method get_flags: hflag list
 
         (** Set all flags *)
-        method set_flags: hflag list
+        method set_flags: hflag list -> unit
 
         (** Get a textual representation of flags *)
         method flags_s: string
@@ -72,19 +72,10 @@ and
  *)
     var: string -> int ->
     object 
+        inherit symb
+
         (** @return variable's unique identifier *)
         method id: int
-
-        method get_name : string
-
-        (** @return symbol type, i.e., SymVar *)
-        method get_sym_type: sym_type
-
-        (** Try to convert this symbol to a variable
-            @return object of class var
-            @raise Invalid_type when the symbol cannot be coerced
-         *)
-        method as_var: var
 
         (** Whether the variable is marked as symbolic *)
         method is_symbolic: bool
@@ -102,19 +93,19 @@ and
         method proc_name: string
 
         (** Set the name of the owning process *)
-        method set_proc_name: string
+        method set_proc_name: string -> unit
 
         (** Get the index of the owning process *)
-        method proc_index: string
+        method proc_index: int
 
         (** Set the index of the owning process *)
-        method set_proc_index: string
+        method set_proc_index: int -> unit
 
         (** Get the mark of the variable (useful in search algorithms) *)
         method mark: int
 
         (** Set the mark (useful in search algorithms) *)
-        method set_mark: int
+        method set_mark: int -> unit
 
         (** Return the qualified name including the process name and   
             the process index, if available
@@ -138,6 +129,8 @@ and
 (** A label that is mapped to an integer. *)
     label: string -> int ->
     object 
+        inherit symb
+
         method get_name : string
 
         (** @return symbol type, i.e., SymLab *)
@@ -159,11 +152,11 @@ class symb_tab: string ->
     object
         method tab_name: string
 
-        method add_symb: string -> symb
+        method add_symb: string -> symb -> unit
 
-        method add_all_symb: symb list
+        method add_all_symb: symb list -> unit
 
-        method set_syms: symb list
+        method set_syms: symb list -> unit
 
         (** Find a symbol with the given name either in the table,
             or in its parents.
@@ -189,11 +182,11 @@ class symb_tab: string ->
 
         method get_symbs_rec: symb list
 
-        method set_parent: symb_tab
+        method set_parent: symb_tab -> unit
 
-        method set_parent_opt: symb_tab option
+        method set_parent_opt: symb_tab option -> unit
 
-        method get_parent: symb_tab
+        method get_parent: symb_tab option
     end
 
 (** Variable data type *)
@@ -341,6 +334,10 @@ type 't prog_unit =
   | Ltl of string * 't expr
   | EmptyUnit
 
+
+
+module VarSet: (Set.S with type elt = var)
+
 (*************************** GENERAL FUNCTIONS ********************)
 
 (** generate a unique identifier, limited by MAX_INT *)
@@ -416,6 +413,12 @@ val map_expr_in_lir_stmt : ('a expr -> 'a expr) -> 'a stmt -> 'a stmt
 
 (************************** MISC FUNCTIONS ******************)
 
-(** flag to string *)
+(** Flag to string *)
 val hflag_s: hflag -> string
+
+(** Marshal the internal data structures *)
+val save_internal_globals: out_channel -> unit
+
+(** Unmarshal the internal data structures *)
+val load_internal_globals: in_channel -> unit
 

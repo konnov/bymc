@@ -59,6 +59,19 @@ let fresh_id () =
     else raise (Failure "fresh_id: ran out of unique identifiers")
 
 
+let save_internal_globals cout =
+    (* save the id *)
+    Marshal.to_channel cout !uniq_id_next []
+
+
+let load_internal_globals cin =
+    (* restore the id *)
+    let (seq_id: int) = Marshal.from_channel cin in
+    uniq_id_next := seq_id
+
+
+
+
 (* a symbol of any origin *)
 class symb name_i =
     object(self)
@@ -196,7 +209,7 @@ label name_i num_i =
 let new_var name = new var name (fresh_id ())    
 
 let var_qname v = v#qual_name
-let var_name v = v#name
+let var_name v = v#get_name
 
 module VarType =
     struct
