@@ -15,6 +15,7 @@ dist_ver := $(shell date '+%Y%m%d')
 DIST_FILES=bymc.native verifyco-spin verifypa-spin script/ LICENSE
 
 all: ${target}
+	otags src/*.ml
 
 compile: ${target}
 
