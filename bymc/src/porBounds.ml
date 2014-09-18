@@ -483,19 +483,27 @@ let rec filter_path deps conds lockt path =
     | (MaybeMile ((_, id, _, lt), _) as m) :: tl ->
         if lt <> lockt
         then m :: (f set tl)
-        else (* from now on id is locked, and whatever implies it,
-            is locked too *)
-            let collect rhs set (_, lhs, _, _) =
+        else (* from now on id is locked (unlocked),
+                and whatever implies it, is locked (unlocked) too *)
+            let collect_locked rhs set (_, lhs, _, _) =
                 let imps = PSetEltMap.find lhs deps.D.cond_imp in
                 if PSet.mem rhs imps (* lhs -> rhs *)
                 then PSet.add lhs set
                 else set
             in
-            m :: (f (List.fold_left (collect id) set conds) tl)
+            let imps =
+                if lockt = Unlock
+                then PSetEltMap.find id deps.D.cond_imp
+                else List.fold_left (collect_locked id) set conds
+            in
+            m :: (f imps  tl)
 
     | (Seg rule_nos) :: tl ->
         let not_locked rno =
-            PSet.is_empty (PSet.inter set (IntMap.find rno deps.D.rule_pre))
+            let pre = IntMap.find rno deps.D.rule_pre in
+            if lockt = Unlock
+            then PSet.subseteq pre set (* everything is unlocked *)
+            else PSet.is_empty (PSet.inter pre set) (* nothing is locked *)
         in
         (Seg (List.filter not_locked rule_nos)) :: (f set tl)
     in
@@ -538,8 +546,7 @@ let compute_slps_tree sk deps succ =
         in
         (* remove the rules from the segments that precede the conditions *)
         let no_locked = filter_path deps lconds Lock full in
-        let no_unlocked =
-            List.rev (filter_path deps uconds Unlock (List.rev no_locked)) in
+        let no_unlocked = filter_path deps uconds Unlock no_locked in
         (* enumerate all rule corresponding to the conditions *)
         unfold_conds sk deps no_unlocked
     in
