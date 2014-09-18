@@ -1,5 +1,5 @@
 (*
- * Checking the properties using semi-linear regular path scheme
+ * Checking the properties using semi-linear regular path schema
  * that is computed with respect to the diameter, cf. porBounds
  *
  * Igor Konnov, 2014
@@ -47,7 +47,7 @@ class slps_checker_plugin_t (plugin_name: string)
                 if err
                 then true
                 else begin
-                    log INFO (sprintf "      > inspecting path scheme %d" i);
+                    logtm INFO (sprintf "      > inspecting path schema %d" i);
                     let is_err = SlpsChecker.is_error_path rt tt sk form path in
                     log INFO (if is_err then "      [ERR]" else "      [OK]");
                     is_err
@@ -55,6 +55,7 @@ class slps_checker_plugin_t (plugin_name: string)
             in
             log INFO "  > Running SlpsChecker...";
             let npaths = List.length paths in
+            log INFO (sprintf "    > %d schemas to inspect..." npaths);
             let each_form name form =
                 printf "      > Checking %s...\n" name;
                 let err = List.fold_left2 (each_path form) false (range 0 npaths) paths in
