@@ -15,7 +15,7 @@ dist_ver := $(shell date '+%Y%m%d')
 DIST_FILES=bymc.native verifyco-spin verifypa-spin script/ LICENSE
 
 all: ${target}
-	otags src/*.ml
+	#otags src/*.ml
 
 compile: ${target}
 
@@ -52,18 +52,10 @@ clean:
 ${target}: ocaml-3.11.0
 	$(info COMPILING)
 	ocamlbuild -use-ocamlfind ${CFLAGS} ${target} | ./script/ocaml-friendly
-	find _build -regex '.*\.cm\(i\|o\)'\
-        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
-        >./bymc.mltop
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./bymc.top ${target}
 
 ${debug_target}: ocaml-3.11.0
 	$(info COMPILING DEBUG VERSION)
 	ocamlbuild -use-ocamlfind ${CFLAGS} ${debug_target} | ./script/ocaml-friendly
-	find _build -regex '.*\.cm\(i\|o\)'\
-        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
-        >./bymc.mltop
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./bymc.top ${debug_target}
 
 ocaml-3.11.0:
 	$(info Testing, whether ocaml version is at least 3.11.0)
