@@ -125,19 +125,41 @@ module T = struct
 end
    
 
-let print_path out path =
-    let p = function
-        | MaybeMile ((name, _, _, _), rule_nos) ->
-            let rules_s = str_join " | " (List.map int_s rule_nos) in
-            fprintf out " %s: (%s) " name rules_s
+let print_tree out tree =
+    let rec print level = function
+        | T.Leaf seg ->
+            fprintf out "%s" (String.make level ' ');
+            fprintf out "[ ";
+            List.iter (fun r -> fprintf out " %d " r) seg;
+            fprintf out " ]\n"
 
-        | Seg  rs ->
-            fprintf out " [ ";
-            List.iter (fun r -> fprintf out " %d " r) rs;
-            fprintf out " ] "
+        | T.Node (seg, branches) ->
+            fprintf out "%s" (String.make level ' ');
+            fprintf out "[ ";
+            List.iter (fun r -> fprintf out " %d " r) seg;
+            fprintf out " ]\n";
+
+            List.iter (each_branch (level + 2)) branches
+
+    and each_branch level { T.cond_after; T.cond_rules; T.subtree } =
+        let (name, _, _, _) = cond_after in
+        let rules_s = str_join " | " (List.map int_s cond_rules) in
+        fprintf out "%s" (String.make level ' ');
+        fprintf out "%s: (%s)\n" name rules_s;
+        print (level + 2) subtree
     in 
-    List.iter p path;
+    print 0 tree;
     fprintf out "\n"
+
+
+let tree_leafs_count tree = 
+    let rec f = function
+        | T.Leaf _ -> 1
+        | T.Node (_, bs) ->
+            List.fold_left (+)
+                0 (List.map (fun b -> f b.T.subtree) bs)
+    in
+    f tree
 
 
 let compute_flow sk =
@@ -594,29 +616,10 @@ let compute_slps_tree sk deps succ =
         let seg = List.filter (is_rule_locked deps uset lset) full_segment in
         let branches = List.fold_left each_cond [] (uconds @ lconds) in
         if branches = []
-        then T.Leaf []
+        then T.Leaf seg
         else T.Node (seg, branches)
     in
     build_tree PSet.empty PSet.empty
-            
-
-    (*
-    (* construct alternations of conditions and call a function on a leaf *)
-    let rec build_paths f paths rev_prefix =
-        let n, id, m, _ = List.hd rev_prefix in
-        let each_succ ps (nn, id, s, t) =
-            if not (List.exists (fun (name, _, _, _) -> nn = name) rev_prefix)
-            then build_paths f ps ((nn, id, s, t) :: rev_prefix)
-            else (f (List.rev rev_prefix)) :: ps
-        in
-        let succs = Hashtbl.find succ m in
-        if succs = []
-        then (f (List.rev rev_prefix)) :: paths
-        else List.fold_left each_succ paths succs
-    in
-    List.fold_left (build_paths make_path) []
-        (List.rev_map (fun m -> [m]) (uconds @ lconds))
-        *)
 
 
 let collect_actions accum sk =
@@ -670,11 +673,11 @@ let compute_diam solver dom_size sk =
 
     log INFO (sprintf "> SLPS is written to slps-paths.txt");
 
-    let paths = compute_slps_tree sk deps miles_succ in
+    let tree = compute_slps_tree sk deps miles_succ in
     let out = open_out "slps-paths.txt" in
-    List.iter (print_path out) paths;
+    print_tree out tree;
     close_out out;
 
-    paths
+    tree
 
 

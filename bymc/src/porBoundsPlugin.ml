@@ -17,20 +17,20 @@ class por_bounds_plugin_t (plugin_name: string)
     object(self)
         inherit analysis_plugin_t plugin_name
         
-        val mutable m_paths: PorBounds.path_t list = []
+        val mutable m_tree: PorBounds.T.schema_tree_t = PorBounds.T.Leaf []
 
         method transform rt =
             let dom = rt#caches#analysis#get_pia_dom in
             let dom_size = dom#length in
             (* TODO: construct the paths for several process types properly *)
-            m_paths <- List.fold_left
-                (fun l s -> l @ (PorBounds.compute_diam rt#solver dom_size s))
-                [] sk_plugin#skels;
+            assert (1 = (List.length sk_plugin#skels));
+            let sk = List.hd sk_plugin#skels in
+            m_tree <- PorBounds.compute_diam rt#solver dom_size sk;
             self#get_input0
 
         method update_runtime rt =
             ()
 
-        method representative_paths = m_paths
+        method representative_tree = m_tree
     end
 

@@ -38,29 +38,30 @@ class slps_checker_plugin_t (plugin_name: string)
         method transform rt =
             let input = self#get_input0 in
             let tt = Program.get_type_tab input in
-            let paths = por_bounds_plugin#representative_paths in
+            let tree = por_bounds_plugin#representative_tree in
+
             (* TODO: there must be only one skeleton for all process types! *)
             assert ((List.length sk_plugin#skels) = 1);
             let sk = List.hd sk_plugin#skels in
-            let npaths = List.length paths in
+            let nleafs = PorBounds.tree_leafs_count tree in
+            let num = ref 0 in (* XXX *)
+            let on_leaf _ =
+                num := !num + 1;
+                log INFO (sprintf "        checked path %d (%d%% done)" !num
+                (!num * 100 / nleafs))
+            in
 
-            let each_path form err i path =
-                let percent = i * 100 / npaths in
-                if err
-                then true
-                else begin
-                    logtm INFO (sprintf "      > inspecting path schema %d (%d%% done)" i percent);
-                    let is_err = SlpsChecker.is_error_path rt tt sk form path in
-                    if is_err then log INFO "      [ERR]";
-                    is_err
-                end
+            let check_tree form tree =
+                SlpsChecker.is_error_tree rt tt sk on_leaf form tree
             in
             log INFO "  > Running SlpsChecker...";
-            log INFO (sprintf "    > %d schemas to inspect..." npaths);
+            log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
                 printf "      > Checking %s...\n" name;
-                let err = List.fold_left2 (each_path form) false (range 0 npaths) paths in
-                if err then printf "    > SLPS: counterexample for %s found\n" name;
+                let err = check_tree form tree in
+                if err
+                then printf "    > SLPS: counterexample for %s found\n" name
+                else printf "      > Spec %s holds\n" name
             in
             let specs = get_proper_specs input sk_plugin#skels in
             StrMap.iter each_form specs;

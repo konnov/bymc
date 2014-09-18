@@ -131,7 +131,7 @@ let collect_next_vars e =
     f IntSet.empty e
 
 
-let encode_path_elem rt tt sk start_frame pathelem =
+let check_tree rt tt sk bad_form on_leaf start_frame tree =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -158,7 +158,6 @@ let encode_path_elem rt tt sk start_frame pathelem =
 
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, Const 0), rule.Sk.guard) in
-        (* TODO: fix the schemas to get rid of the guards! *)
         if is_milestone
         then F.assert_frame rt#solver tt frame new_frame [guard];
 
@@ -172,25 +171,54 @@ let encode_path_elem rt tt sk start_frame pathelem =
         | [frame] -> Var frame.F.accel_v
         | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum tl)
     in
-    let each_path_elem = function
-    | MaybeMile (_, rules) ->
+    let check_segment frame seg =
+        let endf, _ = List.fold_left (each_rule false) (frame, []) seg in
+        rt#solver#push_ctx;
+        rt#solver#comment "is segment bad?";
+        F.assert_frame rt#solver tt endf endf [bad_form];
+        let err = rt#solver#check in
+        rt#solver#pop_ctx;
+        endf, err
+    in
+    let rec check_node frame = function
+        | T.Leaf seg ->
+            rt#solver#push_ctx;
+            rt#solver#comment "last segment";
+            let _, err = check_segment frame seg in
+            rt#solver#pop_ctx;
+            on_leaf ();
+            err
 
-            (* add the rules of potential milestones *)
+        | T.Node (seg, branches) ->
+            rt#solver#push_ctx;
+            rt#solver#comment "next segment";
+            let seg_endf, err = check_segment frame seg in
+
+            let res =
+                if err
+                then false
+                else List.fold_left (check_branch seg_endf) false branches
+            in
+            rt#solver#pop_ctx;
+            res
+
+    and check_branch frame err br =
+        if err
+        then true
+        else begin
+            (* only one of the rules should actually fire *)
+            rt#solver#push_ctx;
             rt#solver#comment "potential milestones";
             let endf, new_frames =
-                List.fold_left (each_rule true) (start_frame, []) rules in
-            (* only one of the rules should actually fire *)
+                List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
             let constr = BinEx (Spin.EQ, Const 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
-            endf
-
-    | Seg rules ->
-            rt#solver#comment "next segment";
-            let endf, _ =
-                List.fold_left (each_rule false) (start_frame, []) rules in
-            endf
+            let res = check_node endf br.T.subtree in
+            rt#solver#pop_ctx;
+            res (* sat means error *)
+        end
     in
-    each_path_elem pathelem
+    check_node start_frame tree
 
 
 let extract_spec type_tab s =
@@ -201,7 +229,7 @@ let extract_spec type_tab s =
         raise (Ltl.Ltl_error m)
 
 
-let is_error_path rt tt sk ltl_form path =
+let is_error_tree rt tt sk on_leaf ltl_form tree =
     let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
     rt#solver#set_need_evidence true;
@@ -213,21 +241,7 @@ let is_error_path rt tt sk ltl_form path =
     rt#solver#comment "initial constraints from the spec";
     F.assert_frame rt#solver ntt initf initf [init_form];
 
-    let each_elem (frame, err_found) path_el =
-        if err_found
-        then frame, err_found
-        else begin
-            let after = encode_path_elem rt tt sk frame path_el in
-            (* check, whether we have reached a bad state *)
-            rt#solver#push_ctx;
-            rt#solver#comment "is segment bad?";
-            F.assert_frame rt#solver tt after after [bad_form];
-            let err = rt#solver#check in
-            rt#solver#pop_ctx;
-            after, err
-        end
-    in
-    let _, err = List.fold_left each_elem (initf, false) path in
+    let err = check_tree rt tt sk bad_form on_leaf initf tree in
     rt#solver#set_need_evidence false;
     rt#solver#pop_ctx;
     err

@@ -445,7 +445,6 @@ let expand_props_in_ltl prog skels prop_form =
         if neg then UnEx (NEG, e) else e
 
     | UnEx (t, l) ->
-        let ne = UnEx (t, pr neg l) in
         let ne =
             if neg
             then UnEx (NEG, UnEx (t, UnEx (NEG, pr neg l)))
