@@ -97,6 +97,12 @@ module F = struct
 end
 
 
+let not_redundant_action = function
+        | BinEx (Spin.EQ, UnEx (Spin.NEXT, Var l), Var r) ->
+                l#get_name <> r#get_name
+        | _ -> true
+
+
 let accelerate_expr accel_var e =
     let rec f = function
         | UnEx (t, e) ->
@@ -130,9 +136,10 @@ let encode_path_elem rt tt sk start_frame pathelem =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
         let dst_loc_v = List.nth frame.F.loc_vars rule.Sk.dst in
+        let actions = List.filter not_redundant_action rule.Sk.act in
         let next_shared =
             List.fold_left IntSet.union IntSet.empty
-                (List.map collect_next_vars rule.Sk.act) in
+                (List.map collect_next_vars actions) in
         let is_new_f basev v =
             v#id = src_loc_v#id || v#id = dst_loc_v#id
                 || IntSet.mem basev#id next_shared
@@ -151,11 +158,14 @@ let encode_path_elem rt tt sk start_frame pathelem =
 
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, Const 0), rule.Sk.guard) in
+        (* TODO: fix the schemas to get rid of the guards! *)
+        (*
         if is_milestone
-        then F.assert_frame rt#solver tt frame new_frame [guard];
+        then *)
+            F.assert_frame rt#solver tt frame new_frame [guard];
 
         let accelerated =
-            List.map (accelerate_expr new_frame.F.accel_v) rule.Sk.act in
+            List.map (accelerate_expr new_frame.F.accel_v) actions in
         F.assert_frame rt#solver tt frame new_frame accelerated;
         (new_frame, new_frame :: fs)
     in
