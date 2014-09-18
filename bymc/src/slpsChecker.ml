@@ -159,10 +159,8 @@ let encode_path_elem rt tt sk start_frame pathelem =
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, Const 0), rule.Sk.guard) in
         (* TODO: fix the schemas to get rid of the guards! *)
-        (*
         if is_milestone
-        then *)
-            F.assert_frame rt#solver tt frame new_frame [guard];
+        then F.assert_frame rt#solver tt frame new_frame [guard];
 
         let accelerated =
             List.map (accelerate_expr new_frame.F.accel_v) actions in
@@ -206,6 +204,8 @@ let extract_spec type_tab s =
 let is_error_path rt tt sk ltl_form path =
     let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
+    rt#solver#set_need_evidence true;
+
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
     F.declare_frame rt#solver ntt initf;
@@ -228,6 +228,7 @@ let is_error_path rt tt sk ltl_form path =
         end
     in
     let _, err = List.fold_left each_elem (initf, false) path in
+    rt#solver#set_need_evidence false;
     rt#solver#pop_ctx;
     err
 
