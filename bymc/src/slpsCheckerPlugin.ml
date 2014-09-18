@@ -51,7 +51,7 @@ class slps_checker_plugin_t (plugin_name: string)
                 else begin
                     logtm INFO (sprintf "      > inspecting path schema %d (%d%% done)" i percent);
                     let is_err = SlpsChecker.is_error_path rt tt sk form path in
-                    log INFO (if is_err then "      [ERR]" else "      [OK]");
+                    if is_err then log INFO "      [ERR]";
                     is_err
                 end
             in

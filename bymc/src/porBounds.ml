@@ -107,6 +107,23 @@ type path_elem_t =
 
 type path_t = path_elem_t list    
 
+type rule_nos_t = int list
+
+(* instead of constructing plain paths, we construct a tree *)
+module T = struct
+    (** a semi-linear path schema represented as a tree *)
+    type schema_tree_t =
+        | Leaf of rule_nos_t (** segment *)
+        | Node of rule_nos_t (** segment *) * schema_branch_t list (** branches *)
+
+    (** and a branch of a tree *)
+    and schema_branch_t = {
+        cond_after: mstone_t;   (** the condition guarding the branch *)
+        cond_rules: rule_nos_t; (** the possible rules that are fired with this condition *)
+        subtree: schema_tree_t  (** the following subtree *)
+    }
+end
+   
 
 let print_path out path =
     let p = function
@@ -475,42 +492,49 @@ let find_max_bound nrules guards_card deps succ =
     List.fold_left each_branch nrules (umiles @ lmiles)
 
 
+let get_cond_impls deps cond_id lockt =
+    let collect_locked rhs set (_, lhs, _, _) =
+        let imps = PSetEltMap.find lhs deps.D.cond_imp in
+        if PSet.mem rhs imps (* lhs -> rhs *)
+        then PSet.add lhs set
+        else set
+    in
+    if lockt = Unlock
+    then PSetEltMap.find cond_id deps.D.cond_imp
+    else List.fold_left (collect_locked cond_id) PSet.empty deps.D.lconds
+
+
+let is_rule_locked deps uset lset rule_no =
+    let pre = IntMap.find rule_no deps.D.rule_pre in
+    PSet.subseteq pre uset                     (* everything is unlocked *)
+        && PSet.is_empty (PSet.inter pre lset) (* and nothing is locked *)
+    
+
 (* filter out the locked/unlocked rules *)    
 let rec filter_path deps conds lockt path =
-    let rec f set = function
+    let rec f uset lset = function
     | [] -> []
 
     | (MaybeMile ((_, id, _, lt), _) as m) :: tl ->
         if lt <> lockt
-        then m :: (f set tl)
+        then m :: (f uset lset tl)
         else (* from now on id is locked (unlocked),
                 and whatever implies it, is locked (unlocked) too *)
-            let collect_locked rhs set (_, lhs, _, _) =
-                let imps = PSetEltMap.find lhs deps.D.cond_imp in
-                if PSet.mem rhs imps (* lhs -> rhs *)
-                then PSet.add lhs set
-                else set
+            let uset, lset =
+                if lt = Unlock
+                then (PSet.union uset (get_cond_impls deps id lt)), lset
+                else uset, (PSet.union lset (get_cond_impls deps id lt))
             in
-            let imps =
-                if lockt = Unlock
-                then PSetEltMap.find id deps.D.cond_imp
-                else List.fold_left (collect_locked id) set conds
-            in
-            m :: (f imps  tl)
+            m :: (f uset lset tl)
 
     | (Seg rule_nos) :: tl ->
-        let not_locked rno =
-            let pre = IntMap.find rno deps.D.rule_pre in
-            if lockt = Unlock
-            then PSet.subseteq pre set (* everything is unlocked *)
-            else PSet.is_empty (PSet.inter pre set) (* nothing is locked *)
-        in
-        (Seg (List.filter not_locked rule_nos)) :: (f set tl)
+        (Seg (List.filter (is_rule_locked deps uset lset) rule_nos))
+            :: (f uset lset tl)
     in
-    f PSet.empty path
+    f PSet.empty PSet.empty path
 
 
-(* add all possible rules that are labeled with a specific condition *)    
+(** add all possible rules that are labeled with a specific condition *)    
 let unfold_conds sk deps path =
     (* TODO: more careful analysis is required to remove redundant rules *)
     let is_guarded_with (_, cond_no, _, _) rule_no =
@@ -528,7 +552,7 @@ let unfold_conds sk deps path =
     f path
 
 
-(*
+(**
    Compute the tree of representative executions.
 
    Here we compute a semilinear regular path scheme (SLPS),
@@ -539,18 +563,44 @@ let unfold_conds sk deps path =
 let compute_slps_tree sk deps succ =
     let full_segment = make_segment sk deps.D.fg in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
-    let make_path milestones =
-        let each_mstone suffix m =
-            (Seg full_segment) :: (MaybeMile (m, [])) :: suffix in
-        let full = List.rev (List.fold_left each_mstone [Seg full_segment] milestones)
-        in
-        (* remove the rules from the segments that precede the conditions *)
-        let no_locked = filter_path deps lconds Lock full in
-        let no_unlocked = filter_path deps uconds Unlock no_locked in
-        (* enumerate all rule corresponding to the conditions *)
-        unfold_conds sk deps no_unlocked
-    in
 
+    let rec build_tree uset lset =
+        let is_guarded_with cond_id rule_no =
+            let conds = IntMap.find rule_no deps.D.rule_pre in
+            PSet.mem cond_id conds
+        in
+        let each_cond accum (name, cond_id, expr, lockt) =
+            if (PSet.mem cond_id uset) || (PSet.mem cond_id lset)
+            then accum (* already covered *)
+            else (* create a branch *)
+                let all_guarded_with = 
+                    List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
+                in
+                let new_uset, new_lset =
+                    if lockt = Unlock
+                    then (PSet.union uset (get_cond_impls deps cond_id lockt)), lset
+                    else uset, (PSet.union lset (get_cond_impls deps cond_id lockt))
+                in
+                let subtree = build_tree new_uset new_lset in
+                let branch = 
+                    {
+                        T.cond_after = (name, cond_id, expr, lockt);
+                        T.cond_rules = all_guarded_with;
+                        subtree
+                    }
+                in
+                branch :: accum
+        in
+        let seg = List.filter (is_rule_locked deps uset lset) full_segment in
+        let branches = List.fold_left each_cond [] (uconds @ lconds) in
+        if branches = []
+        then T.Leaf []
+        else T.Node (seg, branches)
+    in
+    build_tree PSet.empty PSet.empty
+            
+
+    (*
     (* construct alternations of conditions and call a function on a leaf *)
     let rec build_paths f paths rev_prefix =
         let n, id, m, _ = List.hd rev_prefix in
@@ -566,6 +616,7 @@ let compute_slps_tree sk deps succ =
     in
     List.fold_left (build_paths make_path) []
         (List.rev_map (fun m -> [m]) (uconds @ lconds))
+        *)
 
 
 let collect_actions accum sk =
@@ -611,7 +662,7 @@ let compute_diam solver dom_size sk =
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
-    let miles_succ = find_successors deps in
+    let miles_succ = find_successors deps in (* TODO: get rid of it *)
     let max_bound = find_max_bound sk.Sk.nrules guards_card deps miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
