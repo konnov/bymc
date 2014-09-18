@@ -57,3 +57,9 @@ let inter s1 s2 = gcd_big_int s1 s2
 
 let union s1 s2 = mult_big_int s1 s2
 
+let equal s1 s2 =
+    0 = (compare_big_int s1 s2)
+
+let subseteq smaller larger =
+    eq_big_int zero_big_int (mod_big_int larger smaller)
+

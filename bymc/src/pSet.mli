@@ -33,3 +33,7 @@ val inter: t -> t -> t
 
 val union: t -> t -> t
 
+val equal: t -> t -> bool
+
+val subseteq: t -> t -> bool
+
