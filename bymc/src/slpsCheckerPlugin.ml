@@ -42,19 +42,20 @@ class slps_checker_plugin_t (plugin_name: string)
             (* TODO: there must be only one skeleton for all process types! *)
             assert ((List.length sk_plugin#skels) = 1);
             let sk = List.hd sk_plugin#skels in
+            let npaths = List.length paths in
 
             let each_path form err i path =
+                let percent = i * 100 / npaths in
                 if err
                 then true
                 else begin
-                    logtm INFO (sprintf "      > inspecting path schema %d" i);
+                    logtm INFO (sprintf "      > inspecting path schema %d (%d%% done)" i percent);
                     let is_err = SlpsChecker.is_error_path rt tt sk form path in
                     log INFO (if is_err then "      [ERR]" else "      [OK]");
                     is_err
                 end
             in
             log INFO "  > Running SlpsChecker...";
-            let npaths = List.length paths in
             log INFO (sprintf "    > %d schemas to inspect..." npaths);
             let each_form name form =
                 printf "      > Checking %s...\n" name;
