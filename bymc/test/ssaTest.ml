@@ -40,7 +40,7 @@ let teardown _ =
 
 
 let compare_used_vars used_set exp_ios exp_temps =
-    let nused = StringSet.cardinal used_set in
+    let nused = StrSet.cardinal used_set in
     assert_equal ~msg:(sprintf "|used_set| = %d != %d"
         nused (exp_temps + exp_ios))
         (exp_temps + exp_ios) nused;
@@ -49,7 +49,7 @@ let compare_used_vars used_set exp_ios exp_temps =
         then (n_io + 1, n_t)
         else (n_io, n_t + 1)
     in
-    let n_io, n_t = StringSet.fold check used_set (0, 0) in
+    let n_io, n_t = StrSet.fold check used_set (0, 0) in
     assert_equal ~msg:(sprintf "nr. IN/OUT = %d" exp_ios) exp_ios n_io;
     assert_equal ~msg:(sprintf "nr. temporaries = %d" exp_temps) exp_temps n_t
 
@@ -254,10 +254,10 @@ let test_mk_ssa _ =
     Cfg.write_dot "ssa-test.dot" cfg_ssa;
     let collect us b =
         let used = stmt_list_used_vars b#get_seq in
-        List.fold_left (fun s v -> StringSet.add v#get_name s) us used
+        List.fold_left (fun s v -> StrSet.add v#get_name s) us used
     in
     let used_set =
-        List.fold_left collect StringSet.empty cfg_ssa#block_list
+        List.fold_left collect StrSet.empty cfg_ssa#block_list
     in
     compare_used_vars used_set 2 2
 
@@ -300,10 +300,10 @@ let test_mk_ssa_havoc _ =
     Cfg.write_dot "ssa-test-havoc.dot" cfg_ssa;
     let collect us b =
         let used = stmt_list_used_vars b#get_seq in
-        List.fold_left (fun s v -> StringSet.add v#get_name s) us used
+        List.fold_left (fun s v -> StrSet.add v#get_name s) us used
     in
     let used_set =
-        List.fold_left collect StringSet.empty cfg_ssa#block_list
+        List.fold_left collect StrSet.empty cfg_ssa#block_list
     in
     compare_used_vars used_set 1 2
 
