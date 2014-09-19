@@ -57,6 +57,7 @@ class slps_checker_plugin_t (plugin_name: string)
             log INFO "  > Running SlpsChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
+                num := 0;
                 printf "      > Checking %s...\n" name;
                 let err = check_tree form tree in
                 if err
