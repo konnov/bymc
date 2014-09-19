@@ -95,7 +95,10 @@ class yices_smt =
         val mutable debug = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
+        (** the number of stack pushes executed within consistent context *)
         val mutable m_pushes = 0
+        (** the number of stack pushes executed within inconsistent context *)
+        val mutable m_inconsistent_pushes = 0
 
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
@@ -163,15 +166,33 @@ class yices_smt =
 
         method push_ctx =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            m_pushes <- m_pushes + 1;
-            self#append "(push)"
+            self#sync;
+            self#append "(status)"; (* it can be unsat already *)
+            if not (self#is_out_sat true)
+            then begin
+                self#comment "push in inconsistent context. Ignored.";
+                m_inconsistent_pushes <- m_inconsistent_pushes + 1
+            end else begin
+                m_pushes <- m_pushes + 1;
+                self#append "(push)"
+            end
+
+        (** Get the current stack level (nr. of pushes). Use for debugging *)
+        method get_stack_level =
+            m_pushes + m_inconsistent_pushes
 
         method pop_ctx =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            if m_pushes = 0
+            if m_pushes + m_inconsistent_pushes = 0
             then raise (Failure ("pop: yices stack is empty!"));
-            m_pushes <- m_pushes - 1;
-            self#append "(pop)"
+            if m_inconsistent_pushes > 0
+            then begin
+                self#comment "pop from inconsistent context.";
+                m_inconsistent_pushes <- m_inconsistent_pushes - 1
+            end else begin
+                m_pushes <- m_pushes - 1;
+                self#append "(pop)"
+            end
 
         method sync =
             (* the solver can print more messages, thus, sync! *)
