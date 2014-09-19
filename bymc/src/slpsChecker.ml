@@ -173,52 +173,65 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
     in
     let check_segment frame seg =
         let endf, _ = List.fold_left (each_rule false) (frame, []) seg in
+        rt#solver#comment "push: check_segment";
+        let stack_level = rt#solver#get_stack_level in
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
         F.assert_frame rt#solver tt endf endf [bad_form];
         let err = rt#solver#check in
+        rt#solver#comment "pop: check_segment";
         rt#solver#pop_ctx;
+        assert (stack_level = rt#solver#get_stack_level);
         endf, err
     in
-    let rec check_node frame = function
+    let rec check_node depth frame = function
         | T.Leaf seg ->
+            rt#solver#comment (sprintf "push@%d: check_node[Leaf] at frame %d" depth frame.F.no);
+            let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "last segment";
             let _, err = check_segment frame seg in
+            rt#solver#comment (sprintf "pop@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
+            assert (stack_level = rt#solver#get_stack_level);
+
             on_leaf ();
             err
 
         | T.Node (seg, branches) ->
+            rt#solver#comment (sprintf "push@%d: check_node[Node] at frame %d" depth frame.F.no);
+            let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "next segment";
             let seg_endf, err = check_segment frame seg in
 
-            let res =
-                if err
-                then false
-                else List.fold_left (check_branch seg_endf) false branches
-            in
+            let each_branch err b = check_branch (1 + depth) seg_endf err b in
+            let res = List.fold_left each_branch err branches in
+            rt#solver#comment (sprintf "pop@%d: check_node[Node] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
+            assert (stack_level = rt#solver#get_stack_level);
             res
 
-    and check_branch frame err br =
+    and check_branch depth frame err br =
         if err
         then true
         else begin
             (* only one of the rules should actually fire *)
+            let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
-            rt#solver#comment "potential milestones";
+            rt#solver#comment (sprintf "push@%d: check_branch: potential milestones at frame %d" depth frame.F.no);
             let endf, new_frames =
                 List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
             let constr = BinEx (Spin.EQ, Const 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
-            let res = check_node endf br.T.subtree in
+            let res = check_node (1 + depth) endf br.T.subtree in
+            rt#solver#comment (sprintf "pop@%d: check_branch at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
-            res (* sat means error *)
+            assert (stack_level = rt#solver#get_stack_level);
+            res (* when SAT, an error is found *)
         end
     in
-    check_node start_frame tree
+    check_node 0 start_frame tree
 
 
 let extract_spec type_tab s =
