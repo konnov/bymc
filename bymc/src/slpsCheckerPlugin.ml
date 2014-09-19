@@ -47,7 +47,7 @@ class slps_checker_plugin_t (plugin_name: string)
             let num = ref 0 in (* XXX *)
             let on_leaf _ =
                 num := !num + 1;
-                log INFO (sprintf "        checked path %d (%d%% done)" !num
+                logtm INFO (sprintf "    checked path schema: %4d progress: %2d%%" !num
                 (!num * 100 / nleafs))
             in
 
