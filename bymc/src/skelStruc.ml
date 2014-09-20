@@ -120,6 +120,9 @@ let extract_skel proc_body =
 let extract_loop_sig prog reg_tbl proc =
     let update = mir_to_lir (reg_tbl#get "update" proc#get_stmts) in
     let prev_next = hashtbl_as_list (Analysis.find_copy_pairs update) in
+    (* bugfix: sort the variables,
+        as the hashtable can arbitrarily change their order *)
+    let prev_next = List.sort (fun (x, _) (y, _) -> cmp_vars x y) prev_next in
     let pn = (List.map fst prev_next) @ (List.map snd prev_next) in
     if (List.length pn) <> (List.length proc#get_locals)
     then begin
@@ -129,7 +132,7 @@ let extract_loop_sig prog reg_tbl proc =
             (sprintf "No `next' variables found for the variables of %s: %s"
             proc#get_name missing_s))
     end;
-    { prev_next = prev_next }
+    { prev_next }
 
 
 let get_prev_next loop_sig = loop_sig.prev_next
