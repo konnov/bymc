@@ -46,23 +46,16 @@ class pp_plugin_t (plugin_name: string) =
 
         method update_runtime rt =
             let prog = self#get_output in
-            let smt_of_asrt e =
-                sprintf "(assert %s)" (Smt.expr_to_smt e) in
-            let var_to_smt v =
-                let tp = get_type prog v in
-                Smt.var_to_smt v tp in
-            let smt_exprs =
-                List.append
-                    (List.map var_to_smt (get_params prog))
-                    (List.map smt_of_asrt (get_assumes prog))
-            in
             let new_plugin_opts =
                 StrMap.fold StrMap.add
                     rt#caches#options.plugin_opts m_plugin_opts
             in
             rt#caches#set_options
                 { rt#caches#options with plugin_opts = new_plugin_opts };
-            List.iter rt#solver#append smt_exprs;
+            let append_var v = rt#solver#append_var_def v (get_type prog v) in
+            List.iter append_var (get_params prog);
+            let append_expr e = ignore (rt#solver#append_expr e) in
+            List.iter append_expr (get_assumes prog);
             if not rt#solver#check
             then raise (Program.Program_error "Basic assertions are contradictory");
             (* update regions *)

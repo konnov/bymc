@@ -245,9 +245,9 @@ let cfg_to_constraints proc_name new_sym_tab new_type_tab cfg =
     in
     if may_log DEBUG
     then begin
-        printf "SMT constraints: \n";
+        printf "constraints: \n";
         let print_stmt = function
-        | MExpr (_, e) -> printf "%s\n" (expr_to_smt e)
+        | MExpr (_, e) -> printf "%s\n" (expr_s e)
         | _ -> () in
         List.iter print_stmt cons;
     end;
