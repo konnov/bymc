@@ -280,6 +280,9 @@ and 't mir_option =
   | MOptElse of 't mir_stmt list
 
 
+(** A process prototype (similar to a process in Promela).
+    Every process is a symbolic table.
+ *)
 class ['t] proc :
   string ->
   't expr ->
