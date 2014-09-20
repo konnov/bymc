@@ -58,7 +58,7 @@ active[N - F] proctype Proc() {
     byte pc = 0; int nrcvd = 0;
     byte next_pc = 0; int next_nrcvd = 0;
 
-    /* INV0 */
+    /* INIT */
     if
         ::pc = V0;
         ::pc = V1;
@@ -115,7 +115,7 @@ ltl fairness { []<>(!in_transit) }
     ltl corr { []((prec_init && prec_corr) -> <>(ex_acc)) }
     ltl unforg { []((prec_init && prec_unforg) -> []!ex_acc) }
 #else
-    ltl relay { (ex_acc -> <>(all_acc)) }
+    ltl relay { ([](ex_acc -> <>(all_acc))) }
     ltl corr { (prec_corr -> <>(ex_acc)) }
     ltl unforg { (prec_unforg -> [](!ex_acc)) }
 #endif
