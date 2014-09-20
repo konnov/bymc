@@ -146,8 +146,8 @@ let test_trans_proc_decl_three_var _ =
     match abs_prop with
     | PropGlob p ->
         assert_equal
-            ~msg:("expected (bymc_kP[19] != 0), found: " ^ (expr_s p))
-            "(bymc_kP[19] != 0)" (expr_s p)
+            ~msg:("expected (bymc_kP[13] != 0), found: " ^ (expr_s p))
+            "(bymc_kP[13] != 0)" (expr_s p)
     | _ -> assert_failure "expected PropGlob"
 
 
