@@ -21,12 +21,17 @@ compile: ${target}
 
 debug: ${debug_target}
 
+# unit tests
 test: clean
 	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte | ./script/ocaml-friendly
 	./unitTests.byte
 
+# functional tests
 integrate: clean
 	./test/func-test.sh
+
+# just a synonym for integrate
+fun: integrate
 
 dist:
 
@@ -40,6 +45,7 @@ release:
 	git archive --prefix=bymc-src-${TAG}/ "${TAG}" \
         | bzip2 > bymc-src-${TAG}.tar.bz2
 
+# ocaml doc
 doc:
 	mkdir -p _build/doc
 	ocamldoc -I _build/src -html -keep-code -colorize-code \
