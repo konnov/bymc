@@ -24,6 +24,8 @@ class yices_smt:
 
         method set_need_evidence: bool -> unit
 
+        method get_need_evidence: bool
+
         method get_evidence: string list
 
         method set_collect_asserts: bool -> unit

@@ -93,6 +93,7 @@ class yices_smt =
         val mutable clog = stdout
         val mutable m_pipe_cmd = PipeCmd.null ()
         val mutable debug = false
+        val mutable m_need_evidence = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
         (** the number of stack pushes executed within consistent context *)
@@ -215,9 +216,12 @@ class yices_smt =
             end
 
         method set_need_evidence b =
+            m_need_evidence <- b;
             if b
             then self#append "(set-evidence! true)"
             else self#append "(set-evidence! false)"
+
+        method get_need_evidence = m_need_evidence
 
         method get_evidence =
             (* same as sync but the lines are collected *)
