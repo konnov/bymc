@@ -33,10 +33,7 @@ let test_trans_proc_decl_two_var _ =
     let nsnt = new_var "nsnt"
         and pc = new_var "pc" and npc = new_var "npc"
         and rx = new_var "rx" and nrx = new_var "nrx" in
-    pc#set_proc_name "Proc";
-    npc#set_proc_name "Proc";
-    rx#set_proc_name "Proc";
-    nrx#set_proc_name "Proc";
+    List.iter (fun v -> v#set_proc_name "Proc") [pc; npc; rx; nrx];
     (* {0, 1, many}-abstraction *)
     let dom = new pia_domain [Const 0; Const 1; Const 2] in 
     let h = Hashtbl.create 4 in
@@ -64,11 +61,9 @@ let test_trans_proc_decl_two_var _ =
         MGoto (30, "foo");
     ];
     let tt = new data_type_tab in
-    tt#set_type pc (mk_int_range 0 2);
-    tt#set_type npc (mk_int_range 0 2);
-    tt#set_type rx (mk_int_range 0 3);
-    tt#set_type nrx (mk_int_range 0 3);
-    tt#set_type nsnt (mk_int_range 0 3);
+    List.iter (fun v -> tt#set_type v (mk_int_range 0 4)) [pc; npc];
+    List.iter (fun v -> tt#set_type v (mk_int_range 0 3)) [rx; nrx; nsnt];
+    List.iter (fun v -> proc#add_symb v#get_name (v :> symb)) [pc; npc; rx; nrx];
     let prog = Program.program_of_units tt
         [
             Stmt (MDecl (fresh_id (), nsnt, Const 0));
@@ -84,8 +79,8 @@ let test_trans_proc_decl_two_var _ =
     match abs_prop with
     | PropGlob p ->
         assert_equal
-            ~msg:("expected (bymc_kP[7] != 0), found: " ^ (expr_s p))
-            "(bymc_kP[7] != 0)" (expr_s p)
+            ~msg:("expected (bymc_kP[6] != 0), found: " ^ (expr_s p))
+            "(bymc_kP[6] != 0)" (expr_s p)
     | _ -> assert_failure "expected PropGlob"
 
 
@@ -95,10 +90,7 @@ let test_trans_proc_decl_three_var _ =
         and pc = new_var "pc" and npc = new_var "npc"
         and flt = new_var "flt" and nflt = new_var "nflt"
         and rx = new_var "rx" and nrx = new_var "nrx" in
-    pc#set_proc_name "Proc";
-    npc#set_proc_name "Proc";
-    rx#set_proc_name "Proc";
-    nrx#set_proc_name "Proc";
+    List.iter (fun v -> v#set_proc_name "Proc") [pc; npc; rx; nrx];
     (* {0, 1, many}-abstraction *)
     let dom = new pia_domain [Const 0; Const 1; Const 2] in 
     let h = Hashtbl.create 4 in
@@ -132,13 +124,10 @@ let test_trans_proc_decl_three_var _ =
         MGoto (30, "foo");
     ];
     let tt = new data_type_tab in
-    tt#set_type pc (mk_int_range 0 2);
-    tt#set_type npc (mk_int_range 0 2);
-    tt#set_type rx (mk_int_range 0 3);
-    tt#set_type nrx (mk_int_range 0 3);
-    tt#set_type flt (mk_int_range 0 2);
-    tt#set_type nflt (mk_int_range 0 2);
-    tt#set_type nsnt (mk_int_range 0 3);
+    List.iter (fun v -> tt#set_type v (mk_int_range 0 4)) [pc; npc];
+    List.iter (fun v -> tt#set_type v (mk_int_range 0 3)) [rx; nrx; nsnt];
+    List.iter (fun v -> tt#set_type v (mk_int_range 0 2)) [flt; nflt];
+
     let prog = Program.program_of_units tt
         [
             Stmt (MDecl (fresh_id (), nsnt, Const 0));
@@ -157,8 +146,8 @@ let test_trans_proc_decl_three_var _ =
     match abs_prop with
     | PropGlob p ->
         assert_equal
-            ~msg:("expected (bymc_kP[16] != 0), found: " ^ (expr_s p))
-            "(bymc_kP[16] != 0)" (expr_s p)
+            ~msg:("expected (bymc_kP[19] != 0), found: " ^ (expr_s p))
+            "(bymc_kP[19] != 0)" (expr_s p)
     | _ -> assert_failure "expected PropGlob"
 
 
