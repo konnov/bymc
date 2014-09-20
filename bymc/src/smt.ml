@@ -112,24 +112,24 @@ class yices_smt =
             ignore (PipeCmd.destroy m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.null ()
 
-        method write_line s =
+        method private write_line s =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             writeline m_pipe_cmd s
 
-        method read_line =
+        method private read_line =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             let out = PipeCmd.readline m_pipe_cmd in
             fprintf clog ";; READ: %s\n" out; flush clog;
             trace Trc.smt (fun _ -> sprintf "YICES: ^^^%s$$$\n" out);
             out
 
-        method append cmd =
+        method private append cmd =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             if debug then printf "%s\n" cmd;
             self#write_line (sprintf "%s" cmd);
             fprintf clog "%s\n" cmd; flush clog
 
-        method append_assert s =
+        method private append_assert s =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append (sprintf "(assert %s)" s)
 
@@ -194,7 +194,7 @@ class yices_smt =
                 self#append "(pop)"
             end
 
-        method sync =
+        method private sync =
             (* the solver can print more messages, thus, sync! *)
             self#append "(echo \"sync\\n\")";
             let stop = ref false in
@@ -255,7 +255,7 @@ class yices_smt =
             done;
             !cores
 
-        method is_out_sat ignore_errors =
+        method private is_out_sat ignore_errors =
             let l = self#read_line in
             (*printf "%s\n" l;*)
             match l with

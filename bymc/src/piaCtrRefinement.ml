@@ -581,7 +581,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
         let next_st = if st = num_states - 1 then loop_start else st + 1 in
         let step_asserts = [List.nth apath st; List.nth apath next_st] in
         rt#solver#push_ctx;
-        rt#solver#append
+        rt#solver#comment
             (sprintf ";; Checking the transition %d -> %d" st next_st);
         rt#solver#set_collect_asserts true;
         let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
