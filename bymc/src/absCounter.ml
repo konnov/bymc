@@ -3,7 +3,7 @@
   This code was written in an ad-hoc way and requires refactoring.
 
   NOTE: many decisions in this code were dictated by the need to check
-  the abstraction in Spin. Some operations can be done in a much more
+  the abstraction in Spin. Many operations can be done in a much more
   efficient way symbolically.
 
   Igor Konnov 2012
