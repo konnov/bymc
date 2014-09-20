@@ -47,11 +47,10 @@ class pia_domain conds_i =
                 List.iter
                     (fun (_, l, r) ->
                         solver#push_ctx;
-                        solver#append_assert
-                            (expr_to_smt (BinEx (GE, symb_expr, l)));
+                        ignore (solver#append_expr (BinEx (GE, symb_expr, l)));
                         if not_nop r
-                        then solver#append_assert
-                            (expr_to_smt (BinEx (LT, symb_expr, r)));
+                        then ignore
+                            (solver#append_expr (BinEx (LT, symb_expr, r)));
                         let sat = solver#check in
                         solver#pop_ctx;
                         if sat then raise (Found (Hashtbl.find val_map l));
@@ -86,9 +85,9 @@ class pia_domain conds_i =
             (* enumerate all possible abstract tuples of size n_used that have
                a concretization satisfying symb_expr *)
             let put_interval_constraint var (i, l, r) =
-                solver#append_assert (expr_to_smt (BinEx (GE, Var var, l)));
+                ignore (solver#append_expr (BinEx (GE, Var var, l)));
                 if not_nop r
-                then solver#append_assert (expr_to_smt (BinEx (LT, Var var, r)))
+                then ignore (solver#append_expr (BinEx (LT, Var var, r)))
             in
             let has_concretization intervals =
                 solver#push_ctx;
@@ -98,7 +97,7 @@ class pia_domain conds_i =
                     then symb_expr
                     else UnEx(NEG, symb_expr)
                 in
-                solver#append_assert (expr_to_smt expr_to_check);
+                ignore (solver#append_expr expr_to_check);
                 let result = solver#check in
                 solver#pop_ctx;
                 if (at = ExistAbs) then result else (not result)
@@ -135,18 +134,16 @@ class pia_domain conds_i =
                     List.iter append_def vars;
                     List.iter2
                         (fun v (i, l, r) ->
-                            solver#append_assert
-                                (expr_to_smt (BinEx (GE, Var v, l)));
+                            ignore (solver#append_expr (BinEx (GE, Var v, l)));
                             if not_nop r
-                            then solver#append_assert
-                                (expr_to_smt (BinEx (LT, Var v, r)));
+                            then ignore (solver#append_expr (BinEx (LT, Var v, r)));
                         ) vars comb;
                     let sum = List.fold_left
                         (fun e v ->
                             if is_nop e then Var v else BinEx (PLUS, Var v, e)
                         ) (Nop "") vars in
                     let sum_eq = BinEx (EQ, num_expr, sum) in
-                    solver#append_assert (expr_to_smt sum_eq);
+                    ignore (solver#append_expr sum_eq);
                     let exists_concrete = solver#check in
                     solver#pop_ctx;
                     exists_concrete
@@ -209,11 +206,9 @@ let sort_thresholds solver conds =
         then begin
             let i1 = Hashtbl.find id_map c1
                 and i2 = Hashtbl.find id_map c2 in
-            let asrt =
-                sprintf "(not (%s %s %s))" op (expr_to_smt c1) (expr_to_smt c2)
-            in
+            let asrt = UnEx (NEG, BinEx (op, c1, c2)) in
             solver#push_ctx;
-            solver#append_assert asrt;
+            ignore (solver#append_expr asrt);
             let res = not solver#check in
             if res then (Hashtbl.add cmp_tbl (i1, i2) true);
             solver#pop_ctx; 
@@ -221,7 +216,7 @@ let sort_thresholds solver conds =
         end
         else false
     in
-    let lt c1 c2 = let _ = compare "<" c1 c2 in () in
+    let lt c1 c2 = let _ = compare LT c1 c2 in () in
     List.iter (fun c1 -> List.iter (lt c1) conds) conds;
     let rm_tbl = Hashtbl.create 10 in
     let check_ord c1 c2 = 
@@ -233,17 +228,17 @@ let sort_thresholds solver conds =
             let m =
                 sprintf "No strict order for %s and %s" (expr_s c1) (expr_s c2)
             in
-            if compare "<=" c1 c2 && compare "<=" c2 c1
+            if compare LE c1 c2 && compare LE c2 c1
             then begin
                 log INFO (sprintf "    %s is equivalent to %s\n"
                     (expr_s c1) (expr_s c2));
                 Hashtbl.replace rm_tbl c2 true
-            end else if compare "<=" c1 c2
+            end else if compare LE c1 c2
             then begin
                 log INFO (sprintf "    %s <= %s\n"
                     (expr_s c1) (expr_s c2));
                 (* DEPRECATED: Hashtbl.replace rm_tbl c2 true *)
-            end else if compare "<=" c2 c1
+            end else if compare LE c2 c1
             then begin
                 log INFO (sprintf "    %s <= %s\n"
                     (expr_s c2) (expr_s c1));
