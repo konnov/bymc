@@ -4,6 +4,7 @@ let _ =
     let all = "all-tests" >:::
     [
         PipeCmdTest.suite;
+        SmtTest.suite;
         AccumsTest.suite;
         SsaTest.suite;
         AbsCounterTest.suite;
