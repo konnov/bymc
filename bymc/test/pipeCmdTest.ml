@@ -10,7 +10,7 @@ let test_create _ =
 
 let test_create_non_existent _ =
     let s = PipeCmd.create "this-file-does-not-exist" [| |] "cmd.log" in
-    Unix.sleep 3;
+    Unix.sleep 1;
     let crt _ =
         (* we can detect the premature termination only by enquiring channels *)
         PipeCmd.writeline s "a";
