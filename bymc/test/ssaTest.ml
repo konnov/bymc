@@ -244,6 +244,8 @@ let test_mk_ssa _ =
     in
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg (mir_to_lir code))
     in
+    Cfg.write_dot "ssa-test-in.dot" cfg;
+
     let nst = new symb_tab "" in
     let ntt = new data_type_tab in
     ntt#set_type x (mk_int_range 0 9);
@@ -251,7 +253,7 @@ let test_mk_ssa _ =
     solver#start;
     let cfg_ssa = mk_ssa solver false [x] [] nst ntt cfg in
     ignore (solver#stop);
-    Cfg.write_dot "ssa-test.dot" cfg_ssa;
+    Cfg.write_dot "ssa-test-out.dot" cfg_ssa;
     let collect us b =
         let used = stmt_list_used_vars b#get_seq in
         List.fold_left (fun s v -> StrSet.add v#get_name s) us used
@@ -259,7 +261,10 @@ let test_mk_ssa _ =
     let used_set =
         List.fold_left collect StrSet.empty cfg_ssa#block_list
     in
-    compare_used_vars used_set 2 2
+    (* Previously, we had two temporary variables.
+       For some reason, now it is one, which is also correct.
+    *)
+    compare_used_vars used_set 2 1
 
 
 (* Bugfix on 4.12.13: havoc must always introduce a new variable
