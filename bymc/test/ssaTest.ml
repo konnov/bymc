@@ -163,6 +163,8 @@ let test_reduce_indices_diamond _ =
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
     let solver = new yices_smt in
     solver#start;
+    (* unused variable *)
+    solver#append_var_def (new_var "xx") (mk_int_range 0 4);
     ignore (reduce_indices solver (Ssa.BlockGasM.make bcfg) x);
     ignore (solver#stop);
     begin
@@ -251,6 +253,7 @@ let test_mk_ssa _ =
     ntt#set_type x (mk_int_range 0 9);
     let solver = new yices_smt in
     solver#start;
+
     let cfg_ssa = mk_ssa solver false [x] [] nst ntt cfg in
     ignore (solver#stop);
     Cfg.write_dot "ssa-test-out.dot" cfg_ssa;
