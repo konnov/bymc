@@ -134,6 +134,23 @@ let test_get_model_one_var _ =
         assert_failure (sprintf "expected [%s], found [%s]" (expr_s e) es_s)
 
 
+let test_get_model_var_with_underscore _ =
+    let x = new_var "_x" in
+    let t = mk_int_range 0 10 in
+    (!yices)#set_need_evidence true;
+    (!yices)#append_var_def x t;
+    let e = BinEx (EQ, Var x, Const 1) in
+    ignore ((!yices)#append_expr e);
+    let res = (!yices)#check in
+    assert_equal ~msg:"sat expected" res true;
+    let lookup _ = x in (* here it is that simple *)
+    let model = (!yices)#get_model lookup in
+    if model <> [ e ]
+    then let es_s = str_join "; " (List.map expr_s model) in
+        assert_failure (sprintf "expected [%s], found [%s]" (expr_s e) es_s)
+
+
+
 let test_get_model_array _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
@@ -204,5 +221,7 @@ let suite = "smt-suite" >:::
             >:: (bracket setup test_get_model_array teardown);
         "test_get_model_array_copy"
             >:: (bracket setup test_get_model_array_copy teardown);
+        "test_get_model_var_with_underscore"
+            >:: (bracket setup test_get_model_var_with_underscore teardown);
     ]
 

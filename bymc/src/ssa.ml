@@ -456,18 +456,25 @@ let find_coloring solver graph ncolors =
     VarGraph.iter_vertex add_vertex graph;
     VarGraph.iter_edges add_edge graph;
     let tab = Hashtbl.create ncolors in
+    let each_expr = function
+        | BinEx (EQ, Var v, Const i) ->
+            let index =
+                int_of_string (Str.string_after v#get_name 5 (* _nclr *)) in
+            Hashtbl.replace tab index (1 + i)
+                (* a color from 1 to k, as in Graph.Coloring *)
+        
+        | _ -> ()
+    in
+    let lookup name =
+        let index = int_of_string (Str.string_after name 5 (* _nclr *)) in
+        try Hashtbl.find vars index 
+        with Not_found ->
+            raise (Var_not_found (sprintf "var not found %d" index))
+    in
     let found =
         if solver#check
-        then begin (* parse evidence, XXX: not super-efficient *)
-            let eq_re = Str.regexp "(= _nclr\\([0-9]+\\) \\([0-9]+\\))" in
-            let each_line l =
-                if Str.string_match eq_re l 0
-                then Hashtbl.replace tab
-                    (int_of_string (Str.matched_group 1 l))
-                    (* a color from 1 to k, as in Graph.Coloring *)
-                    (1 + (int_of_string (Str.matched_group 2 l)))
-            in
-            List.iter each_line solver#get_evidence;
+        then begin (* parse evidence, XXX: inefficient *)
+            List.iter each_expr (solver#get_model lookup);
             assert((Hashtbl.length tab) > 0);
             true
         end else

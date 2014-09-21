@@ -81,7 +81,7 @@ let var_to_smt var tp =
 
 
 let parse_smt_model lookup lines =
-    let var_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
+    let var_re = Str.regexp "(= \\([_a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
     let arr_re =
         Str.regexp "(= (\\([_a-zA-Z0-9]+\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
