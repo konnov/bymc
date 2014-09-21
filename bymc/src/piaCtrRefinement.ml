@@ -164,28 +164,66 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
 
 
 let parse_smt_evidence prog solver =
+    let vars = Hashtbl.create 10 in
     let vals = Hashtbl.create 10 in
-    let lines = solver#get_evidence in
-    let aliases = Hashtbl.create 5 in
-    let is_alias full_name = Hashtbl.mem aliases full_name in
-    let add_alias full_name step name dir =
-        Hashtbl.add aliases full_name (step, name, dir) in
-    let get_alias full_name = Hashtbl.find aliases full_name in
-    let param_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
     let var_re =
-        Str.regexp "(= S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) \\([-0-9]+\\))"
+        Str.regexp "S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\)"
     in
-    let arr_re =
-        Str.regexp "(= (S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\([A-Z0-9]+\\) \\([0-9]+\\)) \\([-0-9]+\\))"
+    let param_re = Str.regexp "\\([a-zA-Z0-9]+\\)" in
+    let lookup name =
+        try Hashtbl.find vars name 
+        with Not_found ->
+            let nv = new_var name in
+            Hashtbl.add vars name nv; nv
     in
-    let alias_re =
-        Str.regexp ("(= S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\) "
-            ^ "S\\([0-9]+_[_a-zA-Z0-9]+_[A-Z0-9]+\\))") in
     let add_state_expr state expr =
         if not (Hashtbl.mem vals state)
         then Hashtbl.add vals state [expr]
         else Hashtbl.replace vals state (expr :: (Hashtbl.find vals state))
     in
+    let model = solver#get_model lookup in
+    let each_expr = function
+        | BinEx (EQ, Var var, Const value) ->
+            let full = var#get_name in
+            if Str.string_match var_re full 0
+            then begin
+                (* e.g., (= S0_nsnt_OUT 1) *)
+                let step = int_of_string (Str.matched_group 1 full) in
+                let name = (Str.matched_group 2 full) in
+                let dir = (Str.matched_group 3 full) in
+                let state = if dir = "IN" then step else (step + 1) in
+                let e = BinEx (ASGN, Var var, Const value) in
+                if List.exists
+                    (fun v -> v#get_name = name) (Program.get_shared prog)
+                then add_state_expr state e
+            end
+                else if Str.string_match param_re full 0
+            then begin
+                (* parameters belong to state 0 *)
+                add_state_expr 0 (BinEx (ASGN, Var var, Const value))
+            end
+
+        | BinEx (EQ,
+                BinEx (ARR_ACCESS, Var var, Const idx),
+                Const value) ->
+            let full = var#get_name in
+            if Str.string_match var_re full 0
+            then begin
+                let step = int_of_string (Str.matched_group 1 full) in
+                let name = (Str.matched_group 2 full) in
+                let dir = (Str.matched_group 3 full) in
+                let state = if dir = "IN" then step else (step + 1) in
+                let e = BinEx (ASGN,
+                    BinEx (ARR_ACCESS, Var var, Const idx), Const value) in
+                if dir = "IN" || dir = "OUT"
+                then add_state_expr state e (* and ignore auxillary arrays *)
+            end
+
+        | _ -> ()
+    in
+    List.iter each_expr model;
+
+    (*
     let parse_line line =
         if Str.string_match var_re line 0
         then begin
@@ -235,6 +273,7 @@ let parse_smt_evidence prog solver =
         end
     in
     List.iter parse_line lines;
+    *)
     let cmp e1 e2 =
         let comp_res = match e1, e2 with
         | BinEx (ASGN, Var v1, Const k1),
