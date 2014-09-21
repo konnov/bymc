@@ -156,7 +156,7 @@ let test_get_model_array _ =
         (expr_s e1) (expr_s e2) (expr_s e3) es_s)
 
 
-let test_get_model_two_arrays _ =
+let test_get_model_array_copy _ =
     let x = new_var "x" in
     let y = new_var "y" in
     let t = mk_int_range 0 10 in
@@ -202,7 +202,7 @@ let suite = "smt-suite" >:::
             >:: (bracket setup test_get_model_one_var teardown);
         "test_get_model_array"
             >:: (bracket setup test_get_model_array teardown);
-        "test_get_model_two_arrays"
-            >:: (bracket setup test_get_model_two_arrays teardown);
+        "test_get_model_array_copy"
+            >:: (bracket setup test_get_model_array_copy teardown);
     ]
 
