@@ -264,7 +264,7 @@ let test_mk_ssa _ =
     (* Previously, we had two temporary variables.
        For some reason, now it is one, which is also correct.
     *)
-    compare_used_vars used_set 2 1
+    compare_used_vars used_set 2 2
 
 
 (* Bugfix on 4.12.13: havoc must always introduce a new variable
