@@ -28,7 +28,7 @@ let check_invariant rtm xducers_prog inv_name =
             [([inv], [], (StringMap.singleton "proc" proctype));
              ([not_inv], [], StringMap.empty)] in
         solver#set_collect_asserts true;
-        solver#set_need_evidence true;
+        solver#set_need_model true;
         solver#push_ctx;
         simulate_in_smt solver xducers_prog ctr_ctx_tbl 1;
         let res, smt_rev_map = check_trail_asserts solver step_asserts 1 in

@@ -471,7 +471,7 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     rt#solver#comment ("is_loop_state_fair_by_step: " ^ (expr_s fairness));
     rt#solver#push_ctx;
     rt#solver#set_collect_asserts true;
-    rt#solver#set_need_evidence true;
+    rt#solver#set_need_model true;
 
     (* State 0 is fair and it is a concretization of the abstract state
        kept in state_asserts. State 1 is restricted only by the transition
@@ -506,7 +506,7 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     end;
 
     rt#solver#set_collect_asserts false;
-    rt#solver#set_need_evidence false;
+    rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     res, core_exprs_and
 
@@ -656,7 +656,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
        (discussed in the FMCAD13 paper) *)
     logtm INFO "  Trying to find a spurious transition...";
     rt#solver#push_ctx; (* (A) *)
-    rt#solver#set_need_evidence true; (* needed for refinement! *)
+    rt#solver#set_need_model true; (* needed for refinement! *)
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
     simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1;
     let last_state = if loop <> [] then num_states else num_states - 1 in

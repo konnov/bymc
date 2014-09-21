@@ -245,7 +245,7 @@ let extract_spec type_tab s =
 let is_error_tree rt tt sk on_leaf ltl_form tree =
     let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
-    rt#solver#set_need_evidence true;
+    rt#solver#set_need_model true;
 
     let ntt = tt#copy in
     let initf = F.init_frame ntt sk in
@@ -255,7 +255,7 @@ let is_error_tree rt tt sk on_leaf ltl_form tree =
     F.assert_frame rt#solver ntt initf initf [init_form];
 
     let err = check_tree rt tt sk bad_form on_leaf initf tree in
-    rt#solver#set_need_evidence false;
+    rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     err
 

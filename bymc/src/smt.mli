@@ -48,13 +48,10 @@ class yices_smt:
         method check: bool
 
         (** ask the solver to provide a model of sat *)
-        method set_need_evidence: bool -> unit
+        method set_need_model: bool -> unit
 
         (** check, whether the solver is going to construct a sat model *)
-        method get_need_evidence: bool
-
-        (** get a sat model *)
-        method get_evidence: string list
+        method get_need_model: bool
 
         (** Parse a sat model into expressions.
             @return list of expressions

@@ -436,7 +436,7 @@ let get_var_copies var seq =
 *)
 let find_coloring solver graph ncolors =
     solver#push_ctx;
-    solver#set_need_evidence true;
+    solver#set_need_model true;
     let color_tp = new data_type SpinTypes.TINT in
     color_tp#set_range 0 ncolors;
     let vars = Hashtbl.create ncolors in
@@ -493,7 +493,7 @@ let find_coloring solver graph ncolors =
         end else
             false
     in
-    solver#set_need_evidence false;
+    solver#set_need_model false;
     solver#pop_ctx;
     (found, tab)
 

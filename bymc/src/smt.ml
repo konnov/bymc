@@ -89,7 +89,6 @@ let parse_smt_model lookup lines =
         Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
     in
     let aliases = Hashtbl.create 5 in
-    let is_origin name = Hashtbl.mem aliases name in
     let add_alias origin alias = Hashtbl.add aliases origin alias in
     let get_aliases name = Hashtbl.find_all aliases name in
 
@@ -246,15 +245,15 @@ class yices_smt =
                 res
             end
 
-        method set_need_evidence b =
+        method set_need_model b =
             m_need_evidence <- b;
             if b
             then self#append "(set-evidence! true)"
             else self#append "(set-evidence! false)"
 
-        method get_need_evidence = m_need_evidence
-
-        method get_evidence =
+        method get_need_model = m_need_evidence
+            
+        method get_model (lookup: string -> var): Spin.token SpinIr.expr list =
             (* same as sync but the lines are collected *)
             let lines = ref [] in
             self#append "(echo \"EOEV\\n\")";
@@ -265,11 +264,7 @@ class yices_smt =
                 then stop := true
                 else lines := line :: !lines
             done;
-            List.rev !lines
-            
-        method get_model (lookup: string -> var): Spin.token SpinIr.expr list =
-            let lines = self#get_evidence in
-            parse_smt_model lookup lines
+            parse_smt_model lookup (List.rev !lines)
 
         method get_collect_asserts = collect_asserts
 
