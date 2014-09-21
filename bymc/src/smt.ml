@@ -80,6 +80,58 @@ let var_to_smt var tp =
     sprintf "(define %s :: %s)" var#mangled_name complex_type
 
 
+let parse_smt_model lookup lines =
+    let var_re = Str.regexp "(= \\([a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
+    let arr_re =
+        Str.regexp "(= (\\([_a-zA-Z0-9]+\\) \\([0-9]+\\)) \\([-0-9]+\\))"
+    in
+    let alias_re =
+        Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
+    in
+    let aliases = Hashtbl.create 5 in
+    let is_origin name = Hashtbl.mem aliases name in
+    let add_alias origin alias = Hashtbl.add aliases origin alias in
+    let get_aliases name = Hashtbl.find_all aliases name in
+
+    let parse_line accum line =
+        if Str.string_match var_re line 0
+        then begin
+            (* e.g., (= x 1) *)
+            let variable = lookup (Str.matched_group 1 line) in
+            (* we support ints only, don't we? *)
+            let value = int_of_string (Str.matched_group 2 line) in
+            (BinEx (EQ, Var variable, Const value)) :: accum
+        end
+        else if Str.string_match arr_re line 0
+        then begin
+            (* e.g., (= (x 11) 0) *)
+            let name = Str.matched_group 1 line in
+            let variable = lookup (Str.matched_group 1 line) in
+            let index = int_of_string (Str.matched_group 2 line) in
+            let value = int_of_string (Str.matched_group 3 line) in
+
+            let mk_access x i j =
+                BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const i), Const j)
+            in
+            let each_alias l name =
+                (mk_access (lookup name) index value) :: l
+            in
+            (* the expression *)
+            (mk_access variable index value)
+                (* and a copy for each alias *)
+                :: (List.fold_left each_alias accum (get_aliases name))
+        end else if Str.string_match alias_re line 0
+        then begin
+            (* (= x y) *)
+            let alias = Str.matched_group 1 line in
+            let origin = Str.matched_group 2 line in
+            add_alias origin alias;
+            accum
+        end else accum
+    in
+    List.rev (List.fold_left parse_line [] lines)
+
+
 (* The interface to the SMT solver (yices).
    We are using the text interface, as it is way easier to debug. *)
 class yices_smt =
@@ -214,6 +266,10 @@ class yices_smt =
                 else lines := line :: !lines
             done;
             List.rev !lines
+            
+        method get_model (lookup: string -> var): Spin.token SpinIr.expr list =
+            let lines = self#get_evidence in
+            parse_smt_model lookup lines
 
         method get_collect_asserts = collect_asserts
 
@@ -280,5 +336,4 @@ class yices_smt =
                 if "sync" = self#read_line then stop := true
             done
     end
-;;
 

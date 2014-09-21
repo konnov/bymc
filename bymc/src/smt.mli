@@ -1,4 +1,12 @@
 (**
+    Interface to SMT.
+
+    @author Igor Konnov, 2012-2014
+ *)
+
+exception Smt_error of string
+
+(**
     An interface to SMT, which must be as abstract as possible.
 
     @author Igor Konnov
@@ -47,6 +55,14 @@ class yices_smt:
 
         (** get a sat model *)
         method get_evidence: string list
+
+        (** Parse a sat model into expressions.
+            @return list of expressions
+            @raise Smt_error, if the solver gives something unparseable
+        *)
+        method get_model:
+            (string -> SpinIr.var) (** variable lookup *)
+            -> Spin.token SpinIr.expr list
 
         (** track the assertions, in order to collect unsat cores *)
         method set_collect_asserts: bool -> unit
