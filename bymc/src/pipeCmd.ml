@@ -112,7 +112,11 @@ let writeline st s =
 let readline st =
     try
         input_line st.cin
-    with End_of_file ->
+    with
+    | Unix.Unix_error _ ->
+        raise (Comm_error
+            ("Process terminated prematurely, see: " ^ st.err_filename))
+    | End_of_file ->
         raise (Comm_error
             ("Process terminated prematurely, see: " ^ st.err_filename))
 
@@ -140,11 +144,11 @@ let create prog args err_filename =
         Unix.close out_pipe_i; Unix.close out_pipe_o; 
         Unix.dup2 fderr Unix.stderr; Unix.close fderr;
         let exec _ =
-            let _ = Unix.execvp prog (Array.append [|prog|] args) in
-            Unix.close Unix.stderr;
-            () in
+            ignore (Unix.execvp prog (Array.append [|prog|] args));
+            ignore (Unix.close Unix.stderr)
+        in
         (* exit, if an error occurs *)
-        let _ = Unix.handle_unix_error exec () in ()
+        ignore (Unix.handle_unix_error exec ())
     end else begin
         (* the parent *)
         Unix.close in_pipe_o; 
