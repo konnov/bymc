@@ -458,18 +458,31 @@ let find_coloring solver graph ncolors =
     let tab = Hashtbl.create ncolors in
     let each_expr = function
         | BinEx (EQ, Var v, Const i) ->
-            let index =
-                int_of_string (Str.string_after v#get_name 5 (* _nclr *)) in
-            Hashtbl.replace tab index (1 + i)
-                (* a color from 1 to k, as in Graph.Coloring *)
+            let len = String.length v#get_name in
+            let pref = if len > 5 then String.sub v#get_name 0 5 else "" in
+            if pref = "_nclr"
+            then begin
+                let index =
+                    int_of_string (String.sub v#get_name 5 (len - 5)(* _nclr *))
+                in
+                Hashtbl.replace tab index (1 + i)
+                    (* a color from 1 to k, as in Graph.Coloring *)
+            end
         
         | _ -> ()
     in
     let lookup name =
-        let index = int_of_string (Str.string_after name 5 (* _nclr *)) in
-        try Hashtbl.find vars index 
-        with Not_found ->
-            raise (Var_not_found (sprintf "var not found %d" index))
+        let len = String.length name in
+        let pref = if len > 5 then String.sub name 0 5 else "" in
+        if pref = "_nclr"
+        then begin
+            let index = int_of_string (String.sub name 5 (len - 5) (* _nclr *))
+            in
+            try Hashtbl.find vars index 
+            with Not_found ->
+                raise (Var_not_found (sprintf "var not found %d" index))
+        end else (* a redundant variable, make something up *)
+            new_var name
     in
     let found =
         if solver#check
