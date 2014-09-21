@@ -100,7 +100,7 @@ let test_get_stack_level _ =
 
 
 let test_get_unsat_cores _ =
-    (!yices)#set_need_evidence true;
+    (!yices)#set_need_model true;
     (!yices)#set_collect_asserts true;
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
@@ -121,7 +121,7 @@ let test_get_unsat_cores _ =
 let test_get_model_one_var _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#set_need_evidence true;
+    (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
     let e = BinEx (EQ, Var x, Const 1) in
     ignore ((!yices)#append_expr e);
@@ -137,7 +137,7 @@ let test_get_model_one_var _ =
 let test_get_model_var_with_underscore _ =
     let x = new_var "_x" in
     let t = mk_int_range 0 10 in
-    (!yices)#set_need_evidence true;
+    (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
     let e = BinEx (EQ, Var x, Const 1) in
     ignore ((!yices)#append_expr e);
@@ -155,7 +155,7 @@ let test_get_model_array _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
     t#set_nelems 3;
-    (!yices)#set_need_evidence true;
+    (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
     let arr_upd i j =
         BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const i), Const j) in
@@ -178,7 +178,7 @@ let test_get_model_array_copy _ =
     let y = new_var "y" in
     let t = mk_int_range 0 10 in
     t#set_nelems 3;
-    (!yices)#set_need_evidence true;
+    (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
     (!yices)#append_var_def y t;
     let arr_upd v i j =
