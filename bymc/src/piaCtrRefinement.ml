@@ -210,7 +210,6 @@ let parse_smt_evidence prog solver =
             if Str.string_match var_re full 0
             then begin
                 let step = int_of_string (Str.matched_group 1 full) in
-                let name = (Str.matched_group 2 full) in
                 let dir = (Str.matched_group 3 full) in
                 let state = if dir = "IN" then step else (step + 1) in
                 let e = BinEx (ASGN,
