@@ -15,16 +15,24 @@ open Ssa
 open VarRole
 
 
-let solver = ref (new yices_smt)
+let solver = ref (new yices_smt "yices")
+let is_started = ref false
 
 let setup _ =
     initialize_debug {
         Options.empty with
           Options.plugin_opts = (StringMap.singleton "trace.mods" "cmd")
     };
-    !solver#start
+    if not !is_started
+    then begin
+        (!solver)#start;
+        is_started := true;
+    end
 
 let teardown _ =
+    ignore (!solver#reset)
+
+let shutdown _ =
     ignore (!solver#stop)
 
 
@@ -154,6 +162,6 @@ let suite = "abs-counter-suite" >:::
         "test_trans_proc_decl_two_var"
           >:: (bracket setup test_trans_proc_decl_two_var teardown);
         "test_trans_proc_decl_three_var"
-          >:: (bracket setup test_trans_proc_decl_three_var teardown);
+          >:: (bracket setup test_trans_proc_decl_three_var shutdown (* clean the room *));
     ]
 

@@ -7,7 +7,7 @@ open Spin
 open SpinIr
 open SpinIrImp
 
-let yices = ref (new yices_smt)
+let yices = ref (new yices_smt "yices")
 let is_started = ref false
 
 let setup _ =
@@ -18,7 +18,19 @@ let setup _ =
     end
 
 let teardown _ =
-    (!yices)#reset
+    ignore (!yices)#reset
+
+let shutdown _ =
+    ignore (!yices)#stop
+
+let test_wrong_solver _ =
+    let kaboom _ =
+        let solver = new yices_smt "solver-from-the-year-2020" in
+        solver#start;
+        ignore (solver#append_expr (Const 1))
+    in
+    assert_raises
+        (PipeCmd.Comm_error "Process terminated prematurely, see: cmd.log") kaboom
 
 
 let test_trivial_sat _ =
@@ -238,6 +250,7 @@ let test_model_query_try_get_not_found _ =
 
 let suite = "smt-suite" >:::
     [
+        "test_wrong_solver" >:: test_trivial_sat;
         "test_trivial_sat" >:: (bracket setup test_trivial_sat teardown);
         "test_trivial_unsat" >:: (bracket setup test_trivial_unsat teardown);
         "test_reset" >:: (bracket setup test_reset teardown);
@@ -261,6 +274,6 @@ let suite = "smt-suite" >:::
         "test_model_query_try_get"
             >:: (bracket setup test_model_query_try_get teardown);
         "test_model_query_try_get_not_found"
-            >:: (bracket setup test_model_query_try_get_not_found teardown);
+            >:: (bracket setup test_model_query_try_get_not_found shutdown (* clean the room *));
     ]
 

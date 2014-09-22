@@ -148,7 +148,7 @@ class model_query solver =
 
 (* The interface to the SMT solver (yices).
    We are using the text interface, as it is way easier to debug. *)
-class yices_smt =
+class yices_smt (solver_name: string) =
     object(self)
         (* for how long we wait for output from yices if check is issued *)
         val check_timeout_sec = 3600.0
@@ -168,8 +168,9 @@ class yices_smt =
 
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
-            m_pipe_cmd <- PipeCmd.create "yices" [||] "yices.err";
-            clog <- open_out "yices.log";
+            m_pipe_cmd <- PipeCmd.create solver_name [||] (solver_name ^ ".err");
+            clog <- open_out (solver_name ^ ".log");
+            ignore (self#check);
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
         method stop =

@@ -35,7 +35,7 @@ class type model_query =
 
     @author Igor Konnov
  *)
-class yices_smt:
+class yices_smt: string ->
     object
         (** fork a new process that executes 'yices' *)
         method start: unit

@@ -3,6 +3,7 @@ open Printf
 
 open Accums
 open Cfg
+open Debug
 open Smt
 open Spin
 open SpinIr
@@ -10,6 +11,28 @@ open SpinIrImp
 open Ssa
 
 let marks = Hashtbl.create 10
+
+let solver = ref (new yices_smt "yices")
+let is_started = ref false
+
+let setup _ =
+    initialize_debug {
+        Options.empty with
+          Options.plugin_opts = (StringMap.singleton "trace.mods" "ssa")
+    };
+    Hashtbl.clear marks;
+    if not !is_started
+    then begin
+        (!solver)#start;
+        is_started := true;
+    end
+
+let teardown _ =
+    ignore (!solver#reset)
+
+let shutdown _ =
+    ignore (!solver#stop)
+
 
 let mk_var v i =
     try Hashtbl.find marks (v#id, i)
@@ -29,14 +52,6 @@ let mk_bb v lab lhs rhs =
     let bb = new basic_block in
     bb#set_seq [Label (fresh_id (), lab); Expr (fresh_id (), phi)];
     bb
-
-
-let setup _ =
-    Hashtbl.clear marks
-
-
-let teardown _ =
-    ()
 
 
 let compare_used_vars used_set exp_ios exp_temps =
@@ -161,12 +176,9 @@ let test_reduce_indices_diamond _ =
     in
     let bcfg = cfg#as_block_graph in
     ignore (BlockGO.add_transitive_closure ~reflexive:false bcfg);
-    let solver = new yices_smt in
-    solver#start;
     (* unused variable *)
-    solver#append_var_def (new_var "xx") (mk_int_range 0 4);
-    ignore (reduce_indices solver (Ssa.BlockGasM.make bcfg) x);
-    ignore (solver#stop);
+    !(solver)#append_var_def (new_var "xx") (mk_int_range 0 4);
+    ignore (reduce_indices !solver (Ssa.BlockGasM.make bcfg) x);
     begin
         match b1#get_seq with
         | [Label (_, _); Expr (_, Phi (lhs, rhs))] ->
@@ -251,11 +263,8 @@ let test_mk_ssa _ =
     let nst = new symb_tab "" in
     let ntt = new data_type_tab in
     ntt#set_type x (mk_int_range 0 9);
-    let solver = new yices_smt in
-    solver#start;
 
-    let cfg_ssa = mk_ssa solver false [x] [] nst ntt cfg in
-    ignore (solver#stop);
+    let cfg_ssa = mk_ssa !solver false [x] [] nst ntt cfg in
     Cfg.write_dot "ssa-test-out.dot" cfg_ssa;
     let collect us b =
         let used = stmt_list_used_vars b#get_seq in
@@ -301,10 +310,7 @@ let test_mk_ssa_havoc _ =
     let nst = new symb_tab "" in
     let ntt = new data_type_tab in
     ntt#set_type x (mk_int_range 0 4);
-    let solver = new yices_smt in
-    solver#start;
-    let cfg_ssa = mk_ssa solver false [x] [] nst ntt cfg in
-    ignore (solver#stop);
+    let cfg_ssa = mk_ssa !solver false [x] [] nst ntt cfg in
     Cfg.write_dot "ssa-test-havoc.dot" cfg_ssa;
     let collect us b =
         let used = stmt_list_used_vars b#get_seq in
@@ -325,6 +331,6 @@ let suite = "ssa-suite" >:::
         "test_mk_ssa"
             >:: (bracket setup test_mk_ssa teardown);
         "test_mk_ssa_havoc"
-            >:: (bracket setup test_mk_ssa_havoc teardown)
+            >:: (bracket setup test_mk_ssa_havoc shutdown (* the last one cleans the room! *) )
     ]
 

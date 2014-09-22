@@ -32,7 +32,7 @@ let main () =
         printf "\n%s\n\n" banner;
         Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
-        let solver = new Smt.yices_smt in
+        let solver = new Smt.yices_smt "yices" in
         solver#start;
         let rt = new Runtime.runtime_t solver caches in
         begin
