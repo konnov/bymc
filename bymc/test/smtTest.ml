@@ -200,6 +200,41 @@ let test_get_model_array_copy _ =
     assert_failure (sprintf "expected [%s], found [%s]" exp_s found_s)
 
 
+let test_model_query_try_get _ =
+    let x = new_var "x" in
+    let t = mk_int_range 0 10 in
+    (!yices)#set_need_model true;
+    (!yices)#append_var_def x t;
+    let e = BinEx (EQ, Var x, Const 1) in
+    ignore ((!yices)#append_expr e);
+    let res = (!yices)#check in
+    assert_equal ~msg:"sat expected" res true;
+    
+    let query = (!yices)#get_model_new in
+    let res = query#try_get (Var x) in
+    assert_equal ~msg:"QCached expected" res QCached;
+
+    query#submit;
+
+    let res = query#try_get (Var x) in
+    assert_equal ~msg:"QResult (Const 1) expected" res (QResult (Const 1))
+
+
+let test_model_query_try_get_not_found _ =
+    let y = new_var "y" in
+    (!yices)#set_need_model true;
+    let res = (!yices)#check in
+    assert_equal ~msg:"sat expected" res true;
+    
+    let query = (!yices)#get_model_new in
+    let res = query#try_get (Var y) in
+    assert_equal ~msg:"QCached expected" res QCached;
+
+    query#submit;
+
+    let res = query#try_get (Var y) in
+    assert_equal ~msg:"QNot_found expected" res QNot_found
+
 
 let suite = "smt-suite" >:::
     [
@@ -223,5 +258,9 @@ let suite = "smt-suite" >:::
             >:: (bracket setup test_get_model_array_copy teardown);
         "test_get_model_var_with_underscore"
             >:: (bracket setup test_get_model_var_with_underscore teardown);
+        "test_model_query_try_get"
+            >:: (bracket setup test_model_query_try_get teardown);
+        "test_model_query_try_get_not_found"
+            >:: (bracket setup test_model_query_try_get_not_found teardown);
     ]
 

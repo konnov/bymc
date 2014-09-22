@@ -35,7 +35,6 @@ let test_trans_proc_decl_two_var _ =
         and rx = new_var "rx" and nrx = new_var "nrx" in
     List.iter (fun v -> v#set_proc_name "Proc") [pc; npc; rx; nrx];
     (* {0, 1, many}-abstraction *)
-    let dom = new pia_domain [Const 0; Const 1; Const 2] in 
     let h = Hashtbl.create 4 in
     Hashtbl.add h pc (BoundedInt (0, 2));
     Hashtbl.add h npc (Scratch(pc));
@@ -92,7 +91,6 @@ let test_trans_proc_decl_three_var _ =
         and rx = new_var "rx" and nrx = new_var "nrx" in
     List.iter (fun v -> v#set_proc_name "Proc") [pc; npc; rx; nrx];
     (* {0, 1, many}-abstraction *)
-    let dom = new pia_domain [Const 0; Const 1; Const 2] in 
     let h = Hashtbl.create 4 in
     Hashtbl.add h pc (BoundedInt (0, 2));
     Hashtbl.add h npc (Scratch(pc));

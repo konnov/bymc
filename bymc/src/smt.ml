@@ -12,6 +12,13 @@ open SpinIrImp
 
 exception Smt_error of string
 
+type query_result_t =
+    | QCached    (** the query is cached, once 'submit' is invoked,
+                     the result will be available for the same query *)
+    | QNot_found (** nothing is associated with the query *)
+    | QResult of (Spin.token SpinIr.expr)
+                 (** the result of a previously cached query *)
+
 let rec expr_to_smt e =
     match e with
     | Nop comment -> sprintf ";; %s\n" comment
@@ -129,6 +136,14 @@ let parse_smt_model lookup lines =
         end else accum
     in
     List.rev (List.fold_left parse_line [] lines)
+
+
+class model_query solver =
+    object
+        method try_get (_: token expr) = QCached
+
+        method submit = ()
+    end
 
 
 (* The interface to the SMT solver (yices).
@@ -265,6 +280,8 @@ class yices_smt =
                 else lines := line :: !lines
             done;
             parse_smt_model lookup (List.rev !lines)
+
+        method get_model_new = new model_query self
 
         method get_collect_asserts = collect_asserts
 

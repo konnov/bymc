@@ -6,6 +6,30 @@
 
 exception Smt_error of string
 
+type query_result_t =
+    | QCached    (** the query is cached, once 'submit' is invoked,
+                     the result will be available for the same query *)
+    | QNot_found (** nothing is associated with the query *)
+    | QResult of (Spin.token SpinIr.expr)
+                 (** the result of a previously cached query *)
+
+(**
+    An iterator over a model that shows satisfiability
+ *)
+class type model_query =
+    object
+        (** Try to query the solver. The query is either cached until
+            #submit is invoked, or performed immediately, if
+            #submit has been invoked.
+         *)
+        method try_get: Spin.token SpinIr.expr -> query_result_t
+
+        (** Submit the cached queries to the solver and collect
+            the results.
+          *)
+        method submit: unit
+    end
+
 (**
     An interface to SMT, which must be as abstract as possible.
 
@@ -60,6 +84,8 @@ class yices_smt:
         method get_model:
             (string -> SpinIr.var) (** variable lookup *)
             -> Spin.token SpinIr.expr list
+
+        method get_model_new: model_query
 
         (** track the assertions, in order to collect unsat cores *)
         method set_collect_asserts: bool -> unit
