@@ -328,7 +328,7 @@ class yices_smt (solver_name: string) =
             out
 
         method private append cmd =
-            assert(not (PipeCmd.is_null m_pipe_cmd));
+            assert (not (PipeCmd.is_null m_pipe_cmd));
             if debug then printf "%s\n" cmd;
             self#write_line (sprintf "%s" cmd);
             fprintf clog "%s\n" cmd; flush clog

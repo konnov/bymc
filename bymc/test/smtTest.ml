@@ -23,6 +23,7 @@ let teardown _ =
 let shutdown _ =
     ignore (!yices)#stop
 
+
 let test_wrong_solver _ =
     let kaboom _ =
         let solver = new yices_smt "solver-from-the-year-2020" in
@@ -30,7 +31,7 @@ let test_wrong_solver _ =
         ignore (solver#append_expr (Const 1))
     in
     assert_raises
-        (PipeCmd.Comm_error "Process terminated prematurely, see: cmd.log") kaboom
+        (PipeCmd.Comm_error "exec solver-from-the-year-2020 failed: No such file or directory") kaboom
 
 
 let test_trivial_sat _ =
@@ -250,7 +251,6 @@ let test_model_query_try_get_not_found _ =
 
 let suite = "smt-suite" >:::
     [
-        "test_wrong_solver" >:: test_trivial_sat;
         "test_trivial_sat" >:: (bracket setup test_trivial_sat teardown);
         "test_trivial_unsat" >:: (bracket setup test_trivial_unsat teardown);
         "test_reset" >:: (bracket setup test_reset teardown);
@@ -275,5 +275,6 @@ let suite = "smt-suite" >:::
             >:: (bracket setup test_model_query_try_get teardown);
         "test_model_query_try_get_not_found"
             >:: (bracket setup test_model_query_try_get_not_found shutdown (* clean the room *));
+        "test_wrong_solver" >:: test_wrong_solver;
     ]
 
