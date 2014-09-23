@@ -12,13 +12,6 @@ open SpinIrImp
 
 exception Smt_error of string
 
-type query_result_t =
-    | QCached    (** the query is cached, once 'submit' is invoked,
-                     the result will be available for the same query *)
-    | QNot_found (** nothing is associated with the query *)
-    | QResult of (Spin.token SpinIr.expr)
-                 (** the result of a previously cached query *)
-
 let rec expr_to_smt e =
     match e with
     | Nop comment -> sprintf ";; %s\n" comment
@@ -138,12 +131,94 @@ let parse_smt_model lookup lines =
     List.rev (List.fold_left parse_line [] lines)
 
 
-class model_query solver =
-    object
-        method try_get (_: token expr) = QCached
+module Q = struct
+    type query_result_t =
+        | Cached    (** the query is cached, once 'submit' is invoked,
+                         the result will be available for the same query *)
+        | NoResult   (** nothing is associated with the query *)
+        | Result of (Spin.token SpinIr.expr)
+                     (** the result of a previously cached query *)
 
-        method submit = ()
-    end
+    type query_t = {
+        frozen: bool;
+        tab: (string, query_result_t) Hashtbl.t
+    }
+
+    let query_result_s = function
+        | Cached -> "Cached"
+        | NoResult -> "NoResult"
+        | Result e -> "Result " ^ (expr_to_smt e)
+
+    let new_query () = { frozen = false; tab = Hashtbl.create 10 }
+
+    let try_get (q: query_t) (key: token expr) =
+        let e_s = expr_to_smt key in
+        try Hashtbl.find q.tab e_s
+        with Not_found ->
+            if q.frozen
+            then NoResult
+            else begin
+                Hashtbl.add q.tab e_s Cached;
+                Cached
+            end
+
+    let add_result (q: query_t) (nq: query_t) (key: string) (value: token expr) =
+        try begin
+            let _ = Hashtbl.find q.tab key in
+            Hashtbl.add nq.tab key (Result value);
+            nq
+        end with Not_found ->
+            nq
+                
+end
+
+
+let parse_smt_model_q query lines =
+    let var_re = Str.regexp "(= \\([_a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
+    let arr_re =
+        Str.regexp "(= \\([_a-zA-Z0-9]+ [0-9]+\\) \\([-0-9]+\\))"
+    in
+    let alias_re =
+        Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
+    in
+    let aliases = Hashtbl.create 5 in
+    let add_alias origin alias = Hashtbl.add aliases origin alias in
+    let get_aliases name = Hashtbl.find_all aliases name in
+
+    let parse_line newq line =
+        if Str.string_match var_re line 0
+        then begin
+            (* e.g., (= x 1) *)
+            let variable = Str.matched_group 1 line in
+            (* we support ints only, don't we? *)
+            let value = int_of_string (Str.matched_group 2 line) in
+            Q.add_result query newq variable (Const value)
+        end
+        else if Str.string_match arr_re line 0
+        then begin
+            (* e.g., (= (x 11) 0) *)
+            let name = Str.matched_group 1 line in
+            let variable = Str.matched_group 1 line in
+            let index = int_of_string (Str.matched_group 2 line) in
+            let value = int_of_string (Str.matched_group 3 line) in
+
+            let mk_access x i = sprintf "(%s %d)" variable index in
+            let each_alias q name =
+                Q.add_result query q (mk_access name index) (Const value)
+            in
+            (* the expression *)
+            List.fold_left each_alias newq (name :: (get_aliases name)) 
+        end else if Str.string_match alias_re line 0
+        then begin
+            (* (= x y) *)
+            let alias = Str.matched_group 1 line in
+            let origin = Str.matched_group 2 line in
+            add_alias origin alias;
+            newq
+        end else newq
+    in
+    let new_query = List.fold_left parse_line (Q.new_query ()) lines in
+    { new_query with Q.frozen = true }
 
 
 (* The interface to the SMT solver (yices).
@@ -269,6 +344,7 @@ class yices_smt (solver_name: string) =
 
         method get_need_model = m_need_evidence
             
+        (* deprecated *)
         method get_model (lookup: string -> var): Spin.token SpinIr.expr list =
             (* same as sync but the lines are collected *)
             let lines = ref [] in
@@ -282,7 +358,20 @@ class yices_smt (solver_name: string) =
             done;
             parse_smt_model lookup (List.rev !lines)
 
-        method get_model_new = new model_query self
+        method get_model_query = Q.new_query ()
+
+        method submit_query (query: Q.query_t) =
+            (* same as sync but the lines are collected *)
+            let lines = ref [] in
+            self#append "(echo \"EOEV\\n\")";
+            let stop = ref false in
+            while not !stop do
+                let line = self#read_line in
+                if "EOEV" = line
+                then stop := true
+                else lines := line :: !lines
+            done;
+            parse_smt_model_q query (List.rev !lines)
 
         method get_collect_asserts = collect_asserts
 

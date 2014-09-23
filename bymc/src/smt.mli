@@ -6,29 +6,21 @@
 
 exception Smt_error of string
 
-type query_result_t =
-    | QCached    (** the query is cached, once 'submit' is invoked,
-                     the result will be available for the same query *)
-    | QNot_found (** nothing is associated with the query *)
-    | QResult of (Spin.token SpinIr.expr)
-                 (** the result of a previously cached query *)
+module Q: sig
+    type query_result_t =
+        | Cached    (** the query is cached, once 'submit' is invoked,
+                         the result will be available for the same query *)
+        | NoResult (** nothing is associated with the query *)
+        | Result of (Spin.token SpinIr.expr)
+                     (** the result of a previously cached query *)
 
-(**
-    An iterator over a model that shows satisfiability
- *)
-class type model_query =
-    object
-        (** Try to query the solver. The query is either cached until
-            #submit is invoked, or performed immediately, if
-            #submit has been invoked.
-         *)
-        method try_get: Spin.token SpinIr.expr -> query_result_t
+    type query_t
 
-        (** Submit the cached queries to the solver and collect
-            the results.
-          *)
-        method submit: unit
-    end
+    val query_result_s: query_result_t -> string
+
+    val try_get: query_t -> Spin.token SpinIr.expr -> query_result_t
+end
+
 
 (**
     An interface to SMT, which must be as abstract as possible.
@@ -85,7 +77,9 @@ class yices_smt: string ->
             (string -> SpinIr.var) (** variable lookup *)
             -> Spin.token SpinIr.expr list
 
-        method get_model_new: model_query
+        method get_model_query: Q.query_t
+
+        method submit_query: Q.query_t -> Q.query_t
 
         (** track the assertions, in order to collect unsat cores *)
         method set_collect_asserts: bool -> unit

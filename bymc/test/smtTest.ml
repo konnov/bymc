@@ -223,30 +223,34 @@ let test_model_query_try_get _ =
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
     
-    let query = (!yices)#get_model_new in
-    let res = query#try_get (Var x) in
-    assert_equal ~msg:"QCached expected" res QCached;
+    let query = (!yices)#get_model_query in
+    let res = Q.try_get query (Var x) in
+    assert_equal ~msg:"Q.Cached expected" res Q.Cached;
 
-    query#submit;
+    let query = (!yices)#submit_query query in
 
-    let res = query#try_get (Var x) in
-    assert_equal ~msg:"QResult (Const 1) expected" res (QResult (Const 1))
+    let res = Q.try_get query (Var x) in
+    assert_equal ~msg:"Q.Result (Const 1) expected" res (Q.Result (Const 1))
 
 
 let test_model_query_try_get_not_found _ =
-    let y = new_var "y" in
     (!yices)#set_need_model true;
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
-    
-    let query = (!yices)#get_model_new in
-    let res = query#try_get (Var y) in
-    assert_equal ~msg:"QCached expected" res QCached;
 
-    query#submit;
+    let query = (!yices)#get_model_query in
+    (* y was never passed to the solver *)
+    let y = new_var "y" in
+    let res = Q.try_get query (Var y) in
+    assert_equal ~msg:"Q.Cached expected" res Q.Cached;
 
-    let res = query#try_get (Var y) in
-    assert_equal ~msg:"QNot_found expected" res QNot_found
+    let new_query = (!yices)#submit_query query in
+
+    let new_res = Q.try_get new_query (Var y) in
+    assert_equal
+        ~msg:(sprintf "NoResult expected, found %s"
+                (Q.query_result_s new_res))
+        new_res Q.NoResult
 
 
 let suite = "smt-suite" >:::
