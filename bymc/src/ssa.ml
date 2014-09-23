@@ -14,6 +14,7 @@ open Accums
 open Analysis
 open Cfg
 open Debug
+open Smt
 open Spin
 open SpinIr
 open SpinIrImp
@@ -455,39 +456,27 @@ let find_coloring solver graph ncolors =
     in
     VarGraph.iter_vertex add_vertex graph;
     VarGraph.iter_edges add_edge graph;
+
     let tab = Hashtbl.create ncolors in
-    let each_expr = function
-        | BinEx (EQ, Var v, Const i) ->
-            let len = String.length v#get_name in
-            let pref = if len > 5 then String.sub v#get_name 0 5 else "" in
-            if pref = "_nclr"
-            then begin
-                let index =
-                    int_of_string (String.sub v#get_name 5 (len - 5)(* _nclr *))
-                in
-                Hashtbl.replace tab index (1 + i)
-                    (* a color from 1 to k, as in Graph.Coloring *)
-            end
-        
-        | _ -> ()
+    let collect_evidence query mark v =
+        match Q.try_get query (Var v) with
+        | Q.NoResult ->
+                raise (Failure ("No value for " ^ v#get_name))
+        | Q.Cached ->
+                ()
+        | Q.Result (Const i) ->
+                Hashtbl.replace tab mark (1 + i)
+        | Q.Result e ->
+                raise (Failure ("Unexpected result: " ^ (expr_s e)))
     in
-    let lookup name =
-        let len = String.length name in
-        let pref = if len > 5 then String.sub name 0 5 else "" in
-        if pref = "_nclr"
-        then begin
-            let index = int_of_string (String.sub name 5 (len - 5) (* _nclr *))
-            in
-            try Hashtbl.find vars index 
-            with Not_found ->
-                raise (Var_not_found (sprintf "var not found %d" index))
-        end else (* a redundant variable, make something up *)
-            new_var name
-    in
+
     let found =
         if solver#check
-        then begin (* parse evidence, XXX: inefficient *)
-            List.iter each_expr (solver#get_model lookup);
+        then begin
+            let query = solver#get_model_query in
+            Hashtbl.iter (collect_evidence query) vars;
+            let model = solver#submit_query query in
+            Hashtbl.iter (collect_evidence model) vars;
             assert((Hashtbl.length tab) > 0);
             true
         end else
