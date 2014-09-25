@@ -22,6 +22,7 @@ CONTENTS
 
  * python 2.x
  * ocaml and ocamlbuild (not earlier than 3.11.0)
+ * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (if you want to run unit tests)
  * yices 1.x: http://yices.csl.sri.com/download.shtml
@@ -126,7 +127,7 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install ounit ocamlgraph
+$ opam install batteries ounit ocamlgraph
 
 (Do not forget to include the line
 'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'

@@ -2,4 +2,4 @@ S src
 S test
 B _build/src
 B _build/test
-PKG threads ocamlgraph oUnit
+PKG threads batteries ocamlgraph oUnit

@@ -1,12 +1,13 @@
 # ocamlbuild tags
 #
+# use_str, 
 # check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
 
 <src> or <test>: include
-<**/*.top>: use_str, use_nums, package(threads), thread, package(ocamlgraph)
-<**/*.native> or <**/*.byte>: use_str, use_nums, package(threads), thread, package(ocamlgraph)
+<**/*.top>: package(threads), thread, package(ocamlgraph), package(batteries)
+<**/*.native> or <**/*.byte>: package(threads), thread, package(ocamlgraph), package(batteries)
 
-<src/*.ml>: package(ocamlgraph)
+<src/*.ml>: package(ocamlgraph), package(batteries)
 <src/pipeCmd.ml>: thread
-<test/*.ml>: package(oUnit)
-<test/*.byte>: package(oUnit)
+<test/*.ml>: package(oUnit), package(batteries)
+<test/*.byte>: package(oUnit), package(batteries)
