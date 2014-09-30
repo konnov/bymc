@@ -42,7 +42,7 @@ class pia_domain conds_i =
 
         method length = List.length conds
 
-        method map_concrete (solver: yices_smt) (symb_expr: 't expr) =
+        method map_concrete (solver: smt_solver) (symb_expr: 't expr) =
             try
                 List.iter
                     (fun (_, l, r) ->
@@ -78,7 +78,7 @@ class pia_domain conds_i =
                 BinEx (AND, BinEx (GE, exp, l), BinEx (LT, exp, r))
 
         method find_abs_vals
-                (at: abs_type) (solver: yices_smt) (symb_expr: 't expr)
+                (at: abs_type) (solver: smt_solver) (symb_expr: 't expr)
                 : (SpinIr.var * int) list list =
             let used = expr_used_vars symb_expr in
             let n_used = List.length used in
@@ -117,7 +117,7 @@ class pia_domain conds_i =
           distribute n abstract values x_i over the abstract domain s.t.
           sum_{i=1}^n \gamma(x_i) = num_active_processes
          *)
-        method scatter_abs_vals (solver: yices_smt)
+        method scatter_abs_vals (solver: smt_solver)
                 (num_expr: 't expr) (n: int) : int list list =
             if n > 4 (* the magic number which means explosion of variants *)
             then raise (Abstraction_error "scatter_abs_vals for n > 4 (A LOT!)");

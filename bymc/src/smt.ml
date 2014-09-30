@@ -53,33 +53,6 @@ let rec expr_to_smt e =
     | LabelRef (proc_name, lab_name) ->
             raise (Failure "LabelRef to SMT is not supported")
 
-
-let var_to_smt var tp =
-    let base_type = match tp#basetype with
-    | TBIT -> "bool"
-    | TBYTE -> "int"
-    | TSHORT -> "int"
-    | TINT -> "int"
-    | TUNSIGNED -> "nat"
-    | TCHAN -> raise (Failure "Type chan is not supported")
-    | TMTYPE -> raise (Failure "Type mtype is not supported")
-    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
-    | TUNDEF -> raise (Failure "Undefined type met")
-    in
-    let complex_type =
-        let subtype =
-            if tp#has_range
-            then let l, r = tp#range in
-                sprintf "(subrange %d %d)" l (r - 1)
-            else base_type
-        in
-        if tp#is_array
-        then sprintf "(-> (subrange 0 %d) %s)" (tp#nelems - 1) subtype
-        else subtype
-    in
-    sprintf "(define %s :: %s)" var#mangled_name complex_type
-
-
 module Q = struct
     type query_result_t =
         | Cached    (** the query is cached, once 'submit' is invoked,
@@ -125,6 +98,93 @@ module Q = struct
         Hashtbl.iter p q.tab
                 
 end
+
+
+class virtual smt_solver =
+    object
+        (** fork a new process that executes 'yices' *)
+        method virtual start: unit
+
+        (** stop the solver process *)
+        method virtual stop: unit
+
+        (** reset the solver *)
+        method virtual reset: unit
+
+        (** add a comment (free of side effects) *)
+        method virtual comment: string -> unit
+
+        (** declare a variable *)
+        method virtual append_var_def: SpinIr.var -> SpinIr.data_type -> unit
+
+        (** Add an expression.
+            @return an assertion id, if set_collect_asserts was called with true
+         *)
+        method virtual append_expr: Spin.token SpinIr.expr -> int
+
+        (** push the context *)
+        method virtual push_ctx: unit
+
+        (** pop the context *)
+        method virtual pop_ctx: unit
+
+        (** get the number of pushes minus number of pops made so far *)
+        method virtual get_stack_level: int
+
+        (** check, whether the current context is satisfiable.
+            @return true if sat
+         *)
+        method virtual check: bool
+
+        (** ask the solver to provide a model of sat *)
+        method virtual set_need_model: bool -> unit
+
+        (** check, whether the solver is going to construct a sat model *)
+        method virtual get_need_model: bool
+
+        method virtual get_model_query: Q.query_t
+
+        method virtual submit_query: Q.query_t -> Q.query_t
+
+        (** track the assertions, in order to collect unsat cores *)
+        method virtual set_collect_asserts: bool -> unit
+
+        (** are the assertions collected *)
+        method virtual get_collect_asserts: bool
+
+        (** get an unsat core, which is the list of assertion ids
+            that were provided by the solver with append_expr *)
+        method virtual get_unsat_cores: int list
+
+        (** indicate, whether debug information is needed *)
+        method virtual set_debug: bool -> unit
+    end
+
+
+let var_to_smt var tp =
+    let base_type = match tp#basetype with
+    | TBIT -> "bool"
+    | TBYTE -> "int"
+    | TSHORT -> "int"
+    | TINT -> "int"
+    | TUNSIGNED -> "nat"
+    | TCHAN -> raise (Failure "Type chan is not supported")
+    | TMTYPE -> raise (Failure "Type mtype is not supported")
+    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
+    | TUNDEF -> raise (Failure "Undefined type met")
+    in
+    let complex_type =
+        let subtype =
+            if tp#has_range
+            then let l, r = tp#range in
+                sprintf "(subrange %d %d)" l (r - 1)
+            else base_type
+        in
+        if tp#is_array
+        then sprintf "(-> (subrange 0 %d) %s)" (tp#nelems - 1) subtype
+        else subtype
+    in
+    sprintf "(define %s :: %s)" var#mangled_name complex_type
 
 
 let parse_smt_model_q query lines =
@@ -178,6 +238,8 @@ let parse_smt_model_q query lines =
    We are using the text interface, as it is way easier to debug. *)
 class yices_smt (solver_name: string) =
     object(self)
+        inherit smt_solver
+
         (* for how long we wait for output from yices if check is issued *)
         val check_timeout_sec = 3600.0
         (* for how long we wait for output from yices if another command is issued*)
