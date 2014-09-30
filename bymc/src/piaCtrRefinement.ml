@@ -41,6 +41,10 @@ module B = struct
 
     let new_vars pile = pile.new_vars
 
+    let append_vars pile vs =
+        { pile with new_vars =
+            List.fold_left (flip VarSet.add) pile.new_vars vs }
+
     let has_assert_id pile id = IntMap.mem id pile.rev_map
 
     let get_assert pile id = IntMap.find id pile.rev_map
@@ -215,7 +219,8 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
     log INFO (sprintf "    adding %d transition asserts..."
         (List.length xducer_asserts));
 
-    List.fold_left (B.append_expr solver) (B.mk_pile ()) xducer_asserts
+    let pile = B.append_vars (B.mk_pile ()) (Program.get_params xd_prog) in
+    List.fold_left (B.append_expr solver) pile xducer_asserts
 
 
 let parse_smt_evidence prog solver pile =
@@ -292,15 +297,21 @@ let parse_smt_evidence prog solver pile =
         | BinEx (ASGN, Var v1, Const k1),
           BinEx (ASGN, Var v2, Const k2) ->
               let r = String.compare v1#get_name v2#get_name in
-              if r <> 0 then r else (k1 - k2)
+              if v1#is_symbolic && not v2#is_symbolic
+              then 1
+              else if v2#is_symbolic && not v1#is_symbolic
+              then -1
+              else if r <> 0 then r else (k1 - k2)
+
         | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), Const k1),
           BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), Const k2) ->
-                let r = String.compare a1#get_name a2#get_name in
-                if r <> 0
-                then r
-                else if i1 <> i2
-                then i1 - i2
-                else k1 - k2
+              let r = String.compare a1#get_name a2#get_name in
+              if r <> 0
+              then r
+              else if i1 <> i2
+              then i1 - i2
+              else k1 - k2
+
         | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
           BinEx (ASGN, Var v2, _) ->
                 -1 (* arrays go first *)

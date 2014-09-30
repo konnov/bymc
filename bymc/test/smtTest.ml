@@ -215,16 +215,17 @@ let test_get_model_array_copy _ =
     assert_equal ~msg:"sat expected" res true;
 
     let query = (!yices)#get_model_query in
-    let assert_cached i =
-        let res = Q.try_get query (arr_acc y i) in
+    let assert_cached v i =
+        let res = Q.try_get query (arr_acc v i) in
         assert_equal Q.Cached res ~msg:(sprintf "Cached expected for %d" i)
     in
-    Enum.iter assert_cached (0--2);
+    Enum.iter (assert_cached x) (0--2);
+    Enum.iter (assert_cached y) (0--2);
 
     let query = (!yices)#submit_query query in
 
-    let assert_result i =
-        let res = Q.try_get query (arr_acc y i) in
+    let assert_result v i =
+        let res = Q.try_get query (arr_acc v i) in
         let exp = Q.Result (Const (1 + i)) in
         if exp <> res
         then Q.print_contents query;
@@ -232,7 +233,8 @@ let test_get_model_array_copy _ =
             ~msg:(sprintf "%s expected, found %s"
                     (Q.query_result_s exp) (Q.query_result_s res))
     in
-    Enum.iter assert_result (0--2)
+    Enum.iter (assert_result x) (0--2);
+    Enum.iter (assert_result y) (0--2)
 
 
 let test_model_query_try_get _ =

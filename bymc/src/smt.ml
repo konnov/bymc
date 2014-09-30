@@ -80,57 +80,6 @@ let var_to_smt var tp =
     sprintf "(define %s :: %s)" var#mangled_name complex_type
 
 
-let parse_smt_model lookup lines =
-    let var_re = Str.regexp "(= \\([_a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
-    let arr_re =
-        Str.regexp "(= (\\([_a-zA-Z0-9]+\\) \\([0-9]+\\)) \\([-0-9]+\\))"
-    in
-    let alias_re =
-        Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
-    in
-    let aliases = Hashtbl.create 5 in
-    let add_alias origin alias = Hashtbl.add aliases origin alias in
-    let get_aliases name = Hashtbl.find_all aliases name in
-
-    let parse_line accum line =
-        if Str.string_match var_re line 0
-        then begin
-            (* e.g., (= x 1) *)
-            let variable = lookup (Str.matched_group 1 line) in
-            (* we support ints only, don't we? *)
-            let value = int_of_string (Str.matched_group 2 line) in
-            (BinEx (EQ, Var variable, Const value)) :: accum
-        end
-        else if Str.string_match arr_re line 0
-        then begin
-            (* e.g., (= (x 11) 0) *)
-            let name = Str.matched_group 1 line in
-            let variable = lookup (Str.matched_group 1 line) in
-            let index = int_of_string (Str.matched_group 2 line) in
-            let value = int_of_string (Str.matched_group 3 line) in
-
-            let mk_access x i j =
-                BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const i), Const j)
-            in
-            let each_alias l name =
-                (mk_access (lookup name) index value) :: l
-            in
-            (* the expression *)
-            (mk_access variable index value)
-                (* and a copy for each alias *)
-                :: (List.fold_left each_alias accum (get_aliases name))
-        end else if Str.string_match alias_re line 0
-        then begin
-            (* (= x y) *)
-            let alias = Str.matched_group 1 line in
-            let origin = Str.matched_group 2 line in
-            add_alias origin alias;
-            accum
-        end else accum
-    in
-    List.rev (List.fold_left parse_line [] lines)
-
-
 module Q = struct
     type query_result_t =
         | Cached    (** the query is cached, once 'submit' is invoked,
@@ -184,11 +133,11 @@ let parse_smt_model_q query lines =
         Str.regexp "(= (\\([_a-zA-Z][_a-zA-Z0-9]*\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
     let alias_re =
-        Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
+        Str.regexp ("(= \\([_a-zA-Z][_a-zA-Z0-9]*\\) \\([_a-zA-Z][_a-zA-Z0-9]*\\))")
     in
     let aliases = Hashtbl.create 5 in
     let add_alias origin alias = Hashtbl.add aliases origin alias in
-    let get_aliases name = Hashtbl.find_all aliases name in
+    let get_aliases origin = Hashtbl.find_all aliases origin in
 
     let parse_line newq line =
         if Str.string_match var_re line 0
@@ -206,15 +155,15 @@ let parse_smt_model_q query lines =
             let index = int_of_string (Str.matched_group 2 line) in
             let value = int_of_string (Str.matched_group 3 line) in
 
-            let mk_access x i = sprintf "(%s %d)" name index in
-            let each_alias q name =
-                Q.add_result query q (mk_access name index) (Const value)
+            let mk_access n i = sprintf "(%s %d)" n i in
+            let each_alias q alias =
+                Q.add_result query q (mk_access alias index) (Const value)
             in
             (* the expression *)
             List.fold_left each_alias newq (name :: (get_aliases name)) 
         end else if Str.string_match alias_re line 0
         then begin
-            (* (= x y) *)
+            (* (= alias origin) *)
             let alias = Str.matched_group 1 line in
             let origin = Str.matched_group 2 line in
             add_alias origin alias;

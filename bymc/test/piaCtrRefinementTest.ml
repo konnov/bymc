@@ -104,8 +104,8 @@ let test_parse_smt_evidence_array _ =
 
     let prog = Program.set_type_tab tt Program.empty
         |> Program.set_instrumental [x]
-        |> Program.set_params [n] in
-
+        |> Program.set_params [n]
+    in
     let tab = parse_smt_evidence prog (!yices) pile in
     let layer0 = Hashtbl.find tab 0 |> List.map expr_s |> str_join "; " in
     let exp0 = [ BinEx (ASGN, arr_acc x 0, Const 2);
