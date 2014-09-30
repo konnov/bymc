@@ -9,7 +9,7 @@ open Str
 open Accums
 
 let version = [0; 7; 0]
-let version_full = "ByMC-0.7.0-feature-SLPS"
+let version_full = "ByMC-0.7.1-feature-SLPS"
 
 let macro_prefix = "macro."
 
@@ -18,22 +18,30 @@ type action_opt_t =
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv
 
+type smt_opt_t = SmtYices | SmtLib2 of string
+
 type options_t =
     {
-        action: action_opt_t; trail_name: string; filename: string;
+        action: action_opt_t;
+        trail_name: string;
+        filename: string;
         chain: string;
         param_assignments: int StrMap.t;
-        mc_tool: mc_tool_opt_t; bdd_pass: bool; verbose: bool;
+        mc_tool: mc_tool_opt_t;
+        smt: smt_opt_t;
+        bdd_pass: bool;
+        verbose: bool;
         plugin_opts: string StrMap.t
     }
 
-let empty =
-    { action = OptNone; trail_name = ""; filename = "";
-      chain = "piaDataCtr";
-      param_assignments = StrMap.empty;
-      mc_tool = ToolSpin; bdd_pass = false; verbose = false;
-      plugin_opts = StrMap.empty
-    }
+let empty = {
+    action = OptNone; trail_name = ""; filename = "";
+    chain = "piaDataCtr";
+    param_assignments = StrMap.empty;
+    mc_tool = ToolSpin; bdd_pass = false; verbose = false;
+    smt = SmtYices;
+    plugin_opts = StrMap.empty
+}
 
 
 let parse_key_values str =
@@ -53,13 +61,27 @@ let parse_plugin_opt str =
     else raise (Arg.Bad ("Syntax for plugin options: plugin.attr=val"))
 
 
-let parse_options =
-    let opts = ref {empty with filename = ""} in
-    let parse_mc_tool = function
+let parse_mc_tool = function
     | "spin" -> ToolSpin
     | "nusmv" -> ToolNusmv
     | _ as s -> raise (Failure ("Unknown option: " ^ s))
-    in
+
+
+let parse_smt s =
+    if s = "yices"
+    then SmtYices
+    else begin
+        try
+            if "lib2:" = (Str.string_before s 5)
+            then SmtLib2(Str.string_after s 5) 
+            else raise (Failure ("Unknown --smt argument: " ^ s))
+        with Invalid_argument _ ->
+            raise (Failure ("Unknown --smt argument: " ^ s))
+    end
+
+
+let parse_options =
+    let opts = ref {empty with filename = ""} in
     (Arg.parse
         [
             ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"; "fast"; "skelSmv"],
@@ -82,6 +104,9 @@ let parse_options =
                 (fun s -> opts := {!opts with mc_tool = parse_mc_tool s}))),
                 " choose a model checker from the list (default: spin)."
             );
+            ("--smt", (Arg.String (fun s ->
+                opts := {!opts with smt = parse_smt s})),
+                " choose SMT solver (default: yices).");
             ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =

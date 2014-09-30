@@ -16,7 +16,9 @@ module Q: sig
 
     type query_t
 
-    val query_result_s: query_result_t -> string
+    val new_query: (Spin.token SpinIr.expr -> string) -> query_t
+
+    val query_result_s: query_t -> query_result_t -> string
 
     val try_get: query_t -> Spin.token SpinIr.expr -> query_result_t
 
@@ -151,3 +153,4 @@ class yices_smt: string ->
         (** indicate, whether debug information is needed *)
         method set_debug: bool -> unit
     end
+

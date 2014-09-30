@@ -12,46 +12,6 @@ open SpinIrImp
 
 exception Smt_error of string
 
-let rec expr_to_smt e =
-    match e with
-    | Nop comment -> sprintf ";; %s\n" comment
-    | Const i -> string_of_int i
-    | Var v -> v#mangled_name
-    | UnEx (tok, f) ->
-        begin match tok with
-        | UMIN -> sprintf "(- %s)" (expr_to_smt f)
-        | NEG  -> sprintf "(not %s)" (expr_to_smt f)
-        | _ ->
-            raise (Failure
-                (sprintf "No idea how to translate %s to SMT" (token_s tok)))
-        end
-    | BinEx (tok, l, r) ->
-        begin match tok with
-        | PLUS  -> sprintf "(+ %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | MINUS -> sprintf "(- %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | MULT  -> sprintf "(* %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | DIV   -> sprintf "(div %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | MOD   -> sprintf "(mod %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | GT    -> sprintf "(> %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | LT    -> sprintf "(< %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
-        | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | ARR_ACCESS -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
-        | _ -> raise (Failure
-                (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
-        end
-
-    | Phi (lhs, rhs) ->
-            raise (Failure "Phi to SMT is not supported")
-
-    | LabelRef (proc_name, lab_name) ->
-            raise (Failure "LabelRef to SMT is not supported")
 
 module Q = struct
     type query_result_t =
@@ -62,19 +22,21 @@ module Q = struct
                      (** the result of a previously cached query *)
 
     type query_t = {
+        expr_to_smt_f: token expr -> string;
         frozen: bool;
         tab: (string, query_result_t) Hashtbl.t
     }
 
-    let query_result_s = function
+    let query_result_s q = function
         | Cached -> "Cached"
         | NoResult -> "NoResult"
-        | Result e -> "Result " ^ (expr_to_smt e)
+        | Result e -> "Result " ^ (q.expr_to_smt_f e)
 
-    let new_query () = { frozen = false; tab = Hashtbl.create 10 }
+    let new_query expr_to_smt_f = 
+        { frozen = false; expr_to_smt_f; tab = Hashtbl.create 10 }
 
     let try_get (q: query_t) (key: token expr) =
-        let e_s = expr_to_smt key in
+        let e_s = q.expr_to_smt_f key in
         try Hashtbl.find q.tab e_s
         with Not_found ->
             if q.frozen
@@ -93,7 +55,7 @@ module Q = struct
             nq
 
     let print_contents (q: query_t) =
-        let p s r = printf "   %s <- %s\n" s (query_result_s r) in
+        let p s r = printf "   %s <- %s\n" s (query_result_s q r) in
         printf "\n ***** query contents *****\n";
         Hashtbl.iter p q.tab
                 
@@ -159,6 +121,48 @@ class virtual smt_solver =
         (** indicate, whether debug information is needed *)
         method virtual set_debug: bool -> unit
     end
+
+
+let rec expr_to_smt e =
+    match e with
+    | Nop comment -> sprintf ";; %s\n" comment
+    | Const i -> string_of_int i
+    | Var v -> v#mangled_name
+    | UnEx (tok, f) ->
+        begin match tok with
+        | UMIN -> sprintf "(- %s)" (expr_to_smt f)
+        | NEG  -> sprintf "(not %s)" (expr_to_smt f)
+        | _ ->
+            raise (Failure
+                (sprintf "No idea how to translate %s to SMT" (token_s tok)))
+        end
+    | BinEx (tok, l, r) ->
+        begin match tok with
+        | PLUS  -> sprintf "(+ %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | MINUS -> sprintf "(- %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | MULT  -> sprintf "(* %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | DIV   -> sprintf "(div %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | MOD   -> sprintf "(mod %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | GT    -> sprintf "(> %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | LT    -> sprintf "(< %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
+        | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | ARR_ACCESS -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
+        | _ -> raise (Failure
+                (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
+        end
+
+    | Phi (lhs, rhs) ->
+            raise (Failure "Phi to SMT is not supported")
+
+    | LabelRef (proc_name, lab_name) ->
+            raise (Failure "LabelRef to SMT is not supported")
 
 
 let var_to_smt var tp =
@@ -230,7 +234,7 @@ let parse_smt_model_q query lines =
             newq
         end else newq
     in
-    let new_query = List.fold_left parse_line (Q.new_query ()) lines in
+    let new_query = List.fold_left parse_line (Q.new_query expr_to_smt) lines in
     { new_query with Q.frozen = true }
 
 
@@ -359,7 +363,7 @@ class yices_smt (solver_name: string) =
 
         method get_need_model = m_need_evidence
             
-        method get_model_query = Q.new_query ()
+        method get_model_query = Q.new_query expr_to_smt
 
         method submit_query (query: Q.query_t) =
             (* same as sync but the lines are collected *)

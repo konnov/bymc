@@ -146,7 +146,8 @@ let test_get_model_one_var _ =
     let query = (!yices)#submit_query query in
     let res = Q.try_get query (Var x) in
     assert_equal (Q.Result (Const 1)) res
-        ~msg:(sprintf "(Const 1) expected, found %s" (Q.query_result_s res))
+        ~msg:(sprintf "(Const 1) expected, found %s"
+                (Q.query_result_s query res))
 
 
 let test_get_model_var_with_underscore _ =
@@ -163,7 +164,8 @@ let test_get_model_var_with_underscore _ =
     let query = (!yices)#submit_query query in
     let res = Q.try_get query (Var x) in
     assert_equal (Q.Result (Const 1)) res
-        ~msg:(sprintf "(Const 1) expected, found %s" (Q.query_result_s res))
+        ~msg:(sprintf "(Const 1) expected, found %s"
+            (Q.query_result_s query res))
 
 
 let test_get_model_array _ =
@@ -194,7 +196,8 @@ let test_get_model_array _ =
         then Q.print_contents query;
         assert_equal exp res
             ~msg:(sprintf "%s expected, found %s"
-                           (Q.query_result_s exp) (Q.query_result_s res))
+                           (Q.query_result_s query exp)
+                           (Q.query_result_s query res))
     in
     Enum.iter assert_result (0--2)
 
@@ -231,7 +234,7 @@ let test_get_model_array_copy _ =
         then Q.print_contents query;
         assert_equal exp res
             ~msg:(sprintf "%s expected, found %s"
-                    (Q.query_result_s exp) (Q.query_result_s res))
+                    (Q.query_result_s query exp) (Q.query_result_s query res))
     in
     Enum.iter (assert_result x) (0--2);
     Enum.iter (assert_result y) (0--2)
@@ -273,7 +276,7 @@ let test_model_query_try_get_not_found _ =
     let new_res = Q.try_get new_query (Var y) in
     assert_equal
         ~msg:(sprintf "NoResult expected, found %s"
-                (Q.query_result_s new_res))
+                (Q.query_result_s new_query new_res))
         new_res Q.NoResult
 
 
