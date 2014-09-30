@@ -19,6 +19,8 @@ module Q: sig
     val query_result_s: query_result_t -> string
 
     val try_get: query_t -> Spin.token SpinIr.expr -> query_result_t
+
+    val print_contents: query_t -> unit
 end
 
 
@@ -68,14 +70,6 @@ class yices_smt: string ->
 
         (** check, whether the solver is going to construct a sat model *)
         method get_need_model: bool
-
-        (** Parse a sat model into expressions.
-            @return list of expressions
-            @raise Smt_error, if the solver gives something unparseable
-        *)
-        method get_model:
-            (string -> SpinIr.var) (** variable lookup *)
-            -> Spin.token SpinIr.expr list
 
         method get_model_query: Q.query_t
 

@@ -169,6 +169,11 @@ module Q = struct
             nq
         end with Not_found ->
             nq
+
+    let print_contents (q: query_t) =
+        let p s r = printf "   %s <- %s\n" s (query_result_s r) in
+        printf "\n ***** query contents *****\n";
+        Hashtbl.iter p q.tab
                 
 end
 
@@ -176,7 +181,7 @@ end
 let parse_smt_model_q query lines =
     let var_re = Str.regexp "(= \\([_a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
     let arr_re =
-        Str.regexp "(= \\([_a-zA-Z0-9]+ [0-9]+\\) \\([-0-9]+\\))"
+        Str.regexp "(= (\\([_a-zA-Z][_a-zA-Z0-9]*\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
     let alias_re =
         Str.regexp ("(= \\([_a-zA-Z0-9]+\\) \\([_a-zA-Z0-9]++\\))")
@@ -198,11 +203,10 @@ let parse_smt_model_q query lines =
         then begin
             (* e.g., (= (x 11) 0) *)
             let name = Str.matched_group 1 line in
-            let variable = Str.matched_group 1 line in
             let index = int_of_string (Str.matched_group 2 line) in
             let value = int_of_string (Str.matched_group 3 line) in
 
-            let mk_access x i = sprintf "(%s %d)" variable index in
+            let mk_access x i = sprintf "(%s %d)" name index in
             let each_alias q name =
                 Q.add_result query q (mk_access name index) (Const value)
             in
@@ -344,20 +348,6 @@ class yices_smt (solver_name: string) =
 
         method get_need_model = m_need_evidence
             
-        (* deprecated *)
-        method get_model (lookup: string -> var): Spin.token SpinIr.expr list =
-            (* same as sync but the lines are collected *)
-            let lines = ref [] in
-            self#append "(echo \"EOEV\\n\")";
-            let stop = ref false in
-            while not !stop do
-                let line = self#read_line in
-                if "EOEV" = line
-                then stop := true
-                else lines := line :: !lines
-            done;
-            parse_smt_model lookup (List.rev !lines)
-
         method get_model_query = Q.new_query ()
 
         method submit_query (query: Q.query_t) =

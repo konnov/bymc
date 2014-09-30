@@ -1,3 +1,4 @@
+open Batteries
 open OUnit
 open Printf
 
@@ -140,11 +141,12 @@ let test_get_model_one_var _ =
     ignore ((!yices)#append_expr e);
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
-    let lookup _ = x in (* here it is that simple *)
-    let model = (!yices)#get_model lookup in
-    if model <> [ e ]
-    then let es_s = str_join "; " (List.map expr_s model) in
-        assert_failure (sprintf "expected [%s], found [%s]" (expr_s e) es_s)
+    let query = (!yices)#get_model_query in
+    assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
+    let query = (!yices)#submit_query query in
+    let res = Q.try_get query (Var x) in
+    assert_equal (Q.Result (Const 1)) res
+        ~msg:(sprintf "(Const 1) expected, found %s" (Q.query_result_s res))
 
 
 let test_get_model_var_with_underscore _ =
@@ -156,11 +158,13 @@ let test_get_model_var_with_underscore _ =
     ignore ((!yices)#append_expr e);
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
-    let lookup _ = x in (* here it is that simple *)
-    let model = (!yices)#get_model lookup in
-    if model <> [ e ]
-    then let es_s = str_join "; " (List.map expr_s model) in
-        assert_failure (sprintf "expected [%s], found [%s]" (expr_s e) es_s)
+    let query = (!yices)#get_model_query in
+    assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
+    let query = (!yices)#submit_query query in
+    let res = Q.try_get query (Var x) in
+    assert_equal (Q.Result (Const 1)) res
+        ~msg:(sprintf "(Const 1) expected, found %s" (Q.query_result_s res))
+
 
 
 
@@ -170,20 +174,31 @@ let test_get_model_array _ =
     t#set_nelems 3;
     (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
-    let arr_upd i j =
-        BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const i), Const j) in
-    let e1, e2, e3 = arr_upd 0 1, arr_upd 1 2, arr_upd 2 3 in
-    ignore ((!yices)#append_expr e1);
-    ignore ((!yices)#append_expr e2);
-    ignore ((!yices)#append_expr e3);
+    let arr_acc i = BinEx (ARR_ACCESS, Var x, Const i) in
+    let arr_upd i j = BinEx (EQ, arr_acc i, Const j) in
+    Enum.iter (fun i -> ignore ((!yices)#append_expr (arr_upd i (1 + i)))) (0--2);
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
-    let lookup _ = x in (* here it is that simple *)
-    let model = (!yices)#get_model lookup in
-    if model <> [ e1; e2; e3 ]
-    then let es_s = str_join "; " (List.map expr_s model) in
-    assert_failure (sprintf "expected [%s; %s; %s], found [%s]"
-        (expr_s e1) (expr_s e2) (expr_s e3) es_s)
+
+    let query = (!yices)#get_model_query in
+    let assert_cached i =
+        let res = Q.try_get query (arr_acc i) in
+        assert_equal Q.Cached res ~msg:(sprintf "Cached expected for %d" i)
+    in
+    Enum.iter assert_cached (0--2);
+
+    let query = (!yices)#submit_query query in
+
+    let assert_result i =
+        let res = Q.try_get query (arr_acc i) in
+        let exp = Q.Result (Const (1 + i)) in
+        if exp <> res
+        then Q.print_contents query;
+        assert_equal exp res
+            ~msg:(sprintf "%s expected, found %s"
+                           (Q.query_result_s exp) (Q.query_result_s res))
+    in
+    Enum.iter assert_result (0--2)
 
 
 let test_get_model_array_copy _ =
@@ -194,23 +209,32 @@ let test_get_model_array_copy _ =
     (!yices)#set_need_model true;
     (!yices)#append_var_def x t;
     (!yices)#append_var_def y t;
-    let arr_upd v i j =
-        BinEx (EQ, BinEx (ARR_ACCESS, Var v, Const i), Const j) in
-    let e1, e2, e3 = arr_upd x 0 1, arr_upd x 1 2, arr_upd x 2 3 in
-    ignore ((!yices)#append_expr e1);
-    ignore ((!yices)#append_expr e2);
-    ignore ((!yices)#append_expr e3);
+    let arr_acc v i = BinEx (ARR_ACCESS, Var v, Const i) in
+    let arr_upd v i j = BinEx (EQ, arr_acc v i, Const j) in
+    Enum.iter (fun i -> ignore ((!yices)#append_expr (arr_upd x i (1 + i)))) (0--2);
     ignore ((!yices)#append_expr (BinEx (EQ, Var x, Var y)));
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
-    let lookup n = if n = "x" then x else y in
-    let model = (!yices)#get_model lookup in
-    let e4, e5, e6 = arr_upd y 0 1, arr_upd y 1 2, arr_upd y 2 3 in
-    let expected = [e1; e4; e2; e5; e3; e6] in
-    if model <> expected
-    then let found_s = str_join "; " (List.map expr_s model) in
-    let exp_s = str_join "; " (List.map expr_s expected) in
-    assert_failure (sprintf "expected [%s], found [%s]" exp_s found_s)
+
+    let query = (!yices)#get_model_query in
+    let assert_cached i =
+        let res = Q.try_get query (arr_acc y i) in
+        assert_equal Q.Cached res ~msg:(sprintf "Cached expected for %d" i)
+    in
+    Enum.iter assert_cached (0--2);
+
+    let query = (!yices)#submit_query query in
+
+    let assert_result i =
+        let res = Q.try_get query (arr_acc y i) in
+        let exp = Q.Result (Const (1 + i)) in
+        if exp <> res
+        then Q.print_contents query;
+        assert_equal exp res
+            ~msg:(sprintf "%s expected, found %s"
+                    (Q.query_result_s exp) (Q.query_result_s res))
+    in
+    Enum.iter assert_result (0--2)
 
 
 let test_model_query_try_get _ =
@@ -271,10 +295,10 @@ let suite = "smt-suite" >:::
             >:: (bracket setup test_get_model_one_var teardown);
         "test_get_model_array"
             >:: (bracket setup test_get_model_array teardown);
-        "test_get_model_array_copy"
-            >:: (bracket setup test_get_model_array_copy teardown);
         "test_get_model_var_with_underscore"
             >:: (bracket setup test_get_model_var_with_underscore teardown);
+        "test_get_model_array_copy"
+            >:: (bracket setup test_get_model_array_copy teardown);
         "test_model_query_try_get"
             >:: (bracket setup test_model_query_try_get teardown);
         "test_model_query_try_get_not_found"
