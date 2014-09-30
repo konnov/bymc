@@ -531,7 +531,7 @@ class vass_funcs dom prog solver =
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struc#regions.
  *)
-let do_counter_abstraction funcs solver caches prog proc_names =
+let do_counter_abstraction ~keep_symbolic funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let replace_update c_ctx active_expr update atomics stmts =
@@ -635,16 +635,18 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)))
         (Program.get_ltl_forms prog) in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
+    let new_params = if keep_symbolic then Program.get_params prog else [] in
+    let new_assumes = if keep_symbolic then Program.get_assumes prog else [] in
     let new_prog =
-        (Program.set_params []
-        (Program.set_assumes []
-        (Program.set_shared_with_init
+        Program.set_params new_params Program.empty
+        |> Program.set_assumes new_assumes
+        |> Program.set_shared_with_init
             (counters @ (Program.get_shared_with_init prog))
-        (Program.set_instrumental new_decls
-        (Program.set_type_tab new_type_tab
-        (Program.set_atomics new_atomics
-        (Program.set_ltl_forms new_ltl_forms
-        Program.empty))))))) in
+        |> Program.set_instrumental new_decls
+        |> Program.set_type_tab new_type_tab
+        |> Program.set_atomics new_atomics
+        |> Program.set_ltl_forms new_ltl_forms
+    in
     let new_struc = empty_proc_struc () in
     let new_procs =
         let trp p =

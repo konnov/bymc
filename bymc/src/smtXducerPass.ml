@@ -85,7 +85,7 @@ let to_xducer_interleave solver caches prog =
     let opts, suffix = List.fold_left each_proc ([], []) procs in
     let lirs = mir_to_lir ((MIf (fresh_id (), opts)) :: suffix) in
     let globals = (Program.get_shared prog) @ (Program.get_instrumental prog) in
-    let locals = (Program.get_all_locals prog) in
+    let locals = Program.get_all_locals prog in
     let new_name = "P" in
     let new_sym_tab = new symb_tab new_name in
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg lirs) in
@@ -99,8 +99,9 @@ let to_xducer_interleave solver caches prog =
     new_proc#add_all_symb new_sym_tab#get_symbs;
     new_proc#set_stmts transd;
     let new_prog =
-        (Program.set_type_tab new_type_tab
-            (Program.set_procs [new_proc] prog))
+        Program.set_procs [new_proc] prog
+        |> Program.set_type_tab new_type_tab 
+        |> Program.set_params (Program.get_params prog)
     in
     new_prog
 

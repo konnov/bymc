@@ -65,6 +65,7 @@ class pc_plugin_t (plugin_name: string) =
             log INFO "> Constructing counter abstraction";
             let ctrabs_prog =
                 do_counter_abstraction funcs solver caches prog proc_names
+                    ~keep_symbolic:false
             in
             write_to_file false "abs-counter-general.prm"
                 (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog)
@@ -78,6 +79,7 @@ class pc_plugin_t (plugin_name: string) =
             vass_funcs#set_embed_inv embed_inv;
             let vass_prog =
                 do_counter_abstraction vass_funcs solver caches prog proc_names
+                    ~keep_symbolic:true
             in
             caches#set_struc vass_prog (compute_struc vass_prog);
             write_to_file false "abs-vass.prm"
