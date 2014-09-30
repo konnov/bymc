@@ -3,6 +3,8 @@
 open Printf
 open Str
 
+open Batteries
+
 open AbsBasics
 open Accums
 open Ltl
@@ -20,10 +22,71 @@ exception No_moving_error
 let pred_reach = "p"
 let pred_recur = "r"
 
+module VarSet = Set.Make (struct
+    type t = var
+    (* compare the names, as some variables are copies with the same id! *)
+    let compare a b = String.compare a#qual_name b#qual_name
+end)
+
+(** the book keeping for the translation *)
+module B = struct
+    type pile_t = {
+        rev_map: (int * token expr) IntMap.t;
+        new_vars: VarSet.t
+    }
+
+    let mk_pile () = { rev_map = IntMap.empty; new_vars = VarSet.empty }
+
+    let rev_map pile = pile.rev_map
+
+    let new_vars pile = pile.new_vars
+
+    let has_assert_id pile id = IntMap.mem id pile.rev_map
+
+    let get_assert pile id = IntMap.find id pile.rev_map
+
+    let bind_expr solver pile state_no orig_expr new_expr =
+        let smt_id = solver#append_expr new_expr in
+        (* bind ids assigned to expressions by the solver *)
+        let new_map =
+            if smt_id >= 0
+            then begin
+                log DEBUG (sprintf "map: %d -> %d, %s\n"
+                    smt_id state_no (expr_s new_expr));
+                if solver#get_collect_asserts
+                then IntMap.add smt_id (state_no, orig_expr) pile.rev_map 
+                else pile.rev_map
+            end
+            else pile.rev_map
+        in
+        let used_vars =
+            expr_used_vars new_expr
+                |> List.fold_left (flip VarSet.add) pile.new_vars
+        in
+        { rev_map = new_map;
+          new_vars = VarSet.union used_vars pile.new_vars
+        }
+
+    let append_expr solver pile new_expr =
+        ignore (solver#append_expr new_expr);
+        (* bind ids assigned to expressions by the solver *)
+        let used_vars =
+            expr_used_vars new_expr
+                |> List.fold_left (flip VarSet.add) pile.new_vars
+        in
+        { pile with
+          new_vars = VarSet.union used_vars pile.new_vars
+        }
+end
+
 
 (* don't touch symbolic variables --- they are the parameters! *)
-let map_to_in v = if v#is_symbolic then v else v#copy (v#get_name ^ "_IN") ;;
-let map_to_out v = if v#is_symbolic then v else v#copy (v#get_name ^ "_OUT") ;;
+let map_to_in v =
+    if v#is_symbolic then v else v#copy (v#get_name ^ "_IN")
+
+let map_to_out v =
+    if v#is_symbolic then v else v#copy (v#get_name ^ "_OUT")
+
 let map_to_step step v =
     if v#is_symbolic
     then v
@@ -69,17 +132,6 @@ let create_path proc local_vars shared_vars n_steps =
     xducers @ connections
 
 
-let smt_append_bind solver smt_rev_map state_no orig_expr mapped_expr =
-    let smt_id = solver#append_expr mapped_expr in
-    (* bind ids assigned to expressions by the solver *)
-    if smt_id >= 0
-    then begin
-        log DEBUG (sprintf "map: %d -> %d, %s\n"
-            smt_id state_no (expr_s mapped_expr));
-        if solver#get_collect_asserts
-        then Hashtbl.add smt_rev_map smt_id (state_no, orig_expr)
-    end
-
 
 let activate_process procs step =
     let enabled p = Var (map_to_step step (CfgSmt.get_entry_loc p)) in
@@ -98,9 +150,8 @@ let activate_process procs step =
     BinEx (AND, at_least_one, mux)
 
 
-let check_trail_asserts solver trail_asserts n_steps =
-    let smt_rev_map = Hashtbl.create 10 in
-    let append_one_assert state_no is_traceable asrt =
+let check_trail_asserts solver pile trail_asserts n_steps =
+    let append_one_assert state_no is_traceable pile asrt =
         let new_e =
             if state_no = 0
             then map_vars (fun v -> Var (map_to_step 0 (map_to_in v))) asrt
@@ -108,12 +159,13 @@ let check_trail_asserts solver trail_asserts n_steps =
                 (fun v -> Var (map_to_step (state_no - 1) (map_to_out v))) asrt
         in
         if is_traceable
-        then smt_append_bind solver smt_rev_map state_no asrt new_e
-        else let _ = solver#append_expr new_e in ()
+        then B.bind_expr solver pile state_no asrt new_e
+        else B.append_expr solver pile new_e
     in
-    let append_trail_asserts state_no (asserts, assumes, _) =
-        List.iter (append_one_assert state_no true) asserts;
-        List.iter (append_one_assert state_no false) assumes
+    let append_trail_asserts pile state_no (asserts, assumes, _) =
+        let np =
+            List.fold_left (append_one_assert state_no true) pile asserts in
+        List.fold_left (append_one_assert state_no false) np assumes
     in
     (* put asserts from the counter example *)
     log INFO (sprintf "    adding %d trail asserts..."
@@ -122,11 +174,13 @@ let check_trail_asserts solver trail_asserts n_steps =
     assert (n_steps < (List.length trail_asserts));
     let trail_asserts = list_sub trail_asserts 0 (n_steps + 1) in
     solver#push_ctx;
-    List.iter2 append_trail_asserts (range 0 (n_steps + 1)) trail_asserts;
+    let new_pile =
+        List.fold_left2 append_trail_asserts pile (range 0 (n_steps + 1)) trail_asserts
+    in
     logtm INFO "    waiting for SMT...";
     let result = solver#check in
     solver#pop_ctx;
-    (result, smt_rev_map)
+    (result, new_pile)
 
 
 let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
@@ -160,119 +214,79 @@ let simulate_in_smt solver xd_prog ctr_ctx_tbl n_steps =
 
     log INFO (sprintf "    adding %d transition asserts..."
         (List.length xducer_asserts));
-    List.iter (fun e -> let _ = solver#append_expr e in ()) xducer_asserts
+
+    List.fold_left (B.append_expr solver) (B.mk_pile ()) xducer_asserts
 
 
-let parse_smt_evidence prog solver =
-    let vars = Hashtbl.create 10 in
+let parse_smt_evidence prog solver pile =
     let vals = Hashtbl.create 10 in
     let var_re =
         Str.regexp "S\\([0-9]+\\)_\\([_a-zA-Z0-9]+\\)_\\(IN\\|OUT\\)"
     in
-    let param_re = Str.regexp "\\([a-zA-Z0-9]+\\)" in
-    let lookup name =
-        try Hashtbl.find vars name 
-        with Not_found ->
-            let nv = new_var name in
-            Hashtbl.add vars name nv; nv
-    in
+    let param_re = Str.regexp "\\([_a-zA-Z0-9]+\\)" in
     let add_state_expr state expr =
         if not (Hashtbl.mem vals state)
         then Hashtbl.add vals state [expr]
         else Hashtbl.replace vals state (expr :: (Hashtbl.find vals state))
     in
-    let model = solver#get_model lookup in
-    let each_expr = function
-        | BinEx (EQ, Var var, Const value) ->
+    let each_expr query exp =
+        match (exp, Q.try_get query exp) with
+        | _, Q.NoResult -> ()
+
+        | _, Q.Cached -> ()
+
+        | Var var, Q.Result (Const value) ->
             let full = var#get_name in
             if Str.string_match var_re full 0
             then begin
-                (* e.g., (= S0_nsnt_OUT 1) *)
+                (* e.g., S0_nsnt_OUT *)
                 let step = int_of_string (Str.matched_group 1 full) in
-                let name = (Str.matched_group 2 full) in
-                let dir = (Str.matched_group 3 full) in
+                let name = Str.matched_group 2 full in
+                let dir = Str.matched_group 3 full in
                 let state = if dir = "IN" then step else (step + 1) in
-                let e = BinEx (ASGN, Var var, Const value) in
+                let e = BinEx (ASGN, Var (var#copy name), Const value) in
                 if List.exists
                     (fun v -> v#get_name = name) (Program.get_shared prog)
                 then add_state_expr state e
             end
-                else if Str.string_match param_re full 0
-            then begin
+            else (* e.g., N *)
+                if Str.string_match param_re full 0
+                    && List.exists (fun v -> v#get_name = full) (Program.get_params prog)
+            then
                 (* parameters belong to state 0 *)
                 add_state_expr 0 (BinEx (ASGN, Var var, Const value))
-            end
 
-        | BinEx (EQ,
-                BinEx (ARR_ACCESS, Var var, Const idx),
-                Const value) ->
+        | BinEx (ARR_ACCESS, Var var, Const idx), Q.Result(Const value) ->
             let full = var#get_name in
             if Str.string_match var_re full 0
             then begin
+                (* e.g., S1_k_P_IN *)
                 let step = int_of_string (Str.matched_group 1 full) in
-                let dir = (Str.matched_group 3 full) in
+                let name = Str.matched_group 2 full in
+                let dir = Str.matched_group 3 full in
                 let state = if dir = "IN" then step else (step + 1) in
                 let e = BinEx (ASGN,
-                    BinEx (ARR_ACCESS, Var var, Const idx), Const value) in
+                    BinEx (ARR_ACCESS, Var (var#copy name), Const idx), Const value) in
                 if dir = "IN" || dir = "OUT"
                 then add_state_expr state e (* and ignore auxillary arrays *)
             end
 
         | _ -> ()
     in
-    List.iter each_expr model;
-
-    (*
-    let parse_line line =
-        if Str.string_match var_re line 0
-        then begin
-            (* (= S0_nsnt_OUT 1) *)
-            let step = int_of_string (Str.matched_group 1 line) in
-            let name = (Str.matched_group 2 line) in
-            let dir = (Str.matched_group 3 line) in
-            (* we support ints only, don't we? *)
-            let value = int_of_string (Str.matched_group 4 line) in
-            let state = if dir = "IN" then step else (step + 1) in
-            let e = BinEx (ASGN, Var (new_var name), Const value) in
-            if List.exists
-                (fun v -> v#get_name = name) (Program.get_shared prog)
-            then add_state_expr state e;
-        end else if Str.string_match arr_re line 0
-        then begin
-            (* (= (S0_bymc_kP_IN 11) 0) *)
-            let s = int_of_string (Str.matched_group 1 line) in
-            let n = (Str.matched_group 2 line) in
-            let d = (Str.matched_group 3 line) in
-            let full = sprintf "%d_%s_%s" s n d in
-            let step, name, dir =
-                if is_alias full then get_alias full else s, n, d in
-            let idx = int_of_string (Str.matched_group 4 line) in
-            (* we support ints only, don't we? *)
-            let value = int_of_string (Str.matched_group 5 line) in
-            let state = if dir = "IN" then step else (step + 1) in
-            let e = BinEx (ASGN,
-                BinEx (ARR_ACCESS, Var (new_var name), Const idx),
-                Const value) in
-            if dir = "IN" || dir = "OUT"
-            then add_state_expr state e; (* and ignore auxillary arrays *)
-        end else if Str.string_match alias_re line 0
-        then begin
-            (* (= S0_bymc_kP_OUT S0_bymc_kP_Y2) *)
-            let target = (Str.matched_group 4 line) in
-            let step = int_of_string (Str.matched_group 1 line) in
-            let name = (Str.matched_group 2 line) in
-            let dir = (Str.matched_group 3 line) in
-            add_alias target step name dir
-        end else if Str.string_match param_re line 0
-        then begin
-            (* (= T 2) *)
-            let name = (Str.matched_group 1 line) in
-            let value = int_of_string (Str.matched_group 2 line) in
-            add_state_expr 0 (BinEx (ASGN, Var (new_var name), Const value))
-        end
+    let rec add_var l v =
+        let t = Program.get_type prog v in
+        let arr_acc l i = (BinEx (ARR_ACCESS, Var v, Const i)) :: l in
+        if t#is_array
+        then List.fold_left arr_acc l (range 0 t#nelems)
+        else (Var v) :: l
     in
-    List.iter parse_line lines;
-    *)
+    let exprs = VarSet.elements pile.B.new_vars
+        |> List.fold_left add_var [] in
+    let query = solver#get_model_query in
+    List.iter (each_expr query) exprs;
+    let result = solver#submit_query query in
+    List.iter (each_expr result) exprs;
+
     let cmp e1 e2 =
         let comp_res = match e1, e2 with
         | BinEx (ASGN, Var v1, Const k1),
@@ -299,9 +313,8 @@ let parse_smt_evidence prog solver =
         comp_res
     in
     let new_tbl = Hashtbl.create (Hashtbl.length vals) in
-    Hashtbl.iter
-        (fun k vs -> Hashtbl.add new_tbl k (list_sort_uniq cmp vs))
-        vals;
+    let add k vs = Hashtbl.add new_tbl k (list_sort_uniq cmp vs) in
+    Hashtbl.iter add vals;
     new_tbl
 
 
@@ -378,7 +391,7 @@ let intro_new_pred new_type_tab prefix step_no (* pred_reach or pred_recur *) =
    partition the constraints into two categories:
        before the transition, after the transition
  *)
-let retrieve_unsat_cores rt smt_rev_map src_state_no =
+let retrieve_unsat_cores rt pile src_state_no =
     let leaf_fun = function
         | BinEx (ARR_ACCESS, Var _, _) -> true
         | Var _ as e -> not (is_symbolic e)
@@ -393,8 +406,8 @@ let retrieve_unsat_cores rt smt_rev_map src_state_no =
     let core_ids = rt#solver#get_unsat_cores in
     log INFO (sprintf "Detected %d unsat core ids\n" (List.length core_ids));
     let filtered =
-        List.filter (fun id -> Hashtbl.mem smt_rev_map id) core_ids in
-    let mapped = List.map (fun id -> Hashtbl.find smt_rev_map id) filtered in
+        List.filter (fun id -> B.has_assert_id pile id) core_ids in
+    let mapped = List.map (fun id -> B.get_assert pile id) filtered in
     (* List.iter (fun (s, e) -> printf "   %d: %s\n" s (expr_s e)) mapped; *)
     rt#solver#push_ctx;
     let aes = List.map abstract mapped in
@@ -453,13 +466,19 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
         (Program.set_procs (List.map sub_proc (Program.get_procs prog)) prog)))
 
 
-let print_vass_trace prog solver num_states = 
+let print_vass_trace prog pile solver num_states = 
     printf "Here is a CONCRETE trace in VASS violating the property.\n";
     printf "State 0 gives concrete parameters.\n\n";
-    let vals = parse_smt_evidence prog solver in
+    let vals = parse_smt_evidence prog solver pile in
+    let find i =
+        try Hashtbl.find vals i
+        with Not_found ->
+            printf "No values for state %d\n" i;
+            raise Not_found
+    in
     let print_st i =
         printf "%d: " i;
-        pretty_print_exprs (Hashtbl.find vals i);
+        pretty_print_exprs (find i);
         printf "\n";
     in
     List.iter (print_st) (range 0 num_states)
@@ -483,14 +502,14 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     in
     (* simulate one step *)
     rt#solver#push_ctx;
-    simulate_in_smt rt#solver prog ctr_ctx_tbl 1;
-    let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
+    let pile = simulate_in_smt rt#solver prog ctr_ctx_tbl 1 in
+    let res, new_pile = check_trail_asserts rt#solver pile step_asserts 1 in
 
     (* collect unsat cores if the assertions contradict fairness,
        or fairness + the state assertions lead to a deadlock *)
     let core_exprs, _ =
         if not res
-        then retrieve_unsat_cores rt smt_rev_map 0
+        then retrieve_unsat_cores rt new_pile 0
         else [], []
     in
     rt#solver#pop_ctx;
@@ -499,7 +518,7 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     if res then begin
         logtm INFO
             (sprintf "State %d of the loop is fair. See the trace." state_num);
-        print_vass_trace prog rt#solver 2;
+        print_vass_trace prog new_pile rt#solver 2;
     end else begin
         printf "core_exprs_s: %s\n" (expr_s core_exprs_and)
     end;
@@ -615,14 +634,14 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     log INFO "  [DONE]";
     log INFO "> Simulating counter example in VASS...";
 
-    let check_trans st = 
+    let check_trans pile st = 
         let next_st = if st = num_states - 1 then loop_start else st + 1 in
         let step_asserts = [List.nth apath st; List.nth apath next_st] in
         rt#solver#push_ctx;
         rt#solver#comment
             (sprintf ";; Checking the transition %d -> %d" st next_st);
         rt#solver#set_collect_asserts true;
-        let res, smt_rev_map = check_trail_asserts rt#solver step_asserts 1 in
+        let res, new_pile = check_trail_asserts rt#solver pile step_asserts 1 in
         rt#solver#set_collect_asserts false;
         if not res
         then begin
@@ -637,19 +656,19 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
             rt#solver#pop_ctx; (* (B) *)
 
             let new_prog =
-                refine_spurious_step rt smt_rev_map 0 ref_step ctr_prog in
-            (true, new_prog)
+                refine_spurious_step rt new_pile 0 ref_step ctr_prog in
+            (true, new_pile, new_prog)
         end else begin
             logtm INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st next_st total_steps);
             rt#solver#pop_ctx;
-            (false, ctr_prog)
+            (false, new_pile, ctr_prog)
         end
     in
-    let find_first (res, prog) step_no =
+    let find_first (res, pile, prog) step_no =
         if res
-        then (true, prog)
-        else check_trans step_no
+        then (true, pile, prog)
+        else check_trans pile step_no
     in
     (* Try to detect spurious transitions and unfair paths
        (discussed in the FMCAD13 paper) *)
@@ -657,10 +676,10 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     rt#solver#push_ctx; (* (A) *)
     rt#solver#set_need_model true; (* needed for refinement! *)
     let ctr_ctx_tbl = rt#caches#analysis#get_pia_ctr_ctx_tbl in
-    simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1;
+    let init_pile = simulate_in_smt rt#solver xducer_prog ctr_ctx_tbl 1 in
     let last_state = if loop <> [] then num_states else num_states - 1 in
-    let (refined, new_prog) =
-        List.fold_left find_first (false, ctr_prog) (range 0 last_state)
+    let (refined, pile, new_prog) =
+        List.fold_left find_first (false, init_pile, ctr_prog) (range 0 last_state)
     in
     if refined
     then begin

@@ -166,8 +166,6 @@ let test_get_model_var_with_underscore _ =
         ~msg:(sprintf "(Const 1) expected, found %s" (Q.query_result_s res))
 
 
-
-
 let test_get_model_array _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
