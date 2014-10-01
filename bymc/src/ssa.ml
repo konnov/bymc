@@ -460,8 +460,6 @@ let find_coloring solver graph ncolors =
     let tab = Hashtbl.create ncolors in
     let collect_evidence query mark v =
         match Q.try_get query (Var v) with
-        | Q.NoResult ->
-                raise (Failure ("No value for " ^ v#get_name))
         | Q.Cached ->
                 ()
         | Q.Result (Const i) ->

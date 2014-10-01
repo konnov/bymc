@@ -10,7 +10,6 @@ module Q: sig
     type query_result_t =
         | Cached    (** the query is cached, once 'submit' is invoked,
                          the result will be available for the same query *)
-        | NoResult (** nothing is associated with the query *)
         | Result of (Spin.token SpinIr.expr)
                      (** the result of a previously cached query *)
 

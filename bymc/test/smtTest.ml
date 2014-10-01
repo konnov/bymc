@@ -88,6 +88,17 @@ let test_append_var_def _ =
     assert_equal ~msg:"sat expected" res true 
 
 
+let test_append_var_def_array _ =
+    let x = new_var "x" in
+    let t = mk_int_range 0 10 in
+    t#set_nelems 4;
+    (!solver)#append_var_def x t;
+    ignore ((!solver)#append_expr
+        (BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const 1), Const 43)));
+    let res = (!solver)#check in
+    assert_equal ~msg:"unsat expected" res false 
+
+
 let test_append_expr _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
@@ -122,12 +133,16 @@ let test_pop_ctx _ =
 
 
 let test_get_stack_level _ =
+    let level = !(solver)#get_stack_level in
     (!solver)#push_ctx;
-    assert_equal ~msg:"stack level 1 expected" !(solver)#get_stack_level 1;
+    assert_equal  (1 + level) !(solver)#get_stack_level
+        ~msg:"stack level 1 expected";
     (!solver)#push_ctx;
-    assert_equal ~msg:"stack level 2 expected" !(solver)#get_stack_level 2;
+    assert_equal  (2 + level) !(solver)#get_stack_level
+        ~msg:"stack level 2 expected";
     (!solver)#pop_ctx;
-    assert_equal ~msg:"stack level 1 expected" !(solver)#get_stack_level 1
+    assert_equal  (1 + level) !(solver)#get_stack_level
+        ~msg:"stack level 1 expected"
 
 
 let test_get_unsat_cores _ =
@@ -136,17 +151,15 @@ let test_get_unsat_cores _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
     (!solver)#append_var_def x t;
-    let id = (!solver)#append_expr
-        (BinEx (AND,
-            (BinEx (EQ, Var x, Const 1)),
-            (BinEx (EQ, Var x, Const 2)))) in
+    let id1 = (!solver)#append_expr (BinEx (EQ, Var x, Const 1)) in
+    let id2 = (!solver)#append_expr (BinEx (EQ, Var x, Const 2)) in
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
     let cores = (!solver)#get_unsat_cores in
-    if cores <> [id]
+    if cores <> [id1; id2]
     then
         let cores_s = str_join ", " (List.map int_s cores) in
-        assert_failure (sprintf "expected [%d], got [%s]" id cores_s)
+        assert_failure (sprintf "expected [%d; %d], got [%s]" id1 id2 cores_s)
 
 
 let test_get_model_one_var _ =
@@ -230,7 +243,10 @@ let test_get_model_array_copy _ =
     let arr_acc v i = BinEx (ARR_ACCESS, Var v, Const i) in
     let arr_upd v i j = BinEx (EQ, arr_acc v i, Const j) in
     Enum.iter (fun i -> ignore ((!solver)#append_expr (arr_upd x i (1 + i)))) (0--2);
-    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Var y)));
+    let append_arr i =
+        ignore ((!solver)#append_expr (BinEx (EQ, arr_acc x i, arr_acc y i)))
+    in
+    Enum.iter append_arr (0--2);
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
 
@@ -288,17 +304,17 @@ let test_model_query_try_get_not_found _ =
     let res = Q.try_get query (Var y) in
     assert_equal ~msg:"Q.Cached expected" res Q.Cached;
 
-    let new_query = (!solver)#submit_query query in
-
-    let new_res = Q.try_get new_query (Var y) in
-    assert_equal
-        ~msg:(sprintf "NoResult expected, found %s"
-                (Q.query_result_s new_query new_res))
-        new_res Q.NoResult
+    try
+        let new_query = (!solver)#submit_query query in
+        let _ = Q.try_get new_query (Var y) in
+        assert_failure ("expected Smt_error")
+    with Smt_error _ ->
+        () (* fine *)
 
 
 let suite = "smt-suite" >:::
     [
+        (***************** Yices 1.x **********************)
         "test_trivial_sat_yices"
 			>:: (bracket setup_yices test_trivial_sat reset_yices);
         "test_trivial_unsat_yices"
@@ -309,32 +325,69 @@ let suite = "smt-suite" >:::
 			>:: (bracket setup_yices test_comment reset_yices);
         "test_append_var_def_yices"
 			>:: (bracket setup_yices test_append_var_def reset_yices);
+        "test_append_var_def_array_yices"
+			>:: (bracket setup_yices test_append_var_def_array reset_yices);
         "test_append_expr_yices"
 			>:: (bracket setup_yices test_append_expr reset_yices);
         "test_push_ctx_yices"
 			>:: (bracket setup_yices test_push_ctx reset_yices);
         "test_pop_ctx_yices"
 			>:: (bracket setup_yices test_pop_ctx reset_yices);
-        "test_get_stack_level"
+        "test_get_stack_level_yices"
             >:: (bracket setup_yices test_get_stack_level reset_yices);
-        "test_get_unsat_cores"
+        "test_get_unsat_cores_yices"
             >:: (bracket setup_yices test_get_unsat_cores reset_yices);
-        "test_get_model_one_var"
+        "test_get_model_one_var_yices"
             >:: (bracket setup_yices test_get_model_one_var reset_yices);
-        "test_get_model_array"
+        "test_get_model_array_yices"
             >:: (bracket setup_yices test_get_model_array reset_yices);
-        "test_get_model_var_with_underscore"
+        "test_get_model_var_with_underscore_yices"
             >:: (bracket setup_yices test_get_model_var_with_underscore reset_yices);
-        "test_get_model_array_copy"
+        "test_get_model_array_copy_yices"
             >:: (bracket setup_yices test_get_model_array_copy reset_yices);
-        "test_model_query_try_get"
+        "test_model_query_try_get_yices"
             >:: (bracket setup_yices test_model_query_try_get reset_yices);
-        "test_model_query_try_get_not_found"
+        "test_model_query_try_get_not_found_yices"
             >:: (bracket setup_yices test_model_query_try_get_not_found shutdown_yices (* clean the room *));
         "test_wrong_solver_yices"
 			>:: test_wrong_solver;
 
         (***************** Z3 **********************)
+        "test_trivial_sat_smt2"
+			>:: (bracket setup_smt2 test_trivial_sat reset_smt2);
+        "test_trivial_unsat_smt2"
+			>:: (bracket setup_smt2 test_trivial_unsat reset_smt2);
+        "test_reset_smt2"
+			>:: (bracket setup_smt2 test_reset reset_smt2);
+        "test_comment_smt2"
+			>:: (bracket setup_smt2 test_comment reset_smt2);
+        "test_append_var_def_smt2"
+			>:: (bracket setup_smt2 test_append_var_def reset_smt2);
+        "test_append_var_def_array_smt2"
+			>:: (bracket setup_smt2 test_append_var_def_array reset_smt2);
+        "test_append_expr_smt2"
+			>:: (bracket setup_smt2 test_append_expr reset_smt2);
+        "test_push_ctx_smt2"
+			>:: (bracket setup_smt2 test_push_ctx reset_smt2);
+        "test_pop_ctx_smt2"
+			>:: (bracket setup_smt2 test_pop_ctx reset_smt2);
+        "test_get_stack_level_smt2"
+            >:: (bracket setup_smt2 test_get_stack_level reset_smt2);
+        "test_get_unsat_cores_smt2"
+            >:: (bracket setup_smt2 test_get_unsat_cores reset_smt2);
+        "test_get_model_one_var_smt2"
+            >:: (bracket setup_smt2 test_get_model_one_var reset_smt2);
+        "test_get_model_array_smt2"
+            >:: (bracket setup_yices test_get_model_array reset_yices);
+        "test_get_model_var_with_underscore_smt2"
+            >:: (bracket setup_yices test_get_model_var_with_underscore reset_yices);
+        "test_get_model_array_copy_smt2"
+            >:: (bracket setup_yices test_get_model_array_copy reset_yices);
+        "test_model_query_try_get_smt2"
+            >:: (bracket setup_yices test_model_query_try_get reset_yices);
+        "test_model_query_try_get_not_found_smt2"
+            >:: (bracket setup_yices test_model_query_try_get_not_found reset_yices);
+        (* this test shutdowns the solver! *)
         "test_trivial_sat_smt2"
 			>:: (bracket setup_smt2 test_trivial_sat shutdown_smt2);
     ]

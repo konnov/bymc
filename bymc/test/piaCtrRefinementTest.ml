@@ -97,7 +97,9 @@ let test_parse_smt_evidence_array _ =
     let pile =
         add n 1 (B.mk_pile ())
         |> add_arr x_in 0 2
+        |> add_arr x_in 1 5
         |> add_arr x_out 0 3
+        |> add_arr x_out 1 7
     in
     let res = (!yices)#check in
     assert_equal ~msg:"sat expected" res true;
@@ -109,15 +111,18 @@ let test_parse_smt_evidence_array _ =
     let tab = parse_smt_evidence prog (!yices) pile in
     let layer0 = Hashtbl.find tab 0 |> List.map expr_s |> str_join "; " in
     let exp0 = [ BinEx (ASGN, arr_acc x 0, Const 2);
+                 BinEx (ASGN, arr_acc x 1, Const 5);
                  BinEx (ASGN, Var n, Const 1) ]
         |> List.map expr_s |> str_join "; "
     in
     assert_equal exp0 layer0
-        ~msg:(sprintf "[%s] expected, found [%s]" exp0 layer0);
+        ~msg:(sprintf "expected [%s], found [%s]" exp0 layer0);
 
     let layer1 = Hashtbl.find tab 1 |> List.map expr_s |> str_join "; " in
     let exp1 =
-        [ BinEx (ASGN, arr_acc x 0, Const 3) ] |> List.map expr_s |> str_join "; "
+        [ BinEx (ASGN, arr_acc x 0, Const 3);
+          BinEx (ASGN, arr_acc x 1, Const 7) ]
+            |> List.map expr_s |> str_join "; "
     in
     assert_equal exp1 layer1
         ~msg:(sprintf "expected [%s], found [%s]" exp1 layer1)

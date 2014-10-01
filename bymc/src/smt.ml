@@ -4,6 +4,7 @@ open Printf
 open Str
 
 open BatEnum
+open Sexplib
 
 open Debug
 open PipeCmd
@@ -19,7 +20,6 @@ module Q = struct
     type query_result_t =
         | Cached    (** the query is cached, once 'submit' is invoked,
                          the result will be available for the same query *)
-        | NoResult   (** nothing is associated with the query *)
         | Result of (Spin.token SpinIr.expr)
                      (** the result of a previously cached query *)
 
@@ -31,7 +31,6 @@ module Q = struct
 
     let query_result_s q = function
         | Cached -> "Cached"
-        | NoResult -> "NoResult"
         | Result e -> "Result " ^ (q.expr_to_smt_f e)
 
     let new_query expr_to_smt_f = 
@@ -42,7 +41,7 @@ module Q = struct
         try Hashtbl.find q.tab e_s
         with Not_found ->
             if q.frozen
-            then NoResult
+            then raise (Smt_error ("No result for " ^ e_s))
             else begin
                 Hashtbl.add q.tab e_s Cached;
                 Cached
@@ -150,7 +149,7 @@ let rec expr_to_smt e =
         | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
+        | NE    -> sprintf "(not (= %s %s))"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
@@ -167,7 +166,7 @@ let rec expr_to_smt e =
             raise (Failure "LabelRef to SMT is not supported")
 
 
-let var_to_smt var tp =
+let var_to_smt_yices var tp =
     let base_type = match tp#basetype with
     | TBIT -> "bool"
     | TBYTE -> "int"
@@ -191,6 +190,51 @@ let var_to_smt var tp =
         else subtype
     in
     sprintf "(define %s :: %s)" var#mangled_name complex_type
+
+
+let var_to_smtlib2 var tp =
+    let l, r = tp#range in
+    let rng e = [ BinEx (GE, e, Const l); BinEx (LT, e, Const r) ] in
+    let base_type, cons_f = match tp#basetype with
+    | TBIT -> "Bool",
+        fun _ -> []
+
+    | TBYTE -> "Int",
+        (fun e ->
+            if tp#has_range
+            then rng e
+            else [ BinEx (AND,
+                BinEx (GE, e, Const 0),
+                BinEx (LE, e, Const 255))
+            ])
+
+    | TSHORT -> "Int", (* TODO: what is the range of short? *)
+        (fun e -> if tp#has_range then rng e else [])
+
+    | TINT -> "Int",
+        (fun e -> if tp#has_range then rng e else [])
+
+    | TUNSIGNED -> "Int",
+        (fun e -> if tp#has_range then rng e else [ BinEx (GE, e, Const 0) ])
+
+    | TCHAN -> raise (Failure "Type chan is not supported")
+    | TMTYPE -> raise (Failure "Type mtype is not supported")
+    | TPROPOSITION -> raise (Failure "Type proposition is not supported")
+    | TUNDEF -> raise (Failure "Undefined type met")
+    in
+    let decl =
+        if tp#is_array
+        then sprintf "(declare-fun %s (Int) %s)" var#mangled_name base_type
+        else sprintf "(declare-fun %s () %s)" var#mangled_name base_type
+    in
+    let acc i = BinEx (ARR_ACCESS, Var var, Const i) in
+    let cons =
+        if not tp#is_array
+        then cons_f (Var var)
+        else List.concat
+            (List.map (fun i -> cons_f (acc i)) (Accums.range 0 tp#nelems))
+    in
+    decl :: (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e)) cons)
 
 
 let parse_smt_model_q query lines =
@@ -285,7 +329,7 @@ class yices_smt (solver_cmd: string) =
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            self#append (var_to_smt v tp)
+            self#append (var_to_smt_yices v tp)
 
         method comment (line: string) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -469,13 +513,17 @@ class lib2_smt solver_cmd solver_args =
         val mutable m_pushes = 0
         (** the number of stack pushes executed within inconsistent context *)
         val mutable m_inconsistent_pushes = 0
+        (** the last id used in the assertions *)
+        val mutable m_last_id = 1
 
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.create solver_cmd solver_args "smt2.err";
             clog <- open_out "smt2.log";
-            self#append "(set-option :print-success true)\n";
-            self#sync;
+            self#append_and_sync "(set-option :print-success true)\n";
+            self#append_and_sync "(set-option :produce-unsat-cores true)\n";
+            (* pop removes the declarations *)
+            self#append_and_sync "(set-option :global-decls false)\n";
             self#push_ctx (* a backup context to reset *)
         
         method stop =
@@ -487,7 +535,7 @@ class lib2_smt solver_cmd solver_args =
             m_pipe_cmd <- PipeCmd.null ()
 
         method reset =
-            BatEnum.iter (fun _ -> self#pop_ctx) (1 -- m_pushes);
+            self#pop_n m_pushes;
             m_need_evidence <- false;
             collect_asserts <- false;
             m_pushes <- 0;
@@ -496,7 +544,8 @@ class lib2_smt solver_cmd solver_args =
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            self#append (var_to_smt v tp)
+            let exprs = var_to_smtlib2 v tp in
+            List.iter (fun e -> self#append_and_sync e) exprs
 
         method comment (line: string) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -504,25 +553,23 @@ class lib2_smt solver_cmd solver_args =
 
         method append_expr expr =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            let eid = ref 0 in
             let e_s = expr_to_smt expr in
-            let is_comment = (String.length e_s) > 1
-                    && e_s.[0] = ';' && e_s.[1] = ';' in
+            let is_comment =
+                (String.length e_s) > 1 && e_s.[0] = ';' && e_s.[1] = ';'
+            in
             if not is_comment
             then begin 
                 if not collect_asserts
-                then self#append (sprintf "(assert %s)" e_s)
-                else begin
-                    (* XXX: may block if the verbosity level < 2 *)
-                    self#sync;
-                    self#append (sprintf "(assert+ %s)" e_s);
-                    let line = self#read_line in
-                    if (Str.string_match (Str.regexp "id: \\([0-9]+\\)") line 0)
-                    then
-                        let id = int_of_string (Str.matched_group 1 line) in
-                        eid := id
+                then begin
+                    self#append_and_sync (sprintf "(assert %s)" e_s);
+                    -1
+                end else begin
+                    let id = m_last_id in
+                    self#append_and_sync
+                        (sprintf "(assert (! %s :named _E%d))" e_s id);
+                    m_last_id <- m_last_id + 1;
+                    id
                 end;
-                !eid
             end else -1
 
         method push_ctx =
@@ -538,8 +585,12 @@ class lib2_smt solver_cmd solver_args =
         method pop_ctx =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             m_pushes <- m_pushes - 1;
-            self#append "(pop 1)";
-            self#sync
+            self#append_and_sync "(pop 1)"
+
+        method private pop_n n =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            m_pushes <- m_pushes - n;
+            self#append_and_sync (sprintf "(pop %d)" n)
 
         method check =
             self#append "(check-sat)";
@@ -558,17 +609,39 @@ class lib2_smt solver_cmd solver_args =
         method get_model_query = Q.new_query expr_to_smt
 
         method submit_query (query: Q.query_t) =
-            (* same as sync but the lines are collected *)
-            let lines = ref [] in
-            self#append "(echo \"EOEV\\n\")";
-            let stop = ref false in
-            while not !stop do
+            let str = Hashtbl.fold (fun e_s _ s -> s ^ " " ^ e_s) query.Q.tab "" in
+            self#append (sprintf "(get-value (%s))" str);
+            let new_q = Q.new_query query.Q.expr_to_smt_f in
+            let opened, closed = ref 0, ref 0 in
+            let buf = ref "" in
+            let cnt_braces b s =
+                BatString.fold_left (fun n c -> if c = b then n + 1 else n) 0 s
+            in
+            while !opened = 0 || !opened <> !closed do
                 let line = self#read_line in
-                if "EOEV" = line
-                then stop := true
-                else lines := line :: !lines
+                opened := !opened + (cnt_braces '(' line);
+                closed := !closed + (cnt_braces ')' line);
+                buf := !buf ^ line;
             done;
-            parse_smt_model_q query (List.rev !lines)
+
+            let parse_elem = function
+                | Sexp.List [_ as key_sexp; Sexp.Atom val_s] ->
+                        let key = Sexp.to_string key_sexp in
+                        let value = int_of_string val_s in
+                        ignore (Q.add_result query new_q key (Const value))
+                
+                | _ as s ->
+                        raise (Smt_error
+                            ("Unexpected pair: " ^ (Sexp.to_string s)))
+            in
+            let parse = function
+                | Sexp.List l ->
+                        List.iter parse_elem l
+
+                | _ -> raise (Smt_error ("Unexpected model: " ^ !buf))
+            in
+            parse (Sexp.of_string !buf);
+            new_q
 
         method get_collect_asserts = collect_asserts
 
@@ -576,20 +649,26 @@ class lib2_smt solver_cmd solver_args =
 
         method get_unsat_cores =
             (* collect unsatisfiable cores *)
-            let re = Str.regexp ".*unsat core ids: \\([ 0-9]+\\).*" in
+            let re = Str.regexp "_E\\([0-9]+\\)" in
             let cores = ref [] in
-            self#append "(echo \"EOI\\n\")\n";
+            self#append "(get-unsat-core)\n";
             let stop = ref false in
+
             while not !stop do
                 let line = self#read_line in
-                if Str.string_match re line 0
-                then begin
-                    let id_str = (Str.matched_group 1 line) in
-                    let ids_as_str = (Str.split (Str.regexp " ") id_str) in
-                    cores := (List.map int_of_string ids_as_str)
+                let start = ref 0 in
+                begin
+                    try
+                        while true do
+                            let _ = search_forward re line !start in
+                            let id = int_of_string (Str.matched_group 1 line) in
+                            cores := id :: !cores;
+                            start := 1 + (match_end ())
+                        done
+                    with Not_found -> ()
                 end;
 
-                stop := (line = "EOI")
+                stop := String.contains line ')'
             done;
             !cores
 
@@ -604,7 +683,7 @@ class lib2_smt solver_cmd solver_args =
             | "unknown" -> raise (Smt_error "unknown result")
             | _ -> if ignore_errors
                 then false
-                else raise (Smt_error (sprintf "yices: %s" l))
+                else raise (Smt_error (sprintf "solver: %s" l))
 
         method private read_line =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -623,6 +702,10 @@ class lib2_smt solver_cmd solver_args =
             if debug then printf "%s\n" cmd;
             self#write_line (sprintf "%s" cmd);
             fprintf clog "%s\n" cmd; flush clog
+
+        method private append_and_sync cmd =
+            self#append cmd;
+            self#sync
 
         method private append_assert s =
             assert(not (PipeCmd.is_null m_pipe_cmd));

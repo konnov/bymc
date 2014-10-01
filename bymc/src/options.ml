@@ -18,7 +18,7 @@ type action_opt_t =
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv
 
-type smt_opt_t = SmtYices | SmtLib2 of string
+type smt_opt_t = SmtYices | SmtLib2 of string array
 
 type options_t =
     {
@@ -73,7 +73,8 @@ let parse_smt s =
     else begin
         try
             if "lib2:" = (Str.string_before s 5)
-            then SmtLib2(Str.string_after s 5) 
+            then let cmd = Str.string_after s 5 in  
+                SmtLib2 (Array.of_list (Str.split_delim (Str.regexp ":") cmd))
             else raise (Failure ("Unknown --smt argument: " ^ s))
         with Invalid_argument _ ->
             raise (Failure ("Unknown --smt argument: " ^ s))

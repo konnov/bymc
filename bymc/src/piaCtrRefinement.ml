@@ -236,8 +236,6 @@ let parse_smt_evidence prog solver pile =
     in
     let each_expr query exp =
         match (exp, Q.try_get query exp) with
-        | _, Q.NoResult -> ()
-
         | _, Q.Cached -> ()
 
         | Var var, Q.Result (Const value) ->

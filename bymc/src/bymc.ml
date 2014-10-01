@@ -25,6 +25,16 @@ let print_version_if_needed opts =
     | _ -> ()
 
 
+let run_solver opts =
+    match opts.smt with
+        | SmtYices ->
+                new Smt.yices_smt "yices"
+        | SmtLib2 args ->
+                let prog = args.(0) in
+                let args = Array.sub args 1 ((Array.length args) - 1) in
+                new Smt.lib2_smt prog args    
+
+
 let main () =
     let opts = parse_options in
     print_version_if_needed opts;
@@ -32,7 +42,7 @@ let main () =
         printf "\n%s\n\n" banner;
         Debug.initialize_debug opts;
         let caches = new pass_caches opts (new analysis_cache) in
-        let solver = new Smt.yices_smt "yices" in
+        let solver = run_solver opts in
         solver#start;
         let rt = new Runtime.runtime_t solver caches in
         begin
