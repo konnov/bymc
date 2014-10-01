@@ -25,6 +25,7 @@ CONTENTS
  * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (if you want to run unit tests)
+ * sexplib
  * yices 1.x: http://yices.csl.sri.com/download.shtml
  * at least one of those:
      - spin: http://spinroot.com/spin/Man/README.html#S2
@@ -127,7 +128,7 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install batteries ounit ocamlgraph
+$ opam install batteries ounit ocamlgraph sexplib
 
 (Do not forget to include the line
 'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
