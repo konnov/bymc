@@ -8,21 +8,38 @@ open Spin
 open SpinIr
 open SpinIrImp
 
-let yices = ref (new yices_smt "yices")
+let solver = ref (new yices_smt "yices")
 let is_started = ref false
 
-let setup _ =
+let setup_yices _ =
     if not !is_started
     then begin
-        (!yices)#start;
+        solver := new yices_smt "yices";
+        (!solver)#start;
         is_started := true;
     end
 
-let teardown _ =
-    ignore (!yices)#reset
+let reset_yices _ =
+    assert (!is_started);
+    ignore (!solver)#reset
 
-let shutdown _ =
-    ignore (!yices)#stop
+let shutdown_yices _ =
+    ignore (!solver)#stop;
+    is_started := false
+
+let setup_smt2 _ =
+    if not !is_started
+    then begin
+        solver := new lib2_smt "z3" [| "-smt2"; "-in"|];
+        (!solver)#start;
+        is_started := true;
+    end
+
+let reset_smt2 _ =
+    ignore (!solver)#reset
+
+let shutdown_smt2 _ =
+    ignore (!solver)#stop
 
 
 let test_wrong_solver _ =
@@ -36,96 +53,96 @@ let test_wrong_solver _ =
 
 
 let test_trivial_sat _ =
-    let res = (!yices)#check in
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true 
 
 
 let test_trivial_unsat _ =
-    ignore ((!yices)#append_expr (BinEx (EQ, Const 1, Const 2)));
-    let res = (!yices)#check in
+    ignore ((!solver)#append_expr (BinEx (EQ, Const 1, Const 2)));
+    let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false 
 
 
 let test_reset _ =
-    let res = (!yices)#check in
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
-    ignore ((!yices)#append_expr (BinEx (EQ, Const 1, Const 2)));
-    let res = (!yices)#check in
+    ignore ((!solver)#append_expr (BinEx (EQ, Const 1, Const 2)));
+    let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
-    (!yices)#reset;
-    let res = (!yices)#check in
+    (!solver)#reset;
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected after reset" res true 
 
 
 let test_comment _ =
-    (!yices)#comment "Just a comment";
-    let res = (!yices)#check in
+    (!solver)#comment "Just a comment";
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true 
 
 
 let test_append_var_def _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#append_var_def x t;
-    let res = (!yices)#check in
+    (!solver)#append_var_def x t;
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true 
 
 
 let test_append_expr _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#append_var_def x t;
-    ignore ((!yices)#append_expr
+    (!solver)#append_var_def x t;
+    ignore ((!solver)#append_expr
         (BinEx (AND,
             (BinEx (EQ, Var x, Const 1)),
             (BinEx (EQ, Var x, Const 2)))));
-    let res = (!yices)#check in
+    let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false 
 
 
 let test_push_ctx _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#append_var_def x t;
-    (!yices)#push_ctx
+    (!solver)#append_var_def x t;
+    (!solver)#push_ctx
 
 
 let test_pop_ctx _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#append_var_def x t;
-    ignore ((!yices)#append_expr (BinEx (EQ, Var x, Const 1)));
-    (!yices)#push_ctx;
-    ignore ((!yices)#append_expr (BinEx (EQ, Var x, Const 2)));
-    let res = (!yices)#check in
+    (!solver)#append_var_def x t;
+    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Const 1)));
+    (!solver)#push_ctx;
+    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Const 2)));
+    let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
-    (!yices)#pop_ctx;
-    let res = (!yices)#check in
+    (!solver)#pop_ctx;
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true
 
 
 let test_get_stack_level _ =
-    (!yices)#push_ctx;
-    assert_equal ~msg:"stack level 1 expected" !(yices)#get_stack_level 1;
-    (!yices)#push_ctx;
-    assert_equal ~msg:"stack level 2 expected" !(yices)#get_stack_level 2;
-    (!yices)#pop_ctx;
-    assert_equal ~msg:"stack level 1 expected" !(yices)#get_stack_level 1
+    (!solver)#push_ctx;
+    assert_equal ~msg:"stack level 1 expected" !(solver)#get_stack_level 1;
+    (!solver)#push_ctx;
+    assert_equal ~msg:"stack level 2 expected" !(solver)#get_stack_level 2;
+    (!solver)#pop_ctx;
+    assert_equal ~msg:"stack level 1 expected" !(solver)#get_stack_level 1
 
 
 let test_get_unsat_cores _ =
-    (!yices)#set_need_model true;
-    (!yices)#set_collect_asserts true;
+    (!solver)#set_need_model true;
+    (!solver)#set_collect_asserts true;
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#append_var_def x t;
-    let id = (!yices)#append_expr
+    (!solver)#append_var_def x t;
+    let id = (!solver)#append_expr
         (BinEx (AND,
             (BinEx (EQ, Var x, Const 1)),
             (BinEx (EQ, Var x, Const 2)))) in
-    let res = (!yices)#check in
+    let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
-    let cores = (!yices)#get_unsat_cores in
+    let cores = (!solver)#get_unsat_cores in
     if cores <> [id]
     then
         let cores_s = str_join ", " (List.map int_s cores) in
@@ -135,15 +152,15 @@ let test_get_unsat_cores _ =
 let test_get_model_one_var _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#set_need_model true;
-    (!yices)#append_var_def x t;
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
     let e = BinEx (EQ, Var x, Const 1) in
-    ignore ((!yices)#append_expr e);
-    let res = (!yices)#check in
+    ignore ((!solver)#append_expr e);
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
-    let query = (!yices)#submit_query query in
+    let query = (!solver)#submit_query query in
     let res = Q.try_get query (Var x) in
     assert_equal (Q.Result (Const 1)) res
         ~msg:(sprintf "(Const 1) expected, found %s"
@@ -153,15 +170,15 @@ let test_get_model_one_var _ =
 let test_get_model_var_with_underscore _ =
     let x = new_var "_x" in
     let t = mk_int_range 0 10 in
-    (!yices)#set_need_model true;
-    (!yices)#append_var_def x t;
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
     let e = BinEx (EQ, Var x, Const 1) in
-    ignore ((!yices)#append_expr e);
-    let res = (!yices)#check in
+    ignore ((!solver)#append_expr e);
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
-    let query = (!yices)#submit_query query in
+    let query = (!solver)#submit_query query in
     let res = Q.try_get query (Var x) in
     assert_equal (Q.Result (Const 1)) res
         ~msg:(sprintf "(Const 1) expected, found %s"
@@ -172,22 +189,22 @@ let test_get_model_array _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
     t#set_nelems 3;
-    (!yices)#set_need_model true;
-    (!yices)#append_var_def x t;
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
     let arr_acc i = BinEx (ARR_ACCESS, Var x, Const i) in
     let arr_upd i j = BinEx (EQ, arr_acc i, Const j) in
-    Enum.iter (fun i -> ignore ((!yices)#append_expr (arr_upd i (1 + i)))) (0--2);
-    let res = (!yices)#check in
+    Enum.iter (fun i -> ignore ((!solver)#append_expr (arr_upd i (1 + i)))) (0--2);
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
 
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     let assert_cached i =
         let res = Q.try_get query (arr_acc i) in
         assert_equal Q.Cached res ~msg:(sprintf "Cached expected for %d" i)
     in
     Enum.iter assert_cached (0--2);
 
-    let query = (!yices)#submit_query query in
+    let query = (!solver)#submit_query query in
 
     let assert_result i =
         let res = Q.try_get query (arr_acc i) in
@@ -207,17 +224,17 @@ let test_get_model_array_copy _ =
     let y = new_var "y" in
     let t = mk_int_range 0 10 in
     t#set_nelems 3;
-    (!yices)#set_need_model true;
-    (!yices)#append_var_def x t;
-    (!yices)#append_var_def y t;
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
+    (!solver)#append_var_def y t;
     let arr_acc v i = BinEx (ARR_ACCESS, Var v, Const i) in
     let arr_upd v i j = BinEx (EQ, arr_acc v i, Const j) in
-    Enum.iter (fun i -> ignore ((!yices)#append_expr (arr_upd x i (1 + i)))) (0--2);
-    ignore ((!yices)#append_expr (BinEx (EQ, Var x, Var y)));
-    let res = (!yices)#check in
+    Enum.iter (fun i -> ignore ((!solver)#append_expr (arr_upd x i (1 + i)))) (0--2);
+    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Var y)));
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
 
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     let assert_cached v i =
         let res = Q.try_get query (arr_acc v i) in
         assert_equal Q.Cached res ~msg:(sprintf "Cached expected for %d" i)
@@ -225,7 +242,7 @@ let test_get_model_array_copy _ =
     Enum.iter (assert_cached x) (0--2);
     Enum.iter (assert_cached y) (0--2);
 
-    let query = (!yices)#submit_query query in
+    let query = (!solver)#submit_query query in
 
     let assert_result v i =
         let res = Q.try_get query (arr_acc v i) in
@@ -243,35 +260,35 @@ let test_get_model_array_copy _ =
 let test_model_query_try_get _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
-    (!yices)#set_need_model true;
-    (!yices)#append_var_def x t;
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
     let e = BinEx (EQ, Var x, Const 1) in
-    ignore ((!yices)#append_expr e);
-    let res = (!yices)#check in
+    ignore ((!solver)#append_expr e);
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
     
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     let res = Q.try_get query (Var x) in
     assert_equal ~msg:"Q.Cached expected" res Q.Cached;
 
-    let query = (!yices)#submit_query query in
+    let query = (!solver)#submit_query query in
 
     let res = Q.try_get query (Var x) in
     assert_equal ~msg:"Q.Result (Const 1) expected" res (Q.Result (Const 1))
 
 
 let test_model_query_try_get_not_found _ =
-    (!yices)#set_need_model true;
-    let res = (!yices)#check in
+    (!solver)#set_need_model true;
+    let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
 
-    let query = (!yices)#get_model_query in
+    let query = (!solver)#get_model_query in
     (* y was never passed to the solver *)
     let y = new_var "y" in
     let res = Q.try_get query (Var y) in
     assert_equal ~msg:"Q.Cached expected" res Q.Cached;
 
-    let new_query = (!yices)#submit_query query in
+    let new_query = (!solver)#submit_query query in
 
     let new_res = Q.try_get new_query (Var y) in
     assert_equal
@@ -282,30 +299,43 @@ let test_model_query_try_get_not_found _ =
 
 let suite = "smt-suite" >:::
     [
-        "test_trivial_sat" >:: (bracket setup test_trivial_sat teardown);
-        "test_trivial_unsat" >:: (bracket setup test_trivial_unsat teardown);
-        "test_reset" >:: (bracket setup test_reset teardown);
-        "test_comment" >:: (bracket setup test_comment teardown);
-        "test_append_var_def" >:: (bracket setup test_append_var_def teardown);
-        "test_append_expr" >:: (bracket setup test_append_expr teardown);
-        "test_push_ctx" >:: (bracket setup test_push_ctx teardown);
-        "test_pop_ctx" >:: (bracket setup test_pop_ctx teardown);
+        "test_trivial_sat_yices"
+			>:: (bracket setup_yices test_trivial_sat reset_yices);
+        "test_trivial_unsat_yices"
+			>:: (bracket setup_yices test_trivial_unsat reset_yices);
+        "test_reset_yices"
+			>:: (bracket setup_yices test_reset reset_yices);
+        "test_comment_yices"
+			>:: (bracket setup_yices test_comment reset_yices);
+        "test_append_var_def_yices"
+			>:: (bracket setup_yices test_append_var_def reset_yices);
+        "test_append_expr_yices"
+			>:: (bracket setup_yices test_append_expr reset_yices);
+        "test_push_ctx_yices"
+			>:: (bracket setup_yices test_push_ctx reset_yices);
+        "test_pop_ctx_yices"
+			>:: (bracket setup_yices test_pop_ctx reset_yices);
         "test_get_stack_level"
-            >:: (bracket setup test_get_stack_level teardown);
+            >:: (bracket setup_yices test_get_stack_level reset_yices);
         "test_get_unsat_cores"
-            >:: (bracket setup test_get_unsat_cores teardown);
+            >:: (bracket setup_yices test_get_unsat_cores reset_yices);
         "test_get_model_one_var"
-            >:: (bracket setup test_get_model_one_var teardown);
+            >:: (bracket setup_yices test_get_model_one_var reset_yices);
         "test_get_model_array"
-            >:: (bracket setup test_get_model_array teardown);
+            >:: (bracket setup_yices test_get_model_array reset_yices);
         "test_get_model_var_with_underscore"
-            >:: (bracket setup test_get_model_var_with_underscore teardown);
+            >:: (bracket setup_yices test_get_model_var_with_underscore reset_yices);
         "test_get_model_array_copy"
-            >:: (bracket setup test_get_model_array_copy teardown);
+            >:: (bracket setup_yices test_get_model_array_copy reset_yices);
         "test_model_query_try_get"
-            >:: (bracket setup test_model_query_try_get teardown);
+            >:: (bracket setup_yices test_model_query_try_get reset_yices);
         "test_model_query_try_get_not_found"
-            >:: (bracket setup test_model_query_try_get_not_found shutdown (* clean the room *));
-        "test_wrong_solver" >:: test_wrong_solver;
+            >:: (bracket setup_yices test_model_query_try_get_not_found shutdown_yices (* clean the room *));
+        "test_wrong_solver_yices"
+			>:: test_wrong_solver;
+
+        (***************** Z3 **********************)
+        "test_trivial_sat_smt2"
+			>:: (bracket setup_smt2 test_trivial_sat shutdown_smt2);
     ]
 

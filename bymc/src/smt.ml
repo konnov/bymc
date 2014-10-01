@@ -3,6 +3,8 @@
 open Printf
 open Str
 
+open BatEnum
+
 open Debug
 open PipeCmd
 open SpinTypes
@@ -240,7 +242,7 @@ let parse_smt_model_q query lines =
 
 (* The interface to the SMT solver (yices).
    We are using the text interface, as it is way easier to debug. *)
-class yices_smt (solver_name: string) =
+class yices_smt (solver_cmd: string) =
     object(self)
         inherit smt_solver
 
@@ -262,8 +264,8 @@ class yices_smt (solver_name: string) =
 
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
-            m_pipe_cmd <- PipeCmd.create solver_name [||] (solver_name ^ ".err");
-            clog <- open_out (solver_name ^ ".log");
+            m_pipe_cmd <- PipeCmd.create solver_cmd [||] "yices.err";
+            clog <- open_out "yices.log";
             ignore (self#check);
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
@@ -316,7 +318,7 @@ class yices_smt (solver_name: string) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             self#sync;
             self#append "(status)"; (* it can be unsat already *)
-            if not (self#is_out_sat true)
+            if not (self#is_out_sat ~ignore_errors:true)
             then begin
                 self#comment "push in inconsistent context. Ignored.";
                 m_inconsistent_pushes <- m_inconsistent_pushes + 1
@@ -346,12 +348,12 @@ class yices_smt (solver_name: string) =
         method check =
             self#sync;
             self#append "(status)"; (* it can be unsat already *)
-            if not (self#is_out_sat true)
+            if not (self#is_out_sat ~ignore_errors:true)
             then false
             else begin
                 self#sync;
                 self#append "(check)";
-                let res = self#is_out_sat false in
+                let res = self#is_out_sat ~ignore_errors:false in
                 res
             end
 
@@ -403,9 +405,8 @@ class yices_smt (solver_name: string) =
 
         method set_debug flag = debug <- flag
 
-        method private is_out_sat ignore_errors =
+        method private is_out_sat ~ignore_errors =
             let l = self#read_line in
-            (*printf "%s\n" l;*)
             match l with
             | "sat" -> true
             | "ok" -> true
@@ -415,7 +416,7 @@ class yices_smt (solver_name: string) =
                 else raise (Smt_error (sprintf "yices: %s" l))
 
         method private read_line =
-            assert(not (PipeCmd.is_null m_pipe_cmd));
+            assert (not (PipeCmd.is_null m_pipe_cmd));
             let out = PipeCmd.readline m_pipe_cmd in
             fprintf clog ";; READ: %s\n" out; flush clog;
             trace Trc.smt (fun _ -> sprintf "YICES: ^^^%s$$$\n" out);
@@ -441,6 +442,205 @@ class yices_smt (solver_name: string) =
             let stop = ref false in
             while not !stop do
                 if "sync" = self#read_line then stop := true
+            done
+    end
+
+
+(*
+    An interface to a solver supporting SMTLIB2. This class invoke a solver
+    and communicates with it via pipes.
+*)
+class lib2_smt solver_cmd solver_args =
+    object(self)
+        inherit smt_solver
+
+        (* for how long we wait for output from yices if check is issued *)
+        val check_timeout_sec = 3600.0
+        (* for how long we wait for output from yices if another command is issued*)
+        val timeout_sec = 10.0
+        val mutable pid = 0
+        val mutable clog = stdout
+        val mutable m_pipe_cmd = PipeCmd.null ()
+        val mutable debug = false
+        val mutable m_need_evidence = false
+        val mutable collect_asserts = false
+        val mutable poll_tm_sec = 10.0
+        (** the number of stack pushes executed within consistent context *)
+        val mutable m_pushes = 0
+        (** the number of stack pushes executed within inconsistent context *)
+        val mutable m_inconsistent_pushes = 0
+
+        method start =
+            assert(PipeCmd.is_null m_pipe_cmd);
+            m_pipe_cmd <- PipeCmd.create solver_cmd solver_args "smt2.err";
+            clog <- open_out "smt2.log";
+            self#append "(set-option :print-success true)\n";
+            self#sync;
+            self#push_ctx (* a backup context to reset *)
+        
+        method stop =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            self#append "(exit)\n";
+            self#sync;
+            close_out clog;
+            ignore (PipeCmd.destroy m_pipe_cmd);
+            m_pipe_cmd <- PipeCmd.null ()
+
+        method reset =
+            BatEnum.iter (fun _ -> self#pop_ctx) (1 -- m_pushes);
+            m_need_evidence <- false;
+            collect_asserts <- false;
+            m_pushes <- 0;
+            m_inconsistent_pushes <- 0;
+            self#push_ctx
+
+        method append_var_def (v: var) (tp: data_type) =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            self#append (var_to_smt v tp)
+
+        method comment (line: string) =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            self#append (";; " ^ line)
+
+        method append_expr expr =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            let eid = ref 0 in
+            let e_s = expr_to_smt expr in
+            let is_comment = (String.length e_s) > 1
+                    && e_s.[0] = ';' && e_s.[1] = ';' in
+            if not is_comment
+            then begin 
+                if not collect_asserts
+                then self#append (sprintf "(assert %s)" e_s)
+                else begin
+                    (* XXX: may block if the verbosity level < 2 *)
+                    self#sync;
+                    self#append (sprintf "(assert+ %s)" e_s);
+                    let line = self#read_line in
+                    if (Str.string_match (Str.regexp "id: \\([0-9]+\\)") line 0)
+                    then
+                        let id = int_of_string (Str.matched_group 1 line) in
+                        eid := id
+                end;
+                !eid
+            end else -1
+
+        method push_ctx =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            m_pushes <- m_pushes + 1;
+            self#append "(push 1)";
+            self#sync
+
+        (** Get the current stack level (nr. of pushes). Use for debugging *)
+        method get_stack_level =
+            m_pushes + m_inconsistent_pushes
+
+        method pop_ctx =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            m_pushes <- m_pushes - 1;
+            self#append "(pop 1)";
+            self#sync
+
+        method check =
+            self#append "(check-sat)";
+            let res = self#is_out_sat ~ignore_errors:false in
+            res
+
+        method set_need_model b =
+            m_need_evidence <- b;
+            if b
+            then self#append "(set-option :produce-models true)"
+            else self#append "(set-option :produce-models false)";
+            self#sync
+
+        method get_need_model = m_need_evidence
+            
+        method get_model_query = Q.new_query expr_to_smt
+
+        method submit_query (query: Q.query_t) =
+            (* same as sync but the lines are collected *)
+            let lines = ref [] in
+            self#append "(echo \"EOEV\\n\")";
+            let stop = ref false in
+            while not !stop do
+                let line = self#read_line in
+                if "EOEV" = line
+                then stop := true
+                else lines := line :: !lines
+            done;
+            parse_smt_model_q query (List.rev !lines)
+
+        method get_collect_asserts = collect_asserts
+
+        method set_collect_asserts b = collect_asserts <- b
+
+        method get_unsat_cores =
+            (* collect unsatisfiable cores *)
+            let re = Str.regexp ".*unsat core ids: \\([ 0-9]+\\).*" in
+            let cores = ref [] in
+            self#append "(echo \"EOI\\n\")\n";
+            let stop = ref false in
+            while not !stop do
+                let line = self#read_line in
+                if Str.string_match re line 0
+                then begin
+                    let id_str = (Str.matched_group 1 line) in
+                    let ids_as_str = (Str.split (Str.regexp " ") id_str) in
+                    cores := (List.map int_of_string ids_as_str)
+                end;
+
+                stop := (line = "EOI")
+            done;
+            !cores
+
+        method set_debug flag = debug <- flag
+
+        method private is_out_sat ~ignore_errors =
+            let l = self#read_line in
+            (*printf "%s\n" l;*)
+            match l with
+            | "sat" -> true
+            | "unsat" -> false
+            | "unknown" -> raise (Smt_error "unknown result")
+            | _ -> if ignore_errors
+                then false
+                else raise (Smt_error (sprintf "yices: %s" l))
+
+        method private read_line =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            let out = PipeCmd.readline m_pipe_cmd in
+            fprintf clog ";; READ: %s\n" out; flush clog;
+            trace Trc.smt (fun _ -> sprintf "SMT2: ^^^%s$$$\n" out);
+            try
+                if "(error " = (Str.string_before out 7)
+                then raise (Smt_error out)
+                else out
+            with Invalid_argument _ ->
+                out
+
+        method private append cmd =
+            assert (not (PipeCmd.is_null m_pipe_cmd));
+            if debug then printf "%s\n" cmd;
+            self#write_line (sprintf "%s" cmd);
+            fprintf clog "%s\n" cmd; flush clog
+
+        method private append_assert s =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            self#append (sprintf "(assert %s)" s)
+
+        method private write_line s =
+            assert(not (PipeCmd.is_null m_pipe_cmd));
+            writeline m_pipe_cmd s
+
+        method private sync =
+            (* the solver can print more messages, thus, sync! *)
+            let stop = ref false in
+            while not !stop do
+                let line = self#read_line in
+                if "success" = line
+                then stop := true;
+                if "unsupported" = line
+                then raise (Failure "got unsupported")
             done
     end
 
