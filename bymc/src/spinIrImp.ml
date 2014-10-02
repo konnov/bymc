@@ -154,7 +154,7 @@ let is_name = function
 
 let rec expr_s = function
     | Nop comment -> sprintf "/* %s */" comment
-    | Const i -> string_of_int i
+    | IntConst i -> string_of_int i
     | Var v -> v#get_name
     | UnEx (CARD, f) -> sprintf "card(%s)" (expr_s f)
     | UnEx (tok, f) -> sprintf "(%s%s)" (token_s tok) (expr_s f)
@@ -180,7 +180,7 @@ let rec expr_s = function
 
 let rec expr_tree_s = function
     | Nop comment -> sprintf "Nop('%s')" comment
-    | Const i -> sprintf "Const(%d)" i
+    | IntConst i -> sprintf "Const(%d)" i
     | Var v -> sprintf "Var(%s)" v#get_name
     | UnEx (tok, f) -> sprintf "UnEx(%s,%s)" (token_s tok) (expr_tree_s f)
     | BinEx (ARR_ACCESS, arr, idx) ->
@@ -200,7 +200,7 @@ let rec expr_tree_s = function
 let rec fprint_expr var_fun ff = function
     | Nop comment ->
         Format.fprintf ff "skip@ /*@ %s@ */" comment
-    | Const i ->
+    | IntConst i ->
         Format.fprintf ff "%d" i
     | Var v ->
         Format.fprintf ff "%s" (var_fun v)
@@ -404,7 +404,7 @@ let mir_to_lir (stmts: 't mir_stmt list) : 't stmt list =
 
 let prog_unit_s = function
     | Proc p ->
-        let act = if p#get_active_expr <> (Const 0)
+        let act = if p#get_active_expr <> (IntConst 0)
             then Printf.sprintf "active[%s] " (expr_s p#get_active_expr)
             else "" in
         let args = List.fold_left

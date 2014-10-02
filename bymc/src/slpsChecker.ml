@@ -111,10 +111,10 @@ let accelerate_expr accel_var e =
         | BinEx (t, l, r) ->
                 BinEx (t, f l, f r)
 
-        | Const i ->
+        | IntConst i ->
                 if i = 1
                 then Var accel_var
-                else BinEx (Spin.MULT, Const i, Var accel_var)
+                else BinEx (Spin.MULT, IntConst i, Var accel_var)
 
         | e -> e
     in
@@ -157,7 +157,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
         F.assert_frame rt#solver tt frame new_frame [move rule.Sk.dst Spin.PLUS];
 
         let guard = (* if acceleration factor > 0 then guard *)
-            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, Const 0), rule.Sk.guard) in
+            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule.Sk.guard) in
         if is_milestone
         then F.assert_frame rt#solver tt frame new_frame [guard];
 
@@ -167,7 +167,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
         (new_frame, new_frame :: fs)
     in
     let rec sum = function
-        | [] -> Const 0
+        | [] -> IntConst 0
         | [frame] -> Var frame.F.accel_v
         | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum tl)
     in
@@ -222,7 +222,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
             rt#solver#comment (sprintf "push@%d: check_branch: potential milestones at frame %d" depth frame.F.no);
             let endf, new_frames =
                 List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
-            let constr = BinEx (Spin.EQ, Const 1, sum new_frames) in
+            let constr = BinEx (Spin.EQ, IntConst 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
             let res = check_node (1 + depth) endf br.T.subtree in
             rt#solver#comment (sprintf "pop@%d: check_branch at frame %d" depth frame.F.no);

@@ -47,7 +47,7 @@ let is_propositional type_tab e =
 let normalize_form form =
     let rec norm neg = function
         | Var _ as f -> if neg then UnEx(NEG, f) else f
-        | Const _ as f -> f
+        | IntConst _ as f -> f
         | BinEx(GT, l, r) as f -> if neg then BinEx(LE, l, r) else f
         | BinEx(GE, l, r) as f -> if neg then BinEx(LT, l, r) else f
         | BinEx(LT, l, r) as f -> if neg then BinEx(GE, l, r) else f
@@ -126,7 +126,7 @@ let embed_atomics type_tab aprops form =
             | PropGlob e -> e
             | _ ->
                 fprintf stderr "WARN: skipped atomic expression: %s\n" name;
-                Const 1
+                IntConst 1
         with Not_found ->
             raise (Ltl_error ("Atomic expr not found: " ^ name))
     in

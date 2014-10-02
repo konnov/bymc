@@ -51,19 +51,19 @@ let test_trans_proc_decl_two_var _ =
     let roles = new var_role_tbl in
     roles#add_from_hash h;
 
-    let proc = new proc "Proc" (Const 10) in
+    let proc = new proc "Proc" (IntConst 10) in
     proc#set_stmts [
-        MDecl (1, pc, Const 0);
-        MDecl (2, npc, Const 0);
-        MDecl (3, rx, Const 0);
-        MDecl (4, nrx, Const 0);
+        MDecl (1, pc, IntConst 0);
+        MDecl (2, npc, IntConst 0);
+        MDecl (3, rx, IntConst 0);
+        MDecl (4, nrx, IntConst 0);
         MLabel (10, "foo");
         MAtomic (20, [
-            MExpr (21, BinEx (ASGN, Var npc, Const 1));
+            MExpr (21, BinEx (ASGN, Var npc, IntConst 1));
             MExpr (22, BinEx (ASGN, Var pc, Var npc));
             MExpr (23, BinEx (ASGN, Var rx, Var nrx));
-            MExpr (24, BinEx (ASGN, Var npc, Const 0));
-            MExpr (25, BinEx (ASGN, Var nrx, Const 0));
+            MExpr (24, BinEx (ASGN, Var npc, IntConst 0));
+            MExpr (25, BinEx (ASGN, Var nrx, IntConst 0));
         ]);
         MGoto (30, "foo");
     ];
@@ -73,7 +73,7 @@ let test_trans_proc_decl_two_var _ =
     List.iter (fun v -> proc#add_symb v#get_name (v :> symb)) [pc; npc; rx; nrx];
     let prog = Program.program_of_units tt
         [
-            Stmt (MDecl (fresh_id (), nsnt, Const 0));
+            Stmt (MDecl (fresh_id (), nsnt, IntConst 0));
             Proc (proc)
         ]
     in
@@ -81,7 +81,7 @@ let test_trans_proc_decl_two_var _ =
 
     (* test *)
     let prop = PropSome (BinEx (AND,
-        BinEx (EQ, Var pc, Const 2), BinEx (EQ, Var rx, Const 1))) in
+        BinEx (EQ, Var pc, IntConst 2), BinEx (EQ, Var rx, IntConst 1))) in
     let abs_prop = trans_prop_decl !solver pia_ctx_tab prog prop in
     match abs_prop with
     | PropGlob p ->
@@ -109,23 +109,23 @@ let test_trans_proc_decl_three_var _ =
     let roles = new var_role_tbl in
     roles#add_from_hash h;
 
-    let proc = new proc "Proc" (Const 10) in
+    let proc = new proc "Proc" (IntConst 10) in
     proc#set_stmts [
-        MDecl (1, pc, Const 0);
-        MDecl (2, npc, Const 0);
-        MDecl (3, rx, Const 0);
-        MDecl (4, nrx, Const 0);
-        MDecl (5, flt, Const 0);
-        MDecl (6, nflt, Const 0);
+        MDecl (1, pc, IntConst 0);
+        MDecl (2, npc, IntConst 0);
+        MDecl (3, rx, IntConst 0);
+        MDecl (4, nrx, IntConst 0);
+        MDecl (5, flt, IntConst 0);
+        MDecl (6, nflt, IntConst 0);
         MLabel (10, "foo");
         MAtomic (20, [
-            MExpr (21, BinEx (ASGN, Var npc, Const 1));
+            MExpr (21, BinEx (ASGN, Var npc, IntConst 1));
             MExpr (22, BinEx (ASGN, Var pc, Var npc));
             MExpr (23, BinEx (ASGN, Var rx, Var nrx));
             MExpr (24, BinEx (ASGN, Var flt, Var nflt));
-            MExpr (25, BinEx (ASGN, Var npc, Const 0));
-            MExpr (26, BinEx (ASGN, Var nrx, Const 0));
-            MExpr (27, BinEx (ASGN, Var nflt, Const 0));
+            MExpr (25, BinEx (ASGN, Var npc, IntConst 0));
+            MExpr (26, BinEx (ASGN, Var nrx, IntConst 0));
+            MExpr (27, BinEx (ASGN, Var nflt, IntConst 0));
         ]);
         MGoto (30, "foo");
     ];
@@ -136,7 +136,7 @@ let test_trans_proc_decl_three_var _ =
 
     let prog = Program.program_of_units tt
         [
-            Stmt (MDecl (fresh_id (), nsnt, Const 0));
+            Stmt (MDecl (fresh_id (), nsnt, IntConst 0));
             Proc (proc)
         ]
     in
@@ -144,9 +144,9 @@ let test_trans_proc_decl_three_var _ =
 
     (* test *)
     let prop = PropSome (list_to_binex AND
-        [BinEx (EQ, Var pc, Const 2);
-         BinEx (EQ, Var rx, Const 1);
-         BinEx (EQ, Var flt, Const 1)
+        [BinEx (EQ, Var pc, IntConst 2);
+         BinEx (EQ, Var rx, IntConst 1);
+         BinEx (EQ, Var flt, IntConst 1)
     ]) in
     let abs_prop = trans_prop_decl !solver pia_ctx_tab prog prop in
     match abs_prop with

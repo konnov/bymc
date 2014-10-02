@@ -46,7 +46,7 @@ let test_wrong_solver _ =
     let kaboom _ =
         let solver = new yices_smt "solver-from-the-year-2020" in
         solver#start;
-        ignore (solver#append_expr (Const 1))
+        ignore (solver#append_expr (IntConst 1))
     in
     assert_raises
         (PipeCmd.Comm_error "exec solver-from-the-year-2020 failed: No such file or directory") kaboom
@@ -58,7 +58,7 @@ let test_trivial_sat _ =
 
 
 let test_trivial_unsat _ =
-    ignore ((!solver)#append_expr (BinEx (EQ, Const 1, Const 2)));
+    ignore ((!solver)#append_expr (BinEx (EQ, IntConst 1, IntConst 2)));
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false 
 
@@ -66,7 +66,7 @@ let test_trivial_unsat _ =
 let test_reset _ =
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
-    ignore ((!solver)#append_expr (BinEx (EQ, Const 1, Const 2)));
+    ignore ((!solver)#append_expr (BinEx (EQ, IntConst 1, IntConst 2)));
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
     (!solver)#reset;
@@ -94,7 +94,7 @@ let test_append_var_def_array _ =
     t#set_nelems 4;
     (!solver)#append_var_def x t;
     ignore ((!solver)#append_expr
-        (BinEx (EQ, BinEx (ARR_ACCESS, Var x, Const 1), Const 43)));
+        (BinEx (EQ, BinEx (ARR_ACCESS, Var x, IntConst 1), IntConst 43)));
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false 
 
@@ -105,8 +105,8 @@ let test_append_expr _ =
     (!solver)#append_var_def x t;
     ignore ((!solver)#append_expr
         (BinEx (AND,
-            (BinEx (EQ, Var x, Const 1)),
-            (BinEx (EQ, Var x, Const 2)))));
+            (BinEx (EQ, Var x, IntConst 1)),
+            (BinEx (EQ, Var x, IntConst 2)))));
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false 
 
@@ -122,9 +122,9 @@ let test_pop_ctx _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
     (!solver)#append_var_def x t;
-    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Const 1)));
+    ignore ((!solver)#append_expr (BinEx (EQ, Var x, IntConst 1)));
     (!solver)#push_ctx;
-    ignore ((!solver)#append_expr (BinEx (EQ, Var x, Const 2)));
+    ignore ((!solver)#append_expr (BinEx (EQ, Var x, IntConst 2)));
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
     (!solver)#pop_ctx;
@@ -151,8 +151,8 @@ let test_get_unsat_cores _ =
     let x = new_var "x" in
     let t = mk_int_range 0 10 in
     (!solver)#append_var_def x t;
-    let id1 = (!solver)#append_expr (BinEx (EQ, Var x, Const 1)) in
-    let id2 = (!solver)#append_expr (BinEx (EQ, Var x, Const 2)) in
+    let id1 = (!solver)#append_expr (BinEx (EQ, Var x, IntConst 1)) in
+    let id2 = (!solver)#append_expr (BinEx (EQ, Var x, IntConst 2)) in
     let res = (!solver)#check in
     assert_equal ~msg:"unsat expected" res false;
     let cores = (!solver)#get_unsat_cores in
@@ -167,7 +167,7 @@ let test_get_model_one_var _ =
     let t = mk_int_range 0 10 in
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
-    let e = BinEx (EQ, Var x, Const 1) in
+    let e = BinEx (EQ, Var x, IntConst 1) in
     ignore ((!solver)#append_expr e);
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
@@ -175,8 +175,8 @@ let test_get_model_one_var _ =
     assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
     let query = (!solver)#submit_query query in
     let res = Q.try_get query (Var x) in
-    assert_equal (Q.Result (Const 1)) res
-        ~msg:(sprintf "(Const 1) expected, found %s"
+    assert_equal (Q.Result (IntConst 1)) res
+        ~msg:(sprintf "(IntConst 1) expected, found %s"
                 (Q.query_result_s query res))
 
 
@@ -193,7 +193,7 @@ let test_get_model_bool _ =
     let res = Q.try_get query (Var x) in
     assert_bool
         (sprintf "expected 0 or 1, found %s" (Q.query_result_s query res))
-        ((Q.Result (Const 1)) = res || (Q.Result (Const 0)) = res)
+        ((Q.Result (IntConst 1)) = res || (Q.Result (IntConst 0)) = res)
         
 
 
@@ -202,7 +202,7 @@ let test_get_model_var_with_underscore _ =
     let t = mk_int_range 0 10 in
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
-    let e = BinEx (EQ, Var x, Const 1) in
+    let e = BinEx (EQ, Var x, IntConst 1) in
     ignore ((!solver)#append_expr e);
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
@@ -210,8 +210,8 @@ let test_get_model_var_with_underscore _ =
     assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
     let query = (!solver)#submit_query query in
     let res = Q.try_get query (Var x) in
-    assert_equal (Q.Result (Const 1)) res
-        ~msg:(sprintf "(Const 1) expected, found %s"
+    assert_equal (Q.Result (IntConst 1)) res
+        ~msg:(sprintf "(IntConst 1) expected, found %s"
             (Q.query_result_s query res))
 
 
@@ -221,8 +221,8 @@ let test_get_model_array _ =
     t#set_nelems 3;
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
-    let arr_acc i = BinEx (ARR_ACCESS, Var x, Const i) in
-    let arr_upd i j = BinEx (EQ, arr_acc i, Const j) in
+    let arr_acc i = BinEx (ARR_ACCESS, Var x, IntConst i) in
+    let arr_upd i j = BinEx (EQ, arr_acc i, IntConst j) in
     Enum.iter (fun i -> ignore ((!solver)#append_expr (arr_upd i (1 + i)))) (0--2);
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
@@ -238,7 +238,7 @@ let test_get_model_array _ =
 
     let assert_result i =
         let res = Q.try_get query (arr_acc i) in
-        let exp = Q.Result (Const (1 + i)) in
+        let exp = Q.Result (IntConst (1 + i)) in
         if exp <> res
         then Q.print_contents query;
         assert_equal exp res
@@ -257,8 +257,8 @@ let test_get_model_array_copy _ =
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
     (!solver)#append_var_def y t;
-    let arr_acc v i = BinEx (ARR_ACCESS, Var v, Const i) in
-    let arr_upd v i j = BinEx (EQ, arr_acc v i, Const j) in
+    let arr_acc v i = BinEx (ARR_ACCESS, Var v, IntConst i) in
+    let arr_upd v i j = BinEx (EQ, arr_acc v i, IntConst j) in
     Enum.iter (fun i -> ignore ((!solver)#append_expr (arr_upd x i (1 + i)))) (0--2);
     let append_arr i =
         ignore ((!solver)#append_expr (BinEx (EQ, arr_acc x i, arr_acc y i)))
@@ -279,7 +279,7 @@ let test_get_model_array_copy _ =
 
     let assert_result v i =
         let res = Q.try_get query (arr_acc v i) in
-        let exp = Q.Result (Const (1 + i)) in
+        let exp = Q.Result (IntConst (1 + i)) in
         if exp <> res
         then Q.print_contents query;
         assert_equal exp res
@@ -295,7 +295,7 @@ let test_model_query_try_get _ =
     let t = mk_int_range 0 10 in
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
-    let e = BinEx (EQ, Var x, Const 1) in
+    let e = BinEx (EQ, Var x, IntConst 1) in
     ignore ((!solver)#append_expr e);
     let res = (!solver)#check in
     assert_equal ~msg:"sat expected" res true;
@@ -307,7 +307,7 @@ let test_model_query_try_get _ =
     let query = (!solver)#submit_query query in
 
     let res = Q.try_get query (Var x) in
-    assert_equal ~msg:"Q.Result (Const 1) expected" res (Q.Result (Const 1))
+    assert_equal ~msg:"Q.Result (IntConst 1) expected" res (Q.Result (IntConst 1))
 
 
 let test_model_query_try_get_not_found _ =

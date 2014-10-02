@@ -40,7 +40,7 @@ let top_labs () = List.hd !lab_stack
 (* it uses tokens, so we cannot move it outside *)
 let rec is_expr_symbolic e =
     match e with
-    | Const _ -> true
+    | IntConst _ -> true
     | Var v -> v#is_symbolic
     | UnEx (op, se) -> op = UMIN && is_expr_symbolic se
     | BinEx (op, le, re) ->
@@ -199,12 +199,12 @@ proctype_name: PROCTYPE NAME {
         }
     ;
 
-inst	: /* empty */	{ Const 0 }
-    | ACTIVE	{ Const 1 }
+inst	: /* empty */	{ IntConst 0 }
+    | ACTIVE	{ IntConst 1 }
     /* FORSYTE extension: any constant + a symbolic arith expression */
     | ACTIVE LBRACE expr RBRACE {
             match $3 with
-            | Const i -> Const i
+            | IntConst i -> IntConst i
             | Var v ->
                 if v#is_symbolic
                 then Var v
@@ -682,7 +682,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref INCR		{
                     let v = Var $1 in
-                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, IntConst 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '+', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -693,7 +693,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref DECR	{
                     let v = Var $1 in
-                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, IntConst 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '-', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -842,7 +842,7 @@ prop_arith_expr    :
             with Not_found ->
                 fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
         }
-	| CONST { Const $1 }
+	| CONST { IntConst $1 }
     ;
 
 expr    : LPAREN expr RPAREN		{ $2 }
@@ -923,7 +923,7 @@ expr    : LPAREN expr RPAREN		{ $2 }
         }
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
 	| CONST 	{
-                    Const $1
+                    IntConst $1
                (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)

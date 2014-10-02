@@ -24,9 +24,9 @@ let parse_assignment syms line =
                 then Var ((syms#lookup lhs)#as_var)
                 else let arr = Str.matched_group 1 lhs in
                     let idx = int_of_string (Str.matched_group 2 lhs) in
-                    BinEx (ARR_ACCESS, Var ((syms#lookup arr)#as_var), Const idx)
+                    BinEx (ARR_ACCESS, Var ((syms#lookup arr)#as_var), IntConst idx)
             in
-            BinEx (EQ, left_ex, Const rhs)
+            BinEx (EQ, left_ex, IntConst rhs)
         with SpinIr.Symbol_not_found _ ->
             Nop "" (* ignore local process variables *)
 
@@ -34,7 +34,7 @@ let parse_assignment syms line =
 let add_hidden prog state_es =            
     let tab = Hashtbl.create 8 in
     let assign = function
-    | BinEx (EQ, lhs, Const i) as e ->
+    | BinEx (EQ, lhs, IntConst i) as e ->
         Hashtbl.replace tab (expr_s lhs) e
     | _ as e ->
         raise (Failure ("Unexpected expression " ^ (expr_s e)))
@@ -43,7 +43,7 @@ let add_hidden prog state_es =
     let add_if_needed l e =
         let e_s = expr_s e in
         try (Hashtbl.find tab e_s) :: l
-        with Not_found -> (BinEx (EQ, e, Const 0)) :: l
+        with Not_found -> (BinEx (EQ, e, IntConst 0)) :: l
     in
     let _, es = global_state_fmt prog in
     List.rev (List.fold_left add_if_needed [] es)
@@ -52,7 +52,7 @@ let add_hidden prog state_es =
 let print_state prog path_elem =
     let tab = Hashtbl.create 8 in
     let assign = function
-    | BinEx (EQ, e, Const i) ->
+    | BinEx (EQ, e, IntConst i) ->
         Hashtbl.replace tab (expr_s e) i
     | _ as e ->
         raise (Failure ("Unexpected expression " ^ (expr_s e)))

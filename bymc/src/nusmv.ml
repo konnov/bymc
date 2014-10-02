@@ -215,7 +215,7 @@ let expr_s ~is_bool var_fun e =
     | Nop comment ->
         (* make an explicit line break *)
         sprintf "TRUE -- %s\n" comment
-    | Const i ->
+    | IntConst i ->
         (* convert 0 and 1 to false and true in nusmv *)
         if inb
         then (if i = 0 then "FALSE" else "TRUE")
@@ -256,7 +256,7 @@ let expr_s ~is_bool var_fun e =
 
 
 let rec form_s = function
-    | Const 1 -> "TRUE"
+    | IntConst 1 -> "TRUE"
     | BinEx (AND, f, g) -> sprintf "(%s & %s)" (form_s f) (form_s g)
     | BinEx (OR, f, g) -> sprintf "(%s | %s)" (form_s f) (form_s g)
     | UnEx (ALWAYS, f) -> sprintf " G (%s)" (form_s f)
@@ -287,7 +287,7 @@ let section_s s =
     let vf v = v#mangled_name in
     let preprocess es =
             let not_const1 = function
-            | Const 1 -> false
+            | IntConst 1 -> false
             | _ -> true
             in
         List.filter not_const1 es

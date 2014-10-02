@@ -84,50 +84,50 @@ let propagate_not ?negate:(init_neg=false) exp =
 let compute_consts exp =
     let int_of_bool b = if b then 1 else 0 in
     let rec fold = function
-    | BinEx (PLUS, Const l, Const r) -> Const (l + r)
-    | BinEx (MINUS, Const l, Const r) -> Const (l - r)
-    | BinEx (MULT, Const l, Const r) -> Const (l * r)
-    | BinEx (DIV, Const l, Const r) -> Const (l / r)
-    | BinEx (LT, Const l, Const r) -> Const (int_of_bool (l < r))
-    | BinEx (LE, Const l, Const r) -> Const (int_of_bool (l <= r))
-    | BinEx (GT, Const l, Const r) -> Const (int_of_bool (l > r))
-    | BinEx (GE, Const l, Const r) -> Const (int_of_bool (l >= r))
-    | BinEx (NE, Const l, Const r) -> Const (int_of_bool (l != r))
-    | BinEx (EQ, Const l, Const r) -> Const (int_of_bool (l == r))
-    | BinEx (AND, Const 0, _) -> Const 0
-    | BinEx (AND, _, Const 0) -> Const 0
-    | BinEx (AND, Const 1, r) -> r
-    | BinEx (AND, l, Const 1) -> l
+    | BinEx (PLUS, IntConst l, IntConst r) -> IntConst (l + r)
+    | BinEx (MINUS, IntConst l, IntConst r) -> IntConst (l - r)
+    | BinEx (MULT, IntConst l, IntConst r) -> IntConst (l * r)
+    | BinEx (DIV, IntConst l, IntConst r) -> IntConst (l / r)
+    | BinEx (LT, IntConst l, IntConst r) -> IntConst (int_of_bool (l < r))
+    | BinEx (LE, IntConst l, IntConst r) -> IntConst (int_of_bool (l <= r))
+    | BinEx (GT, IntConst l, IntConst r) -> IntConst (int_of_bool (l > r))
+    | BinEx (GE, IntConst l, IntConst r) -> IntConst (int_of_bool (l >= r))
+    | BinEx (NE, IntConst l, IntConst r) -> IntConst (int_of_bool (l != r))
+    | BinEx (EQ, IntConst l, IntConst r) -> IntConst (int_of_bool (l == r))
+    | BinEx (AND, IntConst 0, _) -> IntConst 0
+    | BinEx (AND, _, IntConst 0) -> IntConst 0
+    | BinEx (AND, IntConst 1, r) -> r
+    | BinEx (AND, l, IntConst 1) -> l
     | BinEx (AND, l, r) as e ->
             if l = r then l else e 
-    | BinEx (OR, Const 1, _) -> Const 1
-    | BinEx (OR, _, Const 1) -> Const 1
-    | BinEx (OR, Const 0, r) -> r
-    | BinEx (OR, l, Const 0) -> l
+    | BinEx (OR, IntConst 1, _) -> IntConst 1
+    | BinEx (OR, _, IntConst 1) -> IntConst 1
+    | BinEx (OR, IntConst 0, r) -> r
+    | BinEx (OR, l, IntConst 0) -> l
     | BinEx (OR, l, r) as e ->
             if l = r then l else e 
-    | BinEx (IMPLIES, Const 0, _) -> Const 1
-    | BinEx (IMPLIES, Const 1, r) -> r
-    | BinEx (IMPLIES, l, Const 1) -> Const 1
-    | BinEx (IMPLIES, l, Const 0) -> UnEx (NEG, l)
-    | BinEx (EQUIV, Const 0, r) -> Const 0
-    | BinEx (EQUIV, l, Const 0) -> Const 0
-    | BinEx (EQUIV, Const 1, r) -> r
-    | BinEx (EQUIV, l, Const 1) -> l
-    | UnEx (NEG, Const 1) -> Const 0
-    | UnEx (NEG, Const 0) -> Const 1
+    | BinEx (IMPLIES, IntConst 0, _) -> IntConst 1
+    | BinEx (IMPLIES, IntConst 1, r) -> r
+    | BinEx (IMPLIES, l, IntConst 1) -> IntConst 1
+    | BinEx (IMPLIES, l, IntConst 0) -> UnEx (NEG, l)
+    | BinEx (EQUIV, IntConst 0, r) -> IntConst 0
+    | BinEx (EQUIV, l, IntConst 0) -> IntConst 0
+    | BinEx (EQUIV, IntConst 1, r) -> r
+    | BinEx (EQUIV, l, IntConst 1) -> l
+    | UnEx (NEG, IntConst 1) -> IntConst 0
+    | UnEx (NEG, IntConst 0) -> IntConst 1
 
-    | UnEx (ALWAYS, Const 0) -> Const 0
-    | UnEx (ALWAYS, Const 1) -> Const 1
-    | UnEx (EVENTUALLY, Const 0) -> Const 0
-    | UnEx (EVENTUALLY, Const 1) -> Const 1
-    | UnEx (NEXT, Const 0) -> Const 0
-    | UnEx (NEXT, Const 1) -> Const 1
-    | BinEx (UNTIL, _, Const 0) -> Const 0
-    | BinEx (UNTIL, _, Const 1) -> Const 1
-    | BinEx (UNTIL, Const 0, _) -> Const 0
-    | BinEx (UNTIL, Const 1, r) -> fold (UnEx (EVENTUALLY, r))
-    | Nop _ -> Const 1
+    | UnEx (ALWAYS, IntConst 0) -> IntConst 0
+    | UnEx (ALWAYS, IntConst 1) -> IntConst 1
+    | UnEx (EVENTUALLY, IntConst 0) -> IntConst 0
+    | UnEx (EVENTUALLY, IntConst 1) -> IntConst 1
+    | UnEx (NEXT, IntConst 0) -> IntConst 0
+    | UnEx (NEXT, IntConst 1) -> IntConst 1
+    | BinEx (UNTIL, _, IntConst 0) -> IntConst 0
+    | BinEx (UNTIL, _, IntConst 1) -> IntConst 1
+    | BinEx (UNTIL, IntConst 0, _) -> IntConst 0
+    | BinEx (UNTIL, IntConst 1, r) -> fold (UnEx (EVENTUALLY, r))
+    | Nop _ -> IntConst 1
     | _ as e -> e
     in
     let rec explore = function
@@ -176,7 +176,7 @@ let mk_expr_bindings type_tab exp =
 let prop_const exp binding =
     let map v = 
         if VarMap.mem v binding
-        then Const (VarMap.find v binding)
+        then IntConst (VarMap.find v binding)
         else Var v
     in
     compute_consts (map_vars map exp)
@@ -192,7 +192,7 @@ let prop_const_in_stmt stmt binding =
 
 
 let binding_to_eqs binding =
-    let eq var value = BinEx (EQ, Var var, Const value) in
+    let eq var value = BinEx (EQ, Var var, IntConst value) in
     (* backport to ocaml 3.10.2: *)
     VarMap.fold (fun k v a -> (eq k v) :: a) binding []
     (* the new code:
@@ -271,7 +271,7 @@ let expand_array_access_struc type_tab stmt =
     let points = ref [] in
 
     let rec gather_idx_exprs set = function
-    | BinEx (ARR_ACCESS, _, Const _) ->
+    | BinEx (ARR_ACCESS, _, IntConst _) ->
         set
     | BinEx (ARR_ACCESS, _, e) ->
         let e_s = expr_s e in
@@ -365,7 +365,7 @@ let expand_array_access_struc type_tab stmt =
 (* replace arr[c] by arr_c for a constant c *)
 let replace_arr_elem_with_var sym_tab exp =
     let rec embed_rec = function
-    | BinEx (ARR_ACCESS, Var arr, Const i) ->
+    | BinEx (ARR_ACCESS, Var arr, IntConst i) ->
         let new_name = sprintf "%s_%dI" arr#get_name i in
         let sym = sym_tab#lookup new_name in
         let v = sym#as_var in

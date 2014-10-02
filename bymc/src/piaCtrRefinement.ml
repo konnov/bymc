@@ -238,7 +238,7 @@ let parse_smt_evidence prog solver pile =
         match (exp, Q.try_get query exp) with
         | _, Q.Cached -> ()
 
-        | Var var, Q.Result (Const value) ->
+        | Var var, Q.Result (IntConst value) ->
             let full = var#get_name in
             if Str.string_match var_re full 0
             then begin
@@ -247,7 +247,7 @@ let parse_smt_evidence prog solver pile =
                 let name = Str.matched_group 2 full in
                 let dir = Str.matched_group 3 full in
                 let state = if dir = "IN" then step else (step + 1) in
-                let e = BinEx (ASGN, Var (var#copy name), Const value) in
+                let e = BinEx (ASGN, Var (var#copy name), IntConst value) in
                 if List.exists
                     (fun v -> v#get_name = name) (Program.get_shared prog)
                 then add_state_expr state e
@@ -257,9 +257,9 @@ let parse_smt_evidence prog solver pile =
                     && List.exists (fun v -> v#get_name = full) (Program.get_params prog)
             then
                 (* parameters belong to state 0 *)
-                add_state_expr 0 (BinEx (ASGN, Var var, Const value))
+                add_state_expr 0 (BinEx (ASGN, Var var, IntConst value))
 
-        | BinEx (ARR_ACCESS, Var var, Const idx), Q.Result(Const value) ->
+        | BinEx (ARR_ACCESS, Var var, IntConst idx), Q.Result(IntConst value) ->
             let full = var#get_name in
             if Str.string_match var_re full 0
             then begin
@@ -269,7 +269,7 @@ let parse_smt_evidence prog solver pile =
                 let dir = Str.matched_group 3 full in
                 let state = if dir = "IN" then step else (step + 1) in
                 let e = BinEx (ASGN,
-                    BinEx (ARR_ACCESS, Var (var#copy name), Const idx), Const value) in
+                    BinEx (ARR_ACCESS, Var (var#copy name), IntConst idx), IntConst value) in
                 if dir = "IN" || dir = "OUT"
                 then add_state_expr state e (* and ignore auxillary arrays *)
             end
@@ -278,7 +278,7 @@ let parse_smt_evidence prog solver pile =
     in
     let rec add_var l v =
         let t = Program.get_type prog v in
-        let arr_acc l i = (BinEx (ARR_ACCESS, Var v, Const i)) :: l in
+        let arr_acc l i = (BinEx (ARR_ACCESS, Var v, IntConst i)) :: l in
         if t#is_array
         then List.fold_left arr_acc l (range 0 t#nelems)
         else (Var v) :: l
@@ -292,8 +292,8 @@ let parse_smt_evidence prog solver pile =
 
     let cmp e1 e2 =
         let comp_res = match e1, e2 with
-        | BinEx (ASGN, Var v1, Const k1),
-          BinEx (ASGN, Var v2, Const k2) ->
+        | BinEx (ASGN, Var v1, IntConst k1),
+          BinEx (ASGN, Var v2, IntConst k2) ->
               let r = String.compare v1#get_name v2#get_name in
               if v1#is_symbolic && not v2#is_symbolic
               then 1
@@ -301,8 +301,8 @@ let parse_smt_evidence prog solver pile =
               then -1
               else if r <> 0 then r else (k1 - k2)
 
-        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), Const k1),
-          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), Const k2) ->
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, IntConst i1), IntConst k1),
+          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, IntConst i2), IntConst k2) ->
               let r = String.compare a1#get_name a2#get_name in
               if r <> 0
               then r
@@ -310,11 +310,11 @@ let parse_smt_evidence prog solver pile =
               then i1 - i2
               else k1 - k2
 
-        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, Const i1), _),
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var a1, IntConst i1), _),
           BinEx (ASGN, Var v2, _) ->
                 -1 (* arrays go first *)
         | BinEx (ASGN, Var v1, _),
-          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, Const i2), _) ->
+          BinEx (ASGN, BinEx (ARR_ACCESS, Var a2, IntConst i2), _) ->
                 1 (* arrays go first *)
         | _ -> raise (Failure
             (sprintf "Incomparable: %s and %s" (expr_s e1) (expr_s e2)))
@@ -341,7 +341,7 @@ let pretty_print_exprs exprs =
         last_arr := ""
     in
     let pp = function
-        | BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, Const idx), Const value) ->
+        | BinEx (ASGN, BinEx (ARR_ACCESS, Var arr, IntConst idx), IntConst value) ->
                 if !last_arr <> "" && !last_arr <> arr#get_name
                 then stop_arr ();
                 if !last_arr <> arr#get_name
@@ -356,7 +356,7 @@ let pretty_print_exprs exprs =
                 printf "%d " value;
                 last_idx := idx
 
-        | BinEx (ASGN, Var var, Const value) ->
+        | BinEx (ASGN, Var var, IntConst value) ->
                 if !last_arr <> ""
                 then stop_arr ();
                 printf "%s = %d " var#get_name value
@@ -445,7 +445,7 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
             BinEx (ASGN, Var bymc_spur,
                 BinEx (OR, Var bymc_spur, e)))
     in
-    let or_true e = if not_nop e then e else (Const 1) in
+    let or_true e = if not_nop e then e else (IntConst 1) in
     (* Modify the counter abstraction directly to exclude the transitions
        by setting bymc_spur to true. By adding []!bymc_spur as a precondition,
        we cut out the spurious behaviour. This works for Promela.

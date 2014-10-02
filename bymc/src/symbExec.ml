@@ -118,7 +118,7 @@ let exec_path solver (type_tab: data_type_tab) (sym_tab: symb_tab)
 
     let path_cons =
         try List.fold_left
-            (exec_stmt sym_tab type_tab versions vals) (Const 1) stmts
+            (exec_stmt sym_tab type_tab versions vals) (IntConst 1) stmts
         with SymbExec_error s ->
             printf "The troublesome path is:\n";
             List.iter (fun s -> printf "  %s\n" (stmt_s s)) stmts;

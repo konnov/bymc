@@ -18,8 +18,8 @@ let nuke_vars is_nuked exp =
             then (Var v, true)
             else (Var v, false)
 
-    | Const i ->
-            (Const i, false)
+    | IntConst i ->
+            (IntConst i, false)
 
     | BinEx (PLUS as t, l, r)
     | BinEx (MINUS as t, l, r)
@@ -28,7 +28,7 @@ let nuke_vars is_nuked exp =
     | BinEx (MOD as t, l, r) ->
             let nl, nukel = red l and nr, nuker = red r in
             if nukel || nuker
-            then (Const 1, true)
+            then (IntConst 1, true)
             else (BinEx (t, nl, nr), false)
 
     | BinEx (EQ as t, l, r)
@@ -39,7 +39,7 @@ let nuke_vars is_nuked exp =
     | BinEx (GT as t, l, r) ->
             let nl, nukel = red l and nr, nuker = red r in
             if nukel || nuker
-            then (Const 1, false)
+            then (IntConst 1, false)
             else (BinEx (t, nl, nr), false)
 
     | BinEx (t, l, r) ->
@@ -50,7 +50,7 @@ let nuke_vars is_nuked exp =
     | UnEx (NEXT, e) ->
             let ne, nukee = red e in
             if nukee
-            then (Const 1, true)
+            then (IntConst 1, true)
             else (UnEx (NEXT, ne), false)
 
     | UnEx (t, e) ->

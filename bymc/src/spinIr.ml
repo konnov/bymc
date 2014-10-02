@@ -381,7 +381,7 @@ class data_type_tab =
 
 type 't expr =
     | Nop of string (* a comment *)
-    | Const of int
+    | IntConst of int
     | Var of var
     | UnEx of 't * 't expr
     | BinEx of 't * 't expr * 't expr
@@ -397,11 +397,11 @@ let is_nop = function
 let not_nop e = not (is_nop e) (* a shorthand *)
 
 let is_c_true = function
-    | Const i -> i > 0
+    | IntConst i -> i > 0
     | _ -> false
 
 let is_c_false = function
-    | Const i -> i = 0
+    | IntConst i -> i = 0
     | _ -> false
 
 let is_var = function

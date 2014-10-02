@@ -71,7 +71,7 @@ let print_expr ?printex:(pex=print_def_expr) ?in_act:(ina=false) ff e =
  *)
 let eliminate_div e =
     let rec divisor = function
-        | BinEx (DIV, l, Const k) ->
+        | BinEx (DIV, l, IntConst k) ->
              k * (divisor l)
         | BinEx (DIV, _, r) ->
              raise (Failure "Division over non-constant")
@@ -82,7 +82,7 @@ let eliminate_div e =
         | _ -> 1
     in
     let rec mult div = function
-        | BinEx (DIV, l, Const k) ->
+        | BinEx (DIV, l, IntConst k) ->
              assert (div mod k = 0);
              if k = div
              then l
@@ -99,8 +99,8 @@ let eliminate_div e =
         | UnEx (t, r) ->
              UnEx (t, mult div r)
              
-        | Const k -> Const (k * div)
-        | Var v -> BinEx (MULT, Const div, Var v)
+        | IntConst k -> IntConst (k * div)
+        | Var v -> BinEx (MULT, IntConst div, Var v)
         | e -> raise (Failure ("Unsupported: " ^ (SpinIrImp.expr_s e)))
     in
     let rec in_logical = function
@@ -155,7 +155,7 @@ let write_rule ff prog sk num r =
     let src_name = Sk.locname (List.nth sk.Sk.locs r.Sk.src) in
     let dst_name = Sk.locname (List.nth sk.Sk.locs r.Sk.dst) in
     F.fprintf ff "%s > 0@ " src_name;
-    if r.Sk.guard <> Const 1
+    if r.Sk.guard <> IntConst 1
     then begin
         F.fprintf ff "&& ";
         print_expr ff (eliminate_div r.Sk.guard);

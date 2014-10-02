@@ -229,7 +229,7 @@ class data_type_tab :
 
 type 't expr =
     Nop of string
-  | Const of int
+  | IntConst of int
   | Var of var
   | UnEx of 't * 't expr
   | BinEx of 't * 't expr * 't expr

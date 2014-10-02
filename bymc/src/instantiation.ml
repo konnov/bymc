@@ -15,7 +15,7 @@ open SpinIrEval
 let try_eval e =
     try begin
         match eval_expr (fun v -> raise (Eval_error "")) e with
-        | Int i -> Const i
+        | Int i -> IntConst i
         | _ -> e
     end with Eval_error _ ->
         e
@@ -31,7 +31,7 @@ let rec conc_expr pa exp =
             then Var v
             else 
                 let value = find_var pa v#get_name in
-                Const value
+                IntConst value
     | UnEx (t, l) -> UnEx (t, conc_expr pa l)
     | BinEx (t, l, r) ->
             let sl, sr = conc_expr pa l, conc_expr pa r in
@@ -82,7 +82,7 @@ let conc_prop pa pmap prop =
         | _ as e -> e
     in
     let rec replace_card = function
-        | UnEx (CARD, l) -> Const 0 (* how to do cardinality in the concrete? *)
+        | UnEx (CARD, l) -> IntConst 0 (* how to do cardinality in the concrete? *)
         | UnEx (t, l) -> UnEx (t, replace_card l)
         | BinEx (t, l, r) -> BinEx (t, replace_card l, replace_card r)
         | _ as e -> e
@@ -201,7 +201,7 @@ let concretize_unit param_vals pmap lmap accum = function
                 (List.map (concretize_stmt param_vals pmap) renamed_stmts) in
             let new_p = p#copy (sprintf "%s%d" p#get_name idx) in
             new_p#set_stmts new_seq;
-            new_p#set_active_expr (Const 1);
+            new_p#set_active_expr (IntConst 1);
             (Proc new_p) :: with_locals
         in
         List.fold_left copy_proc accum (range 0 count)
@@ -212,7 +212,7 @@ let do_substitution (param_vals: int StringMap.t)
     let count_proc pmap = function
         | Proc p -> 
             let cnt = begin match (conc_expr param_vals p#get_active_expr) with
-            | Const i -> i
+            | IntConst i -> i
             | _ as e -> raise (Failure ("Failed to compute: " ^ (expr_s e)))
             end in
             StringMap.add p#get_name cnt pmap

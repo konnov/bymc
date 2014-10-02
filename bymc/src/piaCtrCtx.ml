@@ -75,7 +75,7 @@ class ctr_abs_ctx prog reg_tbl (spur_var: var) proc abbrev_name =
             let pack_one subex (v, sz) =
                 if is_nop subex
                 then Var v
-                else let shifted = BinEx (MULT, subex, Const sz) in
+                else let shifted = BinEx (MULT, subex, IntConst sz) in
                     BinEx (PLUS, shifted, Var v)
             in
             List.fold_left pack_one (Nop "") (List.rev m_var_vec)

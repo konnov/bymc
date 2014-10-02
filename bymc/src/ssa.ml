@@ -462,7 +462,7 @@ let find_coloring solver graph ncolors =
         match Q.try_get query (Var v) with
         | Q.Cached ->
                 ()
-        | Q.Result (Const i) ->
+        | Q.Result (IntConst i) ->
                 Hashtbl.replace tab mark (1 + i)
         | Q.Result e ->
                 raise (Failure ("Unexpected result: " ^ (expr_s e)))

@@ -58,7 +58,7 @@ class pia_domain conds_i =
                 raise (Abstraction_error
                     (sprintf "No abstract value for %s" (expr_s symb_expr)))
             with Found i ->
-                (Const i: Spin.token expr)
+                (IntConst i: Spin.token expr)
 
         method expr_is_concretization exp abs_val =
             (* given an abstract value abs_val, constrain exp to be a concretization
@@ -66,9 +66,9 @@ class pia_domain conds_i =
             let eq (a, _, _) = (a = abs_val) in
             let (_, l, r) = List.find eq cond_intervals in
             match l, r with
-            | Const a, Const b ->
+            | IntConst a, IntConst b ->
                 if b = a + 1
-                then BinEx (EQ, exp, Const a)
+                then BinEx (EQ, exp, IntConst a)
                 else BinEx (AND, BinEx (GE, exp, l), BinEx (LT, exp, r))
 
             | _, Nop _ ->
@@ -166,7 +166,7 @@ let identify_conditions var_roles stmts =
         if ls && not rs (* N <= x, i.e., x >= N *)
         then [l]
         else if rs && not ls
-        then [BinEx (PLUS, Const 1, r)] (* x <= N means N + 1 is the threshold *)
+        then [BinEx (PLUS, IntConst 1, r)] (* x <= N means N + 1 is the threshold *)
         else [] (* it is either a constant expression, or a general one *)
     in
 
@@ -190,8 +190,8 @@ let identify_conditions var_roles stmts =
         | Expr (_, e) -> List.iter add_on_demand (on_expr e)
         | _ -> ()
     in
-    add_on_demand (Const 0);
-    add_on_demand (Const 1);
+    add_on_demand (IntConst 0);
+    add_on_demand (IntConst 1);
     List.iter for_stmts stmts;
     hashtbl_vals tab
 

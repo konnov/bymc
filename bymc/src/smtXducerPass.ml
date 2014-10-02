@@ -95,7 +95,7 @@ let to_xducer_interleave solver caches prog =
     Cfg.write_dot "ssa_P.dot" ssa;
     let transd = cfg_to_constraints new_name new_sym_tab new_type_tab ssa in
     write_exprs new_name transd;
-    let new_proc = new proc new_name (Const 1) in
+    let new_proc = new proc new_name (IntConst 1) in
     new_proc#add_all_symb new_sym_tab#get_symbs;
     new_proc#set_stmts transd;
     let new_prog =

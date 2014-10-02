@@ -75,14 +75,14 @@ let test_optimize_ssa_in_out _ =
     let entry = mk_entry x in
     let b1 = mk_bb x 1 4 [1] in
     b1#set_seq (Label (fresh_id (), 1)
-        :: [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 4), Const 1))]);
+        :: [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 4), IntConst 1))]);
     let b2 = mk_bb x 2 4 [1] in
     b2#set_seq (Label (fresh_id (), 1)
-        :: [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 4), Const 2))]);
+        :: [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 4), IntConst 2))]);
     let b3 = mk_bb x 3 3 [4] in
     let b4 = mk_bb x 4 6 [4] in
     b4#set_seq (b4#get_seq
-        @ [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 3), Const 3))]);
+        @ [Expr (fresh_id (), BinEx (ASGN, Var (mk_var x 3), IntConst 3))]);
     let b5 = mk_bb x 5 2 [3] in
     let b6 = mk_bb x 6 2 [3] in
     let b7 = mk_bb x 7 5 [2] in
@@ -134,7 +134,7 @@ let test_optimize_ssa_in_out _ =
     let expect_skip_asgn b i =
         match b#get_seq with
         | [Label (_, _);
-                Expr (_, BinEx (ASGN, Var lhs, Const i))] ->
+                Expr (_, BinEx (ASGN, Var lhs, IntConst i))] ->
             assert_equal
                 ~msg:(sprintf "expected x_OUT = i, found %d" lhs#mark)
                 lhs#mark Ssa.mark_out
@@ -146,7 +146,7 @@ let test_optimize_ssa_in_out _ =
     expect_skip_asgn b4 3;
     let expect_asgn b i =
         match b#get_seq with
-        | [Label (_, _); Expr (_, BinEx (ASGN, Var lhs, Const i))] ->
+        | [Label (_, _); Expr (_, BinEx (ASGN, Var lhs, IntConst i))] ->
             assert_bool
                 (sprintf "expected x_j = i and j <> OUT, found %d" lhs#mark)
                 (lhs#mark <> Ssa.mark_out)
@@ -213,40 +213,40 @@ let test_mk_ssa _ =
     (* this code is very similar to next_nrcvd in bcast-byz.pml *)
     let code =
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 0)) ];
-            MOptGuarded[ MExpr (id(), BinEx (NE, Var x, Const 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (NE, Var x, IntConst 1)) ];
         ])
         ::
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 0)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 1)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 2)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 3)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 4)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 5)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 6)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 7)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 8)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 2)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 3)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 4)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 5)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 6)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 7)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 8)) ];
         ])
         ::
         MIf (fresh_id (), [
             MOptGuarded[
-                MExpr (id(), BinEx (EQ, Var x, Const 0));
-                MExpr (id(), BinEx (ASGN, Var x, Const 5))
+                MExpr (id(), BinEx (EQ, Var x, IntConst 0));
+                MExpr (id(), BinEx (ASGN, Var x, IntConst 5))
             ];
-            MOptGuarded[ MExpr (id(), BinEx (NE, Var x, Const 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (NE, Var x, IntConst 1)) ];
         ])
         ::
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 3)) ];
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 2)) ];
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 3)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 2)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 1)) ];
         ])
         ::
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 3)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 3)) ];
             MOptGuarded[
-                MExpr (id(), BinEx (EQ, Var x, Const 4));
+                MExpr (id(), BinEx (EQ, Var x, IntConst 4));
                 MIf (fresh_id (), [
                     MOptGuarded [ MSkip (id ()) ];
                     MOptGuarded [ MSkip (id ()) ];
@@ -288,20 +288,20 @@ let test_mk_ssa_havoc _ =
     (* this code is very similar to next_nrcvd in bcast-byz.pml *)
     let code =
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 0)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 1)) ];
         ])
         ::
         MHavoc (fresh_id (), x)
         ::
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 0)) ];
-            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, Const 1)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 0)) ];
+            MOptGuarded[ MExpr (id(), BinEx (EQ, Var x, IntConst 1)) ];
         ])
         ::
         MIf (fresh_id (), [
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 2)) ];
-            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, Const 3)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 2)) ];
+            MOptGuarded[ MExpr (id(), BinEx (ASGN, Var x, IntConst 3)) ];
         ])
         :: []
     in

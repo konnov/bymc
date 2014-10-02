@@ -129,7 +129,7 @@ class virtual smt_solver =
 let rec expr_to_smt e =
     match e with
     | Nop comment -> sprintf ";; %s\n" comment
-    | Const i -> string_of_int i
+    | IntConst i -> string_of_int i
     | Var v -> v#mangled_name
     | UnEx (tok, f) ->
         begin match tok with
@@ -196,7 +196,7 @@ let var_to_smt_yices var tp =
 
 let var_to_smtlib2 var tp =
     let l, r = tp#range in
-    let rng e = [ BinEx (GE, e, Const l); BinEx (LT, e, Const r) ] in
+    let rng e = [ BinEx (GE, e, IntConst l); BinEx (LT, e, IntConst r) ] in
     let base_type, cons_f = match tp#basetype with
     | TBIT -> "Bool",
         fun _ -> []
@@ -206,8 +206,8 @@ let var_to_smtlib2 var tp =
             if tp#has_range
             then rng e
             else [ BinEx (AND,
-                BinEx (GE, e, Const 0),
-                BinEx (LE, e, Const 255))
+                BinEx (GE, e, IntConst 0),
+                BinEx (LE, e, IntConst 255))
             ])
 
     | TSHORT -> "Int", (* TODO: what is the range of short? *)
@@ -217,7 +217,7 @@ let var_to_smtlib2 var tp =
         (fun e -> if tp#has_range then rng e else [])
 
     | TUNSIGNED -> "Int",
-        (fun e -> if tp#has_range then rng e else [ BinEx (GE, e, Const 0) ])
+        (fun e -> if tp#has_range then rng e else [ BinEx (GE, e, IntConst 0) ])
 
     | TCHAN -> raise (Failure "Type chan is not supported")
     | TMTYPE -> raise (Failure "Type mtype is not supported")
@@ -229,7 +229,7 @@ let var_to_smtlib2 var tp =
         then sprintf "(declare-fun %s (Int) %s)" var#mangled_name base_type
         else sprintf "(declare-fun %s () %s)" var#mangled_name base_type
     in
-    let acc i = BinEx (ARR_ACCESS, Var var, Const i) in
+    let acc i = BinEx (ARR_ACCESS, Var var, IntConst i) in
     let cons =
         if not tp#is_array
         then cons_f (Var var)
@@ -267,7 +267,7 @@ let parse_smt_model_q query lines =
             let variable = Str.matched_group 1 line in
             (* we support ints only, don't we? *)
             let value = parse_val (Str.matched_group 2 line) in
-            Q.add_result query newq variable (Const value)
+            Q.add_result query newq variable (IntConst value)
         end
         else if Str.string_match arr_re line 0
         then begin
@@ -278,7 +278,7 @@ let parse_smt_model_q query lines =
 
             let mk_access n i = sprintf "(%s %d)" n i in
             let each_alias q alias =
-                Q.add_result query q (mk_access alias index) (Const value)
+                Q.add_result query q (mk_access alias index) (IntConst value)
             in
             (* the expression *)
             List.fold_left each_alias newq (name :: (get_aliases name)) 
@@ -510,8 +510,8 @@ let expand_arr_eq tt root =
                 assert (xt#nelems = yt#nelems);
                 let eq i =
                     BinEx (EQ,
-                        BinEx (ARR_ACCESS, Var x, Const i),
-                        BinEx (ARR_ACCESS, Var y, Const i))
+                        BinEx (ARR_ACCESS, Var x, IntConst i),
+                        BinEx (ARR_ACCESS, Var y, IntConst i))
                 in
                 list_to_binex AND (List.map eq (Accums.range 0 xt#nelems))
             end
@@ -671,7 +671,7 @@ class lib2_smt solver_cmd solver_args =
                 | Sexp.List [_ as key_sexp; Sexp.Atom val_s] ->
                         let key = Sexp.to_string key_sexp in
                         let value = parse_val val_s in
-                        ignore (Q.add_result query new_q key (Const value))
+                        ignore (Q.add_result query new_q key (IntConst value))
                 
                 | _ as s ->
                         raise (Smt_error

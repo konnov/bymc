@@ -40,7 +40,7 @@ let test_parse_smt_evidence _ =
     List.iter append_def [n; nsnt_in; nsnt_out];
 
     let add pile lhs rhs =
-        B.append_expr (!yices) pile (BinEx (EQ, Var lhs, Const rhs))
+        B.append_expr (!yices) pile (BinEx (EQ, Var lhs, IntConst rhs))
     in
     let pile =
         List.fold_left2 add (B.mk_pile ()) [n; nsnt_in; nsnt_out] (range 1 4)
@@ -54,8 +54,8 @@ let test_parse_smt_evidence _ =
 
     let tab = parse_smt_evidence prog (!yices) pile in
     let layer0 = Hashtbl.find tab 0 |> List.map expr_s |> str_join "; " in
-    let exp0 = [ BinEx (ASGN, Var n, Const 1);
-                BinEx (ASGN, Var nsnt, Const 2) ]
+    let exp0 = [ BinEx (ASGN, Var n, IntConst 1);
+                BinEx (ASGN, Var nsnt, IntConst 2) ]
         |> List.map expr_s |> str_join "; "
     in
     assert_equal exp0 layer0
@@ -63,7 +63,7 @@ let test_parse_smt_evidence _ =
 
     let layer1 = Hashtbl.find tab 1 |> List.map expr_s |> str_join "; " in
     let exp1 =
-        [ BinEx (ASGN, Var nsnt, Const 3) ] |> List.map expr_s |> str_join "; "
+        [ BinEx (ASGN, Var nsnt, IntConst 3) ] |> List.map expr_s |> str_join "; "
     in
     assert_equal exp1 layer1
         ~msg:(sprintf "[%s] expected, found [%s]" exp1 layer1)
@@ -87,10 +87,10 @@ let test_parse_smt_evidence_array _ =
     List.iter (append_def ~is_arr:true) [x_in; x_out];
 
     let add lhs rhs pile =
-        B.append_expr (!yices) pile (BinEx (EQ, Var lhs, Const rhs))
+        B.append_expr (!yices) pile (BinEx (EQ, Var lhs, IntConst rhs))
     in
-    let arr_acc v i = BinEx (ARR_ACCESS, Var v, Const i) in
-    let arr_upd v i j = BinEx (EQ, arr_acc v i, Const j) in
+    let arr_acc v i = BinEx (ARR_ACCESS, Var v, IntConst i) in
+    let arr_upd v i j = BinEx (EQ, arr_acc v i, IntConst j) in
     let add_arr arr ind rhs pile =
         B.append_expr (!yices) pile (arr_upd arr ind rhs)
     in
@@ -110,9 +110,9 @@ let test_parse_smt_evidence_array _ =
     in
     let tab = parse_smt_evidence prog (!yices) pile in
     let layer0 = Hashtbl.find tab 0 |> List.map expr_s |> str_join "; " in
-    let exp0 = [ BinEx (ASGN, arr_acc x 0, Const 2);
-                 BinEx (ASGN, arr_acc x 1, Const 5);
-                 BinEx (ASGN, Var n, Const 1) ]
+    let exp0 = [ BinEx (ASGN, arr_acc x 0, IntConst 2);
+                 BinEx (ASGN, arr_acc x 1, IntConst 5);
+                 BinEx (ASGN, Var n, IntConst 1) ]
         |> List.map expr_s |> str_join "; "
     in
     assert_equal exp0 layer0
@@ -120,8 +120,8 @@ let test_parse_smt_evidence_array _ =
 
     let layer1 = Hashtbl.find tab 1 |> List.map expr_s |> str_join "; " in
     let exp1 =
-        [ BinEx (ASGN, arr_acc x 0, Const 3);
-          BinEx (ASGN, arr_acc x 1, Const 7) ]
+        [ BinEx (ASGN, arr_acc x 0, IntConst 3);
+          BinEx (ASGN, arr_acc x 1, IntConst 7) ]
             |> List.map expr_s |> str_join "; "
     in
     assert_equal exp1 layer1

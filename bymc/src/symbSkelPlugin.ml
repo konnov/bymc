@@ -98,9 +98,9 @@ class symb_skel_plugin_t (plugin_name: string) =
                 List.iter register shadows;
                 (* abstract *)
                 let ae =
-                    if se <> Const 1
+                    if se <> IntConst 1
                     then AI.translate_expr ctx dom rt#solver AbsBasics.ExistAbs se
-                    else Const 1
+                    else IntConst 1
                 in
                 (* unhide next(x) *)
                 unshadow_f ae

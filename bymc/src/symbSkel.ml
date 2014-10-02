@@ -189,22 +189,22 @@ let label_transition builder path_cons vals (prev, next) =
         List.iter each (expr_used_vars e)
     in
     let load_prev h (x, i) =
-        Hashtbl.replace h x#get_name (Const i)
+        Hashtbl.replace h x#get_name (IntConst i)
     in
     let load_next h (x, i) =
         match Hashtbl.find vals x#get_name with
-        | Const b -> ()
+        | IntConst b -> ()
         | Var v ->
             if String.contains v#get_name '$'
             (* this variable was introduced by havoc *)
-            then Hashtbl.replace h v#get_name (Const i)
-        (* TODO: replace the expression on rhs with Const a *)
+            then Hashtbl.replace h v#get_name (IntConst i)
+        (* TODO: replace the expression on rhs with IntConst a *)
         | _ -> raise (SymbExec_error "Complex expression in rhs")
     in
     let is_inconsistent h (x, value) =
         let rhs = Hashtbl.find vals x#get_name in
         let of_const = function
-            | Const i -> i
+            | IntConst i -> i
             | _ -> raise (Failure "Expected a constant")
         in
         let val_fun = function
@@ -250,7 +250,7 @@ let label_transition builder path_cons vals (prev, next) =
     List.iter (load_prev h) prev; List.iter (load_next h) next;
     let inconsistent = List.exists (is_inconsistent h) next in
     match npc, inconsistent with
-    | Const 0, _ -> () (* the path conditions are violated *)
+    | IntConst 0, _ -> () (* the path conditions are violated *)
     | _, true -> ()    (* the state after the execution is invalid *)
     | _ -> (* o.k. *)
         Debug.trace Trc.syx (fun _ -> "ADDED");
@@ -296,13 +296,13 @@ let make_init rt prog proc locals builder =
     (* the globals are assigned as by declarations *)
     let init_shared (v, e) =
         match e with
-        | Nop _ -> BinEx (EQ, Var v, Const 0)
-        | Const _ -> BinEx (EQ, Var v, e)
+        | Nop _ -> BinEx (EQ, Var v, IntConst 0)
+        | IntConst _ -> BinEx (EQ, Var v, e)
         | _ -> raise (Failure ("Unexpected initialization: " ^ (SpinIrImp.expr_s e)))
     in
     (* the resulting list of initialization expressions *)
     (BinEx (EQ, init_sum, proc#get_active_expr))
-        :: (List.map (fun i -> BinEx (EQ, Var (loc_var i), Const 0)) zerolocs)
+        :: (List.map (fun i -> BinEx (EQ, Var (loc_var i), IntConst 0)) zerolocs)
         @ (List.map init_shared (Program.get_shared_with_init prog))
             
 
@@ -378,12 +378,12 @@ let expand_quant prog skels ~quant e =
         match quant with
         | QExist -> (* there is a non-zero location *)
             let cmp =
-                BinEx (GT, Var (Sk.locvar sk l), Const 0) in
+                BinEx (GT, Var (Sk.locvar sk l), IntConst 0) in
             if is_nop accum then cmp else BinEx (OR, cmp, accum)
 
         | QAll -> (* forall: all other locations are zero *)
             let cmp =
-                BinEx (EQ, Var (Sk.locvar sk l), Const 0) in
+                BinEx (EQ, Var (Sk.locvar sk l), IntConst 0) in
             if is_nop accum then cmp else BinEx (AND, cmp, accum)
 
         | QCard ->

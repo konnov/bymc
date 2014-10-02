@@ -20,7 +20,7 @@ class pia_dom_plugin_t (plugin_name: string) =
                 && (self#get_opt rt "pxz02") <> "0" in
             if pxz
             then begin
-                m_dom <- Some (new pia_domain [Const 0; Const 1; Const 2]);
+                m_dom <- Some (new pia_domain [IntConst 0; IntConst 1; IntConst 2]);
                 log INFO "   forced (0, 1, \\infty) by Pnueli, Xu, Zuck 2002"
             end else if self#has_opt rt "thresholds"
             then begin

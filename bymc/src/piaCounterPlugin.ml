@@ -109,13 +109,13 @@ class pc_plugin_t (plugin_name: string) =
             let data_ctx = rt#caches#analysis#get_pia_data_ctx in
 
             let concretize_ex = function
-            | BinEx(EQ, BinEx(ARR_ACCESS, Var a, Const i), Const v) ->
+            | BinEx(EQ, BinEx(ARR_ACCESS, Var a, IntConst i), IntConst v) ->
                 (* TODO: check, whether "a" is a counter array? *)
-                let el = BinEx(ARR_ACCESS, Var a, Const i) in
+                let el = BinEx(ARR_ACCESS, Var a, IntConst i) in
                 let conc_ex = dom#expr_is_concretization el v in
                 conc_ex
 
-            | BinEx(EQ, Var x, Const v) as e ->
+            | BinEx(EQ, Var x, IntConst v) as e ->
                 if data_ctx#must_keep_concrete (Var x)
                 then dom#expr_is_concretization (Var x) v
                 else e
