@@ -181,6 +181,7 @@ let test_get_model_one_var _ =
 
 
 let test_get_model_bool _ =
+    todo "not important right now, needs type extensions";
     let x = new_var "x" in
     let t = new data_type SpinTypes.TBIT in
     (!solver)#set_need_model true;
