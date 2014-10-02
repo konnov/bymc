@@ -180,6 +180,23 @@ let test_get_model_one_var _ =
                 (Q.query_result_s query res))
 
 
+let test_get_model_bool _ =
+    let x = new_var "x" in
+    let t = new data_type SpinTypes.TBIT in
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
+    let res = (!solver)#check in
+    assert_equal ~msg:"sat expected" res true;
+    let query = (!solver)#get_model_query in
+    assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
+    let query = (!solver)#submit_query query in
+    let res = Q.try_get query (Var x) in
+    assert_bool
+        (sprintf "expected 0 or 1, found %s" (Q.query_result_s query res))
+        ((Q.Result (Const 1)) = res || (Q.Result (Const 0)) = res)
+        
+
+
 let test_get_model_var_with_underscore _ =
     let x = new_var "_x" in
     let t = mk_int_range 0 10 in
@@ -314,6 +331,8 @@ let test_model_query_try_get_not_found _ =
 
 let suite = "smt-suite" >:::
     [
+        "test_wrong_solver_yices"
+			>:: test_wrong_solver;
         (***************** Yices 1.x **********************)
         "test_trivial_sat_yices"
 			>:: (bracket setup_yices test_trivial_sat reset_yices);
@@ -339,6 +358,8 @@ let suite = "smt-suite" >:::
             >:: (bracket setup_yices test_get_unsat_cores reset_yices);
         "test_get_model_one_var_yices"
             >:: (bracket setup_yices test_get_model_one_var reset_yices);
+        "test_get_model_bool_yices"
+            >:: (bracket setup_yices test_get_model_bool reset_yices);
         "test_get_model_array_yices"
             >:: (bracket setup_yices test_get_model_array reset_yices);
         "test_get_model_var_with_underscore_yices"
@@ -349,8 +370,6 @@ let suite = "smt-suite" >:::
             >:: (bracket setup_yices test_model_query_try_get reset_yices);
         "test_model_query_try_get_not_found_yices"
             >:: (bracket setup_yices test_model_query_try_get_not_found shutdown_yices (* clean the room *));
-        "test_wrong_solver_yices"
-			>:: test_wrong_solver;
 
         (***************** Z3 **********************)
         "test_trivial_sat_smt2"
@@ -377,6 +396,8 @@ let suite = "smt-suite" >:::
             >:: (bracket setup_smt2 test_get_unsat_cores reset_smt2);
         "test_get_model_one_var_smt2"
             >:: (bracket setup_smt2 test_get_model_one_var reset_smt2);
+        "test_get_model_bool_smt2"
+            >:: (bracket setup_smt2 test_get_model_bool reset_smt2);
         "test_get_model_array_smt2"
             >:: (bracket setup_yices test_get_model_array reset_yices);
         "test_get_model_var_with_underscore_smt2"

@@ -662,10 +662,15 @@ class lib2_smt solver_cmd solver_args =
                 buf := !buf ^ line;
             done;
 
+            let parse_val = function
+                | "false" -> 0
+                | "true" -> 1
+                | _ as s -> int_of_string s
+            in
             let parse_elem = function
                 | Sexp.List [_ as key_sexp; Sexp.Atom val_s] ->
                         let key = Sexp.to_string key_sexp in
-                        let value = int_of_string val_s in
+                        let value = parse_val val_s in
                         ignore (Q.add_result query new_q key (Const value))
                 
                 | _ as s ->
