@@ -33,6 +33,11 @@ module Q = struct
         | Cached -> "Cached"
         | Result e -> "Result " ^ (q.expr_to_smt_f e)
 
+    let print_contents (q: query_t) =
+        let p s r = printf "   %s <- %s\n" s (query_result_s q r) in
+        printf "\n ***** query contents *****\n";
+        Hashtbl.iter p q.tab
+
     let new_query expr_to_smt_f = 
         { frozen = false; expr_to_smt_f; tab = Hashtbl.create 10 }
 
@@ -41,8 +46,10 @@ module Q = struct
         try Hashtbl.find q.tab e_s
         with Not_found ->
             if q.frozen
-            then raise (Smt_error ("No result for " ^ e_s))
-            else begin
+            then begin
+                print_contents q;
+                raise (Smt_error ("No result for " ^ e_s))
+            end else begin
                 Hashtbl.add q.tab e_s Cached;
                 Cached
             end
@@ -54,11 +61,6 @@ module Q = struct
             nq
         end with Not_found ->
             nq
-
-    let print_contents (q: query_t) =
-        let p s r = printf "   %s <- %s\n" s (query_result_s q r) in
-        printf "\n ***** query contents *****\n";
-        Hashtbl.iter p q.tab
                 
 end
 
@@ -238,7 +240,10 @@ let var_to_smtlib2 var tp =
 
 
 let parse_smt_model_q query lines =
-    let var_re = Str.regexp "(= \\([_a-zA-Z0-9]+\\) \\([-0-9]+\\))" in
+    let var_re =
+        Str.regexp
+            "(= \\([_a-zA-Z][_a-zA-Z0-9]*\\) \\([-0-9]+\\|false\\|true\\))"
+    in
     let arr_re =
         Str.regexp "(= (\\([_a-zA-Z][_a-zA-Z0-9]*\\) \\([0-9]+\\)) \\([-0-9]+\\))"
     in
@@ -249,13 +254,19 @@ let parse_smt_model_q query lines =
     let add_alias origin alias = Hashtbl.add aliases origin alias in
     let get_aliases origin = Hashtbl.find_all aliases origin in
 
+    let parse_val = function
+        | "false" -> 0
+        | "true" -> 1
+        | _ as s -> int_of_string s
+    in
+
     let parse_line newq line =
         if Str.string_match var_re line 0
         then begin
             (* e.g., (= x 1) *)
             let variable = Str.matched_group 1 line in
             (* we support ints only, don't we? *)
-            let value = int_of_string (Str.matched_group 2 line) in
+            let value = parse_val (Str.matched_group 2 line) in
             Q.add_result query newq variable (Const value)
         end
         else if Str.string_match arr_re line 0
@@ -263,7 +274,7 @@ let parse_smt_model_q query lines =
             (* e.g., (= (x 11) 0) *)
             let name = Str.matched_group 1 line in
             let index = int_of_string (Str.matched_group 2 line) in
-            let value = int_of_string (Str.matched_group 3 line) in
+            let value = parse_val (Str.matched_group 3 line) in
 
             let mk_access n i = sprintf "(%s %d)" n i in
             let each_alias q alias =
@@ -488,6 +499,33 @@ class yices_smt (solver_cmd: string) =
                 if "sync" = self#read_line then stop := true
             done
     end
+
+
+let expand_arr_eq tt root =
+    let rec each = function    
+    | BinEx (EQ, Var x, Var y) as e ->
+            let xt, yt = tt#get_type x, tt#get_type y in
+            if xt#is_array && yt#is_array
+            then begin
+                assert (xt#nelems = yt#nelems);
+                let eq i =
+                    BinEx (EQ,
+                        BinEx (ARR_ACCESS, Var x, Const i),
+                        BinEx (ARR_ACCESS, Var y, Const i))
+                in
+                list_to_binex AND (List.map eq (Accums.range 0 xt#nelems))
+            end
+            else e
+
+    | BinEx (t, l, r) ->
+            BinEx (t, each l, each r)
+
+    | UnEx (t, l) ->
+            UnEx (t, each l)
+
+    | _ as e -> e
+    in
+    each root
 
 
 (*
