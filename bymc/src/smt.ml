@@ -126,11 +126,11 @@ class virtual smt_solver =
     end
 
 
-let rec expr_to_smt e =
-    match e with
+let rec expr_to_smt = function
     | Nop comment -> sprintf ";; %s\n" comment
     | IntConst i -> string_of_int i
     | Var v -> v#mangled_name
+
     | UnEx (tok, f) ->
         begin match tok with
         | UMIN -> sprintf "(- %s)" (expr_to_smt f)
@@ -139,6 +139,7 @@ let rec expr_to_smt e =
             raise (Failure
                 (sprintf "No idea how to translate %s to SMT" (token_s tok)))
         end
+
     | BinEx (tok, l, r) ->
         begin match tok with
         | PLUS  -> sprintf "(+ %s %s)" (expr_to_smt l) (expr_to_smt r)
@@ -151,12 +152,55 @@ let rec expr_to_smt e =
         | GE    -> sprintf "(>= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | LE    -> sprintf "(<= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | EQ    -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
-        | NE    -> sprintf "(not (= %s %s))"  (expr_to_smt l) (expr_to_smt r)
+        | NE    -> sprintf "(/= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | AND   -> sprintf "(and %s %s)" (expr_to_smt l) (expr_to_smt r)
         | OR    -> sprintf "(or %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_smt l) (expr_to_smt r)
         | ARR_ACCESS -> sprintf "(%s %s)" (expr_to_smt l) (expr_to_smt r)
+        | _ -> raise (Failure
+                (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
+        end
+
+    | Phi (lhs, rhs) ->
+            raise (Failure "Phi to SMT is not supported")
+
+    | LabelRef (proc_name, lab_name) ->
+            raise (Failure "LabelRef to SMT is not supported")
+
+
+let rec expr_to_smt2 = function
+    | Nop comment -> sprintf ";; %s\n" comment
+    | IntConst i -> string_of_int i
+    | Var v -> v#mangled_name
+
+    | UnEx (tok, f) ->
+        begin match tok with
+        | UMIN -> sprintf "(- %s)" (expr_to_smt2 f)
+        | NEG  -> sprintf "(not %s)" (expr_to_smt2 f)
+        | _ ->
+            raise (Failure
+                (sprintf "No idea how to translate %s to SMT" (token_s tok)))
+        end
+
+    | BinEx (tok, l, r) ->
+        begin match tok with
+        | PLUS  -> sprintf "(+ %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | MINUS -> sprintf "(- %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | MULT  -> sprintf "(* %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | DIV   -> sprintf "(div %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | MOD   -> sprintf "(mod %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | GT    -> sprintf "(> %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | LT    -> sprintf "(< %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | GE    -> sprintf "(>= %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | LE    -> sprintf "(<= %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | EQ    -> sprintf "(= %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | NE    -> sprintf "(not (= %s %s))"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | AND   -> sprintf "(and %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
+        | OR    -> sprintf "(or %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | EQUIV -> sprintf "(= %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_smt2 l) (expr_to_smt2 r)
+        | ARR_ACCESS -> sprintf "(select %s %s)" (expr_to_smt2 l) (expr_to_smt2 r)
         | _ -> raise (Failure
                 (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
         end
@@ -226,7 +270,7 @@ let var_to_smtlib2 var tp =
     in
     let decl =
         if tp#is_array
-        then sprintf "(declare-fun %s (Int) %s)" var#mangled_name base_type
+        then sprintf "(declare-fun %s () (Array Int %s))" var#mangled_name base_type
         else sprintf "(declare-fun %s () %s)" var#mangled_name base_type
     in
     let acc i = BinEx (ARR_ACCESS, Var var, IntConst i) in
@@ -236,7 +280,7 @@ let var_to_smtlib2 var tp =
         else List.concat
             (List.map (fun i -> cons_f (acc i)) (Accums.range 0 tp#nelems))
     in
-    decl :: (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt e)) cons)
+    decl :: (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt2 e)) cons)
 
 
 let parse_smt_model_q query lines =
@@ -501,33 +545,6 @@ class yices_smt (solver_cmd: string) =
     end
 
 
-let expand_arr_eq tt root =
-    let rec each = function    
-    | BinEx (EQ, Var x, Var y) as e ->
-            let xt, yt = tt#get_type x, tt#get_type y in
-            if xt#is_array && yt#is_array
-            then begin
-                assert (xt#nelems = yt#nelems);
-                let eq i =
-                    BinEx (EQ,
-                        BinEx (ARR_ACCESS, Var x, IntConst i),
-                        BinEx (ARR_ACCESS, Var y, IntConst i))
-                in
-                list_to_binex AND (List.map eq (Accums.range 0 xt#nelems))
-            end
-            else e
-
-    | BinEx (t, l, r) ->
-            BinEx (t, each l, each r)
-
-    | UnEx (t, l) ->
-            UnEx (t, each l)
-
-    | _ as e -> e
-    in
-    each root
-
-
 (*
     An interface to a solver supporting SMTLIB2. This class invoke a solver
     and communicates with it via pipes.
@@ -591,7 +608,7 @@ class lib2_smt solver_cmd solver_args =
 
         method append_expr expr =
             assert(not (PipeCmd.is_null m_pipe_cmd));
-            let e_s = expr_to_smt expr in
+            let e_s = expr_to_smt2 expr in
             let is_comment =
                 (String.length e_s) > 1 && e_s.[0] = ';' && e_s.[1] = ';'
             in
@@ -644,7 +661,7 @@ class lib2_smt solver_cmd solver_args =
 
         method get_need_model = m_need_evidence
             
-        method get_model_query = Q.new_query expr_to_smt
+        method get_model_query = Q.new_query expr_to_smt2
 
         method submit_query (query: Q.query_t) =
             let str = Hashtbl.fold (fun e_s _ s -> s ^ " " ^ e_s) query.Q.tab "" in

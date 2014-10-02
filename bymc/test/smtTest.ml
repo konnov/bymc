@@ -399,15 +399,15 @@ let suite = "smt-suite" >:::
         "test_get_model_bool_smt2"
             >:: (bracket setup_smt2 test_get_model_bool reset_smt2);
         "test_get_model_array_smt2"
-            >:: (bracket setup_yices test_get_model_array reset_yices);
+            >:: (bracket setup_smt2 test_get_model_array reset_smt2);
         "test_get_model_var_with_underscore_smt2"
-            >:: (bracket setup_yices test_get_model_var_with_underscore reset_yices);
+            >:: (bracket setup_smt2 test_get_model_var_with_underscore reset_smt2);
         "test_get_model_array_copy_smt2"
-            >:: (bracket setup_yices test_get_model_array_copy reset_yices);
+            >:: (bracket setup_smt2 test_get_model_array_copy reset_smt2);
         "test_model_query_try_get_smt2"
-            >:: (bracket setup_yices test_model_query_try_get reset_yices);
+            >:: (bracket setup_smt2 test_model_query_try_get reset_smt2);
         "test_model_query_try_get_not_found_smt2"
-            >:: (bracket setup_yices test_model_query_try_get_not_found reset_yices);
+            >:: (bracket setup_smt2 test_model_query_try_get_not_found reset_smt2);
         (* this test shutdowns the solver! *)
         "test_trivial_sat_smt2"
 			>:: (bracket setup_smt2 test_trivial_sat shutdown_smt2);
