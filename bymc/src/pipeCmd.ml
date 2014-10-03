@@ -56,7 +56,9 @@ let write_handler (wts, fdout) =
         done;
         max_yields := !max_yields * 2
     done;
+    (* if you want to see this annoying message, uncomment it:
     printf "[writer thread]: about %d yields in 1 msec\n" !max_yields;
+    *)
     (* process the input lines *)
     let yields = ref 0 in
     while !(wts.state) <> Stopping do

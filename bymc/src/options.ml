@@ -107,7 +107,7 @@ let parse_options =
             );
             ("--smt", (Arg.String (fun s ->
                 opts := {!opts with smt = parse_smt s})),
-                " choose SMT solver (default: yices).");
+                " choose SMT solver: yices (default), smt2:solver-name:arg1:arg2...");
             ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =

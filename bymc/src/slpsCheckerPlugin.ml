@@ -45,10 +45,10 @@ class slps_checker_plugin_t (plugin_name: string)
             let sk = List.hd sk_plugin#skels in
             let nleafs = PorBounds.tree_leafs_count tree in
             let num = ref 0 in (* XXX *)
-            let on_leaf _ =
+            let on_leaf length =
                 num := !num + 1;
-                logtm INFO (sprintf "    checked path schema: %4d progress: %2d%%" !num
-                (!num * 100 / nleafs))
+                logtm INFO (sprintf "    checked path schema: %4d length: %4d progress: %2d%%"
+                !num length (!num * 100 / nleafs))
             in
 
             let check_tree form tree =

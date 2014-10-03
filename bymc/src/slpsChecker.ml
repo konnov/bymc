@@ -190,12 +190,12 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "last segment";
-            let _, err = check_segment frame seg in
+            let endf, err = check_segment frame seg in
             rt#solver#comment (sprintf "pop@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
             assert (stack_level = rt#solver#get_stack_level);
 
-            on_leaf ();
+            on_leaf (endf.F.no + 1);
             err
 
         | T.Node (seg, branches) ->
