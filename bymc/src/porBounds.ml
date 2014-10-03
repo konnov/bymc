@@ -428,6 +428,7 @@ let compute_deps solver sk =
     let sccs =
         List.filter (fun l -> (List.length l) > 1) (IGSCC.scc_list fg) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
+    List.iter print_scc sccs;
     { D.lconds = lmiles; D.uconds = umiles;
       D.fg = fg; D.rule_pre = rule_pre; D.cond_imp = cond_imp }
 
