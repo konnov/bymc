@@ -23,6 +23,7 @@ open SymbSkel
 module IGraph = Graph.Pack.Digraph
 module IGraphOper = Graph.Oper.I(IGraph)
 module IGTop = Graph.Topological.Make(IGraph)
+module IGSCC = Graph.Components.Make(IGraph)
 
 
 module PSetMap = Map.Make (struct
@@ -415,9 +416,18 @@ let compute_deps solver sk =
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
     List.iter (print_milestone Lock) lmiles;
 
+    logtm INFO (sprintf "> constructing preconditions...");
     let rule_pre = compute_pre sk (umiles @ lmiles) in
+    logtm INFO (sprintf "> constructing implications...");
     let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
     in
+    logtm INFO (sprintf "> constructing strongly-connected components...");
+    let print_scc scc =
+        log INFO (sprintf "    > SCC of size %d\n" (List.length scc))
+    in
+    let sccs =
+        List.filter (fun l -> (List.length l) > 1) (IGSCC.scc_list fg) in
+    log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     { D.lconds = lmiles; D.uconds = umiles;
       D.fg = fg; D.rule_pre = rule_pre; D.cond_imp = cond_imp }
 
