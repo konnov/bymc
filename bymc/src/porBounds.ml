@@ -423,7 +423,7 @@ let compute_deps solver sk =
     in
     logtm INFO (sprintf "> constructing strongly-connected components...");
     let print_scc scc =
-        log INFO (sprintf "    > SCC of size %d\n" (List.length scc))
+        log INFO (sprintf "    > SCC of size %d" (List.length scc))
     in
     let sccs =
         List.filter (fun l -> (List.length l) > 1) (IGSCC.scc_list fg) in
