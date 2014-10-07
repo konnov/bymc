@@ -196,8 +196,7 @@ type builder_fun_t =
 let transition_to_rule builder path_cons vals (prev, next) =
     let assert_all_locals_eliminated e =
         let each v =
-            if String.contains v#get_name '$'
-                && not (Hashtbl.mem vals v#get_name)
+            if is_temp v && not (Hashtbl.mem vals v#get_name)
             then raise (Failure (sprintf "Can't eliminate local %s" v#get_name))
         in
         List.iter each (expr_used_vars e)
@@ -209,7 +208,7 @@ let transition_to_rule builder path_cons vals (prev, next) =
         match Hashtbl.find vals x#get_name with
         | IntConst b -> ()
         | Var v ->
-            if String.contains v#get_name '$'
+            if is_temp v
             (* this variable was introduced by havoc *)
             then Hashtbl.replace h v#get_name (IntConst i)
         (* TODO: replace the expression on rhs with IntConst a *)
@@ -341,6 +340,7 @@ let build_with builder_fun rt prog proc =
     (*
     st#add_all_symb proc#get_symbs;
     *)
+
     let ctx = { SkB.sym_tab = st; SkB.type_tab = tt;
         SkB.prev_next = prev_next; SkB.state = builder; }
     in

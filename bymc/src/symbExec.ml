@@ -58,8 +58,11 @@ let check_sat solver type_tab exp =
     end
 
 
+let is_temp v = BatString.exists v#get_name "__t"
+
+
 let inc_version sym_tab type_tab var ver =
-    let new_name = sprintf "%s__%d" var#get_name (ver + 1) in
+    let new_name = sprintf "%s__t%d" var#get_name (ver + 1) in
     let nv =
         try (sym_tab#lookup new_name)#as_var
         with Symbol_not_found _ ->
