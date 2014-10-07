@@ -577,6 +577,7 @@ class lib2_smt solver_cmd solver_args =
             clog <- open_out "smt2.log";
             self#append_and_sync "(set-option :print-success true)\n";
             self#append_and_sync "(set-option :produce-unsat-cores true)\n";
+            self#append_and_sync "(set-option :produce-models true)";
             (* pop removes the declarations *)
             self#append_and_sync "(set-option :global-decls false)\n";
             self#push_ctx (* a backup context to reset *)
@@ -653,11 +654,9 @@ class lib2_smt solver_cmd solver_args =
             res
 
         method set_need_model b =
-            m_need_evidence <- b;
-            if b
-            then self#append "(set-option :produce-models true)"
-            else self#append "(set-option :produce-models false)";
-            self#sync
+            m_need_evidence <- b
+            (* the option is set in #start, as many solvers require us to set
+               the options before doing anything *)
 
         method get_need_model = m_need_evidence
             
