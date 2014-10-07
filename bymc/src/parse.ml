@@ -187,6 +187,7 @@ let init_macros opts =
     let tool = match opts.Options.mc_tool with
     | Options.ToolSpin -> "SPIN"
     | Options.ToolNusmv -> "NUSMV"
+    | Options.ToolNone -> "NONE"
     in
     Hashtbl.add macros tool "1";
     let add_macro_opt full_name value =

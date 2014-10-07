@@ -16,7 +16,7 @@ let macro_prefix = "macro."
 type action_opt_t =
     | OptAbstract | OptRefine | OptVersion | OptNone
 
-type mc_tool_opt_t = ToolSpin | ToolNusmv
+type mc_tool_opt_t = ToolSpin | ToolNusmv | ToolNone
 
 type smt_opt_t = SmtYices | SmtLib2 of string array
 
@@ -64,6 +64,7 @@ let parse_plugin_opt str =
 let parse_mc_tool = function
     | "spin" -> ToolSpin
     | "nusmv" -> ToolNusmv
+    | "none" -> ToolNone
     | _ as s -> raise (Failure ("Unknown option: " ^ s))
 
 
@@ -101,7 +102,7 @@ let parse_options =
                     chain = "concrete";
                     param_assignments = parse_key_values s}),
              "substitute parameters into the code and produce standard Promela.");
-            ("--target", (Arg.Symbol (["spin"; "nusmv"],
+            ("--target", (Arg.Symbol (["spin"; "nusmv"; "none"],
                 (fun s -> opts := {!opts with mc_tool = parse_mc_tool s}))),
                 " choose a model checker from the list (default: spin)."
             );

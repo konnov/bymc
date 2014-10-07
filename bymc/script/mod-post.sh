@@ -17,7 +17,7 @@ fi
 
 function mc_compile_first {
     case "$PROP" in
-      all) BYMC_FLAGS="--target nusmv --chain post" ;;
+      all) BYMC_FLAGS="--target none --chain post" ;;
       *) echo "Unknown property to analyze: $PROP" ; exit 1 ;;
     esac
     echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
