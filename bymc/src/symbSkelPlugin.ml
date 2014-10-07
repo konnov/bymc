@@ -130,8 +130,8 @@ class symb_skel_plugin_t (plugin_name: string) =
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
-            let prev = List.map fst prev_next_pairs in
-            let sk, new_prog = SymbSkel.of_transitions rt prog proc prev trs in
+            let sk, new_prog =
+                SymbSkel.state_pairs_to_rules rt prog proc trs in
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             sk, new_prog
 

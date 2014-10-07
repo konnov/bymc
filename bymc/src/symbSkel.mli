@@ -47,23 +47,84 @@ module Sk: sig
 
     (** save skeleton to a file *)
     val to_file: string -> skel_t -> unit
- 
+
+    val print: out_channel -> skel_t -> unit
 end
+
+
+module SkB: sig
+    (** the skeleton under construction *)
+    type state_t
+
+    (** context for a function that constructs locations and rules *)
+    type context_t = {
+        sym_tab: SpinIr.symb_tab;
+        type_tab: SpinIr.data_type_tab;
+        prev_next: (SpinIr.var * SpinIr.var) list;
+        state: state_t ref;
+    }
+
+    (**
+     Create an initial builder state.
+     @param locals local variables
+     @param shared shared variables
+     @param params parameter variables
+     @return initial builder state
+     *)
+    val empty: SpinIr.var list -> SpinIr.var list -> SpinIr.var list -> state_t
+
+    (**
+     Finish skeleton construction and return the complete skeleton.
+     @param state builder state
+     @param name skeleton name
+     @return a complete skeleton
+     *)
+    val finish: state_t -> string -> Sk.skel_t
+
+    (* get location index or allocate a new one *)
+    val get_loci: state_t -> Sk.loc_t -> int
+
+    val intro_loc_vars: state_t ref -> SpinIr.data_type_tab -> SpinIr.var list
+
+    val add_loc: state_t ref -> Sk.loc_t -> int
+
+    val get_nlocs: state_t ref -> int
+
+    val add_rule: state_t ref -> Sk.rule_t -> int
+
+    val add_init: state_t ref -> Spin.token SpinIr.expr -> unit
+end
+
+
+type builder_fun_t =
+    SkB.context_t -> Spin.token SpinIr.expr
+        -> (string, Spin.token SpinIr.expr) Hashtbl.t -> unit
+
+
+val build_with:
+    (** @param builder_fun a function that constructs locations and rules *)
+    builder_fun_t
+    (** @param rt runtime *)
+    -> Runtime.runtime_t
+    (** @param prog input program *)
+    -> Program.program_t
+    (** @param proc input process *)
+    -> Spin.token SpinIr.proc
+    (** @return the skeleton and the modified program *)
+    -> Sk.skel_t * Program.program_t
 
 
 (** Construct a symbolic skeleton given the transitions represented
    as (prev, next) pairs. This representation usually comes from
    an abstraction.
  *)
-val of_transitions:
+val state_pairs_to_rules:
     (** @param rt runtime *)
     Runtime.runtime_t
     (** @param prog input program *)
     -> Program.program_t 
     (** @param proc the original process *)
     -> Spin.token SpinIr.proc
-    (** @param primary_vars the local variables *)
-    -> SpinIr.var list
     (** @param trs transitions as pairs of assignments
         to the previous and next locations *)
     -> ((SpinIr.var * int) list * (SpinIr.var * int) list) list

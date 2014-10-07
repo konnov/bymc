@@ -112,9 +112,18 @@ end
 
 (* the intermediate structure to successively construct Sk *)
 module SkB = struct
+    (** the builder's state *)
     type state_t = {
         loc_map: (Sk.loc_t, int) Hashtbl.t;
         skel: Sk.skel_t;
+    }
+
+    (** context for a function that constructs locations and rules *)
+    type context_t = {
+        sym_tab: symb_tab;
+        type_tab: data_type_tab;
+        prev_next: (var * var) list;
+        state: state_t ref;
     }
 
     let empty locals shared params =
@@ -179,7 +188,12 @@ module SkB = struct
 end
 
 
-let label_transition builder path_cons vals (prev, next) =
+type builder_fun_t =
+    SkB.context_t -> Spin.token SpinIr.expr
+        -> (string, Spin.token SpinIr.expr) Hashtbl.t -> unit
+
+
+let transition_to_rule builder path_cons vals (prev, next) =
     let assert_all_locals_eliminated e =
         let each v =
             if String.contains v#get_name '$'
@@ -269,10 +283,10 @@ let label_transition builder path_cons vals (prev, next) =
         ignore (SkB.add_rule builder rule)
 
 
-let propagate builder trs path_cons vals =
+let reconstruct_rules trs ctx path_cons vals =
     Debug.trace Trc.syx
         (fun _ -> Printf.sprintf "path_cons = %s\n" (SpinIrImp.expr_s path_cons));
-    List.iter (label_transition builder path_cons vals) trs
+    List.iter (transition_to_rule ctx.SkB.state path_cons vals) trs
 
 
 let make_init rt prog proc locals builder =
@@ -304,32 +318,37 @@ let make_init rt prog proc locals builder =
     (BinEx (EQ, init_sum, proc#get_active_expr))
         :: (List.map (fun i -> BinEx (EQ, Var (loc_var i), IntConst 0)) zerolocs)
         @ (List.map init_shared (Program.get_shared_with_init prog))
-            
 
 
-let of_transitions rt prog proc primary_vars trs =
+let build_with builder_fun rt prog proc =
     (* do symbolic exploration/simplification *)
     (* collect a formula along the path *)
-    let get_comp p =
-        let reg_tab = (rt#caches#find_struc prog)#get_regions p#get_name in
-        reg_tab#get "comp" p#get_stmts 
-    in
-    let all_stmts = SpinIrImp.mir_to_lir (get_comp proc) in
+    let reg_tab = (rt#caches#find_struc prog)#get_regions proc#get_name in
+    let all_stmts = SpinIrImp.mir_to_lir (reg_tab#get "comp" proc#get_stmts) in
+    let loop_sig = SkelStruc.extract_loop_sig prog reg_tab proc in
+    let prev_next = SkelStruc.get_prev_next loop_sig in
+
     let cfg = Cfg.remove_ineffective_blocks (mk_cfg all_stmts) in
     let shared = Program.get_shared prog in
     let params = Program.get_params prog in
     let all_vars = shared @ proc#get_locals in
-    let builder = ref (SkB.empty primary_vars shared params) in
+    let primary_locals = List.map fst prev_next in
+    let builder = ref (SkB.empty primary_locals shared params) in
 
-    (* collect steps expressed via paths *)
     let tt = (Program.get_type_tab prog)#copy in
     let st = new symb_tab proc#get_name in
+    let ctx = { SkB.sym_tab = st; SkB.type_tab = tt;
+        SkB.prev_next = prev_next; SkB.state = builder; }
+    in
+
+    (* collect steps expressed via paths *)
     st#add_all_symb proc#get_symbs;
     let path_efun = enum_paths cfg in
     let num_paths =
-        path_efun (exec_path rt#solver tt st all_vars (propagate builder trs))
+        path_efun (exec_path rt#solver tt st all_vars (builder_fun ctx))
     in
-    Printf.printf "    enumerated %d paths\n\n" num_paths;
+    Printf.printf "    enumerated %d symbolic paths in process %s\n\n"
+        num_paths proc#get_name;
 
     (* collect initial conditions *)
     let ntt = (Program.get_type_tab prog)#copy in
@@ -337,7 +356,7 @@ let of_transitions rt prog proc primary_vars trs =
     let vr = rt#caches#analysis#get_var_roles prog in
     List.iter (fun v -> vr#add v VarRole.LocalUnbounded) loc_vars;
     rt#caches#analysis#set_var_roles prog vr;
-    let inits = make_init rt prog proc primary_vars builder in
+    let inits = make_init rt prog proc primary_locals builder in
     List.iter (SkB.add_init builder) inits;
 
     let new_prog =
@@ -347,6 +366,10 @@ let of_transitions rt prog proc primary_vars trs =
     (* get the result *)
     let sk = SkB.finish !builder proc#get_name in
     sk, new_prog
+
+
+let state_pairs_to_rules rt prog proc trs =
+    build_with (reconstruct_rules trs) rt prog proc
 
 
 (** expand quantifiers to conditions over location counters *)
