@@ -79,6 +79,8 @@ elif [ "${TARGET_MC}" == "nusmv-bdd" ]; then
     . "${BYMC_HOME}/script/mod-verify-nusmv-bdd.sh"
 elif [ "${TARGET_MC}" == "analysis" ]; then
     . "${BYMC_HOME}/script/mod-analyse.sh"
+elif [ "${TARGET_MC}" == "post" ]; then
+    . "${BYMC_HOME}/script/mod-post.sh"
 elif [ "${TARGET_MC}" == "fast" ]; then
     . "${BYMC_HOME}/script/mod-fast.sh"
 else

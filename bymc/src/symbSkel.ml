@@ -337,12 +337,15 @@ let build_with builder_fun rt prog proc =
 
     let tt = (Program.get_type_tab prog)#copy in
     let st = new symb_tab proc#get_name in
+    st#add_all_symb (Program.get_sym_tab prog)#get_symbs;
+    (*
+    st#add_all_symb proc#get_symbs;
+    *)
     let ctx = { SkB.sym_tab = st; SkB.type_tab = tt;
         SkB.prev_next = prev_next; SkB.state = builder; }
     in
 
     (* collect steps expressed via paths *)
-    st#add_all_symb proc#get_symbs;
     let path_efun = enum_paths cfg in
     let num_paths =
         path_efun (exec_path rt#solver tt st all_vars (builder_fun ctx))

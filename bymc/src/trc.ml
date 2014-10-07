@@ -13,4 +13,5 @@ let nse = "NSE" (* nusmvSsaEncoding *)
 let pcr = "PCR" (* piaCtrRefinement *)
 let syx = "SYX" (* symbExec *)
 let bnd = "BND" (* porBounds *)
+let sum = "SUM" (* summary *)
 

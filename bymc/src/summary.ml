@@ -8,6 +8,7 @@ open Printf
 
 open Batteries
 
+open Debug
 open Smt
 open Spin
 open SpinIr
@@ -23,7 +24,7 @@ let mk_loc assigns f pair =
     in
     match value with
     | IntConst i -> i
-    | _ -> raise (Failure "expected integer")
+    | _ as e -> raise (Failure ("expected integer, found: " ^ (expr_s e)))
 
 
 let mk_act syms assigns =
@@ -56,7 +57,7 @@ let enum_cubes rt ctx used vars cons assigns =
             | Q.Cached -> ()
             | Q.Result e ->
                     Hashtbl.replace vals v e;
-                    printf "  %s <- %s\n" v#get_name (expr_s e)
+                    (*printf "  %s <- %s\n" v#get_name (expr_s e)*)
         in
         let query = rt#solver#get_model_query in
         List.iter (each query) vars;
@@ -66,11 +67,11 @@ let enum_cubes rt ctx used vars cons assigns =
             if Hashtbl.mem vals v then Hashtbl.find vals v else Var v in
         let simp e = map_vars get_val e |> Simplif.compute_consts in
         let cube = Hashtbl.map (fun _ e -> simp e) assigns in
-        (*
-        printf "  simp_cons: %s\n  simp_vars:\n" (expr_s (simp cons));
-        let p n v = printf "    %s <- %s\n" n (SpinIrImp.expr_s v) in
-        Hashtbl.iter p cube;
-        *)
+        trace Trc.sum (fun _ ->
+            let p n v = printf "    %s <- %s\n" n (SpinIrImp.expr_s v) in
+            Hashtbl.iter p cube;
+            sprintf "  simp_cons: %s\n  simp_vars:\n" (expr_s (simp cons))
+        );
         let prev_loc =
             SkB.add_loc ctx.SkB.state (List.map (mk_loc cube fst) ctx.SkB.prev_next) in
         let next_loc =
@@ -93,16 +94,14 @@ let enum_cubes rt ctx used vars cons assigns =
 let each_path rt ctx cons vals =
     let used = SpinIr.expr_used_vars cons in
     let locals = List.filter (fun v -> v#proc_name <> "") used in
-    enum_cubes rt ctx used locals cons vals
-    (*
-    let p n v = printf "  %s <- %s\n" n (SpinIrImp.expr_s v) in
-    printf "cons: %s\n" (SpinIrImp.expr_s cons);
-    Hashtbl.iter p vals
-    *)
+    enum_cubes rt ctx used locals cons vals;
+    trace Trc.sum (fun _ ->
+        let p n v = printf "  %s <- %s\n" n (SpinIrImp.expr_s v) in
+        Hashtbl.iter p vals;
+        sprintf "cons: %s\n" (SpinIrImp.expr_s cons))
 
 
 let summarize rt prog proc =
-    let skel, _ = build_with (each_path rt) rt prog proc in
-    skel
+    build_with (each_path rt) rt prog proc
 
 

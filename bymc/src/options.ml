@@ -85,7 +85,7 @@ let parse_options =
     let opts = ref {empty with filename = ""} in
     (Arg.parse
         [
-            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"; "fast"; "skelSmv"],
+            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"; "post"; "fast"; "skelSmv"],
                 (fun s -> opts := {!opts with chain = s}))),
                 " choose a transformation/refinement chain (default: piaDataCtr)."
             );

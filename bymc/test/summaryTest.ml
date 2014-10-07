@@ -71,7 +71,7 @@ let test_summary _ =
     rt#caches#analysis#set_var_roles prog (VarRole.identify_var_roles prog);
 
     (* the show starts here *)
-    let sk = Summary.summarize rt prog proc in
+    let sk, _ = Summary.summarize rt prog proc in
     (* Sk.print stdout sk; *)
     assert_equal 7 sk.Sk.nlocs
         ~msg:(sprintf "expected 7 locations, found %d" sk.Sk.nlocs);

@@ -144,11 +144,38 @@ module PiaSkelSmv = struct
 end
 
 
+module PiaPost = struct
+    type plugins_t = {
+        pia: Pia.plugins_t;
+        sk: SymbSkelPlugin.symb_skel_plugin_t;
+        pb: PorBoundsPlugin.por_bounds_plugin_t;
+        slps: SlpsCheckerPlugin.slps_checker_plugin_t;
+    }
+
+    let mk_plugins () =
+        let pia = Pia.mk_plugins () in
+        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
+        let pb =
+            new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
+        let slps =
+            new SlpsCheckerPlugin.slps_checker_plugin_t "slps" sk pb in
+        { pia = pia; sk = sk; pb = pb; slps = slps }
+
+    let mk_chain plugins =
+        let chain = Pia.mk_chain plugins.pia in
+        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
+        chain#add_plugin plugins.pb OutOfPred;
+        chain#add_plugin plugins.slps OutOfPred;
+        chain
+end
+
+
 let create_chain = function
     | "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
     | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
     | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
     | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
     | "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
+    | "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))
 
