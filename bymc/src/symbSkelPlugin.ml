@@ -116,7 +116,6 @@ class symb_skel_plugin_t (plugin_name: string) =
             let new_inits = List.map afun sk.Sk.inits in
             rt#solver#pop_ctx;
             { sk with Sk.rules = new_rules; Sk.inits = new_inits }
-                
 
         method extract_proc rt prog proc =
             let reg_tbl = (rt#caches#find_struc prog)#get_regions proc#get_name in

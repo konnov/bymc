@@ -29,20 +29,27 @@ let get_proper_specs prog skels =
     SymbSkel.expand_props_in_ltl_forms prog skels good
 
 
-class slps_checker_plugin_t (plugin_name: string)
-        (sk_plugin: SymbSkelPlugin.symb_skel_plugin_t)
-        (por_bounds_plugin: PorBoundsPlugin.por_bounds_plugin_t) =
+class slps_checker_plugin_t (plugin_name: string) =
     object(self)
         inherit analysis_plugin_t plugin_name
 
         method transform rt =
-            let input = self#get_input0 in
-            let tt = Program.get_type_tab input in
-            let tree = por_bounds_plugin#representative_tree in
-
+            let sprog = self#get_input0 in
+            rt#caches#set_struc sprog (SkelStruc.compute_struc sprog);
+            let each_proc (skels, prog) proc =
+                let sk, new_prog = self#extract_proc rt prog proc in
+                (sk :: skels, new_prog)
+            in
+            let skels, prog =
+                List.fold_left each_proc ([], sprog) (Program.get_procs sprog)
+            in
+            let dom_size = rt#caches#analysis#get_pia_dom#length in
             (* TODO: there must be only one skeleton for all process types! *)
-            assert ((List.length sk_plugin#skels) = 1);
-            let sk = List.hd sk_plugin#skels in
+            assert (1 = (List.length skels));
+            let sk = List.hd skels in
+            let tt = Program.get_type_tab prog in
+            let tree = PorBounds.compute_diam rt#solver dom_size sk in
+
             let nleafs = PorBounds.tree_leafs_count tree in
             let num = ref 0 in (* XXX *)
             let on_leaf length =
@@ -64,9 +71,16 @@ class slps_checker_plugin_t (plugin_name: string)
                 then printf "    > SLPS: counterexample for %s found\n" name
                 else printf "      > Spec %s holds\n" name
             in
-            let specs = get_proper_specs input sk_plugin#skels in
+            let specs = get_proper_specs prog skels in
             StrMap.iter each_form specs;
-            input
+            prog
+
+        method extract_proc rt prog proc =
+            logtm INFO ("  > Computing the summary of " ^ proc#get_name);
+            let sk, new_prog = Summary.summarize rt prog proc in
+            Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
+            logtm INFO ("    [DONE]");
+            sk, new_prog
 
         method update_runtime rt =
             ()

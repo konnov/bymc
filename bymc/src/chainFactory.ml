@@ -75,7 +75,6 @@ module PiaBounds = struct
         pia: Pia.plugins_t;
         sk: SymbSkelPlugin.symb_skel_plugin_t;
         pb: PorBoundsPlugin.por_bounds_plugin_t;
-        slps: SlpsCheckerPlugin.slps_checker_plugin_t;
         ssn: SymbSkelNusmvPlugin.skel_nusmv_plugin_t;
     }
 
@@ -84,17 +83,14 @@ module PiaBounds = struct
         let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
         let pb =
             new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
-        let slps =
-            new SlpsCheckerPlugin.slps_checker_plugin_t "slps" sk pb in
         let module SSN = SymbSkelNusmvPlugin in
         let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" sk in
-        { pia = pia; sk = sk; pb = pb; ssn = ssn; slps = slps }
+        { pia = pia; sk = sk; pb = pb; ssn = ssn; }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
         chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.pb OutOfPred;
-        chain#add_plugin plugins.slps OutOfPred;
         chain#add_plugin plugins.ssn (* XXX: why is it here after all??? *)
             (OutOfPlugins ["piaCounter"; "piaData"]);
         chain
@@ -147,25 +143,17 @@ end
 module PiaPost = struct
     type plugins_t = {
         pia: Pia.plugins_t;
-        sk: SymbSkelPlugin.symb_skel_plugin_t;
-        pb: PorBoundsPlugin.por_bounds_plugin_t;
         slps: SlpsCheckerPlugin.slps_checker_plugin_t;
     }
 
     let mk_plugins () =
         let pia = Pia.mk_plugins () in
-        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
-        let pb =
-            new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
-        let slps =
-            new SlpsCheckerPlugin.slps_checker_plugin_t "slps" sk pb in
-        { pia = pia; sk = sk; pb = pb; slps = slps }
+        let slps = new SlpsCheckerPlugin.slps_checker_plugin_t "slps" in
+        { pia = pia; slps = slps }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
-        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
-        chain#add_plugin plugins.pb OutOfPred;
-        chain#add_plugin plugins.slps OutOfPred;
+        chain#add_plugin plugins.slps (OutOfPlugin "piaDataShared");
         chain
 end
 
