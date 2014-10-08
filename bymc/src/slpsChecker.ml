@@ -131,6 +131,87 @@ let collect_next_vars e =
     f IntSet.empty e
 
 
+type var_kind_t = KWarp | KGlob | KLoc | KUndef
+
+
+let demangle v =    
+    let name_re =
+        Str.regexp "F\\([0-9]+\\)_\\(g_\\|at_\\|\\)\\([_A-Za-z][_A-Za-z0-9]*\\)"
+    in
+    let name = v#get_name in
+    if Str.string_match name_re name 0
+    then begin
+        let tp = Str.matched_group 2 name in
+        let short = Str.matched_group 3 name in
+        match tp with
+        | "" -> (KWarp, short)
+        | "g_" -> (KGlob, short)
+        | "at_" -> (KLoc, short)
+        | _ -> (KUndef, name)
+    end
+    else (KUndef, name)
+
+
+let get_counterex rt sk frame_hist =
+    let reverse no v m = StrMap.add v#get_name no m in
+    let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
+    let get_vars vars =
+        let query = rt#solver#get_model_query in
+        List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
+        let new_query = rt#solver#submit_query query in
+        let map v =
+            match Smt.Q.try_get new_query (Var v) with
+                | Smt.Q.Result e ->
+                    let k, n = demangle v in
+                    (k, n, e)
+                | Smt.Q.Cached ->
+                    raise (Failure "Unexpected Cached")
+        in
+        List.map map vars
+    in
+    let p (k, n, e) =
+        match k with
+        | KLoc ->
+                let locno = StrMap.find n revmap in
+                let loc = List.nth sk.Sk.locs locno in
+                let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
+                in
+                let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
+                printf " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+
+        | _ ->
+                printf " %s := %s;" n (SpinIrImp.expr_s e)
+    in
+    let rec each_frame num = function
+        | [] -> ()
+
+        | f :: tl ->
+            let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
+            let (_, _, accel), other = List.hd vals, List.tl vals in
+            let new_num =
+                if f.F.no = 0 || accel <> IntConst 0
+                then begin
+                    printf "%4d x%2s: " num (SpinIrImp.expr_s accel);
+                    List.iter p other;
+                    printf "\n";
+                    1 + num
+                end
+                else num
+            in
+            each_frame new_num tl
+    in
+    printf "----------------\n";
+    printf " Counterexample\n";
+    printf "----------------\n";
+    rt#solver#set_need_model true;
+    printf "           ";
+    List.iter p (get_vars sk.Sk.params);
+    printf "\n";
+    each_frame 0 frame_hist;
+    printf "----------------\n";
+    rt#solver#set_need_model false
+
+
 let check_tree rt tt sk bad_form on_leaf start_frame tree =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
@@ -176,26 +257,30 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
         | [frame] -> Var frame.F.accel_v
         | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum tl)
     in
-    let check_segment frame seg =
-        let endf, _ = List.fold_left (each_rule false) (frame, []) seg in
+    let check_segment frame_hist frame seg =
+        let endf, end_hist =
+            List.fold_left (each_rule false) (frame, frame_hist) seg in
         rt#solver#comment "push: check_segment";
         let stack_level = rt#solver#get_stack_level in
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
         F.assert_frame rt#solver tt endf endf [bad_form];
         let err = rt#solver#check in
+        if err (* print the counterexample *)
+        then get_counterex rt sk (List.rev end_hist);
+
         rt#solver#comment "pop: check_segment";
         rt#solver#pop_ctx;
         assert (stack_level = rt#solver#get_stack_level);
-        endf, err
+        endf, end_hist, err
     in
-    let rec check_node depth frame = function
+    let rec check_node depth frame_hist frame = function
         | T.Leaf seg ->
             rt#solver#comment (sprintf "push@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "last segment";
-            let endf, err = check_segment frame seg in
+            let endf, end_hist, err = check_segment frame_hist frame seg in
             rt#solver#comment (sprintf "pop@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
             assert (stack_level = rt#solver#get_stack_level);
@@ -208,16 +293,16 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "next segment";
-            let seg_endf, err = check_segment frame seg in
+            let seg_endf, end_hist, err = check_segment frame_hist frame seg in
 
-            let each_branch err b = check_branch (1 + depth) seg_endf err b in
+            let each_branch err b =
+                check_branch (1 + depth) end_hist seg_endf err b in
             let res = List.fold_left each_branch err branches in
             rt#solver#comment (sprintf "pop@%d: check_node[Node] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
             assert (stack_level = rt#solver#get_stack_level);
             res
-
-    and check_branch depth frame err br =
+    and check_branch depth frame_hist frame err br =
         if err
         then true
         else begin
@@ -229,14 +314,15 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
                 List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
             let constr = BinEx (Spin.EQ, IntConst 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
-            let res = check_node (1 + depth) endf br.T.subtree in
+            let end_hist = new_frames @ frame_hist in
+            let res = check_node (1 + depth) end_hist endf br.T.subtree in
             rt#solver#comment (sprintf "pop@%d: check_branch at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
             assert (stack_level = rt#solver#get_stack_level);
             res (* when SAT, an error is found *)
         end
     in
-    check_node 0 start_frame tree
+    check_node 0 [start_frame] start_frame tree
 
 
 let extract_spec type_tab s =
