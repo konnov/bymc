@@ -78,6 +78,8 @@ class slps_checker_plugin_t (plugin_name: string) =
         method extract_proc rt prog proc =
             logtm INFO ("  > Computing the summary of " ^ proc#get_name);
             let sk, new_prog = Summary.summarize rt prog proc in
+            let sk = SymbSkel.keep_reachable sk in
+            let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             logtm INFO ("    [DONE]");
             sk, new_prog

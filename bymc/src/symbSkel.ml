@@ -110,6 +110,95 @@ module Sk = struct
 end
 
 
+module VarMap = BatMap.Make (struct
+    type t = var
+    let compare a b = a#id - b#id
+end)
+
+
+(**
+    Keep only those locations that are reachable from the initial locations.
+    The implementation looks only at the syntactically reachable locations.
+ *)
+let keep_reachable sk =
+    let renaming = Hashtbl.create sk.Sk.nlocs in
+    let is_visited loc_no = Hashtbl.mem renaming loc_no in
+    let get_new_num loc_no = Hashtbl.find renaming loc_no in
+    let rec visit loc_no =
+        try ignore (Hashtbl.find renaming loc_no)
+        with Not_found ->
+            let new_idx = Hashtbl.length renaming in
+            Hashtbl.add renaming loc_no new_idx;
+            let each_rule r =
+                if r.Sk.src = loc_no
+                then visit r.Sk.dst
+            in
+            List.iter each_rule sk.Sk.rules
+    in
+    let rev_map =
+        IntMap.fold (fun i v m -> VarMap.add v i m)
+        sk.Sk.loc_vars VarMap.empty
+    in
+    let each_init_expr = function
+        | BinEx (EQ, l, r) ->
+                let visit_used v = visit (VarMap.find v rev_map) in
+                if l <> IntConst 0 && r <> IntConst 0
+                then begin
+                    List.iter visit_used (SpinIr.expr_used_vars l);
+                    List.iter visit_used (SpinIr.expr_used_vars r)
+                end
+
+        | _ -> ()
+    in
+    (* visit all locations reachable from the initial locations *)
+    List.iter each_init_expr sk.Sk.inits;
+    (* keep the reachable locations *)
+    let loc_arr = Array.make (Hashtbl.length renaming) [] in
+    let each_loc loc loc_no =
+        if is_visited loc_no
+        then loc_arr.(get_new_num loc_no) <- loc
+    in
+    let each_rule lst r =
+        if not (is_visited r.Sk.src) || not (is_visited r.Sk.dst)
+        then lst
+        else { r with Sk.src = get_new_num r.Sk.src;
+                      Sk.dst = get_new_num r.Sk.dst; } :: lst
+    in
+    List.iter2 each_loc sk.Sk.locs (Accums.range 0 sk.Sk.nlocs);
+    let new_locs = Array.to_list loc_arr in
+    let new_rules = List.fold_left each_rule [] sk.Sk.rules in
+    let map_loc_var old_loc new_loc map =
+        IntMap.add new_loc (IntMap.find old_loc sk.Sk.loc_vars) map
+    in
+    let new_loc_vars = Hashtbl.fold map_loc_var renaming IntMap.empty in
+    let each_init lst e =
+        let omit_unreach v =
+            if not (VarMap.mem v rev_map)
+            then Var v
+            else if is_visited (VarMap.find v rev_map)
+                then Var v
+                else IntConst 0
+        in
+        let ne = Simplif.compute_consts (SpinIr.map_vars omit_unreach e) in
+        assert (not (is_c_false ne));
+        if is_c_true ne
+        then lst
+        else ne :: lst
+    in
+    let new_inits = List.fold_left each_init [] sk.Sk.inits in
+    { sk with Sk.locs = new_locs; Sk.nlocs = List.length new_locs;
+        Sk.rules = new_rules; Sk.nrules = List.length new_rules;
+        Sk.inits = new_inits;
+        Sk.loc_vars = new_loc_vars;
+
+    }
+
+
+let filter_rules f sk =
+    let new_rules = List.filter f sk.Sk.rules in
+    { sk with Sk.rules = new_rules; Sk.nrules = List.length new_rules }
+
+
 (* the intermediate structure to successively construct Sk *)
 module SkB = struct
     (** the builder's state *)
@@ -336,10 +425,10 @@ let build_with builder_fun rt prog proc =
 
     let tt = (Program.get_type_tab prog)#copy in
     let st = new symb_tab proc#get_name in
-    st#add_all_symb (Program.get_sym_tab prog)#get_symbs;
     (*
-    st#add_all_symb proc#get_symbs;
+    st#add_all_symb (Program.get_sym_tab prog)#get_symbs;
     *)
+    st#add_all_symb proc#get_symbs;
 
     let ctx = { SkB.sym_tab = st; SkB.type_tab = tt;
         SkB.prev_next = prev_next; SkB.state = builder; }

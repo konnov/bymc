@@ -15,7 +15,7 @@ module IntSet = Set.Make (struct
  let compare a b = a - b
 end)
 
-module IntMap = Map.Make (struct
+module IntMap = BatMap.Make (struct
  type t = int
  let compare a b = a - b
 end)

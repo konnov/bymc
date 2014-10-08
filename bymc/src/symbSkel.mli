@@ -96,6 +96,13 @@ module SkB: sig
 end
 
 
+(** keep only reachable states *)
+val keep_reachable: Sk.skel_t -> Sk.skel_t
+
+(** keep only the rules matching the filter function *)
+val filter_rules: (Sk.rule_t -> bool) -> Sk.skel_t -> Sk.skel_t
+
+
 type builder_fun_t =
     SkB.context_t -> Spin.token SpinIr.expr
         -> (string, Spin.token SpinIr.expr) Hashtbl.t -> unit
