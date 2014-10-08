@@ -43,7 +43,7 @@ class pc_plugin_t (plugin_name: string) =
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
 
-            (* construct VASS *)
+            (* construct symbolic representation *)
             if m_ref_step = 0
             then begin
                 (* TODO: the following MUST be set in piaDataPlugin only! *)
@@ -74,7 +74,7 @@ class pc_plugin_t (plugin_name: string) =
             ctrabs_prog
 
         method private make_vass solver dom caches prog proc_names embed_inv =
-            log INFO "> Constructing VASS...";
+            log INFO "> Constructing symbolic transition relation...";
             let vass_funcs = new vass_funcs dom prog solver in
             vass_funcs#set_embed_inv embed_inv;
             let vass_prog =

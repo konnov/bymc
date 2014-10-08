@@ -476,7 +476,7 @@ let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
 
 
 let print_vass_trace prog pile solver num_states = 
-    printf "Here is a CONCRETE trace in VASS violating the property.\n";
+    printf "Here is a CONCRETE trace violating the property.\n";
     printf "State 0 gives concrete parameters.\n\n";
     let vals = parse_smt_evidence prog solver pile in
     let find i =
@@ -641,7 +641,7 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     if total_steps = 0
     then raise (Failure "All processes idle forever at the initial state");
     log INFO "  [DONE]";
-    log INFO "> Simulating counter example in VASS...";
+    log INFO "> Simulating counter example with SMT...";
 
     let check_trans pile st = 
         let next_st = if st = num_states - 1 then loop_start else st + 1 in
