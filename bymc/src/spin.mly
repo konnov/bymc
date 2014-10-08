@@ -434,6 +434,8 @@ one_decl: vis TYPE var_list	{
             (* type constraints in the right-hand side *)
             tp#set_nelems tp_rhs#nelems;
             tp#set_nbits tp_rhs#nbits;
+            if tp_rhs#nbits > 0
+            then tp#set_range 0 (Accums.ipow 2 tp_rhs#nbits);
             v#add_flag fl;
             (type_tab ())#set_type v tp;
             (top_scope ())#add_symb v#get_name (v :> symb);
