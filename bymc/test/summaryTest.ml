@@ -160,14 +160,22 @@ let test_summary_valid _ =
     assert_equal 9 sk.Sk.nrules
         ~msg:(sprintf "expected 9 rules, found %d" sk.Sk.nrules);
     let nsnt = (proc#lookup "nsnt")#as_var in
+    let exp_inc =
+        BinEx (EQ,
+            UnEx (NEXT, Var nsnt),
+            BinEx (PLUS, Var nsnt, IntConst 1))
+    in
+    let exp_keep = BinEx (EQ, UnEx (NEXT, Var nsnt), Var nsnt)
+    in
     let check_rule r =
         assert_bool ("expected 1, found " ^ (expr_s r.Sk.guard))
-            (is_c_true r.Sk.guard);
-        if r.Sk.act <> []
-        then assert_equal
-            [ BinEx (EQ, Var nsnt, BinEx (PLUS, Var nsnt, IntConst 1)) ]
-            r.Sk.act
-            ~msg:"expected no actions, found some";
+                    (is_c_true r.Sk.guard);
+        if [ exp_inc ] <> r.Sk.act && [ exp_keep ] <> r.Sk.act
+        then
+        assert_failure
+            (sprintf "expected action [%s] or [%s], found [%s]"
+                  (expr_s exp_inc) (expr_s exp_keep)
+                  (List.map expr_s r.Sk.act |> str_join "; "));
     in
     List.iter check_rule sk.Sk.rules;
 
@@ -223,6 +231,98 @@ let test_summary_reachable _ =
         ~msg:(sprintf "expected 3 init expression, found %d" ninits)
 
 
+let test_summary_inc _ =
+    let text =
+        "symbolic int N; int nsnt;\n" ^
+        "assume (N > 1);\n" ^
+        "active[N] proctype Foo() {\n" ^
+        "  byte pc:1 = 0; int nrcvd:2 = 0;\n" ^
+        "  byte npc:1 = 0; int nnrcvd:2 = 0;\n" ^
+        "  do :: atomic {\n" ^
+        "    if :: pc == 0 -> npc = 1;\n" ^
+        "       havoc(nnrcvd);\n" ^
+        "       assume((nrcvd == 0 && nnrcvd == 1));\n" ^
+        "       nsnt++;\n" ^ 
+        "    fi;\n" ^
+        "    nrcvd = nnrcvd; pc = npc;\n" ^
+        "    nnrcvd = 0; npc = 0;\n" ^
+        "  } od;\n" ^
+        "}"
+    in
+    let rt, prog, proc = parse text in
+    let nsnt = (proc#lookup "nsnt")#as_var in
+
+    (* the show starts here *)
+    let sk, _ = Summary.summarize rt prog proc in
+    let sk = SymbSkel.keep_reachable sk in
+    (*Sk.print stdout sk;*)
+    assert_equal 2 sk.Sk.nlocs
+        ~msg:(sprintf "expected 2 reachable location, found %d" sk.Sk.nlocs);
+    assert_equal 2 (List.length sk.Sk.locs)
+        ~msg:(sprintf "expected 2 reachable location, found %d"
+            (List.length sk.Sk.locs));
+    assert_equal 1 sk.Sk.nrules
+        ~msg:(sprintf "expected 1 reachable rule, found %d" sk.Sk.nrules);
+    assert_equal 1 (List.length sk.Sk.rules)
+        ~msg:(sprintf "expected 1 reachable rule, found %d"
+            (List.length sk.Sk.rules));
+    let r = List.hd sk.Sk.rules in
+    let exp =
+        BinEx (EQ,
+            UnEx (NEXT, Var nsnt),
+            BinEx (PLUS, Var nsnt, IntConst 1))
+    in
+    assert_equal [exp] r.Sk.act
+        ~msg:(sprintf "expected action [%s], found [%s]"
+            (expr_s exp) (List.map expr_s r.Sk.act |> str_join "; "))
+
+
+let test_summary_keep _ =
+    let text =
+        "symbolic int N; int nsnt;\n" ^
+        "assume (N > 1);\n" ^
+        "active[N] proctype Foo() {\n" ^
+        "  byte pc:1 = 0; int nrcvd:2 = 0;\n" ^
+        "  byte npc:1 = 0; int nnrcvd:2 = 0;\n" ^
+        "  do :: atomic {\n" ^
+        "    if :: pc == 0 -> npc = 0;\n" ^
+        "       havoc(nnrcvd);\n" ^
+        "       assume((nrcvd == 0 && nnrcvd == 1));\n" ^
+        "       :: pc == 1 -> npc = 1;\n" ^
+        "       nnrcvd = nrcvd;\n" ^
+        "       nsnt++;\n" ^
+        "    fi;\n" ^
+        "    nrcvd = nnrcvd; pc = npc;\n" ^
+        "    nnrcvd = 0; npc = 0;\n" ^
+        "  } od;\n" ^
+        "}"
+    in
+    let rt, prog, proc = parse text in
+    let nsnt = (proc#lookup "nsnt")#as_var in
+
+    (* the show starts here *)
+    let sk, _ = Summary.summarize rt prog proc in
+    let sk = SymbSkel.keep_reachable sk in
+    (*Sk.print stdout sk;*)
+    assert_equal 2 sk.Sk.nlocs
+        ~msg:(sprintf "expected 2 reachable location, found %d" sk.Sk.nlocs);
+    assert_equal 2 (List.length sk.Sk.locs)
+        ~msg:(sprintf "expected 2 reachable location, found %d"
+            (List.length sk.Sk.locs));
+    assert_equal 1 sk.Sk.nrules
+        ~msg:(sprintf "expected 1 reachable rule, found %d" sk.Sk.nrules);
+    assert_equal 1 (List.length sk.Sk.rules)
+        ~msg:(sprintf "expected 1 reachable rule, found %d"
+            (List.length sk.Sk.rules));
+    let r = List.hd sk.Sk.rules in
+    let exp = BinEx (EQ, UnEx (NEXT, Var nsnt), Var nsnt)
+    in
+    assert_equal [exp] r.Sk.act
+        ~msg:(sprintf "expected action [%s], found [%s]"
+            (expr_s exp) (List.map expr_s r.Sk.act |> str_join "; "))
+
+
+
 let suite = "summary-suite" >:::
     [
         "test_summary"
@@ -231,6 +331,10 @@ let suite = "summary-suite" >:::
           >:: (bracket setup test_summary_unfold teardown);
         "test_summary_reachable"
           >:: (bracket setup test_summary_reachable teardown);
+        "test_summary_inc"
+          >:: (bracket setup test_summary_inc teardown);
+        "test_summary_keep"
+          >:: (bracket setup test_summary_keep teardown);
         "test_summary_valid"
           >:: (bracket setup test_summary_valid shutdown); (* clean the room *)
     ]

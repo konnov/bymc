@@ -9,6 +9,7 @@ let _ =
         SsaTest.suite;
         AbsCounterTest.suite;
         PiaCtrRefinementTest.suite;
+        SummaryTest.suite;
     ]
     in
     run_test_tt_main all

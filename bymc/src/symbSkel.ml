@@ -428,7 +428,7 @@ let build_with builder_fun rt prog proc =
     (*
     st#add_all_symb (Program.get_sym_tab prog)#get_symbs;
     *)
-    st#add_all_symb proc#get_symbs;
+    st#add_all_symb proc#get_symbs_rec;
 
     let ctx = { SkB.sym_tab = st; SkB.type_tab = tt;
         SkB.prev_next = prev_next; SkB.state = builder; }

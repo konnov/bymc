@@ -72,17 +72,7 @@ let mk_act syms assigns =
         try let var = (syms#lookup name)#as_var in
             if var#proc_name <> ""
             then l (* omit local variables *)
-            else
-            begin
-                match exp with
-                | Var x ->
-                        (* same variable, or a local variable *)
-                        if x#get_name = var#get_name
-                        then l
-                        else (BinEx (EQ, UnEx (NEXT, Var var), exp)) :: l
-                
-                | _ -> (BinEx (EQ, UnEx (NEXT, Var var), exp)) :: l
-            end
+            else (BinEx (EQ, UnEx (NEXT, Var var), exp)) :: l
         with Symbol_not_found _ -> l
     in
     Hashtbl.fold add assigns []
