@@ -58,15 +58,15 @@ class slps_checker_plugin_t (plugin_name: string) =
                 !num length (!num * 100 / nleafs))
             in
 
-            let check_tree form tree =
-                SlpsChecker.is_error_tree rt tt sk on_leaf form tree
+            let check_tree name form tree =
+                SlpsChecker.is_error_tree rt tt sk on_leaf name form tree
             in
             log INFO "  > Running SlpsChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
                 num := 0;
                 printf "      > Checking %s...\n" name;
-                let err = check_tree form tree in
+                let err = check_tree name form tree in
                 if err
                 then printf "    > SLPS: counterexample for %s found\n" name
                 else printf "      > Spec %s holds\n" name

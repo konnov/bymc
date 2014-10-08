@@ -152,7 +152,7 @@ let demangle v =
     else (KUndef, name)
 
 
-let get_counterex rt sk frame_hist =
+let get_counterex rt sk form_name frame_hist =
     let reverse no v m = StrMap.add v#get_name no m in
     let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
     let get_vars vars =
@@ -169,7 +169,7 @@ let get_counterex rt sk frame_hist =
         in
         List.map map vars
     in
-    let p (k, n, e) =
+    let p out (k, n, e) =
         match k with
         | KLoc ->
                 let locno = StrMap.find n revmap in
@@ -177,12 +177,12 @@ let get_counterex rt sk frame_hist =
                 let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
                 in
                 let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
-                printf " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+                fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
 
         | _ ->
-                printf " %s := %s;" n (SpinIrImp.expr_s e)
+                fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
     in
-    let rec each_frame num = function
+    let rec each_frame out num = function
         | [] -> ()
 
         | f :: tl ->
@@ -191,28 +191,33 @@ let get_counterex rt sk frame_hist =
             let new_num =
                 if f.F.no = 0 || accel <> IntConst 0
                 then begin
-                    printf "%4d x%2s: " num (SpinIrImp.expr_s accel);
-                    List.iter p other;
-                    printf "\n";
+                    fprintf out "%4d x%2s: " num (SpinIrImp.expr_s accel);
+                    List.iter (p out) other;
+                    fprintf out "\n";
                     1 + num
                 end
                 else num
             in
-            each_frame new_num tl
+            each_frame out new_num tl
     in
-    printf "----------------\n";
-    printf " Counterexample\n";
-    printf "----------------\n";
+    let fname = sprintf "cex-%s.trx" form_name in
+    let out = open_out fname in
+    fprintf out "----------------\n";
+    fprintf out " Counterexample\n";
+    fprintf out "----------------\n";
     rt#solver#set_need_model true;
-    printf "           ";
-    List.iter p (get_vars sk.Sk.params);
-    printf "\n";
-    each_frame 0 frame_hist;
-    printf "----------------\n";
-    rt#solver#set_need_model false
+    fprintf out "           ";
+    List.iter (p out) (get_vars sk.Sk.params);
+    fprintf out "\n";
+    each_frame out 0 frame_hist;
+    fprintf out "----------------\n";
+    fprintf out " Gute Nacht. Spokoinoy nochi.\n";
+    rt#solver#set_need_model false;
+    close_out out;
+    printf "    > Saved counterexample to %s\n" fname
 
 
-let check_tree rt tt sk bad_form on_leaf start_frame tree =
+let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -267,7 +272,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame tree =
         F.assert_frame rt#solver tt endf endf [bad_form];
         let err = rt#solver#check in
         if err (* print the counterexample *)
-        then get_counterex rt sk (List.rev end_hist);
+        then get_counterex rt sk form_name (List.rev end_hist);
 
         rt#solver#comment "pop: check_segment";
         rt#solver#pop_ctx;
@@ -333,7 +338,7 @@ let extract_spec type_tab s =
         raise (Ltl.Ltl_error m)
 
 
-let is_error_tree rt tt sk on_leaf ltl_form tree =
+let is_error_tree rt tt sk on_leaf form_name ltl_form tree =
     let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
     rt#solver#set_need_model true;
@@ -345,7 +350,7 @@ let is_error_tree rt tt sk on_leaf ltl_form tree =
     rt#solver#comment "initial constraints from the spec";
     F.assert_frame rt#solver ntt initf initf [init_form];
 
-    let err = check_tree rt tt sk bad_form on_leaf initf tree in
+    let err = check_tree rt tt sk bad_form on_leaf initf form_name tree in
     rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     err

@@ -3,6 +3,7 @@ val is_error_tree:
         -> SpinIr.data_type_tab
         -> SymbSkel.Sk.skel_t
         -> (int -> unit)
+        -> string
         -> Spin.token SpinIr.expr
         -> PorBounds.T.schema_tree_t
         -> bool
