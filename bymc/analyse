@@ -46,6 +46,16 @@ ulimit -SHv $MEM_LIMIT
 echo ulimit -SHt $TIME_LIMIT
 ulimit -SHt $TIME_LIMIT
 
+echo " *********************   WARNING   ************************"
+echo " *                                                        *"
+echo " *  This module is DEPRECATED. Use ./verifypa-post, which *"
+echo " *  has all the features of ./analyse, but works much     *"
+echo " *  faster. Run this script only if you want to reproduce *"
+echo " *  CONCUR'14 results.                                    *"
+echo " *                                                        *"
+echo " **********************************************************"
+
+
 # run the tool
 export TARGET_MC=analysis
 `dirname $0`/script/refinement-loop.sh $PROG $SPEC
