@@ -43,12 +43,11 @@ class slps_checker_plugin_t (plugin_name: string) =
             let skels, prog =
                 List.fold_left each_proc ([], sprog) (Program.get_procs sprog)
             in
-            let dom_size = rt#caches#analysis#get_pia_dom#length in
             (* TODO: there must be only one skeleton for all process types! *)
             assert (1 = (List.length skels));
             let sk = List.hd skels in
             let tt = Program.get_type_tab prog in
-            let tree = PorBounds.compute_diam rt#solver dom_size sk in
+            let tree = PorBounds.make_schema_tree rt#solver sk in
 
             let nleafs = PorBounds.tree_leafs_count tree in
             let num = ref 0 in (* XXX *)

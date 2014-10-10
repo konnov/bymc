@@ -16,8 +16,6 @@ class por_bounds_plugin_t (plugin_name: string)
         (sk_plugin: SymbSkelPlugin.symb_skel_plugin_t) =
     object(self)
         inherit analysis_plugin_t plugin_name
-        
-        val mutable m_tree: PorBounds.T.schema_tree_t = PorBounds.T.Leaf []
 
         method transform rt =
             let dom = rt#caches#analysis#get_pia_dom in
@@ -25,12 +23,10 @@ class por_bounds_plugin_t (plugin_name: string)
             (* TODO: construct the paths for several process types properly *)
             assert (1 = (List.length sk_plugin#skels));
             let sk = List.hd sk_plugin#skels in
-            m_tree <- PorBounds.compute_diam rt#solver dom_size sk;
+            PorBounds.compute_diam rt#solver dom_size sk;
             self#get_input0
 
         method update_runtime rt =
             ()
-
-        method representative_tree = m_tree
     end
 

@@ -31,6 +31,7 @@ module MGTop = Graph.Topological.Make(MGraph)
 module MGSCC = Graph.Components.Make(MGraph)
 module MClassic = Graph.Classic.I(MGraph)
 
+
 (** Complement a graph represented with a matrix.
     The standard operation from ocamlgraph fails.
  *)
@@ -50,14 +51,22 @@ module PSetMap = Map.Make (struct
  let compare = PSet.compare
 end)
 
+
 module PSetEltMap = Map.Make (struct
  type t = PSet.elt
  let compare = PSet.compare_elt
 end)
 
-module PSetSet = Set.Make (struct
- type t = PSet.t
- let compare = PSet.compare
+
+(* To store pairs of sets, e.g., pre+post of one rule and post of the other.
+   Wahnsinn! *)
+module P2Set = Set.Make (struct
+ type t = PSet.t * PSet.t
+ let compare (a, b) (c, d) =
+     let r = PSet.compare a c in
+     if r = 0
+     then PSet.compare b d
+     else r
 end)
 
 
@@ -94,6 +103,7 @@ type lock_t = Lock | Unlock
     but a candidate for a milestone. Rename it.
  *)
 type mstone_t = string * PSet.elt * token expr * lock_t
+
 
 let print_milestone lockt (name, id, m, _) =
     log INFO (sprintf "  %s (%s): %s" name
@@ -226,9 +236,9 @@ let compute_flow sk =
 
 
 (* create a single segment that consists of topologically sorted
-   rules. Every cycle is unfolded twice.
+   rules. Only the cycles of size 1 and 2 are dealt with for now.
  *)
-(* TODO: deal with the cycles! *)    
+(* TODO: deal with long cycles! *)    
 let make_segment sk flowg =
     let add n rules = (MGraph.V.label n) :: rules in
     List.rev (MGTop.fold add flowg [])
@@ -325,55 +335,52 @@ let does_r_affect_cond solver shared lockt r cond =
 
 let compute_unlocking not_flowplus lockt solver sk
         condmap rule_pre actmap rule_post =
-
-    (* The set of type PSetSet keeps the pre- and postconditions that
+    (* The set of type P2Set keeps the pre- and postconditions that
        has been already explored. As many rules are assigned the same
        pair of pre- and postconditions, this significantly reduces the
        runtime. *)
 
     (* enumerate all the edges in not_flowplus and fill rule_to_conds *)
-    let collect_milestones src dst (explored, seen, milestones) =
+    let collect_milestones src dst (edges_seen, checked, milestones) =
         let src, dst = if lockt = Lock then dst, src else src, dst in
         let left_no = MGraph.V.label src in
         let left = List.nth sk.Sk.rules left_no in
         let right_no = MGraph.V.label dst in
         let right = List.nth sk.Sk.rules right_no in
         let right_pre_set = IntMap.find right_no rule_pre in
+        let left_pre_set = IntMap.find left_no rule_pre in
         let left_post_set = IntMap.find left_no rule_post in
 
-        let union_set = PSet.union right_pre_set left_post_set in
-        let is_explored = PSetSet.mem union_set explored in
+        let left_pre_post = PSet.union left_pre_set left_post_set in 
+        let lr_pair = (right_pre_set, left_pre_post) in
+        let is_seen = P2Set.mem lr_pair edges_seen in
 
-        if not is_explored
-            && left_no <> right_no && not (is_c_true right.Sk.guard)
-        then begin
+        if not is_seen && left_no <> right_no && not (is_c_true right.Sk.guard)
+        then
             let conds =
                 List.filter (fun (id, _) -> PSet.mem id right_pre_set)
                     (PSetEltMap.bindings condmap) in
 
-            let each_cond (seen, mset) (c_id, c) =
-                let pair_set = PSet.add c_id left_post_set in
-                if not (PSetSet.mem pair_set seen)
-                then begin
-                    let res =
-                        does_r_affect_cond solver sk.Sk.shared lockt left c in
-                    if res
-                    then (PSetSet.add pair_set seen, PSet.add c_id mset)
-                    else (PSetSet.add pair_set seen, mset)
-                end
-                else (seen, mset)
+            let each_cond (checked, mset) (c_id, c) =
+                (* action + condition *)
+                let cond_and_left = (PSet.singleton c_id, left_pre_post) in
+                let plus_checked = P2Set.add cond_and_left checked in
+                if not (P2Set.mem cond_and_left checked)
+                then if does_r_affect_cond solver sk.Sk.shared lockt left c
+                    then (plus_checked, PSet.add c_id mset)
+                    else (plus_checked, mset)
+                else (checked, mset)
             in
-            let new_seen, new_mset =
-                List.fold_left each_cond (seen, milestones) conds
+            let new_checked, new_mset =
+                List.fold_left each_cond (checked, milestones) conds
             in
-            (PSetSet.add union_set explored, new_seen, new_mset)
-        end
-        else (explored, seen, milestones)
+            (P2Set.add lr_pair edges_seen, new_checked, new_mset)
+        else (edges_seen, checked, milestones)
     in
 
     let _, _, mstone_set =
         MGraph.fold_edges collect_milestones not_flowplus
-            (PSetSet.empty, PSetSet.empty, PSet.empty)
+            (P2Set.empty, P2Set.empty, PSet.empty)
     in
     let mstones =
         List.filter (fun (id, _) -> PSet.mem id mstone_set)
@@ -689,7 +696,7 @@ let unfold_conds sk deps path =
    The difference is that we do not represent ALL executions with SLPS,
    but only the representative ones.
  *)
-let compute_slps_tree sk deps succ =
+let compute_slps_tree sk deps =
     let full_segment = make_segment sk deps.D.fg in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
 
@@ -748,29 +755,22 @@ let count_guarded sk deps =
 
 
 let compute_diam solver dom_size sk =
-    logtm INFO (sprintf "> there are %d locations..." sk.Sk.nlocs);
-    logtm INFO (sprintf "> there are %d rules..." sk.Sk.nrules);
-
-    let conds = collect_conditions ExprSet.empty sk in
-    logtm INFO (sprintf "> there are %d conditions..." (ExprSet.cardinal conds));
-
-    let actions = collect_actions ExprSet.empty sk in
-    logtm INFO (sprintf "> there are %d actions..." (ExprSet.cardinal actions));
+    logtm INFO (sprintf "> found %d locations..." sk.Sk.nlocs);
+    logtm INFO (sprintf "> found %d rules..." sk.Sk.nrules);
 
     let deps = compute_deps solver sk in
 
-    logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
-
+    logtm INFO (sprintf "> Computing bounds for %s..." sk.Sk.name);
 
     let guards_card = count_guarded sk deps in
-    let print_guard g n =
-        log INFO (sprintf "  guard (%s) -> %d times" (PSet.str g) n)
+    let print_potential_mstone g n =
+        log INFO (sprintf "  potential milestone (%s) -> %d times" (PSet.str g) n)
     in
-    PSetMap.iter print_guard guards_card;
+    log INFO (sprintf "> The occurences of potential milestones:");
+    PSetMap.iter print_potential_mstone guards_card;
 
     let miles_succ = find_successors deps in (* TODO: get rid of it *)
 
-        (*
     let n_lmiles = List.length deps.D.lconds 
     and n_umiles = List.length deps.D.uconds in
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules + (n_lmiles + n_umiles) in
@@ -779,14 +779,27 @@ let compute_diam solver dom_size sk =
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
-
     let max_bound = find_max_bound sk.Sk.nrules guards_card deps miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
-        sk.Sk.name (max_bound * (dom_size - 1)));
-    *)
+        sk.Sk.name (max_bound * (dom_size - 1)))
 
-    let tree = compute_slps_tree sk deps miles_succ in
+
+let make_schema_tree solver sk =
+    logtm INFO "Building the schema tree...";
+    logtm INFO (sprintf "> found %d locations..." sk.Sk.nlocs);
+    logtm INFO (sprintf "> found %d rules..." sk.Sk.nrules);
+
+    let deps = compute_deps solver sk in
+
+    let guards_card = count_guarded sk deps in
+    let print_potential_mstone g n =
+        log INFO (sprintf "  potential milestone (%s) -> %d times" (PSet.str g) n)
+    in
+    log INFO (sprintf "> The occurences of potential milestones:");
+    PSetMap.iter print_potential_mstone guards_card;
+
+    let tree = compute_slps_tree sk deps in
 
     log INFO (sprintf "> SLPS is written to slps-paths.txt");
     let out = open_out "slps-paths.txt" in
@@ -794,5 +807,4 @@ let compute_diam solver dom_size sk =
     close_out out;
 
     tree
-
 
