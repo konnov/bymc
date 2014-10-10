@@ -799,9 +799,10 @@ let make_schema_tree solver sk =
     log INFO (sprintf "> The occurences of potential milestones:");
     PSetMap.iter print_potential_mstone guards_card;
 
+    log INFO ("> Computing the schema tree...");
     let tree = compute_slps_tree sk deps in
 
-    log INFO (sprintf "> SLPS is written to slps-paths.txt");
+    log INFO ("> SLPS is written to slps-paths.txt");
     let out = open_out "slps-paths.txt" in
     print_tree out tree;
     close_out out;
