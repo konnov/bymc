@@ -120,10 +120,13 @@ module D = struct
         (* map a rule number to a set of actions the capture its postcondition *)
         rule_post: PSet.t IntMap.t;
 
+        (* the mask of milestone candidates *)
+        mile_mask: PSet.t;
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
         (* basic conditions to be locked *)
         lconds: mstone_t list;
+
         (* implication relation between the conditions of the same type *)
         cond_imp: PSet.t PSetEltMap.t;
     }
@@ -132,6 +135,7 @@ module D = struct
         cond_map = PSetEltMap.empty; act_map = PSetEltMap.empty;
         rule_pre = IntMap.empty; rule_post = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
+        mile_mask = PSet.empty;
         fg = MGraph.make 1
     }
 
@@ -390,9 +394,11 @@ let compute_pre sk =
         if StrMap.mem exp_s rcmap
         then cmap, rcmap, (PSet.add (StrMap.find exp_s rcmap) condset)
         else let new_id = PSet.new_thing () in
+        begin
             (PSetEltMap.add new_id exp cmap,
              StrMap.add exp_s new_id rcmap,
              PSet.add new_id condset)
+        end
     in
     let add_set (rmap, cmap, rcmap) i r =
         let guard_conds = decompose_guard ExprSet.empty r.Sk.guard in
@@ -514,8 +520,11 @@ let compute_deps solver sk =
         List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list fg) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
+    let add m (_, id, _, _) = PSet.add id m in
+    let mile_mask = List.fold_left add PSet.empty lmiles in
+    let mile_mask = List.fold_left add mile_mask umiles in
     {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
-        D.fg; D.rule_pre; D.rule_post; D.cond_imp }
+        D.fg; D.rule_pre; D.rule_post; D.cond_imp; D.mile_mask }
 
 
 (* for each condition find all the other conditions that are not immediately
@@ -623,7 +632,8 @@ let get_cond_impls deps cond_id lockt =
 
 
 let is_rule_locked deps uset lset rule_no =
-    let pre = IntMap.find rule_no deps.D.rule_pre in
+    let pre = PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre)
+    in
     PSet.subseteq pre uset                     (* everything is unlocked *)
         && PSet.is_empty (PSet.inter pre lset) (* and nothing is locked *)
     
@@ -656,7 +666,8 @@ let rec filter_path deps conds lockt path =
 let unfold_conds sk deps path =
     (* TODO: more careful analysis is required to remove redundant rules *)
     let is_guarded_with (_, cond_no, _, _) rule_no =
-        let conds = IntMap.find rule_no deps.D.rule_pre in
+        let conds =
+            PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre) in
         PSet.mem cond_no conds
     in
     let rec f = function
@@ -684,7 +695,9 @@ let compute_slps_tree sk deps succ =
 
     let rec build_tree uset lset =
         let is_guarded_with cond_id rule_no =
-            let conds = IntMap.find rule_no deps.D.rule_pre in
+            let conds =
+                PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre)
+            in
             PSet.mem cond_id conds
         in
         let each_cond accum (name, cond_id, expr, lockt) =
@@ -726,7 +739,7 @@ let collect_actions accum sk =
 (* count how many times every guard (not a subformula of it!) appears in a rule *)
 let count_guarded sk deps =
     let each_rule map i r =
-        let pre = IntMap.find i deps.D.rule_pre in
+        let pre = PSet.inter deps.D.mile_mask (IntMap.find i deps.D.rule_pre) in
         if PSetMap.mem pre map
         then PSetMap.add pre (1 + (PSetMap.find pre map)) map
         else PSetMap.add pre 1 map
@@ -744,8 +757,10 @@ let compute_diam solver dom_size sk =
     let actions = collect_actions ExprSet.empty sk in
     logtm INFO (sprintf "> there are %d actions..." (ExprSet.cardinal actions));
 
-    logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
     let deps = compute_deps solver sk in
+
+    logtm INFO (sprintf "> computing bounds for %s..." sk.Sk.name);
+
 
     let guards_card = count_guarded sk deps in
     let print_guard g n =
@@ -753,6 +768,9 @@ let compute_diam solver dom_size sk =
     in
     PSetMap.iter print_guard guards_card;
 
+    let miles_succ = find_successors deps in (* TODO: get rid of it *)
+
+        (*
     let n_lmiles = List.length deps.D.lconds 
     and n_umiles = List.length deps.D.uconds in
     let bound = (1 + n_lmiles + n_umiles) * sk.Sk.nrules + (n_lmiles + n_umiles) in
@@ -761,15 +779,16 @@ let compute_diam solver dom_size sk =
     log INFO (sprintf "> the counter abstraction bound for %s is %d = %d * %d"
         sk.Sk.name (bound * (dom_size - 1)) bound (dom_size - 1));
 
-    let miles_succ = find_successors deps in (* TODO: get rid of it *)
+
     let max_bound = find_max_bound sk.Sk.nrules guards_card deps miles_succ in
     log INFO (sprintf "> the mild bound for %s is %d" sk.Sk.name max_bound);
     log INFO (sprintf "> the mild counter abstraction bound for %s is %d"
         sk.Sk.name (max_bound * (dom_size - 1)));
-
-    log INFO (sprintf "> SLPS is written to slps-paths.txt");
+    *)
 
     let tree = compute_slps_tree sk deps miles_succ in
+
+    log INFO (sprintf "> SLPS is written to slps-paths.txt");
     let out = open_out "slps-paths.txt" in
     print_tree out tree;
     close_out out;
