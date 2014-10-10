@@ -21,9 +21,28 @@ open SpinIr
 open SymbSkel
 
 module IGraph = Graph.Pack.Digraph
-module IGraphOper = Graph.Oper.I(IGraph)
-module IGTop = Graph.Topological.Make(IGraph)
-module IGSCC = Graph.Components.Make(IGraph)
+
+(* Our graphs are relatively small (up to 10k nodes).
+   Thus, we are using the fast implementation with matrices.
+ *)
+module MGraph = Graph.Imperative.Matrix.Digraph
+module MGraphOper = Graph.Oper.I(MGraph)
+module MGTop = Graph.Topological.Make(MGraph)
+module MGSCC = Graph.Components.Make(MGraph)
+module MClassic = Graph.Classic.I(MGraph)
+
+(** Complement a graph represented with a matrix.
+    The standard operation from ocamlgraph fails.
+ *)
+let complement g =
+    let n = MGraph.nb_vertex g in
+    let comp = MGraph.make n in
+    let add i j =
+        if not (MGraph.mem_edge g i j)
+        then MGraph.add_edge comp i j
+    in
+    List.iter (fun i -> List.iter (add i) (range 0 n)) (range 0 n);
+    comp
 
 
 module PSetMap = Map.Make (struct
@@ -80,7 +99,7 @@ let print_milestone lockt (name, id, m, _) =
 module D = struct
     type deps_t = {
         (* control flow graph *)
-        fg: IGraph.t;
+        fg: MGraph.t;
         (* map a rule number to a set of conditions required to enable it *)
         rule_pre: PSet.t IntMap.t;
         (* basic conditions to be unlocked *)
@@ -94,7 +113,7 @@ module D = struct
     let empty = {
         rule_pre = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
-        fg = IGraph.create ()
+        fg = MGraph.make 1
     }
 
     let conds c = c.uconds @ c.lconds
@@ -164,22 +183,22 @@ let tree_leafs_count tree =
 
 
 let compute_flow sk =
-    let flowg = IGraph.create () in
+    let flowg = MGraph.make sk.Sk.nrules in
     let outgoing = Hashtbl.create sk.Sk.nrules in
     let addi (i, r) =
-        IGraph.add_vertex flowg (U.mkv i);
+        MGraph.add_vertex flowg i;
         if Hashtbl.mem outgoing r.Sk.src
         then Hashtbl.replace outgoing r.Sk.src (i :: (Hashtbl.find outgoing r.Sk.src))
         else Hashtbl.add outgoing r.Sk.src [i]
     in
     List.iter addi (lst_enum sk.Sk.rules);
     let add_flow (i, r) =
-        let each_succ j = IGraph.add_edge_e flowg (U.mke i 0 j) in
+        let each_succ j = MGraph.add_edge flowg i j in
         try List.iter each_succ (Hashtbl.find outgoing r.Sk.dst)
         with Not_found -> ()
     in
     List.iter add_flow (lst_enum sk.Sk.rules);
-    IGraph.dot_output flowg (sprintf "flow-%s.dot" sk.Sk.name);
+    (*IGraph.dot_output flowg (sprintf "flow-%s.dot" sk.Sk.name);*)
     flowg
 
 
@@ -188,8 +207,8 @@ let compute_flow sk =
  *)
 (* TODO: deal with the cycles! *)    
 let make_segment sk flowg =
-    let add n rules = (IGraph.V.label n) :: rules in
-    List.rev (IGTop.fold add flowg [])
+    let add n rules = (MGraph.V.label n) :: rules in
+    List.rev (MGTop.fold add flowg [])
 
 
 let rec collect_guard_elems cs = function
@@ -313,9 +332,9 @@ let compute_unlocking not_flowplus lockt solver sk =
     (* enumerate all the edges in not_flowplus and fill rule_to_conds *)
     let collect_milestones src dst milestones =
         let src, dst = if lockt = Lock then dst, src else src, dst in
-        let left_no = IGraph.V.label src in
+        let left_no = MGraph.V.label src in
         let left = List.nth sk.Sk.rules left_no in
-        let right_no = IGraph.V.label dst in
+        let right_no = MGraph.V.label dst in
         let right = List.nth sk.Sk.rules right_no in
         if left_no <> right_no && not (is_c_true right.Sk.guard)
         then begin
@@ -338,7 +357,7 @@ let compute_unlocking not_flowplus lockt solver sk =
     in
 
     let mstones =
-        IGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
+        MGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
     in
     let map i m =
         if lockt = Lock
@@ -398,12 +417,17 @@ let compute_cond_implications solver shared uconds lconds =
 (* find and deps various dependencies *)    
 let compute_deps solver sk =
     let fg = compute_flow sk in
-    let nflow = IGraph.nb_edges fg in
+    let nflow = MGraph.nb_edges fg in
     logtm INFO (sprintf "> %d transition flow dependencies" nflow);
-    let fgp = IGraphOper.transitive_closure ~reflexive:true fg in
-    IGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
-    IGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
-    let not_flowplus = IGraphOper.complement fgp in
+    logtm INFO "> Computing the transitive closure...";
+    let fgp = MGraphOper.transitive_closure ~reflexive:true fg in
+    (*
+        (* dump only the small graphs *)
+    logtm INFO "Writing the flow graphs...";
+    MGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
+    MGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
+    *)
+    let not_flowplus = complement fgp in
     logtm INFO (sprintf "> constructing unlocking milestones...");
     let umiles = compute_unlocking not_flowplus Unlock solver sk in
     let n_umiles = List.length umiles in
@@ -426,7 +450,7 @@ let compute_deps solver sk =
         log INFO (sprintf "    > SCC of size %d" (List.length scc))
     in
     let sccs =
-        List.filter (fun l -> (List.length l) > 1) (IGSCC.scc_list fg) in
+        List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list fg) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
     { D.lconds = lmiles; D.uconds = umiles;
