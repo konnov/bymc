@@ -34,6 +34,8 @@ let str = string_of_big_int
 
 let empty = unit_big_int (* it corresponds to an empty set *)
 
+let singleton e = e
+
 let is_empty s = (0 = (compare_big_int s empty))
 
 let mem e set =

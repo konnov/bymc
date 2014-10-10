@@ -55,6 +55,11 @@ module PSetEltMap = Map.Make (struct
  let compare = PSet.compare_elt
 end)
 
+module PSetSet = Set.Make (struct
+ type t = PSet.t
+ let compare = PSet.compare
+end)
+
 
 module ExprSet = Set.Make (struct
  type t = token expr
@@ -98,10 +103,23 @@ let print_milestone lockt (name, id, m, _) =
 (* a deps for numerous dependencies we collect here *)
 module D = struct
     type deps_t = {
-        (* control flow graph *)
+        (* control flow graph with rules as the vertices and the flow relation
+           expressing the control flow
+         *)
         fg: MGraph.t;
+        
+        (* map a unique condition id to its expression in Spin *)
+        cond_map: (Spin.token SpinIr.expr) PSetEltMap.t;
+ 
+        (* map a unique action id to its expression in Spin *)
+        act_map: (Spin.token SpinIr.expr) PSetEltMap.t;
+
         (* map a rule number to a set of conditions required to enable it *)
         rule_pre: PSet.t IntMap.t;
+
+        (* map a rule number to a set of actions the capture its postcondition *)
+        rule_post: PSet.t IntMap.t;
+
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
         (* basic conditions to be locked *)
@@ -111,7 +129,8 @@ module D = struct
     }
 
     let empty = {
-        rule_pre = IntMap.empty;
+        cond_map = PSetEltMap.empty; act_map = PSetEltMap.empty;
+        rule_pre = IntMap.empty; rule_post = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
         fg = MGraph.make 1
     }
@@ -211,9 +230,9 @@ let make_segment sk flowg =
     List.rev (MGTop.fold add flowg [])
 
 
-let rec collect_guard_elems cs = function
+let rec decompose_guard cs = function
     | BinEx (AND, l, r) ->
-        collect_guard_elems (collect_guard_elems cs l) r
+        decompose_guard (decompose_guard cs l) r
     | e ->
         ExprSet.add e cs
 
@@ -300,84 +319,119 @@ let does_r_affect_cond solver shared lockt r cond =
     res
 
 
-let compute_unlocking not_flowplus lockt solver sk =
-    (* every condition is assigned a number *)
-    let conds_to_num = Hashtbl.create 1024 in
-    let cond_no c =
-        try Hashtbl.find conds_to_num c
-        with Not_found ->
-            let no = Hashtbl.length conds_to_num in
-            Hashtbl.add conds_to_num c no;
-            no
-    in
-    (* every rule has a set of associated conditions *)
-    let rule_to_conds = Hashtbl.create 1024 in
-    let collect_rule_conds (i, r) =
-        let conds = collect_guard_elems ExprSet.empty r.Sk.guard in
-        let with_no c = (cond_no c, c) in
-        Hashtbl.replace rule_to_conds i
-            (List.map with_no (ExprSet.elements conds))
-    in
-    let get_rule_conds i =
-        try Hashtbl.find rule_to_conds i
-        with Not_found -> raise (Failure ("No rule " ^ (int_s i)))
-    in
-    List.iter collect_rule_conds (lst_enum sk.Sk.rules);
+let compute_unlocking not_flowplus lockt solver sk
+        condmap rule_pre actmap rule_post =
 
-    (* this table keeps relation (rule, {UNLOCKS, DOESNOT}, conds) *)
-    let rule_to_conds = Hashtbl.create 1024 in
-    let is_depsd ri ci = Hashtbl.mem rule_to_conds (ri, ci) in
-    let deps ri ci res = Hashtbl.replace rule_to_conds (ri, ci) res in
+    (* The set of type PSetSet keeps the pre- and postconditions that
+       has been already explored. As many rules are assigned the same
+       pair of pre- and postconditions, this significantly reduces the
+       runtime. *)
 
     (* enumerate all the edges in not_flowplus and fill rule_to_conds *)
-    let collect_milestones src dst milestones =
+    let collect_milestones src dst (explored, seen, milestones) =
         let src, dst = if lockt = Lock then dst, src else src, dst in
         let left_no = MGraph.V.label src in
         let left = List.nth sk.Sk.rules left_no in
         let right_no = MGraph.V.label dst in
         let right = List.nth sk.Sk.rules right_no in
-        if left_no <> right_no && not (is_c_true right.Sk.guard)
+        let right_pre_set = IntMap.find right_no rule_pre in
+        let left_post_set = IntMap.find left_no rule_post in
+
+        let union_set = PSet.union right_pre_set left_post_set in
+        let is_explored = PSetSet.mem union_set explored in
+
+        if not is_explored
+            && left_no <> right_no && not (is_c_true right.Sk.guard)
         then begin
-            let conds = get_rule_conds right_no in
-            let each_cond mset (c_no, c) =
-                if not (is_depsd left_no c_no)
+            let conds =
+                List.filter (fun (id, _) -> PSet.mem id right_pre_set)
+                    (PSetEltMap.bindings condmap) in
+
+            let each_cond (seen, mset) (c_id, c) =
+                let pair_set = PSet.add c_id left_post_set in
+                if not (PSetSet.mem pair_set seen)
                 then begin
                     let res =
                         does_r_affect_cond solver sk.Sk.shared lockt left c in
-                    deps left_no c_no res;
                     if res
-                    then ExprSet.add c mset
-                    else mset
+                    then (PSetSet.add pair_set seen, PSet.add c_id mset)
+                    else (PSetSet.add pair_set seen, mset)
                 end
-                else mset
+                else (seen, mset)
             in
-            List.fold_left each_cond milestones conds
+            let new_seen, new_mset =
+                List.fold_left each_cond (seen, milestones) conds
+            in
+            (PSetSet.add union_set explored, new_seen, new_mset)
         end
-        else milestones
+        else (explored, seen, milestones)
     in
 
+    let _, _, mstone_set =
+        MGraph.fold_edges collect_milestones not_flowplus
+            (PSetSet.empty, PSetSet.empty, PSet.empty)
+    in
     let mstones =
-        MGraph.fold_edges collect_milestones not_flowplus ExprSet.empty
+        List.filter (fun (id, _) -> PSet.mem id mstone_set)
+        (PSetEltMap.bindings condmap)
     in
-    let map i m =
+    let map i (m_id, cond) =
         if lockt = Lock
-        then (sprintf "L%d" i, PSet.new_thing (), m, lockt)
-        else (sprintf "U%d" i, PSet.new_thing (), m, lockt)
+        then (sprintf "L%d" i, m_id, cond, lockt)
+        else (sprintf "U%d" i, m_id, cond, lockt)
     in
-    List.map2 map (range 0 (ExprSet.cardinal mstones)) (ExprSet.elements mstones)
+    List.map2 map (range 0 (List.length mstones)) mstones
 
 
 (* assign a set of condition ids to a rule *)
-let compute_pre sk conds =
-    let add_set map i r =
-        let guard_conds = collect_guard_elems ExprSet.empty r.Sk.guard in
-        let is_included (_, _, cond, _) = ExprSet.mem cond guard_conds in
-        let matching_mstones = List.filter is_included conds in
-        let add set (_, id, _, _) = PSet.add id set in
-        let cond_set = List.fold_left add PSet.empty matching_mstones in
-        IntMap.add i cond_set map
+let compute_pre sk =
+    let map_cond exp (cmap, rcmap, condset) =
+        let exp_s = SpinIrImp.expr_s exp in
+        if StrMap.mem exp_s rcmap
+        then cmap, rcmap, condset
+        else let new_id = PSet.new_thing () in
+            (PSetEltMap.add new_id exp cmap,
+             StrMap.add exp_s new_id rcmap,
+             PSet.add new_id condset)
     in
-    List.fold_left2 add_set IntMap.empty (range 0 sk.Sk.nrules) sk.Sk.rules
+    let add_set (rmap, cmap, rcmap) i r =
+        let guard_conds = decompose_guard ExprSet.empty r.Sk.guard in
+        let new_cmap, new_rcmap, condset =
+            ExprSet.fold map_cond guard_conds (cmap, rcmap, PSet.empty) in
+        let new_rmap = IntMap.add i condset rmap in
+        (new_rmap, new_cmap, new_rcmap)
+    in
+    let rule_pre, cond_map, _ =
+        List.fold_left2 add_set
+            (IntMap.empty, PSetEltMap.empty, StrMap.empty)
+            (range 0 sk.Sk.nrules) sk.Sk.rules
+    in
+    cond_map, rule_pre
+
+
+(* assign a set of action ids to a rule *)
+let compute_post sk =
+    let map_cond (amap, ramap, condset) exp =
+        let exp_s = SpinIrImp.expr_s exp in
+        if StrMap.mem exp_s ramap
+        then amap, ramap, condset
+        else let new_id = PSet.new_thing () in
+            (PSetEltMap.add new_id exp amap,
+             StrMap.add exp_s new_id ramap,
+             PSet.add new_id condset)
+    in
+    let add_set (rmap, amap, ramap) i r =
+        let new_amap, new_ramap, condset =
+            List.fold_left map_cond (amap, ramap, PSet.empty) r.Sk.act in
+        let new_rmap = IntMap.add i condset rmap in
+        (new_rmap, new_amap, new_ramap)
+    in
+    let rule_post, act_map, _ =
+        List.fold_left2 add_set
+            (IntMap.empty, PSetEltMap.empty, StrMap.empty)
+            (range 0 sk.Sk.nrules) sk.Sk.rules
+    in
+    act_map, rule_post
 
 
 let compute_cond_implications solver shared uconds lconds =
@@ -428,20 +482,27 @@ let compute_deps solver sk =
     MGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
     *)
     let not_flowplus = complement fgp in
+    logtm INFO (sprintf "> constructing preconditions...");
+    let cond_map, rule_pre = compute_pre sk in
+    logtm INFO (sprintf "> found %d preconditions..." (PSetEltMap.cardinal cond_map));
+    logtm INFO (sprintf "> constructing postconditions...");
+    let act_map, rule_post = compute_post sk in
+    logtm INFO (sprintf "> found %d postconditions..." (PSetEltMap.cardinal act_map));
+
     logtm INFO (sprintf "> constructing unlocking milestones...");
-    let umiles = compute_unlocking not_flowplus Unlock solver sk in
+    let umiles = compute_unlocking not_flowplus Unlock solver sk
+        cond_map rule_pre act_map rule_post in
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
     List.iter (print_milestone Unlock) umiles;
 
     logtm INFO (sprintf "> constructing locking milestones...");
-    let lmiles = compute_unlocking not_flowplus Lock solver sk in
+    let lmiles = compute_unlocking not_flowplus Lock solver sk
+        cond_map rule_pre act_map rule_post in
     let n_lmiles = List.length lmiles in
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
     List.iter (print_milestone Lock) lmiles;
 
-    logtm INFO (sprintf "> constructing preconditions...");
-    let rule_pre = compute_pre sk (umiles @ lmiles) in
     logtm INFO (sprintf "> constructing implications...");
     let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
     in
@@ -453,8 +514,8 @@ let compute_deps solver sk =
         List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list fg) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
-    { D.lconds = lmiles; D.uconds = umiles;
-      D.fg = fg; D.rule_pre = rule_pre; D.cond_imp = cond_imp }
+    {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
+        D.fg; D.rule_pre; D.rule_post; D.cond_imp }
 
 
 (* for each condition find all the other conditions that are not immediately

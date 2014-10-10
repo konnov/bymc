@@ -17,6 +17,8 @@ val str: t -> string
 
 val empty: t
 
+val singleton: elt -> t
+
 val is_empty: t -> bool
 
 val mem: elt -> t -> bool
