@@ -142,17 +142,28 @@ end
 
 module PiaPost = struct
     type plugins_t = {
-        pia: Pia.plugins_t;
+        pp: PromelaParserPlugin.pp_plugin_t;
+        vr: VarRolePlugin.vr_plugin_t;
+        pdom: PiaDomPlugin.pia_dom_plugin_t;
+        pdg: PiaDataPlugin.pd_plugin_t;
         slps: SlpsCheckerPlugin.slps_checker_plugin_t;
     }
 
     let mk_plugins () =
-        let pia = Pia.mk_plugins () in
+        let pp = new PromelaParserPlugin.pp_plugin_t "promelaParser" in
+        let vr = new VarRolePlugin.vr_plugin_t "varRoles" in
+        let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
+        let pdg =
+            new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
         let slps = new SlpsCheckerPlugin.slps_checker_plugin_t "slps" in
-        { pia = pia; slps = slps }
+        { pp = pp; vr = vr; pdom = pdom; pdg = pdg; slps = slps }
 
     let mk_chain plugins =
-        let chain = Pia.mk_chain plugins.pia in
+        let chain = new plugin_chain_t in
+        chain#add_plugin plugins.pp OutOfPred;
+        chain#add_plugin plugins.vr OutOfPred;
+        chain#add_plugin plugins.pdom OutOfPred;
+        chain#add_plugin plugins.pdg OutOfPred;
         chain#add_plugin plugins.slps (OutOfPlugin "piaDataShared");
         chain
 end
