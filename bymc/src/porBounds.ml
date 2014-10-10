@@ -388,7 +388,7 @@ let compute_pre sk =
     let map_cond exp (cmap, rcmap, condset) =
         let exp_s = SpinIrImp.expr_s exp in
         if StrMap.mem exp_s rcmap
-        then cmap, rcmap, condset
+        then cmap, rcmap, (PSet.add (StrMap.find exp_s rcmap) condset)
         else let new_id = PSet.new_thing () in
             (PSetEltMap.add new_id exp cmap,
              StrMap.add exp_s new_id rcmap,
@@ -414,7 +414,7 @@ let compute_post sk =
     let map_cond (amap, ramap, condset) exp =
         let exp_s = SpinIrImp.expr_s exp in
         if StrMap.mem exp_s ramap
-        then amap, ramap, condset
+        then amap, ramap, (PSet.add (StrMap.find exp_s ramap) condset)
         else let new_id = PSet.new_thing () in
             (PSetEltMap.add new_id exp amap,
              StrMap.add exp_s new_id ramap,
