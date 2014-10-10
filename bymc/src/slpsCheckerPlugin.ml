@@ -78,7 +78,14 @@ class slps_checker_plugin_t (plugin_name: string) =
         method extract_proc rt prog proc =
             logtm INFO ("  > Computing the summary of " ^ proc#get_name);
             let sk, new_prog = Summary.summarize rt prog proc in
+            logtm INFO
+                (sprintf "  > The summary has %d locations and %d rules"
+                    sk.Sk.nlocs sk.Sk.nrules);
+            logtm INFO ("  > Searching for reachable local states...");
             let sk = SymbSkel.keep_reachable sk in
+            logtm INFO
+                (sprintf "  > Found %d reachable locations and %d rules"
+                    sk.Sk.nlocs sk.Sk.nrules);
             let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             logtm INFO ("    [DONE]");
