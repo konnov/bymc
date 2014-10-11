@@ -130,8 +130,10 @@ module D = struct
         (* map a rule number to a set of actions the capture its postcondition *)
         rule_post: PSet.t IntMap.t;
 
-        (* the mask of milestone candidates *)
-        mile_mask: PSet.t;
+        (* the mask of unlocking milestone candidates *)
+        umask: PSet.t;
+        (* the mask of locking milestone candidates *)
+        lmask: PSet.t;
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
         (* basic conditions to be locked *)
@@ -145,7 +147,7 @@ module D = struct
         cond_map = PSetEltMap.empty; act_map = PSetEltMap.empty;
         rule_pre = IntMap.empty; rule_post = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
-        mile_mask = PSet.empty;
+        umask = PSet.empty; lmask = PSet.empty;
         fg = MGraph.make 1
     }
 
@@ -528,10 +530,10 @@ let compute_deps solver sk =
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
     let add m (_, id, _, _) = PSet.add id m in
-    let mile_mask = List.fold_left add PSet.empty lmiles in
-    let mile_mask = List.fold_left add mile_mask umiles in
+    let lmask = List.fold_left add PSet.empty lmiles in
+    let umask = List.fold_left add PSet.empty umiles in
     {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
-        D.fg; D.rule_pre; D.rule_post; D.cond_imp; D.mile_mask }
+        D.fg; D.rule_pre; D.rule_post; D.cond_imp; D.umask; D.lmask }
 
 
 (* for each condition find all the other conditions that are not immediately
@@ -638,55 +640,15 @@ let get_cond_impls deps cond_id lockt =
     else List.fold_left (collect_locked cond_id) PSet.empty deps.D.lconds
 
 
-let is_rule_locked deps uset lset rule_no =
-    let pre = PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre)
-    in
-    PSet.subseteq pre uset                     (* everything is unlocked *)
-        && PSet.is_empty (PSet.inter pre lset) (* and nothing is locked *)
-    
-
-(* filter out the locked/unlocked rules *)    
-let rec filter_path deps conds lockt path =
-    let rec f uset lset = function
-    | [] -> []
-
-    | (MaybeMile ((_, id, _, lt), _) as m) :: tl ->
-        if lt <> lockt
-        then m :: (f uset lset tl)
-        else (* from now on id is locked (unlocked),
-                and whatever implies it, is locked (unlocked) too *)
-            let uset, lset =
-                if lt = Unlock
-                then (PSet.union uset (get_cond_impls deps id lt)), lset
-                else uset, (PSet.union lset (get_cond_impls deps id lt))
-            in
-            m :: (f uset lset tl)
-
-    | (Seg rule_nos) :: tl ->
-        (Seg (List.filter (is_rule_locked deps uset lset) rule_nos))
-            :: (f uset lset tl)
-    in
-    f PSet.empty PSet.empty path
-
-
-(** add all possible rules that are labeled with a specific condition *)    
-let unfold_conds sk deps path =
-    (* TODO: more careful analysis is required to remove redundant rules *)
-    let is_guarded_with (_, cond_no, _, _) rule_no =
-        let conds =
-            PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre) in
-        PSet.mem cond_no conds
-    in
-    let rec f = function
-    | [] -> []
-    | (Seg _) as s :: tl -> s :: (f tl)
-    | (MaybeMile (cond, _)) :: tl ->
-         let all_guarded_with = 
-             List.filter (is_guarded_with cond) (range 0 sk.Sk.nrules) in
-         (MaybeMile (cond, all_guarded_with)) :: (f tl)
-    in
-    f path
-
+let is_rule_unlocked deps uset lset rule_no =
+    let pre = IntMap.find rule_no deps.D.rule_pre in
+    let is_unlocked = PSet.subseteq (PSet.inter deps.D.umask pre) uset in
+    let not_locked = PSet.is_empty (PSet.inter pre lset) in
+    (* printf "uset=%s lset=%s\n" (PSet.str uset) (PSet.str lset);
+    printf "is_unlocked %d [pre=%s]-> is_unlocked=%b and not_locked=%b\n"
+        rule_no (PSet.str pre) is_unlocked not_locked; *)
+    is_unlocked && not_locked
+  
 
 (**
    Compute the tree of representative executions.
@@ -703,7 +665,8 @@ let compute_slps_tree sk deps =
     let rec build_tree uset lset =
         let is_guarded_with cond_id rule_no =
             let conds =
-                PSet.inter deps.D.mile_mask (IntMap.find rule_no deps.D.rule_pre)
+                PSet.inter (PSet.union deps.D.umask deps.D.lmask)
+                    (IntMap.find rule_no deps.D.rule_pre)
             in
             PSet.mem cond_id conds
         in
@@ -729,7 +692,7 @@ let compute_slps_tree sk deps =
                 in
                 branch :: accum
         in
-        let seg = List.filter (is_rule_locked deps uset lset) full_segment in
+        let seg = List.filter (is_rule_unlocked deps uset lset) full_segment in
         let branches = List.fold_left each_cond [] (uconds @ lconds) in
         if branches = []
         then T.Leaf seg
@@ -746,7 +709,9 @@ let collect_actions accum sk =
 (* count how many times every guard (not a subformula of it!) appears in a rule *)
 let count_guarded sk deps =
     let each_rule map i r =
-        let pre = PSet.inter deps.D.mile_mask (IntMap.find i deps.D.rule_pre) in
+        let pre =
+            PSet.inter (PSet.union deps.D.umask deps.D.lmask)
+                (IntMap.find i deps.D.rule_pre) in
         if PSetMap.mem pre map
         then PSetMap.add pre (1 + (PSetMap.find pre map)) map
         else PSetMap.add pre 1 map

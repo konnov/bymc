@@ -10,6 +10,7 @@ let _ =
         AbsCounterTest.suite;
         PiaCtrRefinementTest.suite;
         SummaryTest.suite;
+        PorBoundsTest.suite;
     ]
     in
     run_test_tt_main all
