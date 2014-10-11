@@ -141,7 +141,11 @@ let keep_reachable sk =
     in
     let each_init_expr = function
         | BinEx (EQ, l, r) ->
-                let visit_used v = visit (VarMap.find v rev_map) in
+                let visit_used v =
+                    try visit (VarMap.find v rev_map)
+                    with Not_found -> ()
+                        (* a shared variable -> ignore *)
+                in
                 if l <> IntConst 0 && r <> IntConst 0
                 then begin
                     List.iter visit_used (SpinIr.expr_used_vars l);
