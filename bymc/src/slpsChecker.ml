@@ -191,7 +191,8 @@ let get_counterex rt sk form_name frame_hist =
             let new_num =
                 if f.F.no = 0 || accel <> IntConst 0
                 then begin
-                    fprintf out "%4d x%2s: " num (SpinIrImp.expr_s accel);
+                    fprintf out "%4d (F%4d) x%2s: "
+                        num f.F.no (SpinIrImp.expr_s accel);
                     List.iter (p out) other;
                     fprintf out "\n";
                     1 + num
