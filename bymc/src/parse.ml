@@ -36,9 +36,11 @@ let rec lex_pp (lexst: lex_state ref) lex_fun lexbuf =
     in
     let if_macro ls is_ifdef name = 
         let is_true = Hashtbl.mem ls.macros name in
-        let is_enabled = if is_ifdef then is_true else not is_true in
-        { ls with is_enabled = is_enabled;
-          macro_if_stack = (is_true :: ls.macro_if_stack) }
+        let is_def_enabled = if is_ifdef then is_true else not is_true in
+        let is_parent_enabled = ls.is_enabled in
+        let is_enabled = is_def_enabled && is_parent_enabled in
+        { ls with is_enabled;
+          macro_if_stack = (is_enabled :: ls.macro_if_stack) }
     in
     let new_tok = match tok with
     (* TODO: handle macros with arguments like foo(x, y) *)
@@ -79,15 +81,19 @@ let rec lex_pp (lexst: lex_state ref) lex_fun lexbuf =
         lex_pp lexst lex_fun lexbuf
 
     | MACRO_ELSE ->
+        let old_stack = List.tl (!lexst).macro_if_stack in
+        let is_parent_enabled =
+            if (List.length old_stack) > 0 then List.hd old_stack else true
+        in
+        let is_enabled = (not (!lexst).is_enabled) && is_parent_enabled in
         lexst := {
-            !lexst with is_enabled = not (!lexst).is_enabled;
-            macro_if_stack =
-                (not (!lexst).is_enabled) :: (List.tl (!lexst).macro_if_stack)
+            !lexst with is_enabled;
+            macro_if_stack = is_enabled :: old_stack
         };
         lex_pp lexst lex_fun lexbuf
 
     | MACRO_ENDIF ->
-        let new_stack =
+        let old_stack =
             try List.tl !lexst.macro_if_stack
             with Failure _ -> 
                 let pos = sprintf "%s:%d,%d" lexbuf.lex_curr_p.pos_fname
@@ -97,10 +103,12 @@ let rec lex_pp (lexst: lex_state ref) lex_fun lexbuf =
                 raise (SpinParserState.Parse_error
                     (sprintf "%s #endif does not have matching #ifdef/ifndef" pos))
         in
-        let is_enabled =
-            if (List.length new_stack) > 0 then List.hd new_stack else true in
+        let is_parent_enabled =
+            if (List.length old_stack) > 0 then List.hd old_stack else true
+        in
         lexst := {
-            !lexst with macro_if_stack = new_stack; is_enabled = is_enabled
+            !lexst with macro_if_stack = old_stack;
+                        is_enabled = is_parent_enabled
         };
         lex_pp lexst lex_fun lexbuf
 
