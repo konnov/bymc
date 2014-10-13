@@ -6,6 +6,7 @@
 open Printf
 
 open Accums
+open Debug
 open PorBounds
 open SpinIr
 open SymbSkel
@@ -218,6 +219,12 @@ let get_counterex rt sk form_name frame_hist =
     printf "    > Saved counterexample to %s\n" fname
 
 
+let display_depth depth is_last =
+    if is_last
+    then logtm INFO (sprintf "%s|" (String.make depth '/'))
+    else logtm INFO (String.make (1 + depth) '/')
+
+
 let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
@@ -286,6 +293,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "last segment";
+            display_depth depth true;
             let endf, end_hist, err = check_segment frame_hist frame seg in
             rt#solver#comment (sprintf "pop@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
@@ -299,6 +307,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "next segment";
+            display_depth depth false;
             let seg_endf, end_hist, err = check_segment frame_hist frame seg in
 
             let each_branch err b =

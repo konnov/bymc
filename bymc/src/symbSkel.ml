@@ -385,9 +385,12 @@ let make_init rt prog proc locals builder =
     let reg_tab = (rt#caches#find_struc prog)#get_regions proc#get_name in
     let body = proc#get_stmts in
     let init_stmts = (reg_tab#get "decl" body) @ (reg_tab#get "init" body) in
+
     let to_loci eqs =
         let vals = List.map snd eqs in (* assignments to the locals *)
-        SkB.get_loci !builder vals
+        try SkB.get_loci !builder vals
+        with Not_found ->
+            raise (Failure ("No location " ^ (Sk.locname vals)))
     in
     let locis = List.rev_map to_loci (SkelStruc.comp_seq locals init_stmts) in
     let loc_var i = Sk.locvar !builder.SkB.skel i in

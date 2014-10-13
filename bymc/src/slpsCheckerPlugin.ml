@@ -64,12 +64,12 @@ class slps_checker_plugin_t (plugin_name: string) =
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
                 num := 0;
-                log INFO (sprintf "      > Checking %s...\n" name);
+                logtm INFO (sprintf "      > Checking %s..." name);
                 let err = check_tree name form tree in
                 let msg =
                     if err
-                    then sprintf "    > SLPS: counterexample for %s found\n" name
-                    else sprintf "      > Spec %s holds\n" name
+                    then sprintf "    > SLPS: counterexample for %s found" name
+                    else sprintf "      > Spec %s holds" name
                 in
                 log INFO msg
             in
