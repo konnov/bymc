@@ -36,17 +36,19 @@ class slps_checker_plugin_t (plugin_name: string) =
         method transform rt =
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (SkelStruc.compute_struc sprog);
-            let each_proc (skels, prog) proc =
-                let sk, new_prog = self#extract_proc rt prog proc in
-                (sk :: skels, new_prog)
+            let each_proc skels proc =
+                let sk = self#extract_proc rt sprog proc in
+                sk :: skels
             in
-            let skels, prog =
-                List.fold_left each_proc ([], sprog) (Program.get_procs sprog)
+            let skels =
+                List.fold_left each_proc [] (Program.get_procs sprog)
             in
-            (* TODO: there must be only one skeleton for all process types! *)
-            assert (1 = (List.length skels));
-            let sk = List.hd skels in
-            let tt = Program.get_type_tab prog in
+            let sk = match skels with
+                | [sk] -> sk
+                | skels -> SymbSkel.fuse skels "Fuse"
+            in
+            Sk.to_file "fuse.sk" sk;
+            let tt = Program.get_type_tab sprog in
             let tree = PorBounds.make_schema_tree rt#solver sk in
 
             let nleafs = PorBounds.tree_leafs_count tree in
@@ -73,13 +75,13 @@ class slps_checker_plugin_t (plugin_name: string) =
                 in
                 log INFO msg
             in
-            let specs = get_proper_specs prog skels in
+            let specs = get_proper_specs sprog skels in
             StrMap.iter each_form specs;
-            prog
+            sprog
 
         method extract_proc rt prog proc =
             logtm INFO ("  > Computing the summary of " ^ proc#get_name);
-            let sk, new_prog = Summary.summarize rt prog proc in
+            let sk, _ = Summary.summarize rt prog proc in
             logtm INFO
                 (sprintf "  > The summary has %d locations and %d rules"
                     sk.Sk.nlocs sk.Sk.nrules);
@@ -91,7 +93,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             logtm INFO ("    [DONE]");
-            sk, new_prog
+            sk
 
         method update_runtime rt =
             ()
