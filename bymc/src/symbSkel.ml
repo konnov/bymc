@@ -49,7 +49,8 @@ module Sk = struct
         List.nth sk.locs loc_no
 
     let locname l =
-        sprintf "loc%s" (str_join "_" (List.map int_s l))
+        let s i = if i < 0 then "X" else string_of_int i in
+        sprintf "loc%s" (str_join "_" (List.map s l))
 
     let locvar sk loc_no =
         IntMap.find loc_no sk.loc_vars
@@ -201,6 +202,89 @@ let keep_reachable sk =
 let filter_rules f sk =
     let new_rules = List.filter f sk.Sk.rules in
     { sk with Sk.rules = new_rules; Sk.nrules = List.length new_rules }
+
+
+let fuse skels new_name = 
+    let first = match skels with
+        | hd :: _ -> hd
+        | [] -> raise (Failure "At least one skeleton is needed")
+    in
+    if List.exists (fun sk -> sk.Sk.shared <> first.Sk.shared) skels
+    then raise (Failure ("Skeletons have different sets of shared variables"));
+    if List.exists (fun sk -> sk.Sk.params <> first.Sk.params) skels
+    then raise (Failure ("Skeletons have different sets of params variables"));
+    let new_locals = List.fold_left (fun l sk -> l @ sk.Sk.locals) [] skels in
+
+    let map_rule nlocs r =
+        { r with Sk.src = nlocs + r.Sk.src; Sk.dst = nlocs + r.Sk.dst; }
+    in
+    let each_skel (nlocs, collected) sk =
+        let new_rules = List.map (map_rule nlocs) sk.Sk.rules in
+        (nlocs + sk.Sk.nlocs, collected @ new_rules )
+    in
+    let _, all_rules = List.fold_left each_skel (0, []) skels in
+
+    let map_loc sk start len loc =
+        let before = if start <= 0 then [] else BatList.make start (-1) in
+        let after = if len <= 0 then [] else BatList.make len (-1) in
+        before @ loc @ after
+    in
+    let each_loc (start, len, collected) sk =
+        let nlocals = List.length sk.Sk.locals in
+        let new_len = len - nlocals in
+        let new_start = start + nlocals in
+        let new_locs = List.map (map_loc sk start new_len) sk.Sk.locs in
+        (new_start, new_len, collected @ new_locs)
+    in
+    let _, _, all_locs =
+        List.fold_left each_loc (0, List.length new_locals, []) skels
+    in
+    let each_loc_var sk start map loc i =
+        let v = IntMap.find i sk.Sk.loc_vars in
+        let nv = v#copy (Sk.locname loc) in
+        IntMap.add (start + i) nv map
+    in
+    let each_skel_loc_var (map, start) sk =
+        let new_locs = Accums.list_sub all_locs start sk.Sk.nlocs in
+        let map = 
+            List.fold_left2 (each_loc_var sk start) map new_locs (range 0 sk.Sk.nlocs)
+        in
+        (map, start + sk.Sk.nlocs)
+    in
+    let all_loc_vars, _ =
+        List.fold_left each_skel_loc_var (IntMap.empty, 0) skels
+    in
+    let add_to_map _ v map = IntMap.add v#id v map in
+    let id_map = IntMap.fold add_to_map all_loc_vars IntMap.empty in
+    let map_var v =
+        if IntMap.mem v#id id_map
+        then Var (IntMap.find v#id id_map)
+        else Var v
+    in
+    let each_init (set, collected) e =
+        let mapped_e = map_vars map_var e in
+        let e_s = SpinIrImp.expr_s mapped_e in
+        if StrSet.mem e_s set
+        then (set, collected)
+        else (StrSet.add e_s set, mapped_e :: collected)
+    in
+    let each_skel_init (set, collected) sk = 
+        List.fold_left each_init (set, collected) sk.Sk.inits
+    in
+    let _, all_inits = List.fold_left each_skel_init (StrSet.empty, []) skels
+    in
+    {
+        Sk.name = new_name;
+        Sk.nlocs = List.fold_left (fun s sk -> s + sk.Sk.nlocs) 0 skels;
+        Sk.nrules = List.fold_left (fun s sk -> s + sk.Sk.nrules) 0 skels;
+        Sk.locals = new_locals;
+        Sk.locs = all_locs;
+        Sk.rules = all_rules;
+        Sk.inits = List.rev all_inits;
+        Sk.loc_vars = all_loc_vars;
+        Sk.shared = first.Sk.shared;
+        Sk.params = first.Sk.params;
+    }
 
 
 (* the intermediate structure to successively construct Sk *)
@@ -388,9 +472,7 @@ let make_init rt prog proc locals builder =
 
     let to_loci eqs =
         let vals = List.map snd eqs in (* assignments to the locals *)
-        try SkB.get_loci !builder vals
-        with Not_found ->
-            raise (Failure ("No location " ^ (Sk.locname vals)))
+        SkB.add_loc builder vals
     in
     let locis = List.rev_map to_loci (SkelStruc.comp_seq locals init_stmts) in
     let loc_var i = Sk.locvar !builder.SkB.skel i in

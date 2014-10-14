@@ -102,6 +102,9 @@ val keep_reachable: Sk.skel_t -> Sk.skel_t
 (** keep only the rules matching the filter function *)
 val filter_rules: (Sk.rule_t -> bool) -> Sk.skel_t -> Sk.skel_t
 
+(** fuse several skeletons into one *)
+val fuse: Sk.skel_t list -> string -> Sk.skel_t
+
 
 type builder_fun_t =
     SkB.context_t -> Spin.token SpinIr.expr
