@@ -9,6 +9,7 @@ let _ =
         SsaTest.suite;
         AbsCounterTest.suite;
         PiaCtrRefinementTest.suite;
+        SymbSkelTest.suite;
         SummaryTest.suite;
         PorBoundsTest.suite;
     ]
