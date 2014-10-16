@@ -5,9 +5,11 @@
  * Igor Konnov, 2013-2014
  *)
 
+open Printf
+
 open Accums
 open Cfg
-open Printf
+open Debug
 open Simplif
 open Spin
 open SpinIr
@@ -127,9 +129,15 @@ let exec_path solver (type_tab: data_type_tab) (sym_tab: symb_tab)
             List.iter (fun s -> printf "  %s\n" (stmt_s s)) stmts;
             raise (SymbExec_error s)
     in
+    trace Trc.exe (fun _ -> sprintf "  compute_consts\n");
     let path_cons = compute_consts path_cons in
+    trace Trc.exe (fun _ -> sprintf "  check_sat\n");
     let is_sat = check_sat solver type_tab path_cons in
 
-    if is_final && is_sat then path_fun path_cons vals;
+    if is_final && is_sat
+    then begin
+        trace Trc.exe (fun _ -> sprintf "  path_fun\n");
+        path_fun path_cons vals;
+    end;
     is_sat
 

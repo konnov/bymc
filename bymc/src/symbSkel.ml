@@ -6,6 +6,7 @@
 open Printf
 
 open Accums
+open Debug
 open Spin
 open SpinIr
 open SymbExec
@@ -424,13 +425,13 @@ let transition_to_rule builder path_cons vals (prev, next) =
             (str_join "." (List.map int_s (List.map snd prev)))
             (str_join "." (List.map int_s (List.map snd next)))
     in
-    Debug.trace Trc.syx trace_print;
+    Debug.trace Trc.ssk trace_print;
 
-    Debug.trace Trc.syx
+    Debug.trace Trc.ssk
         (fun _ -> Printf.sprintf "npc:: %s\n" (SpinIrImp.expr_s npc));
     let trace_print k v =
         let p () = Printf.sprintf "%s <- %s\n" k (SpinIrImp.expr_s v) in
-        Debug.trace Trc.syx p
+        Debug.trace Trc.ssk p
     in
     Hashtbl.iter trace_print vals;
     (* end of tracing *)
@@ -443,7 +444,7 @@ let transition_to_rule builder path_cons vals (prev, next) =
     | IntConst 0, _ -> () (* the path conditions are violated *)
     | _, true -> ()    (* the state after the execution is invalid *)
     | _ -> (* o.k. *)
-        Debug.trace Trc.syx (fun _ -> "ADDED");
+        Debug.trace Trc.ssk (fun _ -> "ADDED");
         let src = SkB.add_loc builder (List.map snd prev) in
         let dst = SkB.add_loc builder (List.map snd next) in
         let guard = npc in
@@ -460,7 +461,7 @@ let transition_to_rule builder path_cons vals (prev, next) =
 
 
 let reconstruct_rules trs ctx path_cons vals =
-    Debug.trace Trc.syx
+    Debug.trace Trc.ssk
         (fun _ -> Printf.sprintf "path_cons = %s\n" (SpinIrImp.expr_s path_cons));
     List.iter (transition_to_rule ctx.SkB.state path_cons vals) trs
 
@@ -523,13 +524,15 @@ let build_with builder_fun rt prog proc =
         SkB.prev_next = prev_next; SkB.state = builder; }
     in
 
-    (* collect steps expressed via paths *)
+    (* collect initial conditions *)
+    log INFO ("    enumerating symbolic paths of " ^ proc#get_name);
+    let ntt = (Program.get_type_tab prog)#copy in
     let path_efun = enum_paths cfg in
     let num_paths =
         path_efun (exec_path rt#solver tt st all_vars (builder_fun ctx))
     in
-    Printf.printf "    enumerated %d symbolic paths in process %s\n\n"
-        num_paths proc#get_name;
+    log INFO (sprintf "    enumerated %d symbolic paths in process %s"
+                num_paths proc#get_name);
 
     (* collect initial conditions *)
     let ntt = (Program.get_type_tab prog)#copy in

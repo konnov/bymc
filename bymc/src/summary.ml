@@ -145,6 +145,14 @@ let enum_cubes rt ctx used vars cons assigns =
 
 
 let each_path rt ctx cons vals =
+    log INFO "next path\n";
+    Debug.trace Trc.sum
+        (fun _ ->
+            let m = Printf.sprintf "each_path: %s" (SpinIrImp.expr_s cons) in
+            let m = m ^ (Hashtbl.fold (fun n e s ->
+                s ^ (sprintf " %s -> %s " n (SpinIrImp.expr_s e))) vals "") in
+            m ^ "\n"
+        );
     let used = SpinIr.expr_used_vars cons in
     let locals = List.filter (fun v -> v#proc_name <> "") used in
     enum_cubes rt ctx used locals cons vals;
@@ -156,5 +164,4 @@ let each_path rt ctx cons vals =
 
 let summarize rt prog proc =
     build_with (each_path rt) rt prog proc
-
 

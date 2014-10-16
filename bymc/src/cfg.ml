@@ -632,6 +632,7 @@ let write_dot (out_name: string) (cfg: 't control_flow_graph) =
 let enum_paths (cfg: 't control_flow_graph)
         (path_fun: 't basic_block list -> bool -> bool): int =
     let rec dfs path bb =
+        trace Trc.cfg (fun _ -> sprintf "  dfs in %d\n" bb#label);
         if bb#get_visit_flag
         then raise (CfgError
             (sprintf "Graph is cyclic: %d -> .. -> %d" bb#label bb#label))
@@ -650,7 +651,9 @@ let enum_paths (cfg: 't control_flow_graph)
         bb#set_visit_flag false;
         num
     in
+    trace Trc.cfg (fun _ -> "  started enum_paths.dfs\n");
     let num_paths = dfs [] cfg#entry in
     List.iter (fun bb -> bb#set_visit_flag false) cfg#block_list;
+    trace Trc.cfg (fun _ -> "  finished enum_paths.dfs\n");
     num_paths
 
