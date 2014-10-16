@@ -526,7 +526,6 @@ let build_with builder_fun rt prog proc =
 
     (* collect initial conditions *)
     log INFO ("    enumerating symbolic paths of " ^ proc#get_name);
-    let ntt = (Program.get_type_tab prog)#copy in
     let path_efun = enum_paths cfg in
     let num_paths =
         path_efun (exec_path rt#solver tt st all_vars (builder_fun ctx))
@@ -539,17 +538,18 @@ let build_with builder_fun rt prog proc =
     let loc_vars = SkB.intro_loc_vars builder ntt in
     let vr = rt#caches#analysis#get_var_roles prog in
     List.iter (fun v -> vr#add v VarRole.LocalUnbounded) loc_vars;
-    rt#caches#analysis#set_var_roles prog vr;
-    let inits = make_init rt prog proc primary_locals builder in
-    List.iter (SkB.add_init builder) inits;
 
     let new_prog =
         (Program.set_shared (loc_vars @ shared)
             (Program.set_type_tab ntt prog)) in
+    rt#caches#analysis#set_var_roles new_prog vr; (* req. by make_init *)
+    
+    let inits = make_init rt prog proc primary_locals builder in
+    List.iter (SkB.add_init builder) inits;
     
     (* get the result *)
     let sk = SkB.finish !builder proc#get_name in
-    sk, new_prog
+    sk
 
 
 let state_pairs_to_rules rt prog proc trs =

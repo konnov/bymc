@@ -252,8 +252,8 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
 
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule.Sk.guard) in
-        (*if is_milestone
-        then*)
+        if is_milestone
+        then
         begin
             match rule.Sk.guard with
             | IntConst 1 -> ()

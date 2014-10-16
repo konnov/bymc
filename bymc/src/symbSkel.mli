@@ -120,8 +120,8 @@ val build_with:
     -> Program.program_t
     (** @param proc input process *)
     -> Spin.token SpinIr.proc
-    (** @return the skeleton and the modified program *)
-    -> Sk.skel_t * Program.program_t
+    (** @return the skeleton *)
+    -> Sk.skel_t
 
 
 (** Construct a symbolic skeleton given the transitions represented
@@ -138,8 +138,8 @@ val state_pairs_to_rules:
     (** @param trs transitions as pairs of assignments
         to the previous and next locations *)
     -> ((SpinIr.var * int) list * (SpinIr.var * int) list) list
-    (** @return the skeleton and the modified program *)
-    -> Sk.skel_t * Program.program_t
+    (** @return the skeleton *)
+    -> Sk.skel_t
 
 
 (** Transform a program specifications into specification over

@@ -2,6 +2,8 @@
   the transition relation between local states with the edges labeled
   by conditions and actions
 
+  @deprecated: just use Summary
+
   Igor Konnov, 2014
  *)
 
@@ -129,9 +131,19 @@ class symb_skel_plugin_t (plugin_name: string) =
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
-            let sk, new_prog =
-                SymbSkel.state_pairs_to_rules rt prog proc trs in
+            let sk = SymbSkel.state_pairs_to_rules rt prog proc trs in
+            let loc_vars = IntMap.values sk.Sk.loc_vars in
+
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
+            let ntt = (Program.get_type_tab prog)#copy in
+            let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED)
+            in
+            BatEnum.iter set_type loc_vars;
+            let new_prog =
+                Program.set_type_tab ntt prog
+                    |> Program.set_shared
+                        ((Program.get_shared prog) @ (BatList.of_enum loc_vars))
+            in
             sk, new_prog
 
         method update_runtime rt =

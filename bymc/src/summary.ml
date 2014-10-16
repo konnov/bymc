@@ -163,5 +163,5 @@ let each_path rt ctx cons vals =
 
 
 let summarize rt prog proc =
-    build_with (each_path rt) rt prog proc
+    SymbSkel.build_with (each_path rt) rt prog proc
 

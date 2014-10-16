@@ -12,6 +12,8 @@ open Debug
 open SymbSkel
 open Plugin
 open PorBounds
+open Spin
+open SpinIr
 
 let can_handle_spec prog _ s =
     match Ltl.classify_spec prog s with
@@ -48,7 +50,11 @@ class slps_checker_plugin_t (plugin_name: string) =
                 | skels -> SymbSkel.fuse skels "Fuse"
             in
             Sk.to_file "fuse.sk" sk;
-            let tt = Program.get_type_tab sprog in
+            let loc_vars = IntMap.values sk.Sk.loc_vars in
+            let ntt = (Program.get_type_tab sprog)#copy in
+            let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+            BatEnum.iter set_type loc_vars;
+
             let tree = PorBounds.make_schema_tree rt#solver sk in
 
             let nleafs = PorBounds.tree_leafs_count tree in
@@ -60,7 +66,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             in
 
             let check_tree name form tree =
-                SlpsChecker.is_error_tree rt tt sk on_leaf name form tree
+                SlpsChecker.is_error_tree rt ntt sk on_leaf name form tree
             in
             log INFO "  > Running SlpsChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
@@ -81,7 +87,7 @@ class slps_checker_plugin_t (plugin_name: string) =
 
         method extract_proc rt prog proc =
             logtm INFO ("  > Computing the summary of " ^ proc#get_name);
-            let sk, _ = Summary.summarize rt prog proc in
+            let sk = Summary.summarize rt prog proc in
             logtm INFO
                 (sprintf "  > The summary has %d locations and %d rules"
                     sk.Sk.nlocs sk.Sk.nrules);
