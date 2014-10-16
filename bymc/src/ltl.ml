@@ -109,6 +109,11 @@ let classify_spec type_tab = function
         then CondSafety (lhs, normalize_form (UnEx (NEG, rhs)))
         else CondGeneral e
 
+    | UnEx (ALWAYS, rhs) as e ->
+        if is_propositional type_tab rhs
+        then CondSafety (IntConst 1, normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
     | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
         if (is_propositional type_tab lhs)
             && (is_propositional type_tab rhs)
