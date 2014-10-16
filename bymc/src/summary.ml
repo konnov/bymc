@@ -144,8 +144,12 @@ let enum_cubes rt ctx used vars cons assigns =
     end
 
 
+let path_counter = ref 0
+
+
 let each_path rt ctx cons vals =
-    log INFO "next path\n";
+    log INFO (sprintf "summarizing path %d..." !path_counter);
+    path_counter := !path_counter + 1;
     Debug.trace Trc.sum
         (fun _ ->
             let m = Printf.sprintf "each_path: %s" (SpinIrImp.expr_s cons) in
@@ -163,5 +167,6 @@ let each_path rt ctx cons vals =
 
 
 let summarize rt prog proc =
+    path_counter := 0;
     SymbSkel.build_with (each_path rt) rt prog proc
 
