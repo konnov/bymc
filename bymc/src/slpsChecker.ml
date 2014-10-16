@@ -277,7 +277,10 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
         let stack_level = rt#solver#get_stack_level in
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
-        F.assert_frame rt#solver tt endf endf [bad_form];
+        if not (is_c_false bad_form)
+        then raise (Failure "Bad condition is trivially false");
+        if not (is_c_true bad_form)
+        then F.assert_frame rt#solver tt endf endf [bad_form];
         let err = rt#solver#check in
         if err (* print the counterexample *)
         then get_counterex rt sk form_name (List.rev end_hist);
@@ -358,7 +361,10 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form tree =
     F.declare_frame rt#solver ntt initf;
     F.assert_frame rt#solver ntt initf initf sk.Sk.inits;
     rt#solver#comment "initial constraints from the spec";
-    F.assert_frame rt#solver ntt initf initf [init_form];
+    if is_c_false init_form
+    then raise (Failure "Initial condition is trivially false");
+    if not (is_c_true init_form)
+    then F.assert_frame rt#solver ntt initf initf [init_form];
 
     let err = check_tree rt tt sk bad_form on_leaf initf form_name tree in
     rt#solver#set_need_model false;
