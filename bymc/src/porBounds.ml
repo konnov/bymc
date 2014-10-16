@@ -11,7 +11,8 @@
  *)
 
 
-open Printf
+open Batteries
+open BatPrintf
 
 open Accums
 open Debug
@@ -113,10 +114,14 @@ let print_milestone lockt (name, id, m, _) =
 (* a deps for numerous dependencies we collect here *)
 module D = struct
     type deps_t = {
-        (* control flow graph with rules as the vertices and the flow relation
-           expressing the control flow
+        (* control flow graph with rules as the vertices and
+           the flow relation expressing the control flow
          *)
-        fg: MGraph.t;
+        rule_flow: MGraph.t;
+
+        (* the graph keeping transitive-reflexive closure
+           of location reachability *)
+        loc_reach: MGraph.t;
         
         (* map a unique condition id to its expression in Spin *)
         cond_map: (Spin.token SpinIr.expr) PSetEltMap.t;
@@ -148,7 +153,7 @@ module D = struct
         rule_pre = IntMap.empty; rule_post = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
         umask = PSet.empty; lmask = PSet.empty;
-        fg = MGraph.make 1
+        rule_flow = MGraph.make 1; loc_reach = MGraph.make 1
     }
 
     let conds c = c.uconds @ c.lconds
@@ -217,7 +222,7 @@ let tree_leafs_count tree =
     f tree
 
 
-let compute_flow sk =
+let make_rule_flow sk =
     let flowg = MGraph.make sk.Sk.nrules in
     let outgoing = Hashtbl.create sk.Sk.nrules in
     let addi (i, r) =
@@ -235,6 +240,23 @@ let compute_flow sk =
     List.iter add_flow (lst_enum sk.Sk.rules);
     (*IGraph.dot_output flowg (sprintf "flow-%s.dot" sk.Sk.name);*)
     flowg
+
+
+let make_loc_reach sk =
+    let add g r =
+        MGraph.add_edge g r.Sk.src r.Sk.dst
+    in
+    let g = MGraph.make sk.Sk.nlocs in
+    List.iter (add g) sk.Sk.rules;
+    logtm INFO "> Computing the transitive closure of location reachability...";
+    let gplus = MGraphOper.transitive_closure ~reflexive:true g in
+    (*
+        (* dump only the small graphs *)
+    logtm INFO "Writing the flow graphs...";
+    MGraph.dot_output g (sprintf "reach-%s.dot" sk.Sk.name);
+    MGraph.dot_output gplus (sprintf "reachplus-%s.dot" sk.Sk.name);
+    *)
+    gplus
 
 
 (* create a single segment that consists of topologically sorted
@@ -335,7 +357,7 @@ let does_r_affect_cond solver shared lockt r cond =
     res
 
 
-let compute_unlocking not_flowplus lockt solver sk
+let compute_unlocking loc_reach lockt solver sk
         condmap rule_pre actmap rule_post =
     (* The set of type P2Set keeps the pre- and postconditions that
        has been already explored. As many rules are assigned the same
@@ -343,12 +365,11 @@ let compute_unlocking not_flowplus lockt solver sk
        runtime. *)
 
     (* enumerate all the edges in not_flowplus and fill rule_to_conds *)
-    let collect_milestones src dst (edges_seen, checked, milestones) =
-        let src, dst = if lockt = Lock then dst, src else src, dst in
-        let left_no = MGraph.V.label src in
-        let left = List.nth sk.Sk.rules left_no in
-        let right_no = MGraph.V.label dst in
-        let right = List.nth sk.Sk.rules right_no in
+    let collect_milestones
+            (edges_seen, checked, milestones) ((src_no, src), (dst_no, dst)) =
+        let left_no, right_no =
+            if lockt = Lock then dst_no, src_no else src_no, dst_no in
+        let left, right = if lockt = Lock then dst, src else src, dst in
         let right_pre_set = IntMap.find right_no rule_pre in
         let left_pre_set = IntMap.find left_no rule_pre in
         let left_post_set = IntMap.find left_no rule_post in
@@ -380,9 +401,23 @@ let compute_unlocking not_flowplus lockt solver sk
         else (edges_seen, checked, milestones)
     in
 
+    let is_against_flow ((i1, r1), (i2, r2)) =
+        (* r1 does not precede r2 in the transitive closure
+           of the flow dependency *)
+        i1 <> i2 && (not (MGraph.mem_edge loc_reach r1.Sk.dst r2.Sk.src))
+    in
+    (* rules and their indices *)
+    let rules_enum1 =
+        BatEnum.combine ((0--^sk.Sk.nrules), (BatList.enum sk.Sk.rules))
+    in
+    let rules_enum2 = (* rules and their indices *)
+        BatEnum.combine ((0--^sk.Sk.nrules), (BatList.enum sk.Sk.rules))
+    in
     let _, _, mstone_set =
-        MGraph.fold_edges collect_milestones not_flowplus
-            (P2Set.empty, P2Set.empty, PSet.empty)
+        (BatEnum.cartesian_product rules_enum1 rules_enum2)
+            |> BatEnum.filter is_against_flow
+            |> BatEnum.fold collect_milestones
+                (P2Set.empty, P2Set.empty, PSet.empty)
     in
     let mstones =
         List.filter (fun (id, _) -> PSet.mem id mstone_set)
@@ -485,18 +520,13 @@ let compute_cond_implications solver shared uconds lconds =
 
 (* find and deps various dependencies *)    
 let compute_deps solver sk =
-    let fg = compute_flow sk in
-    let nflow = MGraph.nb_edges fg in
+    let rule_flow = make_rule_flow sk in
+    let nflow = MGraph.nb_edges rule_flow in
     logtm INFO (sprintf "> %d transition flow dependencies" nflow);
-    logtm INFO "> Computing the transitive closure...";
-    let fgp = MGraphOper.transitive_closure ~reflexive:true fg in
-    (*
-        (* dump only the small graphs *)
-    logtm INFO "Writing the flow graphs...";
-    MGraph.dot_output fg (sprintf "flow-%s.dot" sk.Sk.name);
-    MGraph.dot_output fgp (sprintf "flowplus-%s.dot" sk.Sk.name);
-    *)
-    let not_flowplus = complement fgp in
+    let loc_reach = make_loc_reach sk in
+    logtm INFO (sprintf "> %d edges in the reachability relation"
+            (MGraph.nb_edges loc_reach));
+
     logtm INFO (sprintf "> constructing preconditions...");
     let cond_map, rule_pre = compute_pre sk in
     logtm INFO (sprintf "> found %d preconditions..." (PSetEltMap.cardinal cond_map));
@@ -505,14 +535,14 @@ let compute_deps solver sk =
     logtm INFO (sprintf "> found %d postconditions..." (PSetEltMap.cardinal act_map));
 
     logtm INFO (sprintf "> constructing unlocking milestones...");
-    let umiles = compute_unlocking not_flowplus Unlock solver sk
+    let umiles = compute_unlocking loc_reach Unlock solver sk
         cond_map rule_pre act_map rule_post in
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
     List.iter (print_milestone Unlock) umiles;
 
     logtm INFO (sprintf "> constructing locking milestones...");
-    let lmiles = compute_unlocking not_flowplus Lock solver sk
+    let lmiles = compute_unlocking loc_reach Lock solver sk
         cond_map rule_pre act_map rule_post in
     let n_lmiles = List.length lmiles in
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
@@ -526,14 +556,16 @@ let compute_deps solver sk =
         log INFO (sprintf "    > SCC of size %d" (List.length scc))
     in
     let sccs =
-        List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list fg) in
+        List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list rule_flow) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
     let add m (_, id, _, _) = PSet.add id m in
     let lmask = List.fold_left add PSet.empty lmiles in
     let umask = List.fold_left add PSet.empty umiles in
     {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
-        D.fg; D.rule_pre; D.rule_post; D.cond_imp; D.umask; D.lmask }
+        D.rule_flow; D.loc_reach; D.rule_pre; D.rule_post;
+        D.cond_imp; D.umask; D.lmask
+    }
 
 
 (* for each condition find all the other conditions that are not immediately
@@ -659,7 +691,7 @@ let is_rule_unlocked deps uset lset rule_no =
    but only the representative ones.
  *)
 let compute_slps_tree sk deps =
-    let full_segment = make_segment sk deps.D.fg in
+    let full_segment = make_segment sk deps.D.rule_flow in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
 
     let rec build_tree uset lset =

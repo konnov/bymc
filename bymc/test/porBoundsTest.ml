@@ -1,19 +1,14 @@
 open OUnit
-open Printf
+open Batteries
+open BatPrintf
 
 open Accums
-open Cfg
 open Debug
 open PorBounds
-open PiaDom
-open PiaCtrCtx
 open Smt
 open Spin
 open SpinIr
-open SpinIrImp
 open SymbSkel
-open Ssa
-open VarRole
 
 (* overload operators for convenience *)
 let (>=) l r = BinEx (GE, Var l, Var r)
