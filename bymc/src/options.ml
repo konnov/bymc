@@ -73,9 +73,9 @@ let parse_smt s =
     then SmtYices
     else begin
         try
-            if "lib2:" = (Str.string_before s 5)
+            if "lib2|" = (Str.string_before s 5)
             then let cmd = Str.string_after s 5 in  
-                SmtLib2 (Array.of_list (Str.split_delim (Str.regexp ":") cmd))
+                SmtLib2 (Array.of_list (Str.split_delim (Str.regexp "|") cmd))
             else raise (Failure ("Unknown --smt argument: " ^ s))
         with Invalid_argument _ ->
             raise (Failure ("Unknown --smt argument: " ^ s))
@@ -108,7 +108,7 @@ let parse_options =
             );
             ("--smt", (Arg.String (fun s ->
                 opts := {!opts with smt = parse_smt s})),
-                " choose SMT solver: yices (default), smt2:solver-name:arg1:arg2...");
+                " choose SMT solver: yices (default), lib2|solver-name|arg1|arg2...");
             ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =
