@@ -277,7 +277,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
         let stack_level = rt#solver#get_stack_level in
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
-        if not (is_c_false bad_form)
+        if is_c_false bad_form
         then raise (Failure "Bad condition is trivially false");
         if not (is_c_true bad_form)
         then F.assert_frame rt#solver tt endf endf [bad_form];
