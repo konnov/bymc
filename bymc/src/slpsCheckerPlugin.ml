@@ -21,12 +21,19 @@ let can_handle_spec prog _ s =
     | _ -> false
 
 
-let get_proper_specs prog skels =
+let get_proper_specs opts prog skels =
     let forms = Program.get_ltl_forms prog in
     let tt = Program.get_type_tab prog in
-    let good, bad = StrMap.partition (can_handle_spec tt) forms in
+    let is_good name form =
+        let asked = opts.Options.spec in
+        (asked = "all" || asked = name) && (can_handle_spec tt name form)
+    in
+    let good, bad = StrMap.partition is_good forms in
     let p name _ =
-        printf "      > Skipped %s (not reachability)\n" name in
+        if opts.Options.spec <> "all" && opts.Options.spec <> name
+        then printf "      > Skipped %s (since you asked)\n" name
+        else printf "      > Skipped %s (not reachability)\n" name
+    in
     StrMap.iter p bad;
     SymbSkel.expand_props_in_ltl_forms prog skels good
 
@@ -81,7 +88,7 @@ class slps_checker_plugin_t (plugin_name: string) =
                 in
                 log INFO msg
             in
-            let specs = get_proper_specs sprog skels in
+            let specs = get_proper_specs rt#caches#options sprog skels in
             StrMap.iter each_form specs;
             sprog
 

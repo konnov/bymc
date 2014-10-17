@@ -16,11 +16,8 @@ else
 fi
 
 function mc_compile_first {
-    case "$PROP" in
-      all) BYMC_FLAGS="--target none --chain post" ;;
-      *) echo "Unknown property to analyze: $PROP" ; exit 1 ;;
-    esac
-    echo ${TOOL} ${BYMC_FLAGS} -a ${PROG}
+    BYMC_FLAGS="--target none --chain post --spec $PROP"
+    echo ${TOOL} ${BYMC_FLAGS} -a "${PROG}"
     tee_or_die "${POST_OUT}" "bymc failed" \
         ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
 }

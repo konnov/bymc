@@ -25,6 +25,7 @@ type options_t =
         action: action_opt_t;
         trail_name: string;
         filename: string;
+        spec: string;
         chain: string;
         param_assignments: int StrMap.t;
         mc_tool: mc_tool_opt_t;
@@ -35,7 +36,7 @@ type options_t =
     }
 
 let empty = {
-    action = OptNone; trail_name = ""; filename = "";
+    action = OptNone; trail_name = ""; filename = ""; spec = "";
     chain = "piaDataCtr";
     param_assignments = StrMap.empty;
     mc_tool = ToolSpin; bdd_pass = false; verbose = false;
@@ -109,6 +110,9 @@ let parse_options =
             ("--smt", (Arg.String (fun s ->
                 opts := {!opts with smt = parse_smt s})),
                 " choose SMT solver: yices (default), lib2|solver-name|arg1|arg2...");
+            ("--spec", (Arg.String (fun s -> opts := {!opts with spec = s})),
+                " specification name to check."
+            );
             ("-O", Arg.String (fun s ->
                 let name, value = parse_plugin_opt s in
                 opts := {!opts with plugin_opts =
