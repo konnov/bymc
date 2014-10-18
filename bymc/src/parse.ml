@@ -49,7 +49,8 @@ let rec lex_pp (lexst: lex_state ref) lex_fun lexbuf =
         lex_pp lexst lex_fun lexbuf
 
     | PRAGMA(name, text) ->
-        lexst := { !lexst with pragmas = (name, text) :: !lexst.pragmas };
+        if (!lexst).is_enabled
+        then lexst := { !lexst with pragmas = (name, text) :: !lexst.pragmas };
         lex_pp lexst lex_fun lexbuf
 
     | NAME id ->
