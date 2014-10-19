@@ -100,10 +100,15 @@ class slps_checker_plugin_t (plugin_name: string) =
                     sk.Sk.nlocs sk.Sk.nrules);
             logtm INFO ("  > Searching for reachable local states...");
             let sk = SymbSkel.keep_reachable sk in
+
             logtm INFO
                 (sprintf "  > Found %d reachable locations and %d rules"
                     sk.Sk.nlocs sk.Sk.nrules);
+            (* remove self-loops *)
             let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
+            (* deal with the effects of interval abstraction *)
+            logtm INFO ("  > Optimizing guards...");
+            let sk = SymbSkel.optimize_guards sk in
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
             logtm INFO ("    [DONE]");
             sk

@@ -18,9 +18,67 @@ open SpinIr
 open SpinIrEval
 open SpinIrImp
 
+type expr_kind = OnlyConst | ConstOrParam | ConstOrParamOrVar
+
+let expr_kind_less l r =
+    match l, r with
+    | OnlyConst, OnlyConst -> false
+    | OnlyConst, _ -> true
+    | ConstOrParam, ConstOrParamOrVar -> true
+    | ConstOrParam, _ -> false
+    | _ -> false
+
+
+let rec classify_expr = function
+    | Var v ->
+            if v#is_symbolic
+            then ConstOrParam
+            else ConstOrParamOrVar
+
+    | UnEx (_, e) ->
+            classify_expr e
+
+    | BinEx (_, l, r) ->
+            let kl, kr = classify_expr l, classify_expr r in
+            if expr_kind_less kl kr then kr else kl
+
+    | _ -> OnlyConst
+
+
+(* construct a somewhat canonical expression w.r.t. commutativity or duality *)
+let rec canonical = function
+    | BinEx (LT as t, l, r)
+    | BinEx (LE as t, l, r)
+    | BinEx (EQ as t, l, r)
+    | BinEx (NE as t, l, r)
+    | BinEx (GT as t, l, r)
+    | BinEx (GE as t, l, r) ->
+        begin
+            match classify_expr l, classify_expr r with
+            | OnlyConst, ConstOrParamOrVar
+            | ConstOrParam, ConstOrParamOrVar ->
+                    BinEx (symm_of_arith_rel t, r, l)
+
+            | ConstOrParamOrVar, OnlyConst
+            | ConstOrParamOrVar, ConstOrParam ->
+                    BinEx (t, l, r)
+
+            | _ -> if (expr_s l) < (expr_s r)
+                then BinEx (t, l, r)
+                else BinEx (symm_of_arith_rel t, r, l)
+        end
+
+    | BinEx (t, l, r) ->
+        BinEx (t, canonical l, canonical r)
+
+    | UnEx (t, e) -> UnEx (t, canonical e)
+
+    | _ as e -> e
+
+
 module VarMap = Map.Make (struct
- type t = var
- let compare a b = a#id - b#id
+    type t = var
+    let compare a b = a#id - b#id
 end)
 
 module StringSet = Set.Make(String)

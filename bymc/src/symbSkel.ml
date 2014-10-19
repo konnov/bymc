@@ -205,6 +205,175 @@ let filter_rules f sk =
     { sk with Sk.rules = new_rules; Sk.nrules = List.length new_rules }
 
 
+(* auxillary functions to optimize guards *)
+module I = struct
+    module IGraph = Graph.Pack.Digraph
+
+    type interval_t =
+        | IntLR of Spin.token SpinIr.expr * Spin.token SpinIr.expr * Spin.token SpinIr.expr
+        | IntL of Spin.token SpinIr.expr * Spin.token SpinIr.expr
+        | IntR of Spin.token SpinIr.expr * Spin.token SpinIr.expr
+        | SmthElse of Spin.token SpinIr.expr
+
+
+    let is_smth_else = function
+        | SmthElse _ -> true
+        | _ -> false
+
+
+    let arg_of_inter = function
+        | IntLR (a, _, _) -> a
+        | IntL (a, _)     -> a
+        | IntR (a, _)     -> a
+        | SmthElse a    -> a
+
+
+    let inter_of_expr = function
+        | BinEx (AND, BinEx (GE, l1, r1), BinEx (LT, l2, r2)) as e ->
+            if l1 = l2
+            then IntLR (l1, r1, r2)
+            else SmthElse e
+
+        | BinEx (AND, BinEx (LT, l2, r2), BinEx (GE, l1, r1)) as e ->
+            if l1 = l2
+            then IntLR (l1, r1, r2)
+            else SmthElse e
+
+        | BinEx (GE, l, r) ->
+            IntL (l, r)
+
+        | BinEx (LT, l, r) ->
+            IntR (l, r)
+
+        | _ as e ->
+            SmthElse e
+
+
+    let expr_of_inter = function
+        | IntLR (a, l, r) -> BinEx (AND, BinEx (GE, a, l), BinEx (LT, a, r))
+
+        | IntL (a, l) -> BinEx (GE, a, l)
+
+        | IntR (a, r) -> BinEx (LT, a, r)
+
+        | SmthElse e -> e
+
+    let glue_intervals arg ints =
+        let tab = BatHashtbl.create (List.length ints) in
+        let rev = BatHashtbl.create (List.length ints) in
+        let ig = IGraph.create () in
+        let infminus, infplus = IGraph.V.create 0, IGraph.V.create 1 in
+        let add_expr e =
+            let e_s = SpinIrImp.expr_s e in
+            try BatHashtbl.find rev e_s
+            with Not_found ->
+                let id = 2 + (BatHashtbl.length rev) in
+                let vertex = IGraph.V.create id in
+                BatHashtbl.add rev e_s vertex;
+                BatHashtbl.add tab id e;
+                vertex
+        in
+        let add_interval = function
+            | IntL (_, l) ->
+                    let v = add_expr l in
+                    IGraph.add_edge_e ig (IGraph.E.create v 0 infplus)
+
+            | IntR (_, r) ->
+                    let v = add_expr r in
+                    IGraph.add_edge_e ig (IGraph.E.create infminus 0 v)
+
+            | IntLR (_, l, r) ->
+                    let vl = add_expr l in
+                    let vr = add_expr r in
+                    assert (vl <> vr); (* no self-loops *)
+                    IGraph.add_edge_e ig (IGraph.E.create vl 0 vr)
+
+            | SmthElse _ -> raise (Failure "cannot happen")
+        in
+        List.iter add_interval ints;
+        let each_vertex v =
+            if (IGraph.V.label v) > 1 (* not infinity *)
+            then begin
+                let each_pred_e pe =
+                    let each_succ_e se =
+                        let src = IGraph.E.src pe in
+                        let dst = IGraph.E.dst se in
+                        (* XXX: side-effects??? *)
+                        if not (IGraph.mem_edge ig src dst)
+                        then IGraph.add_edge_e ig (IGraph.E.create src 0 dst);
+                        IGraph.remove_edge_e ig se
+                    in
+                    if (IGraph.out_degree ig v) > 0
+                    then begin
+                        IGraph.iter_succ_e each_succ_e ig v;
+                        IGraph.remove_edge_e ig pe;
+                    end
+                in
+                IGraph.iter_pred_e each_pred_e ig v
+            end
+        in
+        (*IGraph.dot_output ig ("before.dot");*)
+        IGraph.iter_vertex each_vertex ig;
+        (*IGraph.dot_output ig ("after.dot");*)
+
+        let fold_edge src dst ints =
+            if src = infminus
+            then (IntR (arg, BatHashtbl.find tab (IGraph.V.label dst))) :: ints
+            else if dst = infplus
+            then IntL (arg, BatHashtbl.find tab (IGraph.V.label src)) :: ints
+            else IntLR (arg,
+                BatHashtbl.find tab (IGraph.V.label src),
+                BatHashtbl.find tab (IGraph.V.label dst)) :: ints
+        in
+        IGraph.fold_edges fold_edge ig []
+
+
+    let try_glue conjuncts =
+        let smth_else, ints =
+            List.partition is_smth_else (List.map inter_of_expr conjuncts) in
+        let tab = BatHashtbl.create (List.length ints) in
+        let add inter =
+            let arg = arg_of_inter inter in
+            let before = 
+                try BatHashtbl.find tab arg
+                with Not_found -> []
+            in
+            BatHashtbl.replace tab arg (inter :: before)
+        in
+        List.iter add ints;
+        let map_each_arg result arg =
+            let arg_ints = BatHashtbl.find tab arg in
+            result @ (glue_intervals arg arg_ints)
+        in
+        let glued = BatEnum.fold map_each_arg [] (BatHashtbl.keys tab) in
+        List.map expr_of_inter (glued @ smth_else)
+end
+
+
+(* try to optimize the guards by gluing the intervals *)
+let optimize_guards sk =
+    let rec collect_conjuncts acc = function
+        | BinEx (OR, l, r) ->
+                (collect_conjuncts (collect_conjuncts acc r) l)
+
+        | e -> e :: acc
+    in
+    let rec opt = function
+        | BinEx (AND, l, r) ->
+                BinEx (AND, opt l, opt r)
+        | UnEx (NEG, l)     ->
+                UnEx (NEG, opt l)
+        | BinEx (OR, l, r) as e ->
+                let res = list_to_binex OR (I.try_glue (collect_conjuncts [] e))
+                in
+                res
+
+        | e -> e
+    in
+    let map_rule r = { r with Sk.guard = opt (Simplif.canonical r.Sk.guard) } in
+    { sk with Sk.rules = List.map map_rule sk.Sk.rules }
+
+
 let fuse skels new_name = 
     let first = match skels with
         | hd :: _ -> hd

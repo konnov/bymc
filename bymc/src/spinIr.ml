@@ -484,6 +484,7 @@ type 't stmt =
     | Havoc of int * var (* forget about the current value of the variable *)
     | Print of int * string * 't expr list
 
+
 let stmt_id = function
       Skip id -> id
     | Expr (id, _) -> id
@@ -499,6 +500,7 @@ let stmt_id = function
     | Assume (id, _) -> id
     | Havoc (id, _) -> id
     | Print (id, _, _) -> id
+
 
 let is_expr = function
     | Expr (_, _) -> true

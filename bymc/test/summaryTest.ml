@@ -76,7 +76,7 @@ let test_summary _ =
     let rt, prog, proc = parse text in
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     (* Sk.print stdout sk; *)
     assert_equal 7 sk.Sk.nlocs
         ~msg:(sprintf "expected 7 locations, found %d" sk.Sk.nlocs);
@@ -118,7 +118,7 @@ let test_summary_unfold _ =
         ~msg:(sprintf "expected range [0, 2), found [%d, %d)" l r);
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     (* Sk.print stdout sk; *)
     assert_equal 4 sk.Sk.nlocs
         ~msg:(sprintf "expected 4 locations, found %d" sk.Sk.nlocs);
@@ -151,7 +151,7 @@ let test_summary_valid _ =
     let rt, prog, proc = parse text in
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     (*
     Sk.print stdout sk;
     *)
@@ -208,7 +208,7 @@ let test_summary_reachable _ =
     let rt, prog, proc = parse text in
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     let sk = SymbSkel.keep_reachable sk in
     (*Sk.print stdout sk;*)
     assert_equal 2 sk.Sk.nlocs
@@ -253,7 +253,7 @@ let test_summary_inc _ =
     let nsnt = (proc#lookup "nsnt")#as_var in
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     let sk = SymbSkel.keep_reachable sk in
     (*Sk.print stdout sk;*)
     assert_equal 2 sk.Sk.nlocs
@@ -301,7 +301,7 @@ let test_summary_keep _ =
     let nsnt = (proc#lookup "nsnt")#as_var in
 
     (* the show starts here *)
-    let sk, _ = Summary.summarize rt prog proc in
+    let sk = Summary.summarize rt prog proc in
     let sk = SymbSkel.keep_reachable sk in
     (*Sk.print stdout sk;*)
     assert_equal 2 sk.Sk.nlocs

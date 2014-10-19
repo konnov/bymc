@@ -29,6 +29,25 @@ let str_of_vars vs = List.map (fun v -> v#get_name) vs |> str_join ", "
 let str_of_exprs es = List.map (fun e -> expr_s e) es |> str_join ", "
 
 
+let prepare () =
+    let opts = Options.empty in
+    let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
+    let tt = new data_type_tab in
+    let pc = new_var "pc" in
+    tt#set_type pc (mk_int_range 0 3);
+    let x, y, n, t = new_var "x", new_var "y", new_var "n", new_var "t" in
+    n#set_symbolic; t#set_symbolic;
+    List.iter
+        (fun v -> tt#set_type v (new data_type SpinTypes.TUNSIGNED))
+        [x; y; n; t];
+    let add_loc map i =
+        let loc = new_var (sprintf "loc%d" i) in
+        IntMap.add i loc map
+    in
+    let locFoo_map = List.fold_left add_loc IntMap.empty (range 0 3) in
+    tt, locFoo_map, pc, x, y, n, t
+
+
 let prepare2 () =
     let opts = Options.empty in
     let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
@@ -174,8 +193,60 @@ let test_fuse_several _ =
     assert_init "(locX_1 == 0)" 4
 
 
+let test_optimize_guards _ =
+    let tt, locFoo_map, pc, x, y, n, t = prepare () in
+    let mk_eq loc_map loc_no e =
+        BinEx (EQ, Var (IntMap.find loc_no loc_map), e)
+    in
+    let interval v a b =
+        BinEx (AND, BinEx (GE, Var v, a), BinEx (LT, Var v, b))
+    in
+    let g1 = list_to_binex OR [
+        interval x (IntConst 1) (Var t);
+        interval x (Var t) (BinEx (MULT, IntConst 2, Var t));
+        interval x (BinEx (MULT, IntConst 2, Var t)) (BinEx (MINUS, Var n, Var t));
+    ] in
+    let g2 = list_to_binex OR [
+        interval y (IntConst 1) (Var t);
+        interval y (Var t) (BinEx (MULT, IntConst 3, Var t));
+        interval y (BinEx (MULT, IntConst 3, Var t)) (Var n);
+    ] in
+    let g3 = BinEx (OR, g1, g2) in
+    let skFoo = {
+        Sk.name = "foo";
+        Sk.nlocs = 3; Sk.locs = [ [0]; [1]; [2] ];
+        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.nrules = 2;
+        Sk.rules = [
+            mk_rule 0 1 g1 [ keep x; keep y ];
+            mk_rule 1 2 g3 [ x = x + 1; keep y ];
+        ];
+        Sk.inits = [
+            BinEx (EQ, Var x, IntConst 0);
+            mk_eq locFoo_map 0 (BinEx (MINUS, Var n, Var t));
+            mk_eq locFoo_map 1 (IntConst 0);
+        ];
+        Sk.loc_vars = locFoo_map;
+    }
+    in
+    let sk = SymbSkel.optimize_guards skFoo in
+    let r0 = List.nth sk.Sk.rules 0 in
+    let r1 = List.nth sk.Sk.rules 1 in
+    let exp0 = (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))) in
+    assert_equal exp0 r0.Sk.guard
+        ~msg:(sprintf "expected optimized guard %s, found %s"
+            (expr_s exp0) (expr_s r0.Sk.guard));
+    let exp1 = (BinEx (OR,
+            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))),
+            (interval y (IntConst 1) (Var n)))) in
+    assert_equal exp1 r1.Sk.guard
+        ~msg:(sprintf "expected optimized guard %s, found %s"
+                (expr_s r0.Sk.guard) (expr_s r1.Sk.guard))
+
+
 let suite = "symbSkel-suite" >:::
     [
-        "test_fuse_several" >:: test_fuse_several
+        "test_fuse_several" >:: test_fuse_several;
+        "test_optimize_guards" >:: test_optimize_guards;
     ]
 
