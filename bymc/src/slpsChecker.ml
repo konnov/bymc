@@ -225,7 +225,7 @@ let display_depth depth is_last =
     else logtm INFO (String.make (1 + depth) '/')
 
 
-let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
+let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
     let each_rule is_milestone (frame, fs) rule_no =
         let rule = List.nth sk.Sk.rules rule_no in
         let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -250,14 +250,18 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name tree =
         F.assert_frame rt#solver tt frame new_frame [move rule.Sk.src Spin.MINUS];
         F.assert_frame rt#solver tt frame new_frame [move rule.Sk.dst Spin.PLUS];
 
+        let rule_guard =
+            if is_milestone
+            then rule.Sk.guard
+            (* milestone conditions are known a priori in a segment *)
+            else PorBounds.D.non_milestones deps rule_no
+        in
         let guard = (* if acceleration factor > 0 then guard *)
-            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule.Sk.guard) in
-        if is_milestone
-        then
+            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
         begin
-            match rule.Sk.guard with
-            | IntConst 1 -> ()
-            | _ -> F.assert_frame rt#solver tt frame new_frame [guard]
+            match rule_guard with
+                | IntConst 1 -> ()
+                | _ -> F.assert_frame rt#solver tt frame new_frame [guard]
         end;
 
         let accelerated =
@@ -351,7 +355,7 @@ let extract_spec type_tab s =
         raise (Ltl.Ltl_error m)
 
 
-let is_error_tree rt tt sk on_leaf form_name ltl_form tree =
+let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     let init_form, bad_form = extract_spec tt ltl_form in
     rt#solver#push_ctx;
     rt#solver#set_need_model true;
@@ -366,7 +370,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form tree =
     if not (is_c_true init_form)
     then F.assert_frame rt#solver ntt initf initf [init_form];
 
-    let err = check_tree rt tt sk bad_form on_leaf initf form_name tree in
+    let err = check_tree rt tt sk bad_form on_leaf initf form_name deps tree in
     rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     err

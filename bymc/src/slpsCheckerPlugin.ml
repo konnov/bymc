@@ -62,7 +62,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
             BatEnum.iter set_type loc_vars;
 
-            let tree = PorBounds.make_schema_tree rt#solver sk in
+            let tree, deps = PorBounds.make_schema_tree rt#solver sk in
 
             let nleafs = PorBounds.tree_leafs_count tree in
             let num = ref 0 in (* XXX *)
@@ -73,7 +73,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             in
 
             let check_tree name form tree =
-                SlpsChecker.is_error_tree rt ntt sk on_leaf name form tree
+                SlpsChecker.is_error_tree rt ntt sk on_leaf name form deps tree
             in
             log INFO "  > Running SlpsChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);

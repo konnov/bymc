@@ -157,6 +157,19 @@ module D = struct
     }
 
     let conds c = c.uconds @ c.lconds
+
+    (* leave only those conditions that are not milestones *)
+    let non_milestones deps rule_no =
+        let pre = IntMap.find rule_no deps.rule_pre in
+        let cond = PSet.diff (PSet.diff pre deps.umask) deps.lmask in
+        let to_list id exp l =
+            if PSet.mem id cond
+            then exp :: l
+            else l
+        in
+        let exp = list_to_binex AND (PSetEltMap.fold to_list deps.cond_map [])
+        in
+        if SpinIr.not_nop exp then exp else IntConst 1
 end
 
 type path_elem_t =
@@ -804,5 +817,5 @@ let make_schema_tree solver sk =
     print_tree out tree;
     close_out out;
 
-    tree
+    tree, deps
 

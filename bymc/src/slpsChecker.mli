@@ -5,5 +5,6 @@ val is_error_tree:
         -> (int -> unit)
         -> string
         -> Spin.token SpinIr.expr
+        -> PorBounds.D.deps_t
         -> PorBounds.T.schema_tree_t
         -> bool
