@@ -765,19 +765,21 @@ let compute_slps_tree sk deps =
             if (PSet.mem cond_id uset) || (PSet.mem cond_id lset)
             then accum (* already covered *)
             else (* create a branch *)
-                let all_guarded_with = 
-                    List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
-                in
                 let new_uset, new_lset =
                     if lockt = Unlock
                     then (PSet.union uset (get_cond_impls deps cond_id lockt)), lset
                     else uset, (PSet.union lset (get_cond_impls deps cond_id lockt))
                 in
+                (* NOTE: we use new uset to filter out milestones *)
+                let all_guarded_with_and_enabled = 
+                    List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
+                        |> List.filter (is_rule_unlocked deps new_uset lset)
+                in
                 let subtree = build_tree new_uset new_lset in
                 let branch = 
                     {
                         T.cond_after = (name, cond_id, expr, lockt);
-                        T.cond_rules = all_guarded_with;
+                        T.cond_rules = all_guarded_with_and_enabled;
                         subtree
                     }
                 in
