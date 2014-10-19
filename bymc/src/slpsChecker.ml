@@ -251,10 +251,12 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
         F.assert_frame rt#solver tt frame new_frame [move rule.Sk.dst Spin.PLUS];
 
         let rule_guard =
-            if is_milestone
-            then rule.Sk.guard
-            (* milestone conditions are known a priori in a segment *)
-            else PorBounds.D.non_milestones deps rule_no
+            (* Milestone conditions are either:
+                known a priori in a segment,
+                or checked once for a milestone.
+              Thus, check only non-milestone conditions
+             *)
+            PorBounds.D.non_milestones deps rule_no
         in
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
@@ -332,6 +334,11 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment (sprintf "push@%d: check_branch: potential milestones at frame %d" depth frame.F.no);
+
+            let _, _, milestone_expr, _ = br.T.cond_after in
+            (* assert that the milestone is unlocked *)
+            F.assert_frame rt#solver tt frame frame [milestone_expr];
+            (* and this effects into firing of the following rules *)
             let endf, new_frames =
                 List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
             let constr = BinEx (Spin.EQ, IntConst 1, sum new_frames) in

@@ -11,15 +11,15 @@ open SpinIr
 open SymbSkel
 
 (* overload operators for convenience *)
-let (>=) l r = BinEx (GE, Var l, Var r)
+let (>=.) l r = BinEx (GE, Var l, Var r)
 
-let (<) l r = BinEx (LT, Var l, Var r)
+let (<.) l r = BinEx (LT, Var l, Var r)
 
-let (=) l e = BinEx (EQ, UnEx (NEXT, Var l), e)
+let (=.) l e = BinEx (EQ, UnEx (NEXT, Var l), e)
 
 let keep x = BinEx (EQ, UnEx (NEXT, Var x), Var x)
 
-let (+) v i = BinEx (PLUS, Var v, IntConst i)
+let (+.) v i = BinEx (PLUS, Var v, IntConst i)
 
 let tru = IntConst 1
 
@@ -95,9 +95,9 @@ let test_make_schema_tree_unlocking _ =
         Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
         Sk.nrules = 4;
         Sk.rules = [
-            mk_rule 0 1 (x >= t) [ keep x; y = y + 1 ];
-            mk_rule 0 1 tru     [ keep y; x = x + 1 ];
-            mk_rule 1 2 (y >= t) [ keep x; keep y ];
+            mk_rule 0 1 (x >=. t) [ keep x; y =. y +. 1 ];
+            mk_rule 0 1 tru     [ keep y; x =. x +. 1 ];
+            mk_rule 1 2 (y >=. t) [ keep x; keep y ];
             mk_rule 2 3 tru     [ keep x; keep y ];
         ];
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
@@ -161,9 +161,9 @@ let test_make_schema_tree_locking _ =
         Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
         Sk.nrules = 4;
         Sk.rules = [
-            mk_rule 0 1 (x < t) [ keep x; y = y + 1 ];
-            mk_rule 0 1 tru     [ keep y; x = x + 1 ];
-            mk_rule 1 2 (y >= t) [ keep x; keep y ];
+            mk_rule 0 1 (x <. t) [ keep x; y =. y +. 1 ];
+            mk_rule 0 1 tru     [ keep y; x =. x +. 1 ];
+            mk_rule 1 2 (y >=. t) [ keep x; keep y ];
             mk_rule 2 3 tru     [ keep x; keep y ];
         ];
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
@@ -226,11 +226,11 @@ let test_make_schema_tree_unlocking_no_redundant_milestones _ =
         Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
         Sk.nrules = 5;
         Sk.rules = [
-            mk_rule 0 1 (x >= t)    [ keep x; y = y + 1 ];
-            mk_rule 0 1 tru         [ keep y; x = x + 1 ];
-            mk_rule 1 2 (y >= t)    [ keep x; keep y ];
-            mk_rule 1 2 (x >= t)    [ keep x; y = y + 1 ];
-            mk_rule 2 3 (BinEx (AND, x >= t, y >= t)) [ keep x; keep y ];
+            mk_rule 0 1 (x >=. t)    [ keep x; y =. y +. 1 ];
+            mk_rule 0 1 tru         [ keep y; x =. x +. 1 ];
+            mk_rule 1 2 (y >=. t)    [ keep x; keep y ];
+            mk_rule 1 2 (x >=. t)    [ keep x; y =. y +. 1 ];
+            mk_rule 2 3 (BinEx (AND, x >=. t, y >=. t)) [ keep x; keep y ];
         ];
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
             mk_eq 2 (IntConst 0); mk_eq 3 (IntConst 0) ];
