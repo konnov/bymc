@@ -14,5 +14,5 @@ let _ =
         PorBoundsTest.suite;
     ]
     in
-    run_test_tt_main all
+    run_test_tt ~verbose:false all
 

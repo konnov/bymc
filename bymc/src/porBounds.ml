@@ -770,7 +770,9 @@ let compute_slps_tree sk deps =
                     then (PSet.union uset (get_cond_impls deps cond_id lockt)), lset
                     else uset, (PSet.union lset (get_cond_impls deps cond_id lockt))
                 in
-                (* NOTE: we use new uset to filter out milestones *)
+                (* NOTE: we use new uset and old lset to filter out milestones,
+                    as the milestone is expected to be unlocked
+                *)
                 let all_guarded_with_and_enabled = 
                     List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
                         |> List.filter (is_rule_unlocked deps new_uset lset)

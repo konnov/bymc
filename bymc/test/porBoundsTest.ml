@@ -105,7 +105,7 @@ let test_make_schema_tree_unlocking _ =
         Sk.loc_vars = loc_map;
     }
     in
-    let tree = PorBounds.make_schema_tree !solver sk in
+    let tree, _ = PorBounds.make_schema_tree !solver sk in
 
     (* the show starts here *)
     (* Sk.print stdout sk; *)
@@ -171,7 +171,7 @@ let test_make_schema_tree_locking _ =
         Sk.loc_vars = loc_map;
     }
     in
-    let tree = PorBounds.make_schema_tree !solver sk in
+    let tree, _ = PorBounds.make_schema_tree !solver sk in
 
     (* the show starts here *)
     (* Sk.print stdout sk; *)
@@ -200,10 +200,110 @@ let test_make_schema_tree_locking _ =
                 (sprintf "expected 2 segments and one milestone, found the tree as shown above")
 
 
+let test_make_schema_tree_unlocking_no_redundant_milestones _ =
+    let rt, tt, loc_map, pc, x, y, n, t = prepare () in
+    let mk_eq loc_no e =
+        BinEx (EQ, Var (IntMap.find loc_no loc_map), e)
+    in
+    rt#solver#append_var_def n (tt#get_type n);
+    rt#solver#append_var_def t (tt#get_type t);
+    ignore (rt#solver#append_expr
+        (BinEx (GT, Var n, BinEx (MULT, IntConst 2, Var t))));
+
+    (*
+
+    The control flow is as follows:
+
+        r0 = 0 -> 1 ? x > t: x = x; y' = y + 1;;
+        r1 = 0 -> 1 ? true:  x' = x + 1; y' = y;
+        r2 = 1 -> 2 ? y > t: x' = x + 1; y' = y;
+        r3 = 2 -> 3 ? true:  x' = x + 1; y' = y;
+
+    *)
+    let sk = {
+        Sk.name = "foo";
+        Sk.nlocs = 4; Sk.locs = [ [0]; [1]; [2]; [3] ];
+        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.nrules = 5;
+        Sk.rules = [
+            mk_rule 0 1 (x >= t)    [ keep x; y = y + 1 ];
+            mk_rule 0 1 tru         [ keep y; x = x + 1 ];
+            mk_rule 1 2 (y >= t)    [ keep x; keep y ];
+            mk_rule 1 2 (x >= t)    [ keep x; y = y + 1 ];
+            mk_rule 2 3 (BinEx (AND, x >= t, y >= t)) [ keep x; keep y ];
+        ];
+        Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
+            mk_eq 2 (IntConst 0); mk_eq 3 (IntConst 0) ];
+        Sk.loc_vars = loc_map;
+    }
+    in
+    let tree, _ = PorBounds.make_schema_tree !solver sk in
+
+    (* the show starts here *)
+    (* Sk.print stdout sk; *)
+
+    let assert_segment seg_no expected actual =
+        assert_equal expected actual
+            ~msg:(sprintf "expected segment %d to be [%s], found [%s]"
+                seg_no (str_of_ints expected) (str_of_ints actual))
+    in
+    let assert_milestone seg_no expected actual =
+        assert_equal expected actual
+            ~msg:(sprintf "expected milestone %d to be [%s], found [%s]"
+                seg_no (str_of_ints expected) (str_of_ints actual))
+    in
+    match tree with
+        | T.Node (seg1,
+            [   (* branch 1 *)
+                { T.cond_after = _, _, cond1, _; T.cond_rules = crules1;
+                T.subtree = T.Node (seg2,
+                    [{ T.cond_after = _, _, cond2, _; T.cond_rules = crules2;
+                       T.subtree = T.Leaf seg3}])
+                };
+                (* branch 2 *)
+                { T.cond_after = _, _, cond3, _; T.cond_rules = crules3;
+                T.subtree = T.Node (seg4,
+                    [{ T.cond_after = _, _, cond4, _; T.cond_rules = crules4;
+                       T.subtree = T.Leaf seg5}])
+                };
+            ]) ->
+
+            let seg1, seg2, seg3, seg4, seg5 =
+                if ("(y >= t)" <> (SpinIrImp.expr_s cond1))
+                then seg1, seg2, seg3, seg4, seg5
+                else seg1, seg4, seg5, seg2, seg3
+            in
+            let crules1, crules2, crules3, crules4 =
+                if ("(y >= t)" <> (SpinIrImp.expr_s cond1))
+                then crules1, crules2, crules3, crules4
+                else crules3, crules4, crules1, crules2
+            in
+
+            assert_segment 1 [1] seg1;
+            assert_segment 2 [0; 1; 3] seg2;
+            assert_segment 3 [0; 1; 3; 2; 4] seg3;
+            assert_milestone 1 [0; 3] crules1;
+            assert_milestone 2 [2; 4] crules2;
+
+            assert_segment 4 [1; 2] seg4;
+            assert_segment 5 [0; 1; 3; 2; 4] seg5;
+            assert_milestone 3 [2] crules3;
+            assert_milestone 4 [0; 3; 4] crules4;
+
+        | _ ->
+            print_tree stdout tree;
+            assert_failure 
+                (sprintf "expected 3 segments and one milestone, found the tree as shown above")
+
+
+
 let suite = "porBounds-suite" >:::
     [
         "test_make_schema_tree_unlocking"
           >:: (bracket setup test_make_schema_tree_unlocking teardown);
+        "test_make_schema_tree_unlocking_no_redundant_milestones"
+          >:: (bracket setup
+            test_make_schema_tree_unlocking_no_redundant_milestones teardown);
         "test_make_schema_tree_locking"
           >:: (bracket setup test_make_schema_tree_locking shutdown); (* clean the room *)
     ]
