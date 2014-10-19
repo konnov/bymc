@@ -57,6 +57,17 @@ class slps_checker_plugin_t (plugin_name: string) =
                 | skels -> SymbSkel.fuse skels "Fuse"
             in
             Sk.to_file "fuse.sk" sk;
+            if "bounds" <> rt#caches#options.Options.spec
+            then self#check rt sprog sk
+            else begin (* compute the bounds using the summary *)
+                let dom = rt#caches#analysis#get_pia_dom in
+                let dom_size = dom#length in
+                PorBounds.compute_diam rt#solver dom_size sk;
+            end;
+            sprog
+
+
+        method check rt sprog sk =
             let loc_vars = IntMap.values sk.Sk.loc_vars in
             let ntt = (Program.get_type_tab sprog)#copy in
             let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
@@ -89,9 +100,9 @@ class slps_checker_plugin_t (plugin_name: string) =
                 in
                 log INFO msg
             in
-            let specs = get_proper_specs rt#caches#options sprog skels in
+            let specs = get_proper_specs rt#caches#options sprog [sk] in
             StrMap.iter each_form specs;
-            sprog
+
 
         method extract_proc rt prog proc =
             logtm INFO ("  > Computing the summary of " ^ proc#get_name);
