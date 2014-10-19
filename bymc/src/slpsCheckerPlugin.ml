@@ -63,6 +63,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             BatEnum.iter set_type loc_vars;
 
             let tree, deps = PorBounds.make_schema_tree rt#solver sk in
+            PorBounds.D.to_dot "flow.dot" sk deps;
 
             let nleafs = PorBounds.tree_leafs_count tree in
             let num = ref 0 in (* XXX *)

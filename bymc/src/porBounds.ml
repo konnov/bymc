@@ -170,6 +170,52 @@ module D = struct
         let exp = list_to_binex AND (PSetEltMap.fold to_list deps.cond_map [])
         in
         if SpinIr.not_nop exp then exp else IntConst 1
+
+    (* write the control flow graph and decorate it with milestones *)
+    let to_dot filename sk deps =
+        let palette = [
+            (200, 0, 0); (0, 200, 0);  (0, 0, 200);
+            (90, 0, 0); (0, 90, 0);  (0, 0, 90);
+            (140, 0, 0); (0, 140, 0); (0, 0, 140)
+        ]
+        in
+        let each_loc out loc_no loc =
+            fprintf out "  l%d[label=\"%s\"];\n" loc_no (Sk.locname loc)
+        in
+        let each_rule out rule_no rule =
+            let pre = IntMap.find rule_no deps.rule_pre in
+            let plus (a, b, c) (d, e, f) = (a + d, b + e, c + f) in
+            let trunc (a, b, c) thr = (min a thr, min b thr, min c thr) in
+            let sum_conds w no (_, id, _, _) =
+                let base =
+                    if no < List.length palette
+                    then List.nth palette no
+                    else (255, 0, 0) (* the default color is read *)
+                in
+                if PSet.mem id pre
+                then trunc (plus base w) 192
+                else w
+            in
+            let nuconds = List.length deps.uconds in
+            let color =
+                List.fold_left2 sum_conds (0, 0, 0) (range 0 nuconds) deps.uconds in
+            let nlconds = List.length deps.lconds in
+            let color =
+                List.fold_left2 sum_conds color
+                    (range nuconds (nuconds + nlconds)) deps.lconds in
+            (* make the edges w/o milestone barely visible *)
+            let r, g, b =
+                if color = (0, 0, 0) then (228, 228, 228) else color in
+            fprintf out "  l%d -> l%d[color=\"#%02x%02x%02x\"];\n"
+                rule.Sk.src rule.Sk.dst r g b
+        in
+        let out = open_out filename in
+        fprintf out "digraph flow {\n";
+        List.iter2 (each_loc out) (range 0 sk.Sk.nlocs) sk.Sk.locs;
+        List.iter2 (each_rule out) (range 0 sk.Sk.nrules) sk.Sk.rules;
+        fprintf out "}\n";
+        close_out out
+
 end
 
 type path_elem_t =
@@ -266,8 +312,8 @@ let make_loc_reach sk =
     (*
         (* dump only the small graphs *)
     logtm INFO "Writing the flow graphs...";
-    MGraph.dot_output g (sprintf "reach-%s.dot" sk.Sk.name);
-    MGraph.dot_output gplus (sprintf "reachplus-%s.dot" sk.Sk.name);
+    IGraph.dot_output g (sprintf "reach-%s.dot" sk.Sk.name);
+    IGraph.dot_output gplus (sprintf "reachplus-%s.dot" sk.Sk.name);
     *)
     gplus
 
