@@ -82,7 +82,19 @@ class virtual smt_solver:
             that were provided by the solver with append_expr *)
         method virtual get_unsat_cores: int list
 
-        (** indicate, whether debug information is needed *)
+        (** indicate, whether to log all output to a text file (default: no) *)
+        method virtual set_enable_log: bool -> unit
+
+        method virtual get_enable_log: bool
+
+        (** indicate, whether to wait for response from the solver for each
+            expression (default: no)
+         *)
+        method virtual set_enable_lockstep: bool -> unit
+
+        method virtual get_enable_lockstep: bool
+
+        (** indicate, whether debug information is needed (default: no) *)
         method virtual set_debug: bool -> unit
     end
 
@@ -149,6 +161,19 @@ class yices_smt: string ->
         (** get an unsat core, which is the list of assertion ids
             that were provided by the solver with append_expr *)
         method get_unsat_cores: int list
+
+        (** indicate, whether to log all output to a text file (default: no) *)
+        method set_enable_log: bool -> unit
+
+        method get_enable_log: bool
+
+        (** Indicate, whether to wait for response from the solver for each
+            expression. It does not have any effect with yices, as it always
+            has to be synchronized in a lockstep.
+         *)
+        method set_enable_lockstep: bool -> unit
+
+        method get_enable_lockstep: bool
 
         (** indicate, whether debug information is needed *)
         method set_debug: bool -> unit
@@ -218,6 +243,18 @@ class lib2_smt: string -> string array ->
         (** get an unsat core, which is the list of assertion ids
             that were provided by the solver with append_expr *)
         method get_unsat_cores: int list
+
+        (** indicate, whether to log all output to a text file (default: no) *)
+        method set_enable_log: bool -> unit
+
+        method get_enable_log: bool
+
+        (** indicate, whether to wait for response from the solver for each
+            expression (default: no)
+         *)
+        method set_enable_lockstep: bool -> unit
+
+        method get_enable_lockstep: bool
 
         (** indicate, whether debug information is needed *)
         method set_debug: bool -> unit

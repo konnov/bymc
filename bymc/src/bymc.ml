@@ -32,7 +32,12 @@ let run_solver opts =
         | SmtLib2 args ->
                 let prog = args.(0) in
                 let args = Array.sub args 1 ((Array.length args) - 1) in
-                new Smt.lib2_smt prog args    
+                let solver = new Smt.lib2_smt prog args in
+                if Some "1" = (Options.get_plugin_opt opts "smt2.log")
+                then solver#set_enable_log true;
+                if Some "1" = (Options.get_plugin_opt opts "smt2.lockstep")
+                then solver#set_enable_lockstep true;
+                solver
 
 
 let main () =

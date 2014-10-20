@@ -65,6 +65,7 @@ module Q = struct
 end
 
 
+(* An abstract interface to an SMT solver *)
 class virtual smt_solver =
     object
         (** fork a new process that executes 'yices' *)
@@ -121,7 +122,19 @@ class virtual smt_solver =
             that were provided by the solver with append_expr *)
         method virtual get_unsat_cores: int list
 
-        (** indicate, whether debug information is needed *)
+        (** indicate, whether to log all output to a text file (default: no) *)
+        method virtual set_enable_log: bool -> unit
+
+        method virtual get_enable_log: bool
+
+        (** indicate, whether to wait for response from the solver for each
+            expression (default: no)
+         *)
+        method virtual set_enable_lockstep: bool -> unit
+
+        method virtual get_enable_lockstep: bool
+
+        (** indicate, whether debug information is needed (default: no) *)
         method virtual set_debug: bool -> unit
     end
 
@@ -353,6 +366,7 @@ class yices_smt (solver_cmd: string) =
         val mutable clog = stdout
         val mutable m_pipe_cmd = PipeCmd.null ()
         val mutable debug = false
+        val mutable m_enable_log = false
         val mutable m_need_evidence = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
@@ -365,6 +379,11 @@ class yices_smt (solver_cmd: string) =
             assert(PipeCmd.is_null m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.create solver_cmd [||] "yices.err";
             clog <- open_out "yices.log";
+            if not m_enable_log
+            then begin
+                fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
+                flush clog
+            end;
             ignore (self#check);
             self#append "(set-verbosity! 2)\n" (* to track assert+ *)
         
@@ -483,6 +502,14 @@ class yices_smt (solver_cmd: string) =
 
         method set_collect_asserts b = collect_asserts <- b
 
+        method set_enable_lockstep (_: bool) = ()
+
+        method get_enable_lockstep = true
+
+        method set_enable_log b = m_enable_log <- b
+
+        method get_enable_log = m_enable_log
+
         method get_unsat_cores =
             (* collect unsatisfiable cores *)
             let re = Str.regexp ".*unsat core ids: \\([ 0-9]+\\).*" in
@@ -510,6 +537,7 @@ class yices_smt (solver_cmd: string) =
             | "sat" -> true
             | "ok" -> true
             | "unsat" -> false
+            | "unsupported" -> raise (Smt_error "unsupported expression")
             | _ -> if ignore_errors
                 then false
                 else raise (Smt_error (sprintf "yices: %s" l))
@@ -517,7 +545,10 @@ class yices_smt (solver_cmd: string) =
         method private read_line =
             assert (not (PipeCmd.is_null m_pipe_cmd));
             let out = PipeCmd.readline m_pipe_cmd in
-            fprintf clog ";; READ: %s\n" out; flush clog;
+            if m_enable_log
+            then begin
+                fprintf clog ";; READ: %s\n" out; flush clog;
+            end;
             trace Trc.smt (fun _ -> sprintf "YICES: ^^^%s$$$\n" out);
             out
 
@@ -525,7 +556,10 @@ class yices_smt (solver_cmd: string) =
             assert (not (PipeCmd.is_null m_pipe_cmd));
             if debug then printf "%s\n" cmd;
             self#write_line (sprintf "%s" cmd);
-            fprintf clog "%s\n" cmd; flush clog
+            if m_enable_log
+            then begin
+                fprintf clog "%s\n" cmd; flush clog
+            end
 
         method private append_assert s =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -548,6 +582,9 @@ class yices_smt (solver_cmd: string) =
 (*
     An interface to a solver supporting SMTLIB2. This class invoke a solver
     and communicates with it via pipes.
+
+    Logging to a file is disabled by default. If you want to enable it,
+    pass option -O smt.log=1
 *)
 class lib2_smt solver_cmd solver_args =
     object(self)
@@ -561,6 +598,8 @@ class lib2_smt solver_cmd solver_args =
         val mutable clog = stdout
         val mutable m_pipe_cmd = PipeCmd.null ()
         val mutable debug = false
+        val mutable m_enable_log = false
+        val mutable m_enable_lockstep = false
         val mutable m_need_evidence = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
@@ -575,7 +614,15 @@ class lib2_smt solver_cmd solver_args =
             assert(PipeCmd.is_null m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.create solver_cmd solver_args "smt2.err";
             clog <- open_out "smt2.log";
-            self#append_and_sync "(set-option :print-success true)\n";
+            if not m_enable_log
+            then begin
+                fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
+                flush clog
+            end;
+            if m_enable_lockstep
+            then self#append_and_sync "(set-option :print-success true)\n"
+            else self#append_and_sync "(set-option :print-success false)\n";
+
             self#append_and_sync "(set-option :produce-unsat-cores true)\n";
             self#append_and_sync "(set-option :produce-models true)";
             (* pop removes the declarations *)
@@ -733,6 +780,14 @@ class lib2_smt solver_cmd solver_args =
 
         method set_debug flag = debug <- flag
 
+        method set_enable_lockstep b = m_enable_lockstep <- b
+
+        method get_enable_lockstep = m_enable_lockstep
+
+        method set_enable_log b = m_enable_log <- b
+
+        method get_enable_log = m_enable_log
+
         method private is_out_sat ~ignore_errors =
             let l = self#read_line in
             (*printf "%s\n" l;*)
@@ -747,7 +802,10 @@ class lib2_smt solver_cmd solver_args =
         method private read_line =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             let out = PipeCmd.readline m_pipe_cmd in
-            fprintf clog ";; READ: %s\n" out; flush clog;
+            if m_enable_log
+            then begin
+                fprintf clog ";; READ: %s\n" out; flush clog;
+            end;
             trace Trc.smt (fun _ -> sprintf "SMT2: ^^^%s$$$\n" out);
             try
                 if "(error " = (Str.string_before out 7)
@@ -758,9 +816,13 @@ class lib2_smt solver_cmd solver_args =
 
         method private append cmd =
             assert (not (PipeCmd.is_null m_pipe_cmd));
+            self#write_line cmd;
             if debug then printf "%s\n" cmd;
-            self#write_line (sprintf "%s" cmd);
-            fprintf clog "%s\n" cmd; flush clog
+            if m_enable_log
+            then begin
+                fprintf clog "%s\n" cmd;
+                flush clog
+            end
 
         method private append_and_sync cmd =
             self#append cmd;
@@ -775,14 +837,19 @@ class lib2_smt solver_cmd solver_args =
             writeline m_pipe_cmd s
 
         method private sync =
-            (* the solver can print more messages, thus, sync! *)
-            let stop = ref false in
-            while not !stop do
-                let line = self#read_line in
-                if "success" = line
-                then stop := true;
-                if "unsupported" = line
-                then raise (Failure "got unsupported")
-            done
+            (*
+             NOTE: if you want to synchronize with the solver in a lock-step
+             *)
+            if m_enable_lockstep
+            then begin
+                let stop = ref false in
+                while not !stop do
+                    let line = self#read_line in
+                    if "success" = line
+                    then stop := true;
+                    if "unsupported" = line
+                    then raise (Failure "got unsupported")
+                done
+            end
     end
 

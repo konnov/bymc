@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [0; 8; 3]
-let version_full = "ByMC-0.8.3-feature-SLPS"
+let version = [0; 8; 9]
+let version_full = "ByMC-0.8.9-feature-SLPS"
 
 let macro_prefix = "macro."
 
@@ -43,6 +43,11 @@ let empty = {
     smt = SmtYices;
     plugin_opts = StrMap.empty
 }
+
+
+let get_plugin_opt opts name =
+    try Some (StrMap.find name opts.plugin_opts)
+    with Not_found -> None
 
 
 let parse_key_values str =
