@@ -49,7 +49,7 @@ let parse_key_values str =
 
 
 let parse_plugin_opt str =
-    let re = regexp "\\([a-zA-Z0-9]+\\.[a-zA-Z0-9]+\\) *= *\\(.*\\)" in
+    let re = regexp "\\([_a-zA-Z0-9]+\\.[_a-zA-Z0-9]+\\) *= *\\(.*\\)" in
     if string_match re str 0
     then (matched_group 1 str, matched_group 2 str)
     else raise (Arg.Bad ("Syntax for plugin options: plugin.attr=val"))
