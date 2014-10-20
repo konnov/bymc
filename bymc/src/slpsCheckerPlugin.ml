@@ -77,20 +77,35 @@ class slps_checker_plugin_t (plugin_name: string) =
             PorBounds.D.to_dot "flow.dot" sk deps;
 
             let nleafs = PorBounds.tree_leafs_count tree in
-            let num = ref 0 in (* XXX *)
-            let on_leaf length =
-                num := !num + 1;
-                logtm INFO (sprintf "    checked path schema: %4d length: %4d progress: %2d%%"
-                !num length (!num * 100 / nleafs))
+            let npaths, minlen, maxlen, totallen =
+                    ref 0, ref max_int, ref 0, ref 0 in
+            let reset_stat () =
+                npaths := 0; minlen := 0; maxlen := 0; totallen := 0
+            in
+            let update_stat length =
+                npaths := !npaths + 1;
+                minlen := min length !minlen;
+                maxlen := max length !maxlen;
+                totallen := !totallen + length
+            in
+            let print_stat () =
+                log INFO (sprintf "  > npaths = %d, min length = %d, max length = %d, avg length = %d"
+                    !npaths !minlen !maxlen (!totallen / !npaths));
             in
 
+            let on_leaf length =
+                update_stat length;
+                logtm INFO (sprintf "    checked path schema: %4d length: %4d progress: %2d%%"
+                !npaths length (!npaths * 100 / nleafs))
+            in
             let check_tree name form tree =
                 SlpsChecker.is_error_tree rt ntt sk on_leaf name form deps tree
             in
+
             log INFO "  > Running SlpsChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
-                num := 0;
+                reset_stat ();
                 logtm INFO (sprintf "      > Checking %s..." name);
                 let err = check_tree name form tree in
                 let msg =
@@ -98,10 +113,11 @@ class slps_checker_plugin_t (plugin_name: string) =
                     then sprintf "    > SLPS: counterexample for %s found" name
                     else sprintf "      > Spec %s holds" name
                 in
-                log INFO msg
+                log INFO msg;
+                print_stat ()
             in
             let specs = get_proper_specs rt#caches#options sprog [sk] in
-            StrMap.iter each_form specs;
+            StrMap.iter each_form specs
 
 
         method extract_proc rt prog proc =
