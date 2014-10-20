@@ -95,10 +95,16 @@ class slps_checker_plugin_t (plugin_name: string) =
                     !npaths !minlen !maxlen (!totallen / !npaths));
             in
 
+            let lasttime = ref (Unix.time ()) in
             let on_leaf length =
                 update_stat length;
-                logtm INFO (sprintf "    checked path schema: %4d length: %4d progress: %2d%%"
-                !npaths length (!npaths * 100 / nleafs))
+                let newtime = Unix.time () in
+                if (newtime -. !lasttime) > 5.0
+                then begin
+                    lasttime := newtime;
+                    logtm INFO (sprintf "    checked path schema: %4d length: %4d progress: %2d%%"
+                    !npaths length (!npaths * 100 / nleafs))
+                end
             in
             let check_tree name form tree =
                 SlpsChecker.is_error_tree rt ntt sk on_leaf name form deps tree
