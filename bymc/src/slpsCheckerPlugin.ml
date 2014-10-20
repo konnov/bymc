@@ -80,7 +80,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             let npaths, minlen, maxlen, totallen =
                     ref 0, ref max_int, ref 0, ref 0 in
             let reset_stat () =
-                npaths := 0; minlen := 0; maxlen := 0; totallen := 0
+                npaths := 0; minlen := max_int; maxlen := 0; totallen := 0
             in
             let update_stat length =
                 npaths := !npaths + 1;
