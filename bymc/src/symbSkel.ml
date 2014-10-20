@@ -813,9 +813,15 @@ let expand_props_in_ltl prog skels prop_form =
         pr (not neg) r
 
     | Var v ->
+        let find n =
+            try StrMap.find v#get_name atomics
+            with Not_found ->
+                raise (Failure
+                    (sprintf "Atomic proposition %s not found" v#get_name))
+        in
         let e =
             if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
-            then pr_atomic (StrMap.find v#get_name atomics)
+            then pr_atomic (find v#get_name)
             else Var v
         in
         if neg then UnEx (NEG, e) else e
