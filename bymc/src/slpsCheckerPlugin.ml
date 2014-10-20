@@ -89,6 +89,8 @@ class slps_checker_plugin_t (plugin_name: string) =
                 totallen := !totallen + length
             in
             let print_stat () =
+                if !npaths = 0
+                then npaths := 1;
                 log INFO (sprintf "  > npaths = %d, min length = %d, max length = %d, avg length = %d"
                     !npaths !minlen !maxlen (!totallen / !npaths));
             in
