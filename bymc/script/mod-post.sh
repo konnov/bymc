@@ -61,7 +61,12 @@ function mc_collect_stat {
         | perl -n -e 'if (/.*there are (\d+) rules*/) { print "$1\n" }'`
     nschemas=`grep "schemas to inspect" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/\D*(\d+) schemas to inspect*/) { print "$1\n" }'`
+    schema_stat=`grep "npaths =" $POST_OUT`
+    npaths=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$1\n" }'`
+    minlen=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$2\n" }'`
+    maxlen=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$3\n" }'`
+    avglen=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$4\n" }'`
 
-    echo "10:Result=$res|11:technique=post|40:post-usersec=$b_user|41:post-syssec=$b_sys|42:post-elapsedsec=$b_elapsed|43:post-maxreskb=$b_maxres|45:post-bound=$bound|46:post-unlocking=$unlocking|47:post-locking=$locking|48:post-nlocs=$nlocs|49:post-nrules=$nrules|50:post-cabound=$cabound|51:post-mild-cabound=$mcabound|52:post-mild-bound=$mbound|52:post-nschemas=$nschemas"
+    echo "10:Result=$res|11:technique=post|40:post-usersec=$b_user|41:post-syssec=$b_sys|42:post-elapsedsec=$b_elapsed|43:post-maxreskb=$b_maxres|45:post-bound=$bound|46:post-unlocking=$unlocking|47:post-locking=$locking|48:post-nlocs=$nlocs|49:post-nrules=$nrules|50:post-cabound=$cabound|51:post-mild-cabound=$mcabound|52:post-mild-bound=$mbound|52:post-nschemas=$nschemas|53:post-minlen=$minlen|54:post-maxlen=$maxlen|55:post-avglen=$avglen"
 }
 
