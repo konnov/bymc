@@ -170,7 +170,7 @@ let get_counterex rt sk form_name frame_hist =
         in
         List.map map vars
     in
-    let p out (k, n, e) =
+    let p is_init_frame out (k, n, e) =
         match k with
         | KLoc ->
                 let locno = StrMap.find n revmap in
@@ -178,7 +178,8 @@ let get_counterex rt sk form_name frame_hist =
                 let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
                 in
                 let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
-                fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+                if not is_init_frame || e <> IntConst 0
+                then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
 
         | _ ->
                 fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
@@ -194,8 +195,10 @@ let get_counterex rt sk form_name frame_hist =
                 then begin
                     fprintf out "%4d (F%4d) x%2s: "
                         num f.F.no (SpinIrImp.expr_s accel);
-                    List.iter (p out) other;
-                    fprintf out "\n";
+                    List.iter (p (f.F.no = 0) out) other;
+                    if f.F.no = 0
+                    then fprintf out " K[*]: = 0;\n"
+                    else fprintf out "\n";
                     1 + num
                 end
                 else num
@@ -209,7 +212,7 @@ let get_counterex rt sk form_name frame_hist =
     fprintf out "----------------\n";
     rt#solver#set_need_model true;
     fprintf out "           ";
-    List.iter (p out) (get_vars sk.Sk.params);
+    List.iter (p false out) (get_vars sk.Sk.params);
     fprintf out "\n";
     each_frame out 0 frame_hist;
     fprintf out "----------------\n";
