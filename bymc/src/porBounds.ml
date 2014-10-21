@@ -119,6 +119,9 @@ module D = struct
          *)
         rule_flow: MGraph.t;
 
+        (* the rules sorted w.r.t. rule_flow *)
+        full_segment: int list;
+
         (* the graph keeping transitive-reflexive closure
            of location reachability *)
         loc_reach: MGraph.t;
@@ -153,7 +156,8 @@ module D = struct
         rule_pre = IntMap.empty; rule_post = IntMap.empty;
         uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
         umask = PSet.empty; lmask = PSet.empty;
-        rule_flow = MGraph.make 1; loc_reach = MGraph.make 1
+        rule_flow = MGraph.make 1; loc_reach = MGraph.make 1;
+        full_segment = []
     }
 
     let conds c = c.uconds @ c.lconds
@@ -226,7 +230,16 @@ type path_elem_t =
 
 type path_t = path_elem_t list    
 
-type rule_nos_t = int list
+type rule_nos_t = BatBitSet.t (* store the bit mask of which rule is present *)
+  
+(* this is how you convert it *)
+let pack_rule_set rule_nos =
+    let cap = List.length rule_nos in
+    List.fold_left (flip BatBitSet.add) (BatBitSet.create cap) rule_nos
+
+let unpack_rule_set set segment =
+    List.filter (BatBitSet.mem set) segment
+
 
 (* instead of constructing plain paths, we construct a tree *)
 module T = struct
@@ -238,29 +251,31 @@ module T = struct
     (** and a branch of a tree *)
     and schema_branch_t = {
         cond_after: mstone_t;   (** the condition guarding the branch *)
-        cond_rules: rule_nos_t; (** the possible rules that are fired with this condition *)
+        cond_set: rule_nos_t; (** the possible rules that are fired with this condition *)
         subtree: schema_tree_t; (** the following subtree *)
     }
 end
    
 
-let print_tree out ?(milestones_only=false) tree =
+let print_tree out ?(milestones_only=false) full_segment tree =
     let rec print level = function
-        | T.Leaf seg ->
+        | T.Leaf ruleset ->
             if not milestones_only
             then begin
                 fprintf out "%s" (String.make level '.');
                 fprintf out "[ ";
+                let seg = unpack_rule_set ruleset full_segment in
                 List.iter (fun r -> fprintf out " %d " r) seg;
                 fprintf out " ]\n"
             end
             else fprintf out "\n"
 
-        | T.Node (seg, branches) ->
+        | T.Node (ruleset, branches) ->
             if not milestones_only
             then begin
                 fprintf out "%s" (String.make level '.');
                 fprintf out "[ ";
+                let seg = unpack_rule_set ruleset full_segment in
                 List.iter (fun r -> fprintf out " %d " r) seg;
                 fprintf out " ]\n";
             end;
@@ -271,8 +286,9 @@ let print_tree out ?(milestones_only=false) tree =
                 List.iter (each_branch false level) (List.tl branches)
             end
 
-    and each_branch is_first level { T.cond_after; T.cond_rules; T.subtree } =
+    and each_branch is_first level { T.cond_after; T.cond_set; T.subtree } =
         let (name, _, _, _) = cond_after in
+        let cond_rules = unpack_rule_set cond_set full_segment in
         let rules_s = str_join " | " (List.map int_s cond_rules) in
         if not is_first
         then fprintf out "%s" (String.make (4 * level) '.');
@@ -603,6 +619,8 @@ let compute_deps solver sk =
     logtm INFO (sprintf "> %d edges in the reachability relation"
             (MGraph.nb_edges loc_reach));
 
+    let full_segment = make_segment sk rule_flow in
+
     logtm INFO (sprintf "> constructing preconditions...");
     let cond_map, rule_pre = compute_pre sk in
     logtm INFO (sprintf "> found %d preconditions..." (PSetEltMap.cardinal cond_map));
@@ -640,7 +658,7 @@ let compute_deps solver sk =
     let umask = List.fold_left add PSet.empty umiles in
     {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
         D.rule_flow; D.loc_reach; D.rule_pre; D.rule_post;
-        D.cond_imp; D.umask; D.lmask
+        D.cond_imp; D.umask; D.lmask; D.full_segment
     }
 
 
@@ -756,7 +774,7 @@ let is_rule_unlocked deps uset lset rule_no =
     printf "is_unlocked %d [pre=%s]-> is_unlocked=%b and not_locked=%b\n"
         rule_no (PSet.str pre) is_unlocked not_locked; *)
     is_unlocked && not_locked
-  
+
 
 (**
    Compute the tree of representative executions.
@@ -767,7 +785,6 @@ let is_rule_unlocked deps uset lset rule_no =
    but only the representative ones.
  *)
 let compute_slps_tree sk deps =
-    let full_segment = make_segment sk deps.D.rule_flow in
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
 
     let rec build_tree uset lset =
@@ -798,13 +815,15 @@ let compute_slps_tree sk deps =
                 let branch = 
                     {
                         T.cond_after = (name, cond_id, expr, lockt);
-                        T.cond_rules = all_guarded_with_and_enabled;
+                        T.cond_set = pack_rule_set all_guarded_with_and_enabled;
                         T.subtree
                     }
                 in
                 (maxlen, branch) :: accum
         in
-        let seg = List.filter (is_rule_unlocked deps uset lset) full_segment in
+        let unlocked =
+            List.filter (is_rule_unlocked deps uset lset) deps.D.full_segment in
+        let seg = pack_rule_set unlocked in
         let len_and_branches = List.fold_left each_cond [] (uconds @ lconds) in
         let cmp (i, _) (j, _) = compare i j in
         let branches = List.map snd (List.sort cmp len_and_branches) in
@@ -886,10 +905,10 @@ let make_schema_tree solver sk =
 
     log INFO ("> You can find the SLPS tree in slps-paths.txt and in slps-milestones.txt");
     let out = open_out "slps-paths.txt" in
-    print_tree out tree;
+    print_tree out deps.D.full_segment tree;
     close_out out;
     let out = open_out "slps-milestones.txt" in
-    print_tree out ~milestones_only:true tree;
+    print_tree out deps.D.full_segment tree ~milestones_only:true;
     close_out out;
 
     tree, deps

@@ -300,12 +300,13 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
         endf, end_hist, err
     in
     let rec check_node depth frame_hist frame = function
-        | T.Leaf seg ->
+        | T.Leaf ruleset ->
             rt#solver#comment (sprintf "push@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "last segment";
             display_depth depth true;
+            let seg = PorBounds.unpack_rule_set ruleset deps.D.full_segment in
             let endf, end_hist, err = check_segment frame_hist frame seg in
             rt#solver#comment (sprintf "pop@%d: check_node[Leaf] at frame %d" depth frame.F.no);
             rt#solver#pop_ctx;
@@ -314,12 +315,13 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
             on_leaf (endf.F.no + 1);
             err
 
-        | T.Node (seg, branches) ->
+        | T.Node (ruleset, branches) ->
             rt#solver#comment (sprintf "push@%d: check_node[Node] at frame %d" depth frame.F.no);
             let stack_level = rt#solver#get_stack_level in
             rt#solver#push_ctx;
             rt#solver#comment "next segment";
             display_depth depth false;
+            let seg = PorBounds.unpack_rule_set ruleset deps.D.full_segment in
             let seg_endf, end_hist, err = check_segment frame_hist frame seg in
 
             let each_branch err b =
@@ -342,8 +344,10 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tree =
             (* assert that the milestone is unlocked *)
             F.assert_frame rt#solver tt frame frame [milestone_expr];
             (* and this effects into firing of the following rules *)
+            let cond_rules =
+                PorBounds.unpack_rule_set br.T.cond_set deps.D.full_segment in
             let endf, new_frames =
-                List.fold_left (each_rule true) (frame, []) br.T.cond_rules in
+                List.fold_left (each_rule true) (frame, []) cond_rules in
             let constr = BinEx (Spin.EQ, IntConst 1, sum new_frames) in
             ignore (rt#solver#append_expr constr);
             let end_hist = new_frames @ frame_hist in
