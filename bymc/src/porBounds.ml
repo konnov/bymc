@@ -239,33 +239,47 @@ module T = struct
     and schema_branch_t = {
         cond_after: mstone_t;   (** the condition guarding the branch *)
         cond_rules: rule_nos_t; (** the possible rules that are fired with this condition *)
-        subtree: schema_tree_t  (** the following subtree *)
+        subtree: schema_tree_t; (** the following subtree *)
     }
 end
    
 
-let print_tree out tree =
+let print_tree out ?(milestones_only=false) tree =
     let rec print level = function
         | T.Leaf seg ->
-            fprintf out "%s" (String.make level ' ');
-            fprintf out "[ ";
-            List.iter (fun r -> fprintf out " %d " r) seg;
-            fprintf out " ]\n"
+            if not milestones_only
+            then begin
+                fprintf out "%s" (String.make level '.');
+                fprintf out "[ ";
+                List.iter (fun r -> fprintf out " %d " r) seg;
+                fprintf out " ]\n"
+            end
+            else fprintf out "\n"
 
         | T.Node (seg, branches) ->
-            fprintf out "%s" (String.make level ' ');
-            fprintf out "[ ";
-            List.iter (fun r -> fprintf out " %d " r) seg;
-            fprintf out " ]\n";
+            if not milestones_only
+            then begin
+                fprintf out "%s" (String.make level '.');
+                fprintf out "[ ";
+                List.iter (fun r -> fprintf out " %d " r) seg;
+                fprintf out " ]\n";
+            end;
 
-            List.iter (each_branch (level + 2)) branches
+            if branches <> []
+            then begin
+                each_branch true level (List.hd branches);
+                List.iter (each_branch false level) (List.tl branches)
+            end
 
-    and each_branch level { T.cond_after; T.cond_rules; T.subtree } =
+    and each_branch is_first level { T.cond_after; T.cond_rules; T.subtree } =
         let (name, _, _, _) = cond_after in
         let rules_s = str_join " | " (List.map int_s cond_rules) in
-        fprintf out "%s" (String.make level ' ');
-        fprintf out "%s: (%s)\n" name rules_s;
-        print (level + 2) subtree
+        if not is_first
+        then fprintf out "%s" (String.make (4 * level) '.');
+        if not milestones_only
+        then fprintf out "%s: (%s)\n" name rules_s
+        else fprintf out "%3s " name;
+        print (level + 1) subtree
     in 
     print 0 tree;
     fprintf out "\n"
@@ -556,6 +570,9 @@ let compute_cond_implications solver shared uconds lconds =
                 (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
             let res = solver#check in
             solver#pop_ctx;
+            if not res && lname <> rname
+            then log INFO
+                (sprintf "  Condition %s implies condition %s" lname rname);
             not res
         end
     in
@@ -777,23 +794,28 @@ let compute_slps_tree sk deps =
                     List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
                         |> List.filter (is_rule_unlocked deps new_uset lset)
                 in
-                let subtree = build_tree new_uset new_lset in
+                let maxlen, subtree = build_tree new_uset new_lset in
                 let branch = 
                     {
                         T.cond_after = (name, cond_id, expr, lockt);
                         T.cond_rules = all_guarded_with_and_enabled;
-                        subtree
+                        T.subtree
                     }
                 in
-                branch :: accum
+                (maxlen, branch) :: accum
         in
         let seg = List.filter (is_rule_unlocked deps uset lset) full_segment in
-        let branches = List.fold_left each_cond [] (uconds @ lconds) in
+        let len_and_branches = List.fold_left each_cond [] (uconds @ lconds) in
+        let cmp (i, _) (j, _) = compare i j in
+        let branches = List.map snd (List.sort cmp len_and_branches) in
+        let maxlen =
+            List.fold_left max 0 (List.map fst len_and_branches) in
         if branches = []
-        then T.Leaf seg
-        else T.Node (seg, branches)
+        then (1 + maxlen, T.Leaf seg)
+        else (1 + maxlen, T.Node (seg, branches))
     in
-    build_tree PSet.empty PSet.empty
+    let _, tree = build_tree PSet.empty PSet.empty in
+    tree
 
 
 let collect_actions accum sk =
@@ -862,9 +884,12 @@ let make_schema_tree solver sk =
     log INFO ("> Computing the schema tree...");
     let tree = compute_slps_tree sk deps in
 
-    log INFO ("> SLPS is written to slps-paths.txt");
+    log INFO ("> You can find the SLPS tree in slps-paths.txt and in slps-milestones.txt");
     let out = open_out "slps-paths.txt" in
     print_tree out tree;
+    close_out out;
+    let out = open_out "slps-milestones.txt" in
+    print_tree out ~milestones_only:true tree;
     close_out out;
 
     tree, deps
