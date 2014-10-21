@@ -4,9 +4,9 @@ LDFLAGS=
 AR=ar
 
 O=./_build
-OBJ=$(O)/mathsat_driver.o
+OBJ=$(O)/mathsat-driver.o
 SRC_DIR=src
-LIBNAME=mathsat4ml.a
+LIBNAME=mathsat4ml-driver.a
 
 ${LIBNAME}: init ${OBJ}
 	${AR} rcs ${LIBNAME} ${OBJ}
