@@ -13,19 +13,19 @@ let _ =
     then printf "The plugin is not required. Skipped.\n"
     else begin
         try
-            printf "foo_int = %d\n" (!Foo.foo_int);
-            printf "loading the plugin...\n";
+            printf "is mathsat4ml loaded = %b\n" (!Msat.is_loaded);
+            printf "loading mathsat4ml plugin...\n";
             flush stdout;
             Dynlink.loadfile "../plugin/mathsat4ml.cmxs";
-            printf "loaded\n";
+            printf "success\n";
             printf "have you seen any message?\n";
-            printf "foo_int = %d\n" (!Foo.foo_int);
-            printf "calling start...\n";
+            printf "is mathsat4ml loaded = %b\n" (!Msat.is_loaded);
+            printf "creating one instance...\n";
             flush stdout;
-            ignore ((!Foo.p_start) ());
-            printf "calling stop...\n";
+            let msat = (!Msat.p_create) () in
+            printf "destroying the instance...\n";
             flush stdout;
-            ignore ((!Foo.p_stop) ());
+            ignore ((!Msat.p_destroy) msat);
             printf "done...\n";
             flush stdout;
         with Dynlink.Error e ->

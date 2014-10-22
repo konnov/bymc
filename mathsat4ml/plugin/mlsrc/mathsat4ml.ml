@@ -1,16 +1,16 @@
 open Ctypes
 open Foreign
 
-let start =
-    foreign "mathsat_start" (void @-> returning int)
+let create =
+    foreign "mathsat_create" (void @-> returning int)
 
-let stop =
-    foreign "mathsat_stop" (void @-> returning int)
+let destroy =
+    foreign "mathsat_destroy" (int @-> returning void)
 
 
 let _ =
     (* register itself *)
-    Foo.foo_int := 1;
-    Foo.p_start := start;
-    Foo.p_stop := stop
+    Msat.is_loaded := true;
+    Msat.p_create := create;
+    Msat.p_destroy := destroy
 
