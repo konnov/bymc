@@ -8,11 +8,13 @@
 
 #include <stdio.h>
 
-int start() {
+int mathsat_start() {
     printf("Starting MathSat\n");
+    fflush(stdout);
 }
 
-int stop() {
+int mathsat_stop() {
     printf("Stopping MathSat\n");
+    fflush(stdout);
 }
 

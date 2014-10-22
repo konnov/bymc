@@ -1,0 +1,9 @@
+# ocamlbuild tags
+#
+# check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
+
+<src>: include
+<**/*.native>: package(ctypes.foreign), use_dynlink
+
+<mlsrc/*.ml>: package(ctypes.foreign), use_dynlink
+

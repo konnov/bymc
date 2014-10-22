@@ -1,0 +1,3 @@
+S mlsrc
+B _build/mlsrc
+PKG ctypes.foreign
