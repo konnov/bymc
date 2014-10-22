@@ -16,7 +16,7 @@ let _ =
             printf "foo_int = %d\n" (!Foo.foo_int);
             printf "loading the plugin...\n";
             flush stdout;
-            Dynlink.loadfile "../_build/mathsat4ml.cmxs";
+            Dynlink.loadfile "../plugin/mathsat4ml.cmxs";
             printf "loaded\n";
             printf "have you seen any message?\n";
             printf "foo_int = %d\n" (!Foo.foo_int);

@@ -5,5 +5,5 @@
 <src>: include
 <**/*.native>: package(ctypes.foreign), use_dynlink
 
-<mlsrc/*.ml>: package(ctypes.foreign), use_dynlink
+<src/*.ml>: package(ctypes.foreign), use_dynlink
 
