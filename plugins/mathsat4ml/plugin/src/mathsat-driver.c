@@ -170,7 +170,6 @@ const char* mathsat_get_model_value(int env_no, const char* term_text) {
                 len, BUF_SIZE);
         abort();
     }
-        fprintf(stderr, "Result for %s: %s\n", term_text, s);
     strncpy(buf, s, (len < BUF_SIZE ? len : BUF_SIZE));
     msat_free(s);
     return buf;
