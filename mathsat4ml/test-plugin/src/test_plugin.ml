@@ -34,8 +34,16 @@ let _ =
             printf "result = %d\n" res; flush stdout;
             assert (res = 1);
 
+            printf "get_model_value('x')\n"; flush stdout;
+            let value = (!Msat.p_get_model_value) msat "x" in
+            printf "result: %s\n" value; flush stdout;
+
+            printf "get_model_value('y')\n"; flush stdout;
+            let value = (!Msat.p_get_model_value) msat "y" in
+            printf "result: %s\n" value; flush stdout;
+
             printf "push\n"; flush stdout;
-            (!Msat.p_push) ();
+            (!Msat.p_push) msat;
 
             printf "asserting x < y...\n"; flush stdout;
             let res = (!Msat.p_assert) msat "(< x y)" in
@@ -45,12 +53,19 @@ let _ =
             assert (res = 0);
 
             printf "pop\n"; flush stdout;
-            (!Msat.p_pop) ();
+            (!Msat.p_pop) msat;
 
-            printf "solving...\n"; flush stdout;
+            printf "assert('= x 0')...\n"; flush stdout;
+            let res = (!Msat.p_assert) msat "(= x 42)" in
+            printf "solve...\n"; flush stdout;
             let res = (!Msat.p_solve) msat in
             printf "result = %d\n" res; flush stdout;
             assert (res = 1);
+
+            printf "get_model_value('x')\n"; flush stdout;
+            let value = (!Msat.p_get_model_value) msat "x" in
+            printf "result: %s\n" value; flush stdout;
+            assert (value = "42");
 
             printf "destroying the instance...\n"; flush stdout;
             ignore ((!Msat.p_destroy) msat);

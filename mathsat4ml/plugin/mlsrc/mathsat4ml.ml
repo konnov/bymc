@@ -17,10 +17,13 @@ let solve =
     foreign "mathsat_solve" (int @-> returning int)
 
 let push =
-    foreign "mathsat_push" (void @-> returning void)
+    foreign "mathsat_push" (int @-> returning void)
 
 let pop =
-    foreign "mathsat_pop" (void @-> returning void)
+    foreign "mathsat_pop" (int @-> returning void)
+
+let get_model_value =
+    foreign "mathsat_get_model_value" (int @-> string @-> returning string)
 
 
 let _ =
@@ -32,5 +35,6 @@ let _ =
     Msat.p_assert := massert;
     Msat.p_solve := solve;
     Msat.p_push := push;
-    Msat.p_pop := pop
+    Msat.p_pop := pop;
+    Msat.p_get_model_value := get_model_value
 

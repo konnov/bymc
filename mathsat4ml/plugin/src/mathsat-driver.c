@@ -8,6 +8,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include <mathsat.h>
 
@@ -15,6 +16,10 @@
 #define MAX_ENVS 10000
 static int n_envs = 0;
 static msat_env* ap_envs[MAX_ENVS];
+
+/* the temporary buffer */
+#define BUF_SIZE 10000
+static char buf[BUF_SIZE];
 
 int mathsat_create() {
     msat_config cfg;
@@ -102,6 +107,7 @@ int mathsat_solve(int env_no) {
         case MSAT_SAT:      return 1;
         case MSAT_UNKNOWN:  return -1;
         case MSAT_UNSAT:    return 0;
+        default:            return -1;
     }
 }
 
@@ -131,5 +137,35 @@ void mathsat_pop(int env_no) {
         fprintf(stderr, "error popping a backtrack point");
         abort();
     }
+}
+
+const char* mathsat_get_model_value(int env_no, const char* term_text) {
+    msat_env env;
+    msat_term term;
+    char* s;
+    size_t len;
+    if (env_no >= n_envs || env_no < 0) {
+        fprintf(stderr, "Accessing non-existent environment %d >= %d\n",
+                env_no, n_envs);
+        abort();
+    }
+    env = *ap_envs[env_no]; 
+    term = msat_from_string(env, term_text);
+    if (MSAT_ERROR_TERM(term)) {
+        fprintf(stderr, "Malformed term: %s\n", term_text);
+        abort();
+    }
+
+    term = msat_get_model_value(env, term);
+    s = msat_to_smtlib2_term(env, term);
+    len = strlen(s);
+    if (len > BUF_SIZE) {
+        fprintf(stderr, "The value is %zd chars long, the maximum is %d\n",
+                len, BUF_SIZE);
+        abort();
+    }
+    strncpy(buf, s, (len < BUF_SIZE ? len : BUF_SIZE));
+    msat_free(s);
+    return buf;
 }
 
