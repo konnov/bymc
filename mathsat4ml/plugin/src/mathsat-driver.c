@@ -80,7 +80,12 @@ int mathsat_assert(int env_no, const char* expr_text) {
     }
     env = *ap_envs[env_no]; 
     res = msat_from_string(env, expr_text);
-    return (MSAT_ERROR_TERM(res)) ? -1 : msat_term_id(res);
+    if (MSAT_ERROR_TERM(res))
+        return -1;
+    else {
+        msat_assert_formula(env, res);
+        return msat_term_id(res);
+    }
 }
 
 int mathsat_solve(int env_no) {
@@ -97,6 +102,34 @@ int mathsat_solve(int env_no) {
         case MSAT_SAT:      return 1;
         case MSAT_UNKNOWN:  return -1;
         case MSAT_UNSAT:    return 0;
+    }
+}
+
+void mathsat_push(int env_no) {
+    msat_env env;
+    if (env_no >= n_envs || env_no < 0) {
+        fprintf(stderr, "Accessing non-existent environment %d >= %d\n",
+                env_no, n_envs);
+        abort();
+    }
+    env = *ap_envs[env_no]; 
+    if (msat_push_backtrack_point(env) != 0) {
+        fprintf(stderr, "error pushing a backtrack point");
+        abort();
+    }
+}
+
+void mathsat_pop(int env_no) {
+    msat_env env;
+    if (env_no >= n_envs || env_no < 0) {
+        fprintf(stderr, "Accessing non-existent environment %d >= %d\n",
+                env_no, n_envs);
+        abort();
+    }
+    env = *ap_envs[env_no]; 
+    if (msat_pop_backtrack_point(env) != 0) {
+        fprintf(stderr, "error popping a backtrack point");
+        abort();
     }
 }
 

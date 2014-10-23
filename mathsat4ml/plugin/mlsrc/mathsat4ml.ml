@@ -16,6 +16,12 @@ let massert =
 let solve =
     foreign "mathsat_solve" (int @-> returning int)
 
+let push =
+    foreign "mathsat_push" (void @-> returning void)
+
+let pop =
+    foreign "mathsat_pop" (void @-> returning void)
+
 
 let _ =
     (* register the functions *)
@@ -25,4 +31,6 @@ let _ =
     Msat.p_declare_int := declare_int;
     Msat.p_assert := massert;
     Msat.p_solve := solve;
+    Msat.p_push := push;
+    Msat.p_pop := pop
 
