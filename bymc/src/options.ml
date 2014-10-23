@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [0; 8; 9]
-let version_full = "ByMC-0.8.9-feature-SLPS"
+let version = [0; 9; 0]
+let version_full = "ByMC-0.9.0-feature-SLPS"
 
 let macro_prefix = "macro."
 
@@ -18,7 +18,7 @@ type action_opt_t =
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv | ToolNone
 
-type smt_opt_t = SmtYices | SmtLib2 of string array
+type smt_opt_t = SmtYices | SmtLib2 of string array | SmtMathsat5
 
 type options_t =
     {
@@ -32,7 +32,8 @@ type options_t =
         smt: smt_opt_t;
         bdd_pass: bool;
         verbose: bool;
-        plugin_opts: string StrMap.t
+        plugin_opts: string StrMap.t;
+        plugin_dir: string;
     }
 
 let empty = {
@@ -41,7 +42,8 @@ let empty = {
     param_assignments = StrMap.empty;
     mc_tool = ToolSpin; bdd_pass = false; verbose = false;
     smt = SmtYices;
-    plugin_opts = StrMap.empty
+    plugin_opts = StrMap.empty;
+    plugin_dir = ""
 }
 
 
@@ -77,6 +79,8 @@ let parse_mc_tool = function
 let parse_smt s =
     if s = "yices"
     then SmtYices
+    else if s = "mathsat5"
+    then SmtMathsat5
     else begin
         try
             if "lib2|" = (Str.string_before s 5)
@@ -130,6 +134,9 @@ let parse_options =
                     (StrMap.add name value !opts.plugin_opts); }
                 ),
              "X=Y define a C-like macro X as Y.");
+            ("--plugin-dir",
+                Arg.String (fun plugin_dir -> opts := {!opts with plugin_dir }),
+             "directory, where the plugins are stored.");
             ("-v", Arg.Unit (fun () -> opts := {!opts with verbose = true}),
              "produce lots of verbose output (you are warned).");
             ("--version", Arg.Unit

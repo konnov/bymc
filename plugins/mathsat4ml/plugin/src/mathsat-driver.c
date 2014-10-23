@@ -158,12 +158,19 @@ const char* mathsat_get_model_value(int env_no, const char* term_text) {
 
     term = msat_get_model_value(env, term);
     s = msat_to_smtlib2_term(env, term);
-    len = strlen(s);
+    if (s == NULL) {
+        fprintf(stderr, "msat_get_model_value returned NULL on: %s\n",
+                term_text);
+        abort();
+    }
+
+    len = 1 + strlen(s);
     if (len > BUF_SIZE) {
         fprintf(stderr, "The value is %zd chars long, the maximum is %d\n",
                 len, BUF_SIZE);
         abort();
     }
+        fprintf(stderr, "Result for %s: %s\n", term_text, s);
     strncpy(buf, s, (len < BUF_SIZE ? len : BUF_SIZE));
     msat_free(s);
     return buf;

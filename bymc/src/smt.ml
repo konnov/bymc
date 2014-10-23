@@ -853,3 +853,175 @@ class lib2_smt solver_cmd solver_args =
             end
     end
 
+
+(*
+    An interface to Mathsat5.
+    It requires plugin mathsat4ml compiled in plugins/mathsat4ml
+
+    Logging to a file is disabled by default. If you want to enable it,
+    pass option -O smt.log=1
+*)
+class mathsat5_smt =
+    object(self)
+        inherit smt_solver
+
+        val mutable m_instance = -1
+
+        val mutable clog = stdout
+        val mutable m_enable_log = false
+        (** the number of stack pushes executed within consistent context *)
+        val mutable m_pushes = 0
+
+        method start =
+            m_instance <- (!Msat.p_create) ();
+            clog <- open_out "smt2.log";
+            if not m_enable_log
+            then begin
+                fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
+                flush clog
+            end else begin
+                fprintf clog "(set-option :produce-unsat-cores true)\n";
+                fprintf clog "(set-option :produce-models true)\n";
+            end;
+            self#push_ctx (* a backup context to reset *)
+        
+        method stop =
+            ignore ((!Msat.p_destroy) m_instance);
+            close_out clog
+
+        method reset =
+            (* TODO: it should be implemented differently *)
+            self#pop_n m_pushes;
+            m_pushes <- 0;
+            self#push_ctx
+
+        method append_var_def (v: var) (tp: data_type) =
+            if m_enable_log
+            then begin
+                List.iter (fun s -> fprintf clog "%s\n" s) (var_to_smtlib2 v tp);
+                flush clog
+            end;
+            if tp#is_array
+            then raise (Smt_error "Arrays are not supported yet");
+            (!Msat.p_declare_int) m_instance v#mangled_name;
+            if tp#has_range
+            then begin let l, r = tp#range in
+                ignore (self#append_expr (BinEx (GE, Var v, IntConst l)));
+                ignore (self#append_expr (BinEx (LT, Var v, IntConst r)));
+            end else
+                match tp#basetype with
+                | SpinTypes.TINT ->
+                    ()
+
+                | SpinTypes.TUNSIGNED ->
+                    ignore (self#append_expr (BinEx (GE, Var v, IntConst 0)))
+
+                | SpinTypes.TBYTE ->
+                    ignore (self#append_expr (BinEx (GE, Var v, IntConst 0)));
+                    ignore (self#append_expr (BinEx (LT, Var v, IntConst 256)))
+
+                | _ as t ->
+                    raise (Smt_error
+                        ((SpinTypes.var_type_s t) ^ " is not supported"))
+
+        method comment (line: string) =
+            if m_enable_log
+            then begin
+                fprintf clog ";; %s\n" line;
+                flush clog
+            end
+
+        method append_expr expr =
+            let exp_s = expr_to_smt2 expr in
+            if m_enable_log
+            then begin
+                fprintf clog "(assert %s)\n" exp_s;
+                flush clog
+            end;
+            (!Msat.p_assert) m_instance exp_s
+
+        method push_ctx =
+            if m_enable_log
+            then begin
+                fprintf clog "(push 1)\n";
+                flush clog
+            end;
+            m_pushes <- m_pushes + 1;
+            (!Msat.p_push) m_instance;
+
+        (** Get the current stack level (nr. of pushes). Use for debugging *)
+        method get_stack_level =
+            m_pushes
+
+        method pop_ctx =
+            assert (m_pushes > 0);
+            if m_enable_log
+            then begin
+                fprintf clog "(pop 1)\n";
+                flush clog
+            end;
+            m_pushes <- m_pushes - 1;
+            (!Msat.p_pop) m_instance
+
+        method private pop_n n =
+            BatEnum.iter (fun _ -> self#pop_ctx) (0--^n)
+
+        method check =
+            if m_enable_log
+            then begin
+                fprintf clog "(check-sat)\n";
+                flush clog
+            end;
+            match (!Msat.p_solve) m_instance with
+            | 0 -> false
+            | 1 -> true
+            | _ -> raise (Smt_error "Smt solver returned unknown")
+
+        method set_need_model _ = ()
+
+        method get_need_model = true
+            
+        method get_model_query = Q.new_query expr_to_smt2
+
+        method submit_query (query: Q.query_t) =
+            let new_q = Q.new_query query.Q.expr_to_smt_f in
+            let each_exp exp_s _ =
+                if m_enable_log
+                then begin
+                    fprintf clog "(get-value (%s))\n" exp_s;
+                    flush clog
+                end;
+                let val_s = (!Msat.p_get_model_value) m_instance exp_s in
+                if m_enable_log
+                then begin
+                    fprintf clog ";; %s\n" val_s;
+                    flush clog
+                end;
+                let value = 
+                    try int_of_string val_s
+                    with Failure _ ->
+                        raise (Failure (sprintf "Cannot convert %s to int" val_s))
+                in
+                ignore (Q.add_result query new_q exp_s (IntConst value))
+            in
+            Hashtbl.iter each_exp query.Q.tab;
+            new_q
+
+        method get_collect_asserts = true
+
+        method set_collect_asserts _ = ()
+
+        method get_unsat_cores =
+            raise (Failure "get_unsat_cores is not implemented yet")
+
+        method set_debug flag = ()
+
+        method set_enable_lockstep _ = ()
+
+        method get_enable_lockstep = false
+
+        method set_enable_log b = m_enable_log <- b
+
+        method get_enable_log = m_enable_log
+    end
+

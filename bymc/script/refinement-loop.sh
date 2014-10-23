@@ -21,6 +21,7 @@ PROG=`readlink -f $1`
 PROP=$2
 BYMC_HOME=`dirname $0`
 BYMC_HOME=`cd $BYMC_HOME/..; pwd`
+PLUGIN_DIR=`cd $BYMC_HOME/../plugins; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
 
@@ -93,10 +94,10 @@ if [ -d "src" ]; then
     # source distribution, compile the latest version
     if [ "x$DEBUG" == "x" ]; then
         make || (cd $ORIG_DIR; exit 1)
-        TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
+        TOOL="$BYMC_HOME/bymc.native --plugin-dir ${PLUGIN_DIR} ${BYMC_FLAGS} "
     else
         BYTE="1" make || (cd $ORIG_DIR; exit 1)
-        TOOL="ocamldebug $BYMC_HOME/bymc.byte "
+        TOOL="ocamldebug $BYMC_HOME/bymc.byte --plugin-dir ${PLUGIN_DIR} "
     fi
 else
     # binary distribution
