@@ -20,11 +20,18 @@ let _ =
             printf "success\n";
             printf "have you seen any message?\n";
             printf "is mathsat4ml loaded = %b\n" (!Msat.is_loaded);
-            printf "creating one instance...\n";
-            flush stdout;
+            printf "creating one instance...\n"; flush stdout;
             let msat = (!Msat.p_create) () in
-            printf "destroying the instance...\n";
-            flush stdout;
+            printf "declaring int x, y...\n"; flush stdout;
+            (!Msat.p_declare_int) msat "x";
+            (!Msat.p_declare_int) msat "y";
+            printf "asserting x > y...\n"; flush stdout;
+            let res = (!Msat.p_assert) msat "(> x y)" in
+            assert (res <> -1);
+            printf "solving...\n"; flush stdout;
+            let res = (!Msat.p_solve) msat in
+            printf "result = %d\n" res; flush stdout;
+            printf "destroying the instance...\n"; flush stdout;
             ignore ((!Msat.p_destroy) msat);
             printf "done...\n";
             flush stdout;

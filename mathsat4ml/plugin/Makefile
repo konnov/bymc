@@ -18,7 +18,7 @@ LIBNAME=${O}/libmathsat4ml_driver.so
 # the compiler sees them used or not (Ctypes requires that)
 
 all: ${LIBNAME} mlsrc/*.ml mlsrc/*.mli
-	ocamlbuild ${OCFLAGS} -use-ocamlfind mathsat4ml.cmxs \
+	ocamlbuild ${OCFLAGS} -use-ocamlfind mathsat4ml.so \
 		-lflag -cclib -lflag \
 		"-Wl,--no-as-needed -Wl,-rpath=${O} -L${O} -L${MATHSAT_DIR}/lib -lmathsat4ml_driver -lmathsat"
 	cp _build/mlsrc/mathsat4ml.cmxs .
