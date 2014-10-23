@@ -21,7 +21,7 @@ all: ${LIBNAME} mlsrc/*.ml mlsrc/*.mli
 	ocamlbuild ${OCFLAGS} -use-ocamlfind mathsat4ml.so \
 		-lflag -cclib -lflag \
 		"-Wl,--no-as-needed -Wl,-rpath=${O} -L${O} -L${MATHSAT_DIR}/lib -lmathsat4ml_driver -lmathsat"
-	cp _build/mlsrc/mathsat4ml.cmxs .
+	cp _build/mlsrc/mathsat4ml.cmxs ../..
 
 #${AR} rcs ${LIBNAME} ${OBJ}
 ${LIBNAME}: init ${OBJ}

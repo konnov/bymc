@@ -16,7 +16,7 @@ let _ =
             printf "is mathsat4ml loaded = %b\n" (!Msat.is_loaded);
             printf "loading mathsat4ml plugin...\n";
             flush stdout;
-            Dynlink.loadfile "../plugin/mathsat4ml.cmxs";
+            Dynlink.loadfile "../../mathsat4ml.cmxs";
             printf "success\n";
             printf "have you seen any message?\n";
             printf "is mathsat4ml loaded = %b\n" (!Msat.is_loaded);
