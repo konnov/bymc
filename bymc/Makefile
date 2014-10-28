@@ -36,7 +36,7 @@ dist-bin: compile
 	tar jhcf bymc-bin-${dist_ver}.tar.bz2 ${DIST_FILES}
 
 release:
-	git archive --prefix=bymc-src-${TAG}/ "${TAG}" \
+	cd .. && git archive --prefix=bymc-src-${TAG}/ "${TAG}" \
         | bzip2 > bymc-src-${TAG}.tar.bz2
 
 clean:
