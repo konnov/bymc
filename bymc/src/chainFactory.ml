@@ -174,6 +174,7 @@ let create_chain = function
     | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
     | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
     | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
+    (* TODO: remove skelSmv *)
     | "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
     | "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))

@@ -22,9 +22,6 @@ class pc_plugin_t (plugin_name: string) =
         val mutable m_ref_step = 0 (* refinement step *)
         val mutable m_vass = Program.empty
 
-        (* TODO: to be removed *)
-        method semi_prog = self#get_input1
-
         method transform rt =
             let prog = self#get_input0 in
             let semiprog = self#get_input1 in
