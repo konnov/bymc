@@ -581,8 +581,11 @@ let do_interval_abstraction rt prog proc_names =
     in
     let new_shared =
         List.map abs_shared (Program.get_shared_with_init prog) in
-    (Program.set_shared_with_init new_shared
-        (Program.set_type_tab new_type_tab
-        (Program.set_ltl_forms new_forms
-        (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))))
+    let module P = Program in
+    P.set_procs new_procs prog
+        |> P.set_ltl_forms new_forms
+        |> P.set_type_tab new_type_tab
+        |> P.set_shared_with_init new_shared
+        |> P.set_atomics new_atomics
+        |> P.set_assumes (P.get_assumes prog)
 

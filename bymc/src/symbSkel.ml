@@ -32,6 +32,7 @@ module Sk = struct
         locals: var list; (* local variables *)
         shared: var list; (* shared variables *)
         params: var list; (* parameters *)
+        assumes: token expr list; (* assumptions on the parameters *)
         nrules: int; (* the number of rules *)
         rules: rule_t list; (* the rules *)
         inits: token expr list; (* initialization expressions *)
@@ -43,7 +44,8 @@ module Sk = struct
     let empty locals shared params =
         { name = ""; nlocs = 0; locs = [];
           locals = locals; shared = shared; params = params;
-          nrules = 0; rules = []; inits = []; loc_vars = IntMap.empty
+          nrules = 0; rules = []; inits = []; assumes = [];
+          loc_vars = IntMap.empty
         }
 
     let loc_by_no sk loc_no =
@@ -75,6 +77,8 @@ module Sk = struct
         | _ as e -> SpinIrImp.expr_s e
 
     let print out sk =
+        let pexp e = fprintf out "    %s;\n" (expr_s e) in
+
         fprintf out "skel %s {\n" sk.name;
         let vname v = v#get_name in
         fprintf out "  local %s;\n"
@@ -83,6 +87,9 @@ module Sk = struct
             (str_join ", " (List.map vname sk.shared));
         fprintf out "  parameters %s;\n"
             (str_join ", " (List.map vname sk.params));
+        fprintf out "  assumptions (%d) {\n" (List.length sk.assumes);
+        List.iter pexp sk.assumes;
+        fprintf out "  }\n\n";
         let ploc (i, l) =
             fprintf out "    %s: [%s];\n"
                 (locname l) (str_join "; " (List.map int_s l))
@@ -91,8 +98,7 @@ module Sk = struct
         List.iter ploc (lst_enum sk.locs);
         fprintf out "  }\n\n";
         fprintf out "  inits (%d) {\n" (List.length sk.inits);
-        let pinit e = fprintf out "    %s;\n" (expr_s e) in
-        List.iter pinit sk.inits;
+        List.iter pexp sk.inits;
         fprintf out "  }\n\n";
         let prule (i, r) =
             let loc j = locname (List.nth sk.locs j) in
@@ -454,6 +460,7 @@ let fuse skels new_name =
         Sk.loc_vars = all_loc_vars;
         Sk.shared = first.Sk.shared;
         Sk.params = first.Sk.params;
+        Sk.assumes = List.concat (List.map (fun sk -> sk.Sk.assumes) skels);
     }
 
 
@@ -531,6 +538,11 @@ module SkB = struct
     let add_init st init_expr =
         st := { !st with
             skel = { !st.skel with Sk.inits = init_expr :: !st.skel.Sk.inits }
+        }
+
+    let add_assume st assump =
+        st := { !st with
+            skel = { !st.skel with Sk.assumes = assump :: !st.skel.Sk.assumes }
         }
 end
 
@@ -718,7 +730,7 @@ let build_with builder_fun rt prog proc =
     
     (* get the result *)
     let sk = SkB.finish !builder proc#get_name in
-    sk
+    { sk with Sk.assumes = Program.get_assumes prog }
 
 
 let state_pairs_to_rules rt prog proc trs =

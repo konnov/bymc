@@ -24,6 +24,7 @@ module Sk: sig
         locals: SpinIr.var list; (** local variables *)
         shared: SpinIr.var list; (** shared variables *)
         params: SpinIr.var list; (** parameters *)
+        assumes: Spin.token SpinIr.expr list; (** assumptions on the parameters *)
         nrules: int; (** the number of rules *)
         rules: rule_t list; (** the rules *)
         inits: Spin.token SpinIr.expr list; (** initialization expressions *)
