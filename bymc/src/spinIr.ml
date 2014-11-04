@@ -25,7 +25,7 @@ type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
            (* our extensions *)
-           | HSymbolic | HInstrumental
+           | HSymbolic | HInstrumental | HNext
 
 let hflag_s f =
     match f with
@@ -39,6 +39,7 @@ let hflag_s f =
     | HReadOnce -> ":readonce:"
     | HSymbolic -> ":symbolic:"
     | HInstrumental -> ":instrumental:"
+    | HNext -> ":next:"
     | HNone -> ""
 
 exception Invalid_type of string

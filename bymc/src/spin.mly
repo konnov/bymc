@@ -49,6 +49,64 @@ let rec is_expr_symbolic e =
     | _ -> false
 
 
+let find_or_declare_next v =
+    if not (v#has_flag HNext)
+    then v#add_flag HNext;
+
+    let new_name = v#get_name ^ "_X" in
+    try ((top_scope ())#lookup new_name)#as_var
+    with Symbol_not_found _ ->
+        let nv = v#fresh_copy new_name in
+        nv
+
+
+let declare_next stmts =
+    let each_decl (lst, prev_nexts) = function
+    | MDecl (_, v, e) as d ->
+            if not (v#has_flag HNext)
+            then (d :: lst, prev_nexts)
+            else begin
+                let nv = find_or_declare_next v in
+                let nflags = List.filter (fun f -> f <> HNext) v#get_flags in
+                v#set_flags nflags; (* remove HNext *)
+                nv#set_flags nflags; (* remove HNext *)
+                let tp = (type_tab ())#get_type v in
+                (type_tab ())#set_type nv tp;
+                let pn = (v, nv) in
+                ((MDecl (fresh_id (), nv, e)) :: d :: lst, pn :: prev_nexts)
+            end
+
+    | _ as e ->
+            (e :: lst, prev_nexts)
+    in
+    let seq, pns = List.fold_left each_decl ([], []) stmts in
+    let make_after (prev, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var prev, Var next)) in
+    let make_before (prev, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var next, Var prev)) in
+    let after = List.map make_after pns in
+    let before = List.map make_before pns in
+    let rec on_seq = function
+        | [] -> []
+
+        | (MIf (id, opts)) :: tl ->
+            (MIf (id, List.map each_opt opts)) :: (on_seq tl)
+
+        | (MD_step (id, seq)) :: tl ->
+            (MD_step (id, on_seq seq)) :: (on_seq tl)
+
+        | (MAtomic (id, seq)) :: tl ->
+            (MAtomic (id, before @ seq @ after)) :: (on_seq tl)
+
+        | e :: tl -> e :: (on_seq tl)
+
+    and each_opt = function
+        | MOptGuarded seq -> MOptGuarded (on_seq seq)
+        | MOptElse seq -> MOptElse (on_seq seq)
+    in
+    on_seq (List.rev seq)
+
+
 let curr_pos () =
     let p = Parsing.symbol_start_pos () in
     let fname = if p.pos_fname != "" then p.pos_fname else "<filename>" in
@@ -99,6 +157,7 @@ let fatal msg payload =
 %token	ALWAYS EVENTUALLY		    /* ltl */
 %token	UNTIL WEAK_UNTIL RELEASE	/* ltl */
 %token	NEXT IMPLIES EQUIV          /* ltl */
+%token	PRIME                       /* our extension */
 %token  <string * string> DEFINE
 %token  <string * string> PRAGMA
 %token  <string> INCLUDE
@@ -183,7 +242,7 @@ proc	: inst		/* optional instantiator */
                     | _ -> fatal "Not a decl in proctype args" p#get_name
                 in
                 p#set_args (List.map unpack $4);
-                p#set_stmts $8;
+                p#set_stmts (declare_next $8);
                 p#add_all_symb my_scope#get_symbs;
                 pop_scope ();
                 Hashtbl.clear fwd_labels;
@@ -597,7 +656,7 @@ for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
 for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
 Special :
-    | HAVOC LPAREN varref RPAREN { [MHavoc (fresh_id (), $3)]  }
+    | HAVOC LPAREN varref_or_prime RPAREN { [MHavoc (fresh_id (), $3)]  }
     | varref RCV	/*	{ (* Expand_Ok++; *) } */
       rargs		{ raise (Not_implemented "rcv")
                 (* Expand_Ok--; has_io++;
@@ -675,7 +734,7 @@ Special :
     }
 ;
 
-Stmnt	: varref ASGN full_expr	{
+Stmnt	: varref_or_prime ASGN full_expr	{
                     [MExpr (fresh_id (), BinEx(ASGN, Var $1, $3))]
                  (* $$ = nn($1, ASGN, $1, $3);
 				  trackvar($1, $3);
@@ -896,33 +955,17 @@ expr    : LPAREN expr RPAREN		{ $2 }
 				}
 	| LEN LPAREN varref RPAREN	{
                   raise (Not_implemented "len")
-               (*  $$ = nn($3, LEN, $3, ZN);  *)}
+                }
 	| ENABLED LPAREN expr RPAREN	{
                   raise (Not_implemented "enabled")
-                (* $$ = nn(ZN, ENABLED, $3, ZN);
-			 	   has_enabled++; *)
 				}
-	| varref RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{
+	| varref RCV LBRACE rargs RBRACE		{
                   raise (Not_implemented "rcv")
-                (* Expand_Ok--; has_io++;
-				      $$ = nn($1, 'R', $1, $5); *)
 				}
-	| varref R_RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{
+	| varref R_RCV LBRACE rargs RBRACE		{
                   raise (Not_implemented "r_rcv")
-               (* Expand_Ok--; has_io++;
-				  $$ = nn($1, 'R', $1, $5);
-				  $$->val = has_random = 1; *)
 				}
-	| varref
-        {
-            let v = $1 in
-            (* TODO: should not be set in printf *)
-            v#add_flag HReadOnce;
-            Var v
-            (*  $$ = $1; trapwonly($1 /*, "varref" */);  *)
-        }
+    | varref_or_prime   { Var $1 }
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
 	| CONST 	{
                     IntConst $1
@@ -956,6 +999,22 @@ expr    : LPAREN expr RPAREN		{ $2 }
                    raise (Not_implemented "PNAME operations")
                 (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
     ;
+
+
+opt_prime:          { false }
+    | PRIME         { true }
+
+
+varref_or_prime: varref opt_prime {
+        if $2
+        then find_or_declare_next $1
+        else begin
+            let v = $1 in
+            v#add_flag HReadOnce;
+            v
+        end
+    }
+
 
 /* FORSYTE extension */
 track_ap: /* empty */	{ HNone }

@@ -26,7 +26,7 @@ type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
            (* our extensions *)
-           | HSymbolic | HInstrumental
+           | HSymbolic | HInstrumental | HNext
 
 (** A symbol of any origin, e.g., a variable, a label, etc. *)
 class symb: string ->
@@ -394,6 +394,7 @@ val stmt_list_used_vars : 't stmt list -> var list
 (************************** PROCESSES AND UNITS ******************)
 val proc_replace_body : 't proc -> 't mir_stmt list -> 't proc
 
+(** map every variable to an expression *)
 val map_vars : (var -> 'a expr) -> 'a expr -> 'a expr
 
 val proc_of_unit : 'a prog_unit -> 'a proc
@@ -410,8 +411,10 @@ val sub_stmt_with_list :
   ('t mir_stmt -> bool * 't mir_stmt list) ->
   't mir_stmt list -> 't mir_stmt list
 
+(** map every variable to an expression *)
 val map_expr_in_stmt : ('a expr -> 'a expr) -> 'a mir_stmt -> 'a mir_stmt
 
+(** map every variable to an expression *)
 val map_expr_in_lir_stmt : ('a expr -> 'a expr) -> 'a stmt -> 'a stmt
 
 (************************** MISC FUNCTIONS ******************)

@@ -141,6 +141,7 @@ let token_s = function
       | POR -> "or"
       | PAND -> "and"
       | HAVOC -> "havoc"
+      | PRIME -> "'"
 
 
 let is_name = function

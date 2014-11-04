@@ -68,6 +68,7 @@ let hflag_promela f =
     | HTreatLocal -> "local"
     | HReadOnce -> ""
     | HSymbolic -> "symbolic"
+    | HNext -> "next"
     | HInstrumental -> "/* instrumental */"
     | HNone -> ""
 

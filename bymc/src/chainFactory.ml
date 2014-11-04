@@ -33,8 +33,7 @@ module Pia = struct
         let pc = new PiaCounterPlugin.pc_plugin_t "piaCounter" in
         let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t "nusmvCounter" "main" in
         let sn = new SpinPlugin.spin_plugin_t "spin" "abs-counter" in
-        { pp = pp; vr = vr; pdom = pdom; pdg = pdg; pd = pd;
-            pc = pc; nv = nv; sn = sn }
+        { pp; vr; pdom; pdg; pd; pc; nv; sn }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
@@ -56,11 +55,10 @@ module Conc = struct
     }
 
     let mk_plugins () =
-        let pp = new PromelaParserPlugin.pp_plugin_t
-            "promelaParser" in
+        let pp = new PromelaParserPlugin.pp_plugin_t "promelaParser" in
         let inst = new InstantiationPlugin.instantiation_plugin_t
             "inst" in
-        { pp = pp; inst = inst }
+        { pp; inst }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
@@ -156,7 +154,7 @@ module PiaPost = struct
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
         let slps = new SlpsCheckerPlugin.slps_checker_plugin_t "slps" in
-        { pp = pp; vr = vr; pdom = pdom; pdg = pdg; slps = slps }
+        { pp; vr; pdom; pdg; slps }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in

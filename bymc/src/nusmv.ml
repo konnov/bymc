@@ -203,6 +203,7 @@ let token_s = function
       | POR -> "or"
       | PAND -> "and"
       | HAVOC -> "havoc"
+      | PRIME -> "'"
 
 
 (* We need var_fun as variables can look either x or next(x).
