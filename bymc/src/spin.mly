@@ -57,6 +57,7 @@ let find_or_declare_next v =
     try ((top_scope ())#lookup new_name)#as_var
     with Symbol_not_found _ ->
         let nv = v#fresh_copy new_name in
+        (top_scope ())#add_symb nv#get_name (nv :> symb);
         nv
 
 
@@ -82,10 +83,13 @@ let declare_next stmts =
     let seq, pns = List.fold_left each_decl ([], []) stmts in
     let make_after (prev, next) =
         MExpr (fresh_id (), BinEx (ASGN, Var prev, Var next)) in
+    let make_zero (_, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var next, IntConst 0)) in
     let make_before (prev, next) =
         MExpr (fresh_id (), BinEx (ASGN, Var next, Var prev)) in
-    let after = List.map make_after pns in
     let before = List.map make_before pns in
+    let after = List.map make_after pns in
+    let zero = List.map make_zero pns in
     let rec on_seq = function
         | [] -> []
 
@@ -96,7 +100,7 @@ let declare_next stmts =
             (MD_step (id, on_seq seq)) :: (on_seq tl)
 
         | (MAtomic (id, seq)) :: tl ->
-            (MAtomic (id, before @ seq @ after)) :: (on_seq tl)
+            (MAtomic (id, before @ seq @ after @ zero)) :: (on_seq tl)
 
         | e :: tl -> e :: (on_seq tl)
 
