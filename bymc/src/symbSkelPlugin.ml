@@ -32,6 +32,9 @@ class symb_skel_plugin_t (plugin_name: string) =
         method abs_skels = m_abs_skels
 
         method transform rt =
+            log WARN "*******************************************";
+            log WARN "* SymbSkelPlugin is outdated, use Summary *";
+            log WARN "*******************************************";
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
             let each_proc (skels, askels, prog) proc =

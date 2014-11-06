@@ -18,6 +18,7 @@ module Pia = struct
         pdom: PiaDomPlugin.pia_dom_plugin_t;
         pdg: PiaDataPlugin.pd_plugin_t;
         pd: PiaDataPlugin.pd_plugin_t;
+        opt: OptPlugin.opt_plugin_t;
         pc: PiaCounterPlugin.pc_plugin_t;
         nv: NusmvSsaPlugin.nusmv_ssa_plugin_t;
         sn: SpinPlugin.spin_plugin_t;
@@ -30,10 +31,11 @@ module Pia = struct
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
         let pd = new PiaDataPlugin.pd_plugin_t ~keep_shared:false "piaData" in
+        let opt = new OptPlugin.opt_plugin_t "opt" in
         let pc = new PiaCounterPlugin.pc_plugin_t "piaCounter" in
         let nv = new NusmvSsaPlugin.nusmv_ssa_plugin_t "nusmvCounter" "main" in
         let sn = new SpinPlugin.spin_plugin_t "spin" "abs-counter" in
-        { pp; vr; pdom; pdg; pd; pc; nv; sn }
+        { pp; opt; vr; pdom; pdg; pd; pc; nv; sn }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
@@ -42,11 +44,13 @@ module Pia = struct
         chain#add_plugin plugins.pdom OutOfPred;
         chain#add_plugin plugins.pdg OutOfPred;
         chain#add_plugin plugins.pd (OutOfPlugin "piaDom");
+        chain#add_plugin plugins.opt OutOfPred;
         chain#add_plugin plugins.pc (OutOfPlugins ["piaData"; "piaDataShared"]);
-        chain#add_plugin plugins.nv (OutOfPlugins ["piaCounter"; "piaData"]);
+        chain#add_plugin plugins.nv (OutOfPlugins ["piaCounter"; "opt"]);
         chain#add_plugin plugins.sn (OutOfPlugin "piaCounter");
         chain
 end
+
 
 module Conc = struct
     type plugins_t = {
