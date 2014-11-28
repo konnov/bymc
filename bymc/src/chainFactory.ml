@@ -86,8 +86,8 @@ module PiaBounds = struct
         let pb =
             new PorBoundsPlugin.por_bounds_plugin_t "porBounds" sk in
         let module SSN = SymbSkelNusmvPlugin in
-        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" sk in
-        { pia = pia; sk = sk; pb = pb; ssn = ssn; }
+        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" in
+        { pia; sk; pb; ssn; }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
@@ -131,20 +131,17 @@ end
 module PiaSkelSmv = struct
     type plugins_t = {
         pia: Pia.plugins_t;
-        sk: SymbSkelPlugin.symb_skel_plugin_t;
         ssn: SymbSkelNusmvPlugin.skel_nusmv_plugin_t;
     }
 
     let mk_plugins () =
         let pia = Pia.mk_plugins () in
-        let sk = new SymbSkelPlugin.symb_skel_plugin_t "symbSkel" in
         let module SSN = SymbSkelNusmvPlugin in
-        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" sk in
-        { pia = pia; sk = sk; ssn = ssn }
+        let ssn = new SSN.skel_nusmv_plugin_t "skelNusmv" "main" in
+        { pia; ssn }
 
     let mk_chain plugins =
         let chain = Pia.mk_chain plugins.pia in
-        chain#add_plugin plugins.sk (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.ssn (OutOfPlugins ["piaCounter"; "piaData"]);
         chain
 end

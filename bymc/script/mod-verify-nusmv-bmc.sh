@@ -60,11 +60,11 @@ function abs_symb_skel {
 function mc_compile_first {
     common_mc_compile_first
 
-    if [ "$SKEL" == "1" ]; then
-        comp_symb_skel
-        abs_symb_skel
-        comp_symb_skel
-    fi
+#    if [ "$SKEL" == "1" ]; then
+#        comp_symb_skel
+#        abs_symb_skel
+#        comp_symb_skel
+#    fi
 }
 
 function mc_verify_spec {
