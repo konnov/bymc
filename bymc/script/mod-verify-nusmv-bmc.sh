@@ -58,19 +58,17 @@ function abs_symb_skel {
 }
 
 function mc_compile_first {
-    common_mc_compile_first
-
-#    if [ "$SKEL" == "1" ]; then
-#        comp_symb_skel
-#        abs_symb_skel
-#        comp_symb_skel
-#    fi
+    if [ "$SKEL" != "1" ]; then
+        common_mc_compile_first
+    else
+        CAMLRUNPARAM="b" $TIME ${TOOL} --target nusmv --chain skelSmv -a ${PROG} \
+            || die "Failure: ${TOOL} -a ${PROG}"
+    fi
 }
 
 function mc_verify_spec {
     if [ "$SKEL" == "1" ]; then
         SRC="main-sum.smv"
-        BYMC_FLAGS="--target nusmv --chain skelSmv"
     fi
 
     SCRIPT="script.nusmv"
