@@ -1,4 +1,5 @@
-(* Extract a symbolic skeleton from a process description, i.e.,
+(**
+  Extract a symbolic skeleton from a process description, i.e.,
   the transition relation between local states with the edges labeled
   by conditions and actions
 

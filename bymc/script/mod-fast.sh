@@ -28,40 +28,11 @@ function mc_compile_first {
         ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
 }
 
-# XXX: partially copied from mod-analysis, refactor
 function mc_verify_spec {
-    SCRIPT="script.nusmv"
-    echo "set on_failure_script_quits" >${SCRIPT}
-
-    echo "go" >>${SCRIPT}
-    echo "time" >>${SCRIPT}
-    echo "compute_reachable" >>${SCRIPT}
-    echo "time" >>${SCRIPT}
-    echo "dump_fsm -r -o reach.dot" >>${SCRIPT}
-    echo "quit" >>${SCRIPT}
-
-    SRC=main-ssa-trans.smv # XXX: it works only if we have one process
-    echo $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
-    tee_or_die "${NUSMV_OUT}" "nusmv failed" \
-        $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
-
-    D=${BYMC_HOME}/../bddc
-    if [ ! -d "${D}" ]; then
-        echo "Directory ${D} is not found"
-        exit 1
-    fi
-
-    for f in vis-*.txt; do
-        ${D}/with-pycudd ${D}/abs-reach.py reach.dot $f
-        proc=`echo "$f" | sed 's/vis-\(.*\).txt/\1/'`
-        cp flow.txt "local-tr-${proc}.txt"
-    done
-
     # run again and produce process skeletons
     mc_compile_first
 
     # run fast
-    echo $TIME ${NUSMV} $ARGS -source "${SCRIPT}" "${SRC}"
     tee_or_die "${MC_OUT}" "fast failed" \
         $TIME ${FAST} $ARGS --plugin=$FAST_PLUGIN -t model.fst
 
