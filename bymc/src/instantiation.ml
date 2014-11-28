@@ -57,30 +57,6 @@ let conc_prop pa pmap prop =
         try StringMap.find pname pmap
         with Not_found -> raise (Failure ("Process name not found: " ^ pname))
     in
-    let rec unfold q = function
-        | BinEx (AND, l, r) -> BinEx (AND, unfold q l, unfold q r)
-        | BinEx (OR, l, r) -> BinEx (OR, unfold q l, unfold q r)
-        | UnEx (NEG, l) -> UnEx (NEG, unfold q l)
-        | BinEx (EQ, l, r)
-        | BinEx (NE, l, r)
-        | BinEx (LE, l, r)
-        | BinEx (LT, l, r)
-        | BinEx (GE, l, r)
-        | BinEx (GT, l, r) as e ->
-                let pname = Ltl.find_proc_name e in
-                if pname = ""
-                then e (* no process variables inside *)
-                else let count = find_proc pname in
-                    let clones = List.map (mk_inst e) (range 0 count) in
-                    let tok = if q = ForAll then AND else OR in
-                    list_to_binex tok clones
-        | LabelRef (pname, label) as e ->
-                let count = find_proc pname in
-                let clones = List.map (mk_inst e) (range 0 count) in
-                let tok = if q = ForAll then AND else OR in
-                list_to_binex tok clones
-        | _ as e -> e
-    in
     let rec replace_card = function
         | UnEx (CARD, l) -> IntConst 0 (* how to do cardinality in the concrete? *)
         | UnEx (t, l) -> UnEx (t, replace_card l)
