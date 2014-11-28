@@ -44,19 +44,7 @@ class slps_checker_plugin_t (plugin_name: string) =
 
         method transform rt =
             let sprog = self#get_input0 in
-            rt#caches#set_struc sprog (SkelStruc.compute_struc sprog);
-            let each_proc skels proc =
-                let sk = self#extract_proc rt sprog proc in
-                sk :: skels
-            in
-            let skels =
-                List.fold_left each_proc [] (Program.get_procs sprog)
-            in
-            let sk = match skels with
-                | [sk] -> sk
-                | skels -> SymbSkel.fuse skels "Fuse"
-            in
-            Sk.to_file "fuse.sk" sk;
+            let sk = Summary.summarize_optimize_fuse rt sprog in
             if "bounds" <> rt#caches#options.Options.spec
             then self#check rt sprog sk
             else begin (* compute the bounds using the summary *)
@@ -127,27 +115,6 @@ class slps_checker_plugin_t (plugin_name: string) =
             let specs = get_proper_specs rt#caches#options sprog [sk] in
             StrMap.iter each_form specs
 
-
-        method extract_proc rt prog proc =
-            logtm INFO ("  > Computing the summary of " ^ proc#get_name);
-            let sk = Summary.summarize rt prog proc in
-            logtm INFO
-                (sprintf "  > The summary has %d locations and %d rules"
-                    sk.Sk.nlocs sk.Sk.nrules);
-            logtm INFO ("  > Searching for reachable local states...");
-            let sk = SymbSkel.keep_reachable sk in
-
-            logtm INFO
-                (sprintf "  > Found %d reachable locations and %d rules"
-                    sk.Sk.nlocs sk.Sk.nrules);
-            (* remove self-loops *)
-            let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
-            (* deal with the effects of interval abstraction *)
-            logtm INFO ("  > Optimizing guards...");
-            let sk = SymbSkel.optimize_guards sk in
-            Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
-            logtm INFO ("    [DONE]");
-            sk
 
         method update_runtime rt =
             ()

@@ -1,9 +1,3 @@
-(** Constructing a summary similar to SymbSkel, but by enumerating SMT
-    models instead of a call to NuSMV.
- 
-    Igor Konnov, 2014
- *)
-
 open Printf
 
 open Batteries
@@ -15,8 +9,12 @@ open SpinIr
 open SpinIrImp
 open SymbSkel
 
+
+(* global path counter (hidden in the implementation) *)
+let path_counter = ref 0
+
 (** enumerate the values of missing variables *)
-(* XXX: most likely, inefficient *)
+(* XXX: there is a space for optimization *)
 let expand_cube f ctx partial_cube =
     let leave_unbound n e l =
         match e with
@@ -144,9 +142,6 @@ let enum_cubes rt ctx used vars cons assigns =
     end
 
 
-let path_counter = ref 0
-
-
 let each_path rt ctx cons vals =
     log INFO (sprintf "summarizing path %d..." !path_counter);
     path_counter := !path_counter + 1;
@@ -169,4 +164,36 @@ let each_path rt ctx cons vals =
 let summarize rt prog proc =
     path_counter := 0;
     SymbSkel.build_with (each_path rt) rt prog proc
+
+
+let summarize_optimize_fuse rt prog =
+    let map_proc proc =
+        logtm INFO ("  > Computing the summary of " ^ proc#get_name);
+        let sk = summarize rt prog proc in
+        let nl = sk.Sk.nlocs and nr = sk.Sk.nrules in
+        logtm INFO
+            (sprintf "  > The summary has %d locations and %d rules" nl nr);
+        logtm INFO ("  > Searching for reachable local states...");
+
+        let sk = SymbSkel.keep_reachable sk in
+        let nl = sk.Sk.nlocs and nr = sk.Sk.nrules in
+        logtm INFO
+            (sprintf "  > Found %d reachable locations and %d rules" nl nr);
+        (* remove self-loops *)
+        let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
+        (* deal with the effects of interval abstraction *)
+        logtm INFO ("  > Optimizing guards...");
+        let sk = SymbSkel.optimize_guards sk in
+        Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
+        logtm INFO ("    [DONE]");
+        sk
+    in
+    rt#caches#set_struc prog (SkelStruc.compute_struc prog);
+    let skels = List.map map_proc (Program.get_procs prog) in
+    let sk = match skels with
+        | [sk] -> sk
+        | skels -> SymbSkel.fuse skels "Fuse"
+    in
+    Sk.to_file "fuse.sk" sk;
+    sk
 
