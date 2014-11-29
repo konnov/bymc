@@ -190,15 +190,21 @@ let write_init_region ff prog skels init_form =
     List.iter p_expr (Program.get_assumes prog);
     let each_skel sk = List.iter p_expr sk.Sk.inits in
     List.iter each_skel skels;
-    F.fprintf ff "@ && @[<h>";
-    print_expr ff ~in_act:true init_form;
-    F.fprintf ff "@]"
+    if init_form <> (IntConst 1)
+    then begin
+        F.fprintf ff "@ && @[<h>";
+        print_expr ff ~in_act:true init_form;
+        F.fprintf ff "@]"
+    end
 
 
 let write_bad_region ff prog skels bad_form =
     F.fprintf ff "@[<hov 2>state = normal";
-    F.fprintf ff "@ && ";
-    print_expr ff ~in_act:true bad_form
+    if bad_form <> IntConst 1
+    then begin
+        F.fprintf ff "@ && ";
+        print_expr ff ~in_act:true bad_form
+    end
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
