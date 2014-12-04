@@ -24,6 +24,9 @@ BYMC_HOME=`cd $BYMC_HOME/..; pwd`
 PLUGIN_DIR=`cd $BYMC_HOME/../plugins; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
+# the experiment number: if not set, then use the number of seconds since 1970
+exp_no=${EXP_NO:-`date -u '+%s'`}
+# hash the arguments to identify the experiment
 
 cmd=""
 step="0"
@@ -57,7 +60,7 @@ function die {
 
 function to_verdict() {
     if [ "$out" == "" ]; then
-        out="|00:exitcode=abort|01:valid=maybe|02:spurious=maybe"
+        out="|00:exitcode=abort|01:valid=maybe|02:spurious=maybe|09:exp=$exp_no"
     fi
 
     END_TIME=$(date +%s)
@@ -128,7 +131,7 @@ while [ "$cmd" != "q" ]; do
 
     if [ "$code" == "0" ]; then
         echo "The property is verified in $step refinement steps"
-        out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
+        out="|00:exitcode=ok|01:valid=yes|02:spurious=no|09:exp=$exp_no"
         cmd="q"
     else
         mc_refine
@@ -144,7 +147,7 @@ while [ "$cmd" != "q" ]; do
         elif grep "error" refinement.out \
                 || grep "trace-concrete-example" refinement.out; then
             echo "It took $step refinement steps"
-            out="|00:exitcode=ok|01:valid=no|02:spurious=no"
+            out="|00:exitcode=ok|01:valid=no|02:spurious=no|09:exp=$exp_no"
             cmd="q"
         elif grep "trace-refined" refinement.out; then
             step=$((step+1))
