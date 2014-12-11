@@ -8,24 +8,8 @@ DEPTH=${DEPTH:-10} # parse options?
 
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
-if [ "$CUSTOM_SAT" != "" ]; then
-    set +e
-    echo "p cnf 0 0" | $CUSTOM_SAT 2>/dev/null 1>/dev/null; RES=$?
-    set -e
-    echo "RES=$RES"
-    if [ "$RES" -ne 10 ]; then
-        die "$CUSTOM_SAT does not work on empty problem"
-    fi
-fi
-
 if [ "$PLINGELING" -ne "0" ]; then
     CUSTOM_SAT=${LINGELING_TOOL:-plingeling}
-    set +e
-    echo "p cnf 0 0" | $CUSTOM_SAT 2>/dev/null 1>/dev/null; RES=$?
-    set -e
-    if [ "$RES" -ne 10 ]; then
-        die "$CUSTOM_SAT does not work on empty problem"
-    fi
     CUSTOM_SAT="$LINGELING_TOOL -t ${PLINGELING}"
 fi
 
@@ -128,10 +112,8 @@ function mc_verify_spec {
             tee_or_die "$MC_OUT" "nusmv failed"\
                 $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "$SCRIPT2" "${SRC}"
             set -o pipefail
-            set +e
             $TIME ${CUSTOM_SAT} 2>&1 "${CNF}.dimacs" | tee ${SAT_OUT}
             RET=${PIPESTATUS}
-            set -e
 
             if [ "$RET" -eq 20 ]; then
                 echo "--------------------------------------"
