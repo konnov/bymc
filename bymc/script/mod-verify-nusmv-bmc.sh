@@ -128,8 +128,10 @@ function mc_verify_spec {
             tee_or_die "$MC_OUT" "nusmv failed"\
                 $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "$SCRIPT2" "${SRC}"
             set -o pipefail
+            set +e
             $TIME ${CUSTOM_SAT} 2>&1 "${CNF}.dimacs" | tee ${SAT_OUT}
             RET=${PIPESTATUS}
+            set -e
 
             if [ "$RET" -eq 20 ]; then
                 echo "--------------------------------------"
