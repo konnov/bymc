@@ -8,16 +8,28 @@ DEPTH=${DEPTH:-10} # parse options?
 
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
-if [ "$PLINGELING" -eq "0" ]; then
-    LINGELING_TOOL=${LINGELING_TOOL:-lingeling}
-    LINGELING_TOOL=`which $LINGELING_TOOL` || die "$LINGELING_TOOL not found"
-else
-    LINGELING_TOOL=${LINGELING_TOOL:-plingeling}
-    LINGELING_TOOL=`which $LINGELING_TOOL` || die "$LINGELING_TOOL not found"
-    LINGELING_TOOL="$LINGELING_TOOL -t ${PLINGELING}"
+if [ "$CUSTOM_SAT" != "" ]; then
+    set +e
+    echo "p cnf 0 0" | $CUSTOM_SAT 2>/dev/null 1>/dev/null; RES=$?
+    set -e
+    echo "RES=$RES"
+    if [ "$RES" -ne 10 ]; then
+        die "$CUSTOM_SAT does not work on empty problem"
+    fi
 fi
 
-LINGELING_OUT="lingeling.out"
+if [ "$PLINGELING" -ne "0" ]; then
+    CUSTOM_SAT=${LINGELING_TOOL:-plingeling}
+    set +e
+    echo "p cnf 0 0" | $CUSTOM_SAT 2>/dev/null 1>/dev/null; RES=$?
+    set -e
+    if [ "$RES" -ne 10 ]; then
+        die "$CUSTOM_SAT does not work on empty problem"
+    fi
+    CUSTOM_SAT="$LINGELING_TOOL -t ${PLINGELING}"
+fi
+
+SAT_OUT="sat.out"
 
 function comp_symb_skel {
     OF="$BYMC_FLAGS"
@@ -97,32 +109,34 @@ function mc_verify_spec {
         $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
-        if [ "$LINGELING" -ne 0 ]; then
-            CNF="oneshot${LINGELING}"
+        if [ "$ONE_SHOT_LEN" -ne 0 ]; then
+            CNF="oneshot${ONE_SHOT_LEN}"
             # lingeling solves one-shot problems much faster!
             echo "--------------------------------------"
             echo " Finished refinement for length $DEPTH."
-            echo " Now running lingeling for length $LINGELING"
+            echo " Now running $CUSTOM_SAT for length $ONE_SHOT_LEN"
             echo "--------------------------------------"
-            SCRIPT2="script-oneshot-lingeling.nusmv"
+            SCRIPT2="script-oneshot-custom-sat.smv"
             echo "set on_failure_script_quits" >$SCRIPT2
             echo "go_bmc" >>$SCRIPT2
             echo "time" >>$SCRIPT2
-            echo "gen_ltlspec_sbmc -1 -k $LINGELING -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            echo "gen_ltlspec_sbmc -1 -k $ONE_SHOT_LEN -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            # that consumes lots of memory
             #echo "gen_ltlspec_bmc_onepb -k $LINGELING -P ${PROP} -o ${CNF}" >>$SCRIPT2
             echo "time" >>$SCRIPT2
             echo "quit" >>$SCRIPT2
             tee_or_die "$MC_OUT" "nusmv failed"\
                 $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "$SCRIPT2" "${SRC}"
             set -o pipefail
-            $TIME ${LINGELING_TOOL} 2>&1 "${CNF}.dimacs" | tee ${LINGELING_OUT}
+            $TIME ${CUSTOM_SAT} 2>&1 "${CNF}.dimacs" | tee ${SAT_OUT}
             RET=${PIPESTATUS}
 
             if [ "$RET" -eq 20 ]; then
                 echo "--------------------------------------"
                 echo "No counterexample found with bounded model checking."
-                echo "WARNING: To guarantee completeness, make sure that --lingeling is set properly"
-                echo "as per completeness threshold"
+                echo "WARNING: To guarantee completeness, make sure"
+                echo "         that -K (or --lingeling) is set properly"
+                echo "         as per completeness threshold"
                 true
             elif [ "$RET" -eq 10 ]; then
                 false
@@ -159,8 +173,8 @@ function mc_collect_stat {
     last=`grep 'Creating the formula specific k-dependent constraints' $MC_OUT \
         | perl -n -e 'if (/for k=(\d+)/) { print "$1\n" }' \
         | tail -n 2 | head -n 1`
-    if [ "$LINGELING" -ne 0 ]; then
-        time_stat=`grep maxresident $LINGELING_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    if [ "$ONE_SHOT_LEN" != "0" ]; then
+        time_stat=`grep maxresident $SAT_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
         lingeling_elapsed=`echo $time_stat | cut -d ' ' -f 3`
         lingeling_maxres=`echo $time_stat | cut -d ' ' -f 4`
     fi

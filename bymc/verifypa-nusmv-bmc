@@ -18,16 +18,20 @@ TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 
 # parse options
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,skel,voodoo,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:K:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,custom-sat:,skel,voodoo,no-reach,no-initial,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_quit() {
     echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where the switches are"
     echo "  -k|--length k: limit the BMC search with length k"
+    echo "  -K K: limit the custom solver with length K"
     echo "  -w|--nusmv-verbose <level>: set the verbosity level"
     echo "  --one-shot: instead of incremental BMC, check one-shot problem for the length"
-    echo "  --lingeling <large_k>: do refinement on k steps, then generate one shot problem for large_k steps and check it with lingeling"
+    echo "  --lingeling <large_k>: do refinement on k steps, then"
+    echo "      generate one shot problem for large_k steps and check it with lingeling"
+    echo "  --custom-sat command: do refinement on k steps, then generate one"
+    echo "          shot problem for K (use -K) and check it with command"
     echo "  --plingeling nworkers: use plingeling with nworkers"
     echo "  --skel: build symbolic skeleton first"
     echo "  --voodoo: same as --skel"
@@ -46,10 +50,12 @@ eval set -- "$TEMPOPTS"
 while true ; do
     case "$1" in
     -k|--length) DEPTH=$2 ; shift 2 ;;
+    -K) ONE_SHOT_LEN=$2 ; shift 2 ;;
     -w|--nusmv-verbose) NUSMV_VERBOSE=$2 ; shift 2 ;;
     --one-shot) ONE_SHOT=1 ; shift 1 ;;
-    --lingeling) LINGELING=$2 ; shift 2 ;;
+    --lingeling) ONE_SHOT_LEN=$2; CUSTOM_SAT="lingeling"; shift 2 ;;
     --plingeling) PLINGELING=$2 ; shift 2 ;;
+    --custom-sat) CUSTOM_SAT=$2 ; shift 2 ;;
     --skel) SKEL=1 ; shift 1 ;;
     --voodoo) SKEL=1 ; shift 1 ;;
     --no-reach) NO_REACH=1 ; shift 1 ;;
@@ -84,6 +90,6 @@ export BYMC_FLAGS="$@ $BYMC_FLAGS"
 # run the tool
 export TARGET_MC=nusmv-bmc
 export DEPTH NUSMV_VERBOSE ONE_SHOT NO_REACH NO_INITIAL COMPLETENESS
-export NO_UNROLLING LINGELING PLINGELING SKEL
+export NO_UNROLLING PLINGELING SKEL ONE_SHOT_LEN CUSTOM_SAT
 `dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
 
