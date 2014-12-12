@@ -67,6 +67,10 @@ function mc_verify_spec {
         SRC="main-sum.smv"
     fi
 
+    if [ "$NO_JUSTICE" != "" -a "$NO_JUSTICE" != "0" ]; then
+        perl -pi -e 's/JUSTICE /-- JUSTICE/g' $SRC
+    fi
+
     SCRIPT="script.nusmv"
     echo "set on_failure_script_quits" >$SCRIPT
     echo "go_bmc" >>$SCRIPT
@@ -77,10 +81,11 @@ function mc_verify_spec {
     else
         if [ "$COMPLETENESS" != "1" ]; then CF=""; else CF="-c"; fi
         if [ "$NO_UNROLLING" != "1" ]; then VU=""; else VU="-N"; fi
+        if [ "$NO_LOOPBACK" != "1" ]; then LB=""; else LB="-l -1"; fi
         if [ "$ONE_SHOT" != "1" ]; then
             echo "check_ltlspec_sbmc_inc $CF $VU -k $DEPTH -P ${PROP}" >>${SCRIPT}
         else
-            echo "gen_ltlspec_sbmc -k $DEPTH -1 -P ${PROP}" >>${SCRIPT}
+            echo "gen_ltlspec_sbmc -k $DEPTH -1 $LB -P ${PROP}" >>${SCRIPT}
 #            echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
     fi
@@ -95,6 +100,7 @@ function mc_verify_spec {
     if [ '!' -f ${CEX} ]; then
         if [ "$ONE_SHOT_LEN" -ne 0 ]; then
             CNF="oneshot${ONE_SHOT_LEN}"
+            if [ "$NO_LOOPBACK" != "1" ]; then LB=""; else LB="-l -1"; fi
             # lingeling solves one-shot problems much faster!
             echo "--------------------------------------"
             echo " Finished refinement for length $DEPTH."
@@ -104,7 +110,7 @@ function mc_verify_spec {
             echo "set on_failure_script_quits" >$SCRIPT2
             echo "go_bmc" >>$SCRIPT2
             echo "time" >>$SCRIPT2
-            echo "gen_ltlspec_sbmc -1 -k $ONE_SHOT_LEN -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            echo "gen_ltlspec_sbmc -1 $LB -k $ONE_SHOT_LEN -P ${PROP} -o ${CNF}" >>${SCRIPT2}
             # that consumes lots of memory
             #echo "gen_ltlspec_bmc_onepb -k $LINGELING -P ${PROP} -o ${CNF}" >>$SCRIPT2
             echo "time" >>$SCRIPT2
