@@ -98,7 +98,7 @@ function mc_verify_spec {
         $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
-        if [ "$ONE_SHOT_LEN" -ne 0 ]; then
+        if [ "$ONE_SHOT_LEN" != "0" ]; then
             CNF="oneshot${ONE_SHOT_LEN}"
             if [ "$NO_LOOPBACK" != "1" ]; then LB=""; else LB="-l -1"; fi
             # lingeling solves one-shot problems much faster!
