@@ -15,6 +15,7 @@ PLINGELING=0
 SKEL=0
 NO_LOOPBACK=0
 NO_JUSTICE=0
+ONE_SHOT_LEN=0
 MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
