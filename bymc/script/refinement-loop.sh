@@ -13,7 +13,7 @@ fi
 
 ORIG_DIR=`pwd`
 
-trap "cd $ORIG_DIR; exit" SIGHUP SIGINT SIGTERM
+trap "cd $ORIG_DIR; kill 0" SIGHUP SIGINT SIGTERM
 set -e # fail on first error
 export CAMLRUNPARAM="b"
 
