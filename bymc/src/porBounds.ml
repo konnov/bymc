@@ -446,7 +446,7 @@ let does_r_affect_cond solver shared lockt r cond =
     res
 
 
-let compute_unlocking loc_reach lockt solver sk
+let compute_unlocking ?(against_only=true) loc_reach lockt solver sk
         condmap rule_pre actmap rule_post =
     (* The set of type P2Set keeps the pre- and postconditions that
        has been already explored. As many rules are assigned the same
@@ -490,10 +490,12 @@ let compute_unlocking loc_reach lockt solver sk
         else (edges_seen, checked, milestones)
     in
 
-    let is_against_flow ((i1, r1), (i2, r2)) =
+    let is_pair_included ((i1, r1), (i2, r2)) =
         (* r1 does not precede r2 in the transitive closure
            of the flow dependency *)
-        i1 <> i2 && (not (MGraph.mem_edge loc_reach r1.Sk.dst r2.Sk.src))
+        (i1 <> i2
+            && (not against_only
+                || not (MGraph.mem_edge loc_reach r1.Sk.dst r2.Sk.src)))
     in
     (* rules and their indices *)
     let rules_enum1 =
@@ -504,7 +506,7 @@ let compute_unlocking loc_reach lockt solver sk
     in
     let _, _, mstone_set =
         (BatEnum.cartesian_product rules_enum1 rules_enum2)
-            |> BatEnum.filter is_against_flow
+            |> BatEnum.filter is_pair_included
             |> BatEnum.fold collect_milestones
                 (P2Set.empty, P2Set.empty, PSet.empty)
     in
@@ -634,6 +636,11 @@ let compute_deps solver sk =
     let n_umiles = List.length umiles in
     logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
     List.iter (print_milestone Unlock) umiles;
+    let n_back_forth =
+        List.length (compute_unlocking ~against_only:false loc_reach Unlock
+            solver sk cond_map rule_pre act_map rule_post) in
+    logtm INFO
+        (sprintf "> %d forward + backward unlocking milestones" n_back_forth);
 
     logtm INFO (sprintf "> constructing locking milestones...");
     let lmiles = compute_unlocking loc_reach Lock solver sk
@@ -641,6 +648,11 @@ let compute_deps solver sk =
     let n_lmiles = List.length lmiles in
     logtm INFO (sprintf "> %d locking milestones" n_lmiles);
     List.iter (print_milestone Lock) lmiles;
+    let n_back_forth =
+        List.length (compute_unlocking ~against_only:false loc_reach Lock
+            solver sk cond_map rule_pre act_map rule_post) in
+    logtm INFO
+        (sprintf "> %d forward + backward locking milestones" n_back_forth);
 
     logtm INFO (sprintf "> constructing implications...");
     let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
