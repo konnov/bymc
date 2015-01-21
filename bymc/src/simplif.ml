@@ -57,15 +57,32 @@ let rec canonical = function
             match classify_expr l, classify_expr r with
             | OnlyConst, ConstOrParamOrVar
             | ConstOrParam, ConstOrParamOrVar ->
-                    BinEx (symm_of_arith_rel t, r, l)
+                    BinEx (symm_of_arith_rel t, canonical r, canonical l)
 
             | ConstOrParamOrVar, OnlyConst
             | ConstOrParamOrVar, ConstOrParam ->
-                    BinEx (t, l, r)
+                    BinEx (t, canonical l, canonical r)
 
             | _ -> if (expr_s l) < (expr_s r)
-                then BinEx (t, l, r)
-                else BinEx (symm_of_arith_rel t, r, l)
+                then BinEx (t, canonical l, canonical r)
+                else BinEx (symm_of_arith_rel t, canonical r, canonical l)
+        end
+
+    | BinEx (MULT as t, l, r) ->
+            (* especially for FAST that report syntax error on x * 2 *)
+        begin
+            match classify_expr l, classify_expr r with
+            | OnlyConst, ConstOrParamOrVar
+            | ConstOrParam, ConstOrParamOrVar ->
+                    BinEx (t, canonical l, canonical r)
+
+            | _, OnlyConst
+            | ConstOrParamOrVar, ConstOrParam ->
+                    BinEx (MULT, canonical r, canonical l)
+
+            | _ -> if (expr_s l) < (expr_s r)
+                then BinEx (t, canonical l, canonical r)
+                else BinEx (MULT, canonical r, canonical l)
         end
 
     | BinEx (t, l, r) ->

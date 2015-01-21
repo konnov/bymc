@@ -1,15 +1,15 @@
 (* Tool options. As the number of options continues to grow,
    this is one place to check the options and to access them from other modules.
 
-   Igor Konnov, 2013-2014
+   Igor Konnov, 2013-2015
  *)
 
 open Str
 
 open Accums
 
-let version = [0; 9; 0]
-let version_full = "ByMC-0.9.0-feature-SLPS"
+let version = [0; 9; 5]
+let version_full = "ByMC-0.9.5-feature-SLPS"
 
 let macro_prefix = "macro."
 

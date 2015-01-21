@@ -158,7 +158,7 @@ let write_rule ff prog sk num r =
     if r.Sk.guard <> IntConst 1
     then begin
         F.fprintf ff "&& ";
-        print_expr ff (eliminate_div r.Sk.guard);
+        print_expr ff (Simplif.canonical (eliminate_div r.Sk.guard));
     end;
     F.fprintf ff "@];@,";
     F.fprintf ff "  action := @[<hov 2>";
@@ -184,7 +184,7 @@ let write_init_region ff prog skels init_form =
     F.fprintf ff "@[<hov 2>state = normal";
     let p_expr e =
         F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:true (eliminate_div e);
+        print_expr ff ~in_act:true (Simplif.canonical (eliminate_div e));
         F.fprintf ff "@]"
     in
     List.iter p_expr (Program.get_assumes prog);
@@ -193,7 +193,7 @@ let write_init_region ff prog skels init_form =
     if init_form <> (IntConst 1)
     then begin
         F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:true init_form;
+        print_expr ff ~in_act:true (Simplif.canonical (eliminate_div init_form));
         F.fprintf ff "@]"
     end
 
