@@ -66,12 +66,16 @@ function mc_collect_stat {
     # TODO: FINISH
     if grep -q "out of memory" ${MC_OUT}; then
         res="OOM"
+    elif grep -q "BDD too large" ${MC_OUT}; then
+        res="BDDERR"
     elif grep -q "terminated by signal 9" ${MC_OUT}; then
         res="TIMEOUT"
     elif grep -q "specification is satisfied" ${MC_OUT}; then
         res="SAT"
     elif grep -q "specification is violated" ${MC_OUT}; then
         res="UNSAT"
+    elif grep -q "terminated by signal" ${MC_OUT}; then
+        res="ABORT"
     elif grep -q "Abort" ${MC_OUT} || grep -q "syntax error" ${MC_OUT}; then
         res="ABORT"
     else
