@@ -56,9 +56,9 @@ function mc_collect_stat {
     locking=`egrep "[0-9] locking milestones" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/.*(\d+) locking.*/) { print "$1\n" }'`
     nlocs=`grep "locations" $POST_OUT | tail -n 1 \
-        | perl -n -e 'if (/.*there are (\d+) locations.*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*found (\d+) locations.*/) { print "$1\n" }'`
     nrules=`grep "rules" $POST_OUT | tail -n 1 \
-        | perl -n -e 'if (/.*there are (\d+) rules*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*found (\d+) rules*/) { print "$1\n" }'`
     nschemas=`grep "schemas to inspect" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/\D*(\d+) schemas to inspect*/) { print "$1\n" }'`
     schema_stat=`grep "npaths =" $POST_OUT`
