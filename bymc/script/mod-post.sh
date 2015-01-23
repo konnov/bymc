@@ -52,15 +52,15 @@ function mc_collect_stat {
     mcabound=`grep "the mild counter abstraction bound for" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/.*bound for.*is (\d+).*/) { print "$1\n" }'`
     unlocking=`grep "[0-9] unlocking milestones" $POST_OUT | tail -n 1 \
-        | perl -n -e 'if (/.*(\d+) unlocking.*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*?(\d+) unlocking.*/) { print "$1\n" }'`
     locking=`egrep "[0-9] locking milestones" $POST_OUT | tail -n 1 \
-        | perl -n -e 'if (/.*(\d+) locking.*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*?(\d+) locking.*/) { print "$1\n" }'`
     nlocs=`grep "locations" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/.*found (\d+) locations.*/) { print "$1\n" }'`
     nrules=`grep "rules" $POST_OUT | tail -n 1 \
         | perl -n -e 'if (/.*found (\d+) rules*/) { print "$1\n" }'`
     nschemas=`grep "schemas to inspect" $POST_OUT | tail -n 1 \
-        | perl -n -e 'if (/\D*(\d+) schemas to inspect*/) { print "$1\n" }'`
+        | perl -n -e 'if (/.*?(\d+) schemas to inspect*/) { print "$1\n" }'`
     schema_stat=`grep "npaths =" $POST_OUT`
     npaths=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$1\n" }'`
     minlen=`echo $schema_stat | perl -n -e 'if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) { print "$2\n" }'`
