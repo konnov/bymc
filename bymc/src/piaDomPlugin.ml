@@ -30,6 +30,7 @@ class pia_dom_plugin_t (plugin_name: string) =
                 log INFO (sprintf "   forced the thresholds: [%s]" ts_s);
                 m_dom <- Some (new pia_domain ts)
             end else m_dom <- Some (create rt#solver roles prog);
+            log INFO (sprintf "   PIA domain size: %d" (get_some m_dom)#length);
             prog
 
         method update_runtime rt =
