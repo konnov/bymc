@@ -68,7 +68,8 @@ print "40:post-usersec=${b_user}|41:post-syssec=${b_sys}\
 |50:post-cabound=${cabound}|51:post-mild-cabound=${mcabound}\
 |52:post-mild-bound=${mbound}|52:post-nschemas=${nschemas}\
 |53:post-minlen=${minlen}|54:post-maxlen=${maxlen}\
-|55:post-avglen=${avglen}|56:post-nsccs=${nsccs}\n"
+|55:post-avglen=${avglen}|56:post-nsccs=${nsccs}\
+|59:post-domsize=${dom_size}\n"
 '`
 
     echo "10:Result=$res|$stat"
