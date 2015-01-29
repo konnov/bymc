@@ -238,6 +238,10 @@ let expr_s ~is_bool var_fun e =
         sprintf "(%s & %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
     | BinEx (OR, f, g) ->
         sprintf "(%s | %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
+    | BinEx (IMPLIES, f, g) ->
+        sprintf "(%s -> %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
+    | BinEx (EQUIV, f, g) ->
+        sprintf "(%s <-> %s)" (to_s ~is_bool:true f) (to_s ~is_bool:true g)
     | BinEx (ASGN, f, g) ->
         sprintf "%s = %s" (to_s f) (to_s g)
     | BinEx (AT, proc, lab) ->
