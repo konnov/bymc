@@ -791,10 +791,12 @@ let is_rule_unlocked deps uset lset rule_no =
 (**
    Compute the tree of representative executions.
 
-   Here we compute a semilinear regular path scheme (SLPS),
-   see, e.g., Flat counter automata almost everywhere.
-   The difference is that we do not represent ALL executions with SLPS,
-   but only the representative ones.
+   Here we compute a schema (see our CAV'15 submission).
+   It has some relation to semi-linear path scheme (SLPS), but not
+   exactly the same thing, see, e.g., Flat counter automata almost everywhere.
+
+   The difference is that they prove existence of SLPS iff their algorithm
+   converges, but we construct SLPS explicitly.
  *)
 let compute_slps_tree sk deps =
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
