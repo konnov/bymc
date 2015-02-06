@@ -33,9 +33,9 @@ function mc_refine {
 
 function mc_collect_stat {
     if egrep -q "counterexample for .* found" ${POST_OUT}; then
-        res="ERROR"
+        res="UNSAT"
     else
-        res="SUCCESS"
+        res="SAT"
     fi
 
     stat=`perl <$POST_OUT -e '
