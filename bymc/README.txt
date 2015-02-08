@@ -118,15 +118,21 @@ or using lingeling for <length2> steps
 
 gives bounds on the diameter of counter systems and counter abstractions
 
-the new way to do that is:
+the new way to do that is (our CAV'15 submission):
 
 ./verifypa-post ${benchmarks}/bcast-byz.pml all
 
 The latter will check the properties as well (Sec. 4.6).
 
-4.6 PARTIAL ORDERS AND ACCELERATION IN SMT
+4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 submission)
 
-./verifypa-post ${benchmarks}/bcast-byz.pml all
+using Z3:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
+
+or another SMT solver:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
 
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
