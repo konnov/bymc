@@ -224,14 +224,14 @@ let rec write_stmt type_tab annot ff lvl indent_first s =
 
     | MAssume (_, e) ->
         openb ff lvl indent_first;
-        Format.pp_print_string ff "assume(";
+        Format.pp_print_string ff "/* assume(";
         fprint_expr_mangled ff e;
-        Format.pp_print_string ff ");";
+        Format.pp_print_string ff "); */";
         closeb ff
 
     | MHavoc (_, v) ->
         openb ff lvl indent_first;
-        Format.fprintf ff "havoc(%s);" v#get_name;
+        Format.fprintf ff "/* havoc(%s); */" v#get_name;
         closeb ff
 
     | MUnsafe (_, s) ->
