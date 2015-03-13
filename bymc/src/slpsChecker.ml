@@ -1,6 +1,7 @@
-(* Encode regular expressions on paths and check them with an SMT solver.
+(*
+ * Encode path schemas and check them with an SMT solver.
  *
- * Igor Konnov, 2014
+ * Igor Konnov, 2014-2015
  *)
 
 open Printf
@@ -95,6 +96,66 @@ module F = struct
             ignore (solver#append_expr (map_frame_vars frame next_frame e)) in
         List.iter add_expr assertions
 
+end
+
+
+(**
+There are different ways to enumerate schemas, which are effectively
+branches of the schema tree.  Here we introduce a general interface for
+different tactics that apply to a depth-first search over the schema tree.
+*)
+module type Tac = sig type node_kind_t = Leaf | Intermediate
+    (** declare a new frame, which corresponds to a new state *)
+    val declare_frame: F.frame_t -> unit
+    (** add an assertion to a pair of frames (previous, next)
+        in a form of an expression over the variables of the two frames.
+     *)
+    val assert_frame: F.frame_t -> F.frame_t -> Spin.token SpinIr.expr -> unit
+
+    (** This function is called when a new tree node is entered.
+        The functions enter/leave are called in the depth-first order.
+
+        @param frame the frame of the state preceding the node
+        @param is_leaf the flag indicating whether the node is
+            leaf (Leaf), or not (Intermediate)
+     *)
+    val enter_node: F.frame_t -> node_kind_t -> unit
+
+    (** This function is called when a tree node is left.
+        The functions enter/leave are called in the depth-first order.
+
+        @param frame the frame of the state preceding the node
+        @param is_leaf the flag indicating whether the node is
+            leaf (Leaf), or not (Intermediate)
+     *)
+    val leave_node: F.frame_t -> node_kind_t -> unit
+
+    (* Enter the new context, also called a branch in the schema tree.
+       The functions enter/leave are called in the depth-first order.
+     *)
+    val enter_context: F.frame_t -> unit
+
+    (* Leave the context, also called a branch in the schema tree.
+       The functions enter/leave are called in the depth-first order.
+     *)
+    val leave_context: F.frame_t -> unit
+end
+
+
+module TreeTac: Tac = struct
+    type node_kind_t = Leaf | Intermediate
+
+    let declare_frame f = ()
+
+    let assert_frame prev next e = ()
+
+    let enter_node f k = ()
+
+    let leave_node f k = ()
+
+    let enter_context f = ()
+
+    let leave_context f = ()
 end
 
 
