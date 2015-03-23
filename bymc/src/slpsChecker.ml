@@ -180,8 +180,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
             let k_s = kind_s kind in
             slv#comment
                 (sprintf "push@%d: check_node[%s] at frame %d" depth k_s frame.F.no);
-            slv#push_ctx;
-            slv#comment (if kind = Leaf then "last segment" else "next segment")
+            slv#push_ctx
 
         method check_property frame form =
             false
@@ -196,12 +195,12 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
             let slv = rt#solver in
             slv#push_ctx;
             slv#comment
-                (sprintf "push@%d: check_branch: potential milestones at frame %d"
+                (sprintf "push@%d: enter_context: potential milestones at frame %d"
                         depth frame.F.no)
 
         method leave_context depth frame =
             let slv = rt#solver in
-            slv#comment (sprintf "pop@%d: check_branch at frame %d" depth frame.F.no);
+            slv#comment (sprintf "pop@%d: leave_context at frame %d" depth frame.F.no);
             slv#pop_ctx
 
     end
@@ -409,58 +408,58 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
         assert (stack_level = rt#solver#get_stack_level);
         endf, end_hist, err
     in
-    let rec check_node depth frame_hist frame = function
-        | T.Leaf ruleset ->
-            let stack_level = rt#solver#get_stack_level in
-            tac#enter_node depth frame Leaf;
-            display_depth depth true;
-            let seg = PorBounds.unpack_rule_set ruleset deps.D.full_segment in
-            let endf, end_hist, err = check_segment frame_hist frame seg in
-            tac#leave_node depth frame Leaf;
-            assert (stack_level = rt#solver#get_stack_level);
+    let rec check_node depth frame_hist
+            { T.pre_rule_set; T.pre_cond; T.segment; T.succ } =
+        (* check the context *)
+        let has_context = not (is_rule_set_empty pre_rule_set) in
+        let start_frame = List.hd frame_hist in
+        tac#enter_context depth start_frame;
 
-            on_leaf (endf.F.no + 1);
-            err
+        (* only one of the rules should actually fire *)
+        let cond_frames =
+            if has_context
+            then begin
+                let _, _, milestone_expr, _ = pre_cond in
+                (* assert that the milestone is unlocked *)
+                tac#assert_frame start_frame start_frame [milestone_expr];
+                (* and this effects into firing of the following rules *)
+                let cond_rules =
+                    PorBounds.unpack_rule_set pre_rule_set deps.D.full_segment in
+                let _, new_frames =
+                    List.fold_left (each_rule true) (start_frame, []) cond_rules in
+                let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
+                tac#assert_frame start_frame start_frame [constr];
+                new_frames @ frame_hist
+            end
+            else frame_hist
+        in
 
-        | T.Node (ruleset, branches) ->
-            let stack_level = rt#solver#get_stack_level in
-            tac#enter_node depth frame Intermediate;
-            display_depth depth false;
-            let seg = PorBounds.unpack_rule_set ruleset deps.D.full_segment in
-            let seg_endf, end_hist, err = check_segment frame_hist frame seg in
+        (* check the segment *)
+        let frame = List.hd cond_frames in
+        let node = if (succ = []) then Leaf else Intermediate in
+        let stack_level = rt#solver#get_stack_level in
+        tac#enter_node depth frame node;
+        display_depth depth true;
+        let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
+        let endf, end_hist, err = check_segment cond_frames frame seg in
 
-            let each_branch err b =
-                check_branch (1 + depth) end_hist seg_endf err b in
-            let res = List.fold_left each_branch err branches in
-            tac#leave_node depth frame Intermediate;
-            assert (stack_level = rt#solver#get_stack_level);
-            res
-    and check_branch depth frame_hist frame err br =
-        if err
-        then true
-        else begin
-            (* only one of the rules should actually fire *)
-            let stack_level = rt#solver#get_stack_level in
-            tac#enter_context depth frame;
+        if node = Leaf
+        then begin
+            on_leaf (endf.F.no + 1)
+        end;
 
-            let _, _, milestone_expr, _ = br.T.cond_after in
-            (* assert that the milestone is unlocked *)
-            tac#assert_frame frame frame [milestone_expr];
-            (* and this effects into firing of the following rules *)
-            let cond_rules =
-                PorBounds.unpack_rule_set br.T.cond_set deps.D.full_segment in
-            let endf, new_frames =
-                List.fold_left (each_rule true) (frame, []) cond_rules in
-            let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
-            tac#assert_frame frame frame [constr];
-            let end_hist = new_frames @ frame_hist in
-            let res = check_node (1 + depth) end_hist endf br.T.subtree in
-            tac#leave_context depth frame;
-            assert (stack_level = rt#solver#get_stack_level);
-            res (* when SAT, an error is found *)
-        end
+        (* and check the subtree *)
+        let each_succ err s =
+            if err then err else check_node (1 + depth) end_hist s
+        in
+        let res = List.fold_left each_succ err succ in
+        tac#leave_node depth frame node;
+        assert (stack_level = rt#solver#get_stack_level);
+
+        tac#leave_context depth start_frame;
+        res
     in
-    check_node 0 [start_frame] start_frame tree
+    check_node 0 [start_frame] tree
 
 
 let extract_spec type_tab s =

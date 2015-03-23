@@ -240,18 +240,12 @@ let pack_rule_set rule_nos =
 let unpack_rule_set set segment =
     List.filter (BatBitSet.mem set) segment
 
+let is_rule_set_empty set =
+    0 = (BatBitSet.count set)
+
 
 (* instead of constructing plain paths, we construct a tree *)
 module T = struct
-    (* TODO: refactor it, we don't need schema_tree_t and schema_branch_t.
-       Every node can carry cond_before, cond_set, rule_nos, and successor nodes.
-       This will better reflect the notion of schemas:
-       <node 1: cond_rules {cond_before} rules>
-         --> <node 2: cond_rules {cond_before} rules>
-             --> <node 3: cond_rules {cond_before} rules>
-         --> <node 4: cond_rules {cond_before} rules>
-     *)
-
     (** the tree representing the execution schema *)
     type schema_tree_t = {
         pre_rule_set: rule_nos_t; (** a rule from this set fires before and activates pre_cond *)
@@ -259,21 +253,6 @@ module T = struct
         segment: rule_nos_t;      (** the rules of the node's segment *)
         succ: schema_tree_t list  (** successor nodes in the tree *)
     }
-
-
-(*
-    (** a semi-linear path schema represented as a tree *)
-    type schema_tree_t =
-        | Leaf of rule_nos_t (** segment *)
-        | Node of rule_nos_t (** segment *) * schema_branch_t list (** branches *)
-
-    (** and a branch of a tree *)
-    and schema_branch_t = {
-        cond_after: mstone_t;   (** the condition guarding the branch *)
-        cond_set: rule_nos_t; (** the possible rules that are fired with this condition *)
-        subtree: schema_tree_t; (** the following subtree *)
-    }
-    *)
 end
    
 
@@ -284,14 +263,14 @@ let print_tree out ?(milestones_only=false) full_segment tree =
         then begin
             let (name, _, _, _) = pre_cond in
             let rules_s = str_join " | " (List.map int_s cond_rules) in
-            fprintf out "%s" (String.make (4 * level) '.');
+            fprintf out "%s" (String.make (4 * level) '-');
             if not milestones_only
             then fprintf out "%s: (%s)\n" name rules_s
             else fprintf out "%3s\n" name;
         end;
         if not milestones_only
         then begin
-            fprintf out "%s" (String.make level '.');
+            fprintf out "%s" (String.make (4 * level + 4) '.');
             fprintf out "[ ";
             let seg = unpack_rule_set segment full_segment in
             List.iter (fun r -> fprintf out " %d " r) seg;
@@ -829,7 +808,6 @@ let compute_slps_tree sk deps =
                 let unlocked =
                     List.filter (is_rule_unlocked deps new_uset new_lset) deps.D.full_segment
                 in
-                let seg = pack_rule_set unlocked in
                 let maxlen, succ = build_tree new_uset new_lset in
                 let node = 
                     {
@@ -839,22 +817,26 @@ let compute_slps_tree sk deps =
                         T.succ
                     }
                 in
-                (1 + maxlen, node) :: accum
+                (maxlen, node) :: accum
         in
-        let unlocked =
-            List.filter (is_rule_unlocked deps uset lset) deps.D.full_segment in
-        let seg = pack_rule_set unlocked in
-        let len_and_branches = List.fold_left each_cond [] (uconds @ lconds) in
+        let len_and_nodes = List.fold_left each_cond [] (uconds @ lconds) in
         let cmp (i, _) (j, _) = compare i j in
-        let branches = List.map snd (List.sort cmp len_and_branches) in
-        let maxlen =
-            List.fold_left max 0 (List.map fst len_and_branches) in
-        if branches = []
-        then (1 + maxlen, T.Leaf seg)
-        else (1 + maxlen, T.Node (seg, branches))
+        let nodes = List.map snd (List.sort cmp len_and_nodes) in
+        let maxlen = List.fold_left max 0 (List.map fst len_and_nodes) in
+        (1 + maxlen, nodes)
     in
-    let _, tree = build_tree PSet.empty PSet.empty in
-    tree
+    let _, children = build_tree PSet.empty PSet.empty in
+    let unlocked =
+        List.filter (is_rule_unlocked deps PSet.empty PSet.empty)
+            deps.D.full_segment
+    in
+    {
+        T.pre_rule_set = (BatBitSet.create 0);
+        T.pre_cond = ("_", (PSet.new_thing ()), SpinIr.Nop "", Unlock);
+        T.segment = pack_rule_set unlocked;
+        T.succ = children
+    }
+
 
 
 let collect_actions accum sk =
