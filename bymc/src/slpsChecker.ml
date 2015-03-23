@@ -368,10 +368,10 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
         tac#assert_frame frame new_frame accelerated;
         (new_frame, new_frame :: fs)
     in
-    let rec sum = function
+    let rec sum_factors = function
         | [] -> IntConst 0
         | [frame] -> Var frame.F.accel_v
-        | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum tl)
+        | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum_factors tl)
     in
     let check_segment frame_hist frame seg =
         let endf, end_hist =
@@ -435,8 +435,8 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
                 PorBounds.unpack_rule_set br.T.cond_set deps.D.full_segment in
             let endf, new_frames =
                 List.fold_left (each_rule true) (frame, []) cond_rules in
-            let constr = BinEx (Spin.EQ, IntConst 1, sum new_frames) in
-            ignore (rt#solver#append_expr constr);
+            let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
+            tac#assert_frame frame frame [constr];
             let end_hist = new_frames @ frame_hist in
             let res = check_node (1 + depth) end_hist endf br.T.subtree in
             tac#leave_context depth frame;
