@@ -243,6 +243,25 @@ let unpack_rule_set set segment =
 
 (* instead of constructing plain paths, we construct a tree *)
 module T = struct
+    (* TODO: refactor it, we don't need schema_tree_t and schema_branch_t.
+       Every node can carry cond_before, cond_set, rule_nos, and successor nodes.
+       This will better reflect the notion of schemas:
+       <node 1: cond_rules {cond_before} rules>
+         --> <node 2: cond_rules {cond_before} rules>
+             --> <node 3: cond_rules {cond_before} rules>
+         --> <node 4: cond_rules {cond_before} rules>
+     *)
+
+    (** the tree representing the execution schema *)
+    type schema_tree_t = {
+        pre_rule_set: rule_nos_t; (** a rule from this set fires before and activates pre_cond *)
+        pre_cond: mstone_t;       (** the precondition that must hold true *)
+        segment: rule_nos_t;      (** the rules of the node's segment *)
+        succ: schema_tree_t list  (** successor nodes in the tree *)
+    }
+
+
+(*
     (** a semi-linear path schema represented as a tree *)
     type schema_tree_t =
         | Leaf of rule_nos_t (** segment *)
@@ -254,59 +273,41 @@ module T = struct
         cond_set: rule_nos_t; (** the possible rules that are fired with this condition *)
         subtree: schema_tree_t; (** the following subtree *)
     }
+    *)
 end
    
 
 let print_tree out ?(milestones_only=false) full_segment tree =
-    let rec print level = function
-        | T.Leaf ruleset ->
+    let rec print level { T.pre_rule_set; T.pre_cond; T.segment; T.succ } =
+        let cond_rules = unpack_rule_set pre_rule_set full_segment in
+        if cond_rules <> []
+        then begin
+            let (name, _, _, _) = pre_cond in
+            let rules_s = str_join " | " (List.map int_s cond_rules) in
+            fprintf out "%s" (String.make (4 * level) '.');
             if not milestones_only
-            then begin
-                fprintf out "%s" (String.make level '.');
-                fprintf out "[ ";
-                let seg = unpack_rule_set ruleset full_segment in
-                List.iter (fun r -> fprintf out " %d " r) seg;
-                fprintf out " ]\n"
-            end
-            else fprintf out "\n"
-
-        | T.Node (ruleset, branches) ->
-            if not milestones_only
-            then begin
-                fprintf out "%s" (String.make level '.');
-                fprintf out "[ ";
-                let seg = unpack_rule_set ruleset full_segment in
-                List.iter (fun r -> fprintf out " %d " r) seg;
-                fprintf out " ]\n";
-            end;
-
-            if branches <> []
-            then begin
-                each_branch true level (List.hd branches);
-                List.iter (each_branch false level) (List.tl branches)
-            end
-
-    and each_branch is_first level { T.cond_after; T.cond_set; T.subtree } =
-        let (name, _, _, _) = cond_after in
-        let cond_rules = unpack_rule_set cond_set full_segment in
-        let rules_s = str_join " | " (List.map int_s cond_rules) in
-        if not is_first
-        then fprintf out "%s" (String.make (4 * level) '.');
+            then fprintf out "%s: (%s)\n" name rules_s
+            else fprintf out "%3s\n" name;
+        end;
         if not milestones_only
-        then fprintf out "%s: (%s)\n" name rules_s
-        else fprintf out "%3s " name;
-        print (level + 1) subtree
-    in 
+        then begin
+            fprintf out "%s" (String.make level '.');
+            fprintf out "[ ";
+            let seg = unpack_rule_set segment full_segment in
+            List.iter (fun r -> fprintf out " %d " r) seg;
+            fprintf out " ]\n";
+        end;
+        List.iter (print (level + 1)) succ
+    in
     print 0 tree;
     fprintf out "\n"
 
 
 let tree_leafs_count tree = 
-    let rec f = function
-        | T.Leaf _ -> 1
-        | T.Node (_, bs) ->
-            List.fold_left (+)
-                0 (List.map (fun b -> f b.T.subtree) bs)
+    let rec f { T.succ } =
+        if succ = []
+        then 1
+        else List.fold_left (fun a n -> a + (f n)) 0 succ
     in
     f tree
 
@@ -825,15 +826,20 @@ let compute_slps_tree sk deps =
                     List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
                         |> List.filter (is_rule_unlocked deps new_uset lset)
                 in
-                let maxlen, subtree = build_tree new_uset new_lset in
-                let branch = 
+                let unlocked =
+                    List.filter (is_rule_unlocked deps new_uset new_lset) deps.D.full_segment
+                in
+                let seg = pack_rule_set unlocked in
+                let maxlen, succ = build_tree new_uset new_lset in
+                let node = 
                     {
-                        T.cond_after = (name, cond_id, expr, lockt);
-                        T.cond_set = pack_rule_set all_guarded_with_and_enabled;
-                        T.subtree
+                        T.pre_rule_set = pack_rule_set all_guarded_with_and_enabled;
+                        T.pre_cond = (name, cond_id, expr, lockt);
+                        T.segment = pack_rule_set unlocked;
+                        T.succ
                     }
                 in
-                (maxlen, branch) :: accum
+                (1 + maxlen, node) :: accum
         in
         let unlocked =
             List.filter (is_rule_unlocked deps uset lset) deps.D.full_segment in

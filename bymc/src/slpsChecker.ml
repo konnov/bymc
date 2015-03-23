@@ -132,6 +132,18 @@ class type tac_t =
          *)
         method enter_node: int -> F.frame_t -> node_kind_t -> unit
 
+        (**
+         * Check, whether the property is violated in the current frame.
+         * The actual check can be postponed, depending on the actual tactic
+         * implementation. The only guarantee is that if the property is violated
+         * for some tree node, then it will be eventually reported for some call
+         * of check_property
+         *
+         * @param frame current frame
+         * @form ltl propositional formula
+         *)
+        method check_property: F.frame_t -> Spin.token SpinIr.expr -> bool
+
         (** This function is called when a tree node is left.
             The functions enter/leave are called in the depth-first order.
 
@@ -155,7 +167,7 @@ class type tac_t =
 
 
 class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
-    object
+    object(self)
 
         method declare_frame f =
             F.declare_frame rt#solver tt f
@@ -170,6 +182,9 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
                 (sprintf "push@%d: check_node[%s] at frame %d" depth k_s frame.F.no);
             slv#push_ctx;
             slv#comment (if kind = Leaf then "last segment" else "next segment")
+
+        method check_property frame form =
+            false
 
         method leave_node depth frame kind =
             let slv = rt#solver in
@@ -378,6 +393,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
             List.fold_left (each_rule false) (frame, frame_hist) seg in
         rt#solver#comment "push: check_segment";
         let stack_level = rt#solver#get_stack_level in
+        
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
         if is_c_false bad_form
