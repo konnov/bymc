@@ -114,23 +114,42 @@ different tactics that apply to a depth-first search over the schema tree.
 *)
 class type tac_t =
     object
-        (** declare a new frame, which corresponds to a new state *)
-        method declare_frame: F.frame_t -> unit
-        
-        (** add an assertion to a pair of frames (previous, next)
-            in a form of an expression over the variables of the two frames.
+        (**
+            Declare a new frame, which corresponds to a new state.
+            This frame is pushed on the frame stack.
          *)
-        method assert_frame:
-            F.frame_t -> F.frame_t -> Spin.token SpinIr.expr list -> unit
+        method push_frame: F.frame_t -> unit
+
+        (**
+            Return the frame on the top
+         *)
+        method top_frame: F.frame_t
+
+        
+        (**
+            Add assertions to the frame on the top of the frame stack.
+            @param expressions the expressions to assert
+         *)
+        method assert_top:
+            Spin.token SpinIr.expr list -> unit
+
+        
+        (** 
+            Add assertion to a pair of frames on the top.
+            @param expressions to assert, where Next(Var _) refers to the
+                topmost frame and (Var _) refers to the second topmost
+                frame
+         *)
+        method assert_top2:
+            Spin.token SpinIr.expr list -> unit
 
         (** This function is called when a new tree node is entered.
             The functions enter/leave are called in the depth-first order.
 
-            @param frame the frame of the state preceding the node
-            @param is_leaf the flag indicating whether the node is
+            @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
-        method enter_node: int -> F.frame_t -> node_kind_t -> unit
+        method enter_node: node_kind_t -> unit
 
         (**
          * Check, whether the property is violated in the current frame.
@@ -139,68 +158,103 @@ class type tac_t =
          * for some tree node, then it will be eventually reported for some call
          * of check_property
          *
-         * @param frame current frame
          * @form ltl propositional formula
          *)
-        method check_property: F.frame_t -> Spin.token SpinIr.expr -> bool
+        method check_property: Spin.token SpinIr.expr -> bool
 
         (** This function is called when a tree node is left.
             The functions enter/leave are called in the depth-first order.
 
-            @param frame the frame of the state preceding the node
-            @param is_leaf the flag indicating whether the node is
+            @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
-        method leave_node: int -> F.frame_t -> node_kind_t -> unit
+        method leave_node: node_kind_t -> unit
 
         (* Enter the new context, also called a branch in the schema tree.
            The functions enter/leave are called in the depth-first order.
          *)
-        method enter_context: int -> F.frame_t -> unit
+        method enter_context: unit
 
         (* Leave the context, also called a branch in the schema tree.
            The functions enter/leave are called in the depth-first order.
          *)
-        method leave_context: int -> F.frame_t -> unit
-
+        method leave_context: unit
     end
+
+
+type frame_stack_elem_t =
+    | Frame of F.frame_t    (* just a frame *)
+    | Node of int           (* a node marker *)
 
 
 class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
     object(self)
+        val mutable m_frames = []
+        val mutable m_depth  = 0
+        
+        method top_frame =
+            let rec find = function
+                | (Frame f) :: _ -> f
+                | (Node _) :: tl -> find tl
+                | _ -> raise (Failure "Frame stack is empty")
+            in
+            find m_frames
+ 
+        method private top2 =
+            let rec find = function
+                | (Frame f) :: tl -> f, tl
+                | (Node _) :: tl -> find tl
+                | _ -> raise (Failure "Frame stack is empty")
+            in
+            let top, tl = find m_frames in
+            let prev, _ = find tl in
+            top, prev
 
-        method declare_frame f =
-            F.declare_frame rt#solver tt f
+        method push_frame f =
+            F.declare_frame rt#solver tt f;
+            m_frames <- (Frame f) :: m_frames
 
-        method assert_frame prev next assertions =
-            F.assert_frame rt#solver tt prev next assertions
+        method assert_top assertions =
+            let frame = self#top_frame in
+            F.assert_frame rt#solver tt frame frame assertions
 
-        method enter_node depth frame kind =
+        method assert_top2 assertions =
+            let top, prev = self#top2 in
+            F.assert_frame rt#solver tt prev top assertions
+
+        method enter_node kind =
             let slv = rt#solver in
             let k_s = kind_s kind in
             slv#comment
-                (sprintf "push@%d: check_node[%s] at frame %d" depth k_s frame.F.no);
-            slv#push_ctx
+                (sprintf "push@%d: check_node[%s] at frame %d"
+                    m_depth k_s self#top_frame.F.no);
+            slv#push_ctx;
+            m_depth <- m_depth + 1
 
-        method check_property frame form =
+        method check_property form =
             false
 
-        method leave_node depth frame kind =
+        method leave_node kind =
             let slv = rt#solver in
             let k_s = kind_s kind in
-            slv#comment (sprintf "pop@%d: check_node[%s] at frame %d" depth k_s frame.F.no);
+            m_depth <- m_depth - 1;
+            slv#comment
+                (sprintf "pop@%d: check_node[%s] at frame %d"
+                    m_depth k_s self#top_frame.F.no);
             slv#pop_ctx
 
-        method enter_context depth frame =
+
+        method enter_context =
             let slv = rt#solver in
             slv#push_ctx;
             slv#comment
                 (sprintf "push@%d: enter_context: potential milestones at frame %d"
-                        depth frame.F.no)
+                        m_depth self#top_frame.F.no)
 
-        method leave_context depth frame =
+        method leave_context =
             let slv = rt#solver in
-            slv#comment (sprintf "pop@%d: leave_context at frame %d" depth frame.F.no);
+            slv#comment (sprintf "pop@%d: leave_context at frame %d"
+                m_depth self#top_frame.F.no);
             slv#pop_ctx
 
     end
@@ -350,7 +404,7 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
                 || IntSet.mem basev#id next_shared
         in
         let new_frame = F.advance_frame tt sk frame is_new_f in
-        tac#declare_frame new_frame;
+        tac#push_frame new_frame;
         let move loc sign =
             let prev = List.nth frame.F.loc_vars loc in
             let next = List.nth new_frame.F.loc_vars loc in
@@ -358,8 +412,8 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
             BinEx (Spin.EQ, UnEx (Spin.NEXT, Var next),
                 BinEx (sign, Var prev, Var new_frame.F.accel_v))
         in
-        tac#assert_frame frame new_frame [move rule.Sk.src Spin.MINUS];
-        tac#assert_frame frame new_frame [move rule.Sk.dst Spin.PLUS];
+        tac#assert_top2 [move rule.Sk.src Spin.MINUS];
+        tac#assert_top2 [move rule.Sk.dst Spin.PLUS];
 
         let rule_guard =
             (* Milestone conditions are either:
@@ -371,15 +425,12 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
         in
         let guard = (* if acceleration factor > 0 then guard *)
             BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
-        begin
-            match rule_guard with
-                | IntConst 1 -> ()
-                | _ -> tac#assert_frame frame new_frame [guard]
-        end;
+        if rule_guard <> IntConst 1
+        then tac#assert_top2 [guard];
 
         let accelerated =
             List.map (accelerate_expr new_frame.F.accel_v) actions in
-        tac#assert_frame frame new_frame accelerated;
+        tac#assert_top2 accelerated;
         (new_frame, new_frame :: fs)
     in
     let rec sum_factors = function
@@ -387,61 +438,59 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
         | [frame] -> Var frame.F.accel_v
         | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum_factors tl)
     in
-    let check_segment frame_hist frame seg =
-        let endf, end_hist =
-            List.fold_left (each_rule false) (frame, frame_hist) seg in
-        rt#solver#comment "push: check_segment";
+    let check_property frame_hist =
+        rt#solver#comment "push: check_property";
         let stack_level = rt#solver#get_stack_level in
         
         rt#solver#push_ctx;
         rt#solver#comment "is segment bad?";
-        if is_c_false bad_form
-        then raise (Failure "Bad condition is trivially false");
         if not (is_c_true bad_form)
-        then tac#assert_frame endf endf [bad_form];
+        then tac#assert_top [bad_form];
         let err = rt#solver#check in
         if err (* print the counterexample *)
-        then get_counterex rt sk form_name (List.rev end_hist);
+        then get_counterex rt sk form_name (List.rev frame_hist);
 
-        rt#solver#comment "pop: check_segment";
+        rt#solver#comment "pop: check_property";
         rt#solver#pop_ctx;
         assert (stack_level = rt#solver#get_stack_level);
-        endf, end_hist, err
+        err
     in
     let rec check_node depth frame_hist
             { T.pre_rule_set; T.pre_cond; T.segment; T.succ } =
         (* check the context *)
-        let has_context = not (is_rule_set_empty pre_rule_set) in
+        let nil_context = is_rule_set_empty pre_rule_set in
         let start_frame = List.hd frame_hist in
-        tac#enter_context depth start_frame;
+        tac#enter_context;
 
         (* only one of the rules should actually fire *)
         let cond_frames =
-            if has_context
+            if not nil_context
             then begin
                 let _, _, milestone_expr, _ = pre_cond in
                 (* assert that the milestone is unlocked *)
-                tac#assert_frame start_frame start_frame [milestone_expr];
+                tac#assert_top [milestone_expr];
                 (* and this effects into firing of the following rules *)
                 let cond_rules =
                     PorBounds.unpack_rule_set pre_rule_set deps.D.full_segment in
                 let _, new_frames =
                     List.fold_left (each_rule true) (start_frame, []) cond_rules in
                 let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
-                tac#assert_frame start_frame start_frame [constr];
+                tac#assert_top [constr];
                 new_frames @ frame_hist
             end
             else frame_hist
         in
 
-        (* check the segment *)
-        let frame = List.hd cond_frames in
-        let node = if (succ = []) then Leaf else Intermediate in
+        (* push the segment rules *)
+        let node = (if succ = [] then Leaf else Intermediate) in
         let stack_level = rt#solver#get_stack_level in
-        tac#enter_node depth frame node;
+        let frame = List.hd cond_frames in
+        tac#enter_node node;
         display_depth depth true;
         let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
-        let endf, end_hist, err = check_segment cond_frames frame seg in
+        let endf, end_hist =
+            List.fold_left (each_rule false) (frame, cond_frames) seg in
+        let err = check_property end_hist in
 
         if node = Leaf
         then begin
@@ -453,10 +502,10 @@ let check_tree rt tt sk bad_form on_leaf start_frame form_name deps tac tree =
             if err then err else check_node (1 + depth) end_hist s
         in
         let res = List.fold_left each_succ err succ in
-        tac#leave_node depth frame node;
+        tac#leave_node node;
         assert (stack_level = rt#solver#get_stack_level);
 
-        tac#leave_context depth start_frame;
+        tac#leave_context;
         res
     in
     check_node 0 [start_frame] tree
@@ -472,19 +521,22 @@ let extract_spec type_tab s =
 
 let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     let init_form, bad_form = extract_spec tt ltl_form in
+    if is_c_false bad_form
+    then raise (Failure "Bad condition is trivially false");
+
     rt#solver#push_ctx;
     rt#solver#set_need_model true;
 
     let ntt = tt#copy in
     let tac = new tree_tac_t rt ntt in
     let initf = F.init_frame ntt sk in
-    tac#declare_frame initf;
-    tac#assert_frame initf initf sk.Sk.inits;
+    tac#push_frame initf;
+    tac#assert_top sk.Sk.inits;
     rt#solver#comment "initial constraints from the spec";
     if is_c_false init_form
     then raise (Failure "Initial condition is trivially false");
     if not (is_c_true init_form)
-    then tac#assert_frame initf initf [init_form];
+    then tac#assert_top [init_form];
 
     let err = check_tree rt ntt sk bad_form on_leaf initf form_name deps tac tree in
     rt#solver#set_need_model false;
