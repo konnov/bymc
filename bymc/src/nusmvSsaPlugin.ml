@@ -74,10 +74,12 @@ let print_state prog path_elem =
 
 class nusmv_ssa_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
-        inherit transform_plugin_t plugin_name
+        inherit transform_plugin_t plugin_name as super
 
         method is_disabled rt =
-            rt#caches#options.Options.mc_tool <> Options.ToolNusmv
+            if super#is_disabled rt
+            then true
+            else rt#caches#options.Options.mc_tool <> Options.ToolNusmv
 
         method transform rt =
             log INFO (sprintf

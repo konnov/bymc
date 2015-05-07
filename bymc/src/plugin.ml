@@ -14,7 +14,7 @@ exception InputRequired of string
 
 (* a generic plugin *)
 class plugin_t (plugin_name: string) =
-    object
+    object(self)
         val mutable m_ready = false
 
         method is_ready = m_ready
@@ -22,7 +22,11 @@ class plugin_t (plugin_name: string) =
 
         method name = plugin_name
 
-        method is_disabled (rt: runtime_t) = false
+        method is_disabled (rt: runtime_t) =
+            if self#has_opt rt "disabled"
+            then let v = self#get_opt rt "disabled" in
+                v = "true" || v = "1" || v = "TRUE"
+            else false
 
         method has_opt (rt: runtime_t) (name: string) =
             let fullname = plugin_name ^ "." ^ name in

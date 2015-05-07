@@ -14,10 +14,12 @@ open Writer
 
 class spin_plugin_t (plugin_name: string) (out_name: string) =
     object(self)
-        inherit transform_plugin_t plugin_name
+        inherit transform_plugin_t plugin_name as super
 
         method is_disabled (rt: runtime_t) =
-            rt#caches#options.Options.mc_tool <> Options.ToolSpin
+            if super#is_disabled rt
+            then true
+            else rt#caches#options.Options.mc_tool <> Options.ToolSpin
 
         method transform rt =
             let prog = self#get_input0 in
