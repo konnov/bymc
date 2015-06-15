@@ -2,12 +2,13 @@
 
 PANCC_FLAGS="-DCOLLAPSE -DNOREDUCE"
 
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hd: --long help,depth:,limit-time:,limit-mem: -n '$@' -- "$@"`
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hd: --long help,depth:,on-disk-stack,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_quit() {
     echo "use $0 [-d|--depth k] [-h|--help]"
     echo "  -d|--depth k: limit the DFS search with depth k"
+    echo "  --on-disk-stack: use spin's on-disk stack (-DSC)"
     echo "  --limit-time: limit (in seconds) Spin's cpu time"
     echo "  --limit-mem: limit (in MB) Spin's virtual memory"
     echo "  -h|--help: show this help message"
@@ -18,6 +19,7 @@ eval set -- "$TEMPOPTS"
 while true ; do
     case "$1" in
     -d|--depth) PAN_FLAGS="$PAN_FLAGS -m$2" ; shift 2 ;;
+    --on-disk-stack) PANCC_FLAGS="$PAN_FLAGS -DSC" ; shift 1 ;;
     --limit-time) PAN_FLAGS="$PAN_FLAGS -Q$(((59+$2)/60))" ;
         shift 2 ;;
     --limit-mem)
