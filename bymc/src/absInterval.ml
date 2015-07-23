@@ -114,7 +114,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
             let guard = List.fold_left
                 (fun lits (ex, abs_val) ->
                     if not (is_out_var ex)
-                    then let lit = BinEx (EQ, ex, Const abs_val) in
+                    then let lit = BinEx (EQ, ex, IntConst abs_val) in
                         if is_nop lits then lit else BinEx (AND, lits, lit)
                     else lits (* skip this var *))
                 (Nop "") abs_tuple
@@ -123,7 +123,7 @@ let mk_assign_unfolding lhs (expr_abs_vals : (token expr * int) list list) =
                 (fun seq (ex, abs_val) ->
                     if is_out_var ex
                     then MExpr (fresh_id (),
-                                BinEx (ASGN, lhs, Const abs_val)) :: seq
+                                BinEx (ASGN, lhs, IntConst abs_val)) :: seq
                     else seq (* skip condition variables *) )
                 [] abs_tuple
             in
@@ -193,12 +193,12 @@ let abstract_pointwise dom solver atype coord_point_fun symb_expr =
     let points_lst = dom#find_abs_vals atype solver symb_expr in
     if points_lst <> []
     then list_to_binex OR (List.map mk_point points_lst)
-    else Const 0 (* false *)
+    else IntConst 0 (* false *)
 
 
 let abstract_pointwise_exprs dom solver atype leaf_fun expr =
     let shadowed, _, unshadow_f = shadow_expr leaf_fun expr in
-    let eq left abs_val = BinEx (EQ, Var left, Const abs_val) in
+    let eq left abs_val = BinEx (EQ, Var left, IntConst abs_val) in
     solver#push_ctx;
     (* introduce the variables to the SMT solver *)
     let append_def v =
@@ -225,7 +225,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
     let orig_expr = BinEx (tok, lhs, rhs) in
     let ltrait = get_abs_trait (var_trait ctx) lhs in
     let rtrait = get_abs_trait (var_trait ctx) rhs in
-    let mk_eq var abs_val = BinEx (EQ, Var var, Const abs_val) in
+    let mk_eq var abs_val = BinEx (EQ, Var var, IntConst abs_val) in
     match ltrait, rtrait with
     | ConstExpr, AbsExpr ->
         (* XXX: this optimization conflicts with complex atomic expressions
@@ -257,7 +257,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
         let restore_lhs v abs_val =
             if v == tmp_var
             then dom#expr_is_concretization lhs abs_val
-            else BinEx (EQ, Var v, Const abs_val)
+            else BinEx (EQ, Var v, IntConst abs_val)
         in
         let ae =
             abstract_pointwise dom solver atype restore_lhs new_expr in
@@ -273,7 +273,7 @@ let abstract_arith_rel ctx dom solver atype tok lhs rhs =
         let restore_rhs v abs_val =
             if v == tmp_var
             then dom#expr_is_concretization rhs abs_val
-            else BinEx (EQ, Var v, Const abs_val)
+            else BinEx (EQ, Var v, IntConst abs_val)
         in
         let ae =
             abstract_pointwise dom solver atype restore_rhs new_expr in
@@ -470,8 +470,8 @@ let rec trans_prop_decl solver caches prog atype atomic_expr =
         abs_ex
     in
     let drop_quantifier_if_const = function
-        | PropAll (Const i as e) -> PropGlob e
-        | PropSome (Const i as e) -> PropGlob e
+        | PropAll (IntConst i as e) -> PropGlob e
+        | PropSome (IntConst i as e) -> PropGlob e
         | _ as qe -> qe
     in
     let rec tr_atomic = function
@@ -571,7 +571,7 @@ let do_interval_abstraction rt prog proc_names =
         let ctx = rt#caches#analysis#get_pia_data_ctx in
         let dom = rt#caches#analysis#get_pia_dom in
         refine_var_type ctx dom roles type_tab new_type_tab shared_var;
-        let init_expr = if not_nop init_expr then init_expr else Const 0 in
+        let init_expr = if not_nop init_expr then init_expr else IntConst 0 in
         let new_init =
             if over_dom roles (Var shared_var)
             then dom#map_concrete rt#solver init_expr
@@ -581,8 +581,11 @@ let do_interval_abstraction rt prog proc_names =
     in
     let new_shared =
         List.map abs_shared (Program.get_shared_with_init prog) in
-    (Program.set_shared_with_init new_shared
-        (Program.set_type_tab new_type_tab
-        (Program.set_ltl_forms new_forms
-        (Program.set_atomics new_atomics (Program.set_procs new_procs prog)))))
+    let module P = Program in
+    P.set_procs new_procs prog
+        |> P.set_ltl_forms new_forms
+        |> P.set_type_tab new_type_tab
+        |> P.set_shared_with_init new_shared
+        |> P.set_atomics new_atomics
+        |> P.set_assumes (P.get_assumes prog)
 

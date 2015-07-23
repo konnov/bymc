@@ -37,13 +37,12 @@ let load_game (filename: string) (rt: Runtime.runtime_t)
     let cin = open_in_bin filename in
     let m = "\nERROR: The saved state seems to be incompatible."
         ^ " Did you recompile the tool?\n\n" in
-    let (seq_id: int) = Marshal.from_channel cin in
+    SpinIr.load_internal_globals cin;
     let (chain: plugin_chain_t) =
         try Marshal.from_channel cin
         with Failure e -> fprintf stderr "%s" m; raise (Failure e)
     in
     close_in cin;
-    SpinIr.uniq_id_next := seq_id; (* unique id sequence used everywhere *)
     chain#update_runtime rt;
     chain
 
@@ -51,7 +50,7 @@ let load_game (filename: string) (rt: Runtime.runtime_t)
 let save_game (filename: string) (chain: plugin_chain_t) =
     log INFO (sprintf "saving game to %s..." filename);
     let cout = open_out_bin filename in
-    Marshal.to_channel cout !SpinIr.uniq_id_next []; (* keep the id sequence *)
+    SpinIr.save_internal_globals cout;
     Marshal.to_channel cout chain [Marshal.Closures];
     close_out cout
 

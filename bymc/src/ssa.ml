@@ -14,6 +14,7 @@ open Accums
 open Analysis
 open Cfg
 open Debug
+open Smt
 open Spin
 open SpinIr
 open SpinIrImp
@@ -436,7 +437,7 @@ let get_var_copies var seq =
 *)
 let find_coloring solver graph ncolors =
     solver#push_ctx;
-    solver#set_need_evidence true;
+    solver#set_need_model true;
     let color_tp = new data_type SpinTypes.TINT in
     color_tp#set_range 0 ncolors;
     let vars = Hashtbl.create ncolors in
@@ -455,25 +456,31 @@ let find_coloring solver graph ncolors =
     in
     VarGraph.iter_vertex add_vertex graph;
     VarGraph.iter_edges add_edge graph;
+
     let tab = Hashtbl.create ncolors in
+    let collect_evidence query mark v =
+        match Q.try_get query (Var v) with
+        | Q.Cached ->
+                ()
+        | Q.Result (IntConst i) ->
+                Hashtbl.replace tab mark (1 + i)
+        | Q.Result e ->
+                raise (Failure ("Unexpected result: " ^ (expr_s e)))
+    in
+
     let found =
         if solver#check
-        then begin (* parse evidence, XXX: not super-efficient *)
-            let eq_re = Str.regexp "(= _nclr\\([0-9]+\\) \\([0-9]+\\))" in
-            let each_line l =
-                if Str.string_match eq_re l 0
-                then Hashtbl.replace tab
-                    (int_of_string (Str.matched_group 1 l))
-                    (* a color from 1 to k, as in Graph.Coloring *)
-                    (1 + (int_of_string (Str.matched_group 2 l)))
-            in
-            List.iter each_line solver#get_evidence;
+        then begin
+            let query = solver#get_model_query in
+            Hashtbl.iter (collect_evidence query) vars;
+            let model = solver#submit_query query in
+            Hashtbl.iter (collect_evidence model) vars;
             assert((Hashtbl.length tab) > 0);
             true
         end else
             false
     in
-    solver#set_need_evidence false;
+    solver#set_need_model false;
     solver#pop_ctx;
     (found, tab)
 

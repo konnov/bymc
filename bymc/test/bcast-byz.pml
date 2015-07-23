@@ -58,7 +58,7 @@ active[N - F] proctype Proc() {
     byte pc = 0; int nrcvd = 0;
     byte next_pc = 0; int next_nrcvd = 0;
 
-    /* INV0 */
+    /* INIT */
     if
         ::pc = V0;
         ::pc = V1;
@@ -115,7 +115,7 @@ ltl fairness { []<>(!in_transit) }
     ltl corr { []((prec_init && prec_corr) -> <>(ex_acc)) }
     ltl unforg { []((prec_init && prec_unforg) -> []!ex_acc) }
 #else
-    ltl relay { (ex_acc -> <>(all_acc)) }
+    ltl relay { ([](ex_acc -> <>(all_acc))) }
     ltl corr { (prec_corr -> <>(ex_acc)) }
     ltl unforg { (prec_unforg -> [](!ex_acc)) }
 #endif
@@ -223,6 +223,114 @@ $bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg -D BUG=1
 
 #BEGIN-TEST n_GE_3t-bmc-relay
 $bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay -D NGE3T=1
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+
+
+
+#BEGIN-TEST z3-correct-unforg
+$bymc_dir/verifypa-spin ${testsource} unforg --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-relay
+$bymc_dir/verifypa-spin ${testsource} relay --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-corr
+$bymc_dir/verifypa-spin ${testsource} corr --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-unforg
+$bymc_dir/verifypa-spin ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-relay
+$bymc_dir/verifypa-spin ${testsource} relay -D NGE3T=1 --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-unforg
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} unforg --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-unforg-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} unforg --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-relay
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} relay --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-relay-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} relay --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-corr
+$bymc_dir/verifyco-spin 'N=4,T=1,F=1' ${testsource} corr --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*0" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-concrete-correct-corr-too-many-faults
+$bymc_dir/verifyco-spin 'N=4,T=1,F=2' ${testsource} corr --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "errors:.*1" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bdd-unforg
+$bymc_dir/verifypa-nusmv-bdd ${testsource} unforg --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bdd-relay
+$bymc_dir/verifypa-nusmv-bdd ${testsource} relay --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bdd-corr
+$bymc_dir/verifypa-nusmv-bdd ${testsource} corr --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-bdd-unforg
+$bymc_dir/verifypa-nusmv-bdd ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-bdd-relay
+$bymc_dir/verifypa-nusmv-bdd ${testsource} relay -D NGE3T=1 --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bmc-unforg
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bmc-relay
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep -e "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-bmc-corr
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} corr --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "verified in [1-9]\([0-9]\)* refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-bmc-unforg
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in'
+#EXPECT grep "no-refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-bmc-relay
+$bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay -D NGE3T=1 --smt 'lib2|z3|-smt2|-in'
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
 */

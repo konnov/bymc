@@ -22,18 +22,25 @@ CONTENTS
 
  * python 2.x
  * ocaml and ocamlbuild (not earlier than 3.11.0)
+ * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
- * ocamlunit (if you want to run unit tests)
- * yices 1.x: http://yices.csl.sri.com/download.shtml
- * at least one of those:
+ * ocamlunit (OPTIONAL: if you want to run unit tests)
+ * sexplib
+ * at least one SMT solver:
+    * yices 1.x: http://yices.csl.sri.com/download.shtml
+    * Microsoft Z3
+    * Any decent SMT solver that supports SMTLIB2, logic QF_ALIA,
+      model generation, and unsat cores.
+ * one of the model checkers (OPTIONAL: when not using verifypa-post):
      - spin: http://spinroot.com/spin/Man/README.html#S2
      - nusmv: http://nusmv.fbk.eu/NuSMV/download/getting-v2.html
      - faster: http://www.lsv.ens-cachan.fr/Software/fast/
+ * gcc (OPTIONAL: if you are going to use spin)
  * lingeling: http://fmv.jku.at/lingeling/
-     (if you want to run bounded model checking using lingeling)
- * gcc (if you are going to use spin)
- * pycudd (Sec. 6, if you want to compute the bounds on the diameter or
-           check the algorithms with FASTer)
+     (OPTIONAL: if you want to run bounded model checking with nusmv + lingeling)
+ * pycudd (OPTIONAL and DEPRECATED:
+     see Sec. 6, if you want to reproduce the results on the diameter, or to
+     check the algorithms with FASTer, as in the paper at CONCUR'14)
 
 If you do not know how to install ocaml and ocaml libraries in your system,
 check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
@@ -100,7 +107,7 @@ or using lingeling for <length2> steps
     ${benchmarks}/bcast-byz.pml relay
 
 
-4.4 NuSMV with FAST    
+4.4 FAST
 
 ./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
 
@@ -110,6 +117,22 @@ or using lingeling for <length2> steps
 ./analyse ${benchmarks}/bcast-byz.pml bounds
 
 gives bounds on the diameter of counter systems and counter abstractions
+
+the new way to do that is (our CAV'15 submission):
+
+./verifypa-post ${benchmarks}/bcast-byz.pml all
+
+The latter will check the properties as well (Sec. 4.6).
+
+4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 submission)
+
+using Z3:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
+
+or another SMT solver:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
 
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
@@ -126,13 +149,17 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install ounit ocamlgraph
+$ opam install batteries ounit ocamlgraph sexplib
 
 (Do not forget to include the line
 'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
 in your ~/.bashrc or ~/.zshrc before doing that)
 
-6. INSTALLING PYCUDD
+6. INSTALLING PYCUDD (DEPRECATED)
+
+WARNING: PyCUDD is required only for the script ./analyse that computes
+reachability bounds as in the paper accepted at CONCUR'14. This script
+is superseded by ./verify-post that neither uses pycydd, nor nusmv.
 
 PyCUDD is required when ./analysis is run with the property 'bounds'.
 To compile pycudd:

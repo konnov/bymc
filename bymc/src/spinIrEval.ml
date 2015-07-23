@@ -18,11 +18,11 @@ let rec eval_expr val_fun e =
         | _ -> raise (Eval_error ("expected int"))
     in
     match e with
-    | Const value ->
+    | IntConst value ->
             Int value
     | Var v ->
             Int (val_fun e)
-    | BinEx (ARR_ACCESS, Var _, Const _) ->
+    | BinEx (ARR_ACCESS, Var _, IntConst _) ->
             Int (val_fun e)
     | BinEx (EQ, le, re) ->
             let lv = uint (eval_expr val_fun le) in

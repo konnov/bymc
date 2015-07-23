@@ -56,6 +56,8 @@ function common_mc_collect_stat () {
         res="OOM"
     elif grep -q "terminated by signal 9" ${MC_OUT}; then
         res="TIMEOUT"
+    elif grep -q "terminated by signal" ${MC_OUT}; then
+        res="ERR"
     elif grep -q "Specification holds true" ${MC_OUT}; then
         res="SAT"
     elif grep -q "Specification is violated" ${MC_OUT}; then

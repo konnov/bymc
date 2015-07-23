@@ -15,17 +15,23 @@ dist_ver := $(shell date '+%Y%m%d')
 DIST_FILES=bymc.native verifyco-spin verifypa-spin script/ LICENSE
 
 all: ${target}
+	#otags src/*.ml
 
 compile: ${target}
 
 debug: ${debug_target}
 
+# unit tests
 test: clean
 	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte | ./script/ocaml-friendly
 	./unitTests.byte
 
+# functional tests
 integrate: clean
 	./test/func-test.sh
+
+# just a synonym for integrate
+fun: integrate
 
 dist:
 
@@ -39,6 +45,12 @@ release:
 	git archive --prefix=bymc-src-${TAG}/ "${TAG}" \
         | bzip2 > bymc-src-${TAG}.tar.bz2
 
+# ocaml doc
+doc:
+	mkdir -p _build/doc
+	ocamldoc -I _build/src -html -keep-code -colorize-code \
+		src/*.ml src/*.mli -d _build/doc
+
 clean:
 	$(info CLEANING)
 	ocamlbuild -clean
@@ -46,18 +58,10 @@ clean:
 ${target}: ocaml-3.11.0
 	$(info COMPILING)
 	ocamlbuild -use-ocamlfind ${CFLAGS} ${target} | ./script/ocaml-friendly
-	find _build -regex '.*\.cm\(i\|o\)'\
-        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
-        >./bymc.mltop
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./bymc.top ${target}
 
 ${debug_target}: ocaml-3.11.0
 	$(info COMPILING DEBUG VERSION)
 	ocamlbuild -use-ocamlfind ${CFLAGS} ${debug_target} | ./script/ocaml-friendly
-	find _build -regex '.*\.cm\(i\|o\)'\
-        | sed 's#_build\/src\/##; s/.cm\(i\|o\)//'\
-        >./bymc.mltop
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./bymc.top ${debug_target}
 
 ocaml-3.11.0:
 	$(info Testing, whether ocaml version is at least 3.11.0)

@@ -141,7 +141,7 @@ let identify_var_roles prog =
         in
         let init_int = match init_expr with
         | Nop _ -> 0
-        | Const i -> i
+        | IntConst i -> i
         | _ -> raise (Role_error
             (sprintf "Initializer of %s is not int" v#qual_name))
         in

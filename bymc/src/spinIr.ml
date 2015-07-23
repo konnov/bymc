@@ -12,7 +12,6 @@
 open Printf
 open SpinTypes
 
-module StringSet = Set.Make(String)
 
 (* here we use a global variable to generate unique variables everywhere *)
 let label_next = ref 1
@@ -26,7 +25,7 @@ type btype = BNone | NClaim | IProc | AProc | PProc | ETrace | NTrace
 type hflag = HNone | HHide | HShow | HBitEquiv | HByteEquiv
            | HFormalPar | HInlinePar | HTreatLocal | HReadOnce
            (* our extensions *)
-           | HSymbolic | HInstrumental
+           | HSymbolic | HInstrumental | HNext
 
 let hflag_s f =
     match f with
@@ -40,6 +39,7 @@ let hflag_s f =
     | HReadOnce -> ":readonce:"
     | HSymbolic -> ":symbolic:"
     | HInstrumental -> ":instrumental:"
+    | HNext -> ":next:"
     | HNone -> ""
 
 exception Invalid_type of string
@@ -58,6 +58,19 @@ let fresh_id () =
     if !uniq_id_next >= 0
     then id
     else raise (Failure "fresh_id: ran out of unique identifiers")
+
+
+let save_internal_globals cout =
+    (* save the id *)
+    Marshal.to_channel cout !uniq_id_next []
+
+
+let load_internal_globals cin =
+    (* restore the id *)
+    let (seq_id: int) = Marshal.from_channel cin in
+    uniq_id_next := seq_id
+
+
 
 
 (* a symbol of any origin *)
@@ -197,7 +210,7 @@ label name_i num_i =
 let new_var name = new var name (fresh_id ())    
 
 let var_qname v = v#qual_name
-let var_name v = v#name
+let var_name v = v#get_name
 
 module VarType =
     struct
@@ -369,7 +382,7 @@ class data_type_tab =
 
 type 't expr =
     | Nop of string (* a comment *)
-    | Const of int
+    | IntConst of int
     | Var of var
     | UnEx of 't * 't expr
     | BinEx of 't * 't expr * 't expr
@@ -385,11 +398,11 @@ let is_nop = function
 let not_nop e = not (is_nop e) (* a shorthand *)
 
 let is_c_true = function
-    | Const i -> i > 0
+    | IntConst i -> i > 0
     | _ -> false
 
 let is_c_false = function
-    | Const i -> i = 0
+    | IntConst i -> i = 0
     | _ -> false
 
 let is_var = function
@@ -472,6 +485,7 @@ type 't stmt =
     | Havoc of int * var (* forget about the current value of the variable *)
     | Print of int * string * 't expr list
 
+
 let stmt_id = function
       Skip id -> id
     | Expr (id, _) -> id
@@ -487,6 +501,7 @@ let stmt_id = function
     | Assume (id, _) -> id
     | Havoc (id, _) -> id
     | Print (id, _, _) -> id
+
 
 let is_expr = function
     | Expr (_, _) -> true

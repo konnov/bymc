@@ -40,13 +40,75 @@ let top_labs () = List.hd !lab_stack
 (* it uses tokens, so we cannot move it outside *)
 let rec is_expr_symbolic e =
     match e with
-    | Const _ -> true
+    | IntConst _ -> true
     | Var v -> v#is_symbolic
     | UnEx (op, se) -> op = UMIN && is_expr_symbolic se
     | BinEx (op, le, re) ->
         (List.mem op [PLUS; MINUS; MULT; DIV; MOD])
             && (is_expr_symbolic le) && (is_expr_symbolic re)
     | _ -> false
+
+
+let find_or_declare_next v =
+    if not (v#has_flag HNext)
+    then v#add_flag HNext;
+
+    let new_name = v#get_name ^ "_X" in
+    try ((top_scope ())#lookup new_name)#as_var
+    with Symbol_not_found _ ->
+        let nv = v#fresh_copy new_name in
+        (top_scope ())#add_symb nv#get_name (nv :> symb);
+        nv
+
+
+let declare_next stmts =
+    let each_decl (lst, prev_nexts) = function
+    | MDecl (_, v, e) as d ->
+            if not (v#has_flag HNext)
+            then (d :: lst, prev_nexts)
+            else begin
+                let nv = find_or_declare_next v in
+                let nflags = List.filter (fun f -> f <> HNext) v#get_flags in
+                v#set_flags nflags; (* remove HNext *)
+                nv#set_flags nflags; (* remove HNext *)
+                let tp = (type_tab ())#get_type v in
+                (type_tab ())#set_type nv tp;
+                let pn = (v, nv) in
+                ((MDecl (fresh_id (), nv, e)) :: d :: lst, pn :: prev_nexts)
+            end
+
+    | _ as e ->
+            (e :: lst, prev_nexts)
+    in
+    let seq, pns = List.fold_left each_decl ([], []) stmts in
+    let make_after (prev, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var prev, Var next)) in
+    let make_zero (_, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var next, IntConst 0)) in
+    let make_before (prev, next) =
+        MExpr (fresh_id (), BinEx (ASGN, Var next, Var prev)) in
+    let before = List.map make_before pns in
+    let after = List.map make_after pns in
+    let zero = List.map make_zero pns in
+    let rec on_seq = function
+        | [] -> []
+
+        | (MIf (id, opts)) :: tl ->
+            (MIf (id, List.map each_opt opts)) :: (on_seq tl)
+
+        | (MD_step (id, seq)) :: tl ->
+            (MD_step (id, on_seq seq)) :: (on_seq tl)
+
+        | (MAtomic (id, seq)) :: tl ->
+            (MAtomic (id, before @ seq @ after @ zero)) :: (on_seq tl)
+
+        | e :: tl -> e :: (on_seq tl)
+
+    and each_opt = function
+        | MOptGuarded seq -> MOptGuarded (on_seq seq)
+        | MOptElse seq -> MOptElse (on_seq seq)
+    in
+    on_seq (List.rev seq)
 
 
 let curr_pos () =
@@ -99,6 +161,7 @@ let fatal msg payload =
 %token	ALWAYS EVENTUALLY		    /* ltl */
 %token	UNTIL WEAK_UNTIL RELEASE	/* ltl */
 %token	NEXT IMPLIES EQUIV          /* ltl */
+%token	PRIME                       /* our extension */
 %token  <string * string> DEFINE
 %token  <string * string> PRAGMA
 %token  <string> INCLUDE
@@ -183,7 +246,7 @@ proc	: inst		/* optional instantiator */
                     | _ -> fatal "Not a decl in proctype args" p#get_name
                 in
                 p#set_args (List.map unpack $4);
-                p#set_stmts $8;
+                p#set_stmts (declare_next $8);
                 p#add_all_symb my_scope#get_symbs;
                 pop_scope ();
                 Hashtbl.clear fwd_labels;
@@ -199,12 +262,12 @@ proctype_name: PROCTYPE NAME {
         }
     ;
 
-inst	: /* empty */	{ Const 0 }
-    | ACTIVE	{ Const 1 }
+inst	: /* empty */	{ IntConst 0 }
+    | ACTIVE	{ IntConst 1 }
     /* FORSYTE extension: any constant + a symbolic arith expression */
     | ACTIVE LBRACE expr RBRACE {
             match $3 with
-            | Const i -> Const i
+            | IntConst i -> IntConst i
             | Var v ->
                 if v#is_symbolic
                 then Var v
@@ -434,6 +497,8 @@ one_decl: vis TYPE var_list	{
             (* type constraints in the right-hand side *)
             tp#set_nelems tp_rhs#nelems;
             tp#set_nbits tp_rhs#nbits;
+            if tp_rhs#nbits > 0
+            then tp#set_range 0 (Accums.ipow 2 tp_rhs#nbits);
             v#add_flag fl;
             (type_tab ())#set_type v tp;
             (top_scope ())#add_symb v#get_name (v :> symb);
@@ -595,7 +660,7 @@ for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
 for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
 Special :
-    | HAVOC LPAREN varref RPAREN { [MHavoc (fresh_id (), $3)]  }
+    | HAVOC LPAREN varref_or_prime RPAREN { [MHavoc (fresh_id (), $3)]  }
     | varref RCV	/*	{ (* Expand_Ok++; *) } */
       rargs		{ raise (Not_implemented "rcv")
                 (* Expand_Ok--; has_io++;
@@ -673,7 +738,7 @@ Special :
     }
 ;
 
-Stmnt	: varref ASGN full_expr	{
+Stmnt	: varref_or_prime ASGN full_expr	{
                     [MExpr (fresh_id (), BinEx(ASGN, Var $1, $3))]
                  (* $$ = nn($1, ASGN, $1, $3);
 				  trackvar($1, $3);
@@ -682,7 +747,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref INCR		{
                     let v = Var $1 in
-                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, IntConst 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '+', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -693,7 +758,7 @@ Stmnt	: varref ASGN full_expr	{
 				}
 	| varref DECR	{
                     let v = Var $1 in
-                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, Const 1)))]
+                    [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, IntConst 1)))]
                  (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
 				  $$ = nn(ZN,  '-', $1, $$);
 				  $$ = nn($1, ASGN, $1, $$);
@@ -842,7 +907,7 @@ prop_arith_expr    :
             with Not_found ->
                 fatal "prop_arith_expr: " (sprintf "Undefined global variable %s" $1)
         }
-	| CONST { Const $1 }
+	| CONST { IntConst $1 }
     ;
 
 expr    : LPAREN expr RPAREN		{ $2 }
@@ -894,36 +959,20 @@ expr    : LPAREN expr RPAREN		{ $2 }
 				}
 	| LEN LPAREN varref RPAREN	{
                   raise (Not_implemented "len")
-               (*  $$ = nn($3, LEN, $3, ZN);  *)}
+                }
 	| ENABLED LPAREN expr RPAREN	{
                   raise (Not_implemented "enabled")
-                (* $$ = nn(ZN, ENABLED, $3, ZN);
-			 	   has_enabled++; *)
 				}
-	| varref RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{
+	| varref RCV LBRACE rargs RBRACE		{
                   raise (Not_implemented "rcv")
-                (* Expand_Ok--; has_io++;
-				      $$ = nn($1, 'R', $1, $5); *)
 				}
-	| varref R_RCV		/* {(*  Expand_Ok++;  *)} */
-	  LBRACE rargs RBRACE		{
+	| varref R_RCV LBRACE rargs RBRACE		{
                   raise (Not_implemented "r_rcv")
-               (* Expand_Ok--; has_io++;
-				  $$ = nn($1, 'R', $1, $5);
-				  $$->val = has_random = 1; *)
 				}
-	| varref
-        {
-            let v = $1 in
-            (* TODO: should not be set in printf *)
-            v#add_flag HReadOnce;
-            Var v
-            (*  $$ = $1; trapwonly($1 /*, "varref" */);  *)
-        }
+    | varref_or_prime   { Var $1 }
 	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
 	| CONST 	{
-                    Const $1
+                    IntConst $1
                (* $$ = nn(ZN,CONST,ZN,ZN);
 				  $$->ismtyp = $1->ismtyp;
 				  $$->val = $1->val; *)
@@ -954,6 +1003,22 @@ expr    : LPAREN expr RPAREN		{ $2 }
                    raise (Not_implemented "PNAME operations")
                 (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
     ;
+
+
+opt_prime:          { false }
+    | PRIME         { true }
+
+
+varref_or_prime: varref opt_prime {
+        if $2
+        then find_or_declare_next $1
+        else begin
+            let v = $1 in
+            v#add_flag HReadOnce;
+            v
+        end
+    }
+
 
 /* FORSYTE extension */
 track_ap: /* empty */	{ HNone }

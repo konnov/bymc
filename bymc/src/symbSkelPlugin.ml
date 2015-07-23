@@ -1,6 +1,9 @@
-(* Extract a symbolic skeleton from a process description, i.e.,
+(**
+  Extract a symbolic skeleton from a process description, i.e.,
   the transition relation between local states with the edges labeled
   by conditions and actions
+
+  @deprecated: just use Summary
 
   Igor Konnov, 2014
  *)
@@ -30,6 +33,9 @@ class symb_skel_plugin_t (plugin_name: string) =
         method abs_skels = m_abs_skels
 
         method transform rt =
+            log WARN "*******************************************";
+            log WARN "* SymbSkelPlugin is outdated, use Summary *";
+            log WARN "*******************************************";
             let sprog = self#get_input0 in
             rt#caches#set_struc sprog (compute_struc sprog);
             let each_proc (skels, askels, prog) proc =
@@ -98,9 +104,9 @@ class symb_skel_plugin_t (plugin_name: string) =
                 List.iter register shadows;
                 (* abstract *)
                 let ae =
-                    if se <> Const 1
+                    if se <> IntConst 1
                     then AI.translate_expr ctx dom rt#solver AbsBasics.ExistAbs se
-                    else Const 1
+                    else IntConst 1
                 in
                 (* unhide next(x) *)
                 unshadow_f ae
@@ -116,7 +122,6 @@ class symb_skel_plugin_t (plugin_name: string) =
             let new_inits = List.map afun sk.Sk.inits in
             rt#solver#pop_ctx;
             { sk with Sk.rules = new_rules; Sk.inits = new_inits }
-                
 
         method extract_proc rt prog proc =
             let reg_tbl = (rt#caches#find_struc prog)#get_regions proc#get_name in
@@ -130,9 +135,19 @@ class symb_skel_plugin_t (plugin_name: string) =
             let filename = sprintf "local-tr-%s.txt" proc#get_name in
             self#test_input filename;
             let trs = self#read_transitions prev_next filename in
-            let prev = List.map fst prev_next_pairs in
-            let sk, new_prog = collect_constraints rt prog proc prev trs in
+            let sk = SymbSkel.state_pairs_to_rules rt prog proc trs in
+            let loc_vars = IntMap.values sk.Sk.loc_vars in
+
             Sk.to_file (sprintf "skel-%s.sk" proc#get_name) sk;
+            let ntt = (Program.get_type_tab prog)#copy in
+            let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED)
+            in
+            BatEnum.iter set_type loc_vars;
+            let new_prog =
+                Program.set_type_tab ntt prog
+                    |> Program.set_shared
+                        ((Program.get_shared prog) @ (BatList.of_enum loc_vars))
+            in
             sk, new_prog
 
         method update_runtime rt =

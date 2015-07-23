@@ -4,10 +4,15 @@ let _ =
     let all = "all-tests" >:::
     [
         PipeCmdTest.suite;
+        SmtTest.suite;
         AccumsTest.suite;
         SsaTest.suite;
         AbsCounterTest.suite;
+        PiaCtrRefinementTest.suite;
+        SymbSkelTest.suite;
+        SummaryTest.suite;
+        PorBoundsTest.suite;
     ]
     in
-    run_test_tt_main all
+    run_test_tt ~verbose:false all
 

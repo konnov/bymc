@@ -22,9 +22,6 @@ class pc_plugin_t (plugin_name: string) =
         val mutable m_ref_step = 0 (* refinement step *)
         val mutable m_vass = Program.empty
 
-        (* TODO: to be removed *)
-        method semi_prog = self#get_input1
-
         method transform rt =
             let prog = self#get_input0 in
             let semiprog = self#get_input1 in
@@ -43,7 +40,7 @@ class pc_plugin_t (plugin_name: string) =
             m_ctr_abs_ctx_tbl <- Some ctx;
             caches#analysis#set_pia_ctr_ctx_tbl ctx;
 
-            (* construct VASS *)
+            (* construct symbolic representation *)
             if m_ref_step = 0
             then begin
                 (* TODO: the following MUST be set in piaDataPlugin only! *)
@@ -65,6 +62,7 @@ class pc_plugin_t (plugin_name: string) =
             log INFO "> Constructing counter abstraction";
             let ctrabs_prog =
                 do_counter_abstraction funcs solver caches prog proc_names
+                    ~keep_symbolic:false
             in
             write_to_file false "abs-counter-general.prm"
                 (units_of_program ctrabs_prog) (get_type_tab ctrabs_prog)
@@ -73,11 +71,12 @@ class pc_plugin_t (plugin_name: string) =
             ctrabs_prog
 
         method private make_vass solver dom caches prog proc_names embed_inv =
-            log INFO "> Constructing VASS...";
+            log INFO "> Constructing symbolic transition relation...";
             let vass_funcs = new vass_funcs dom prog solver in
             vass_funcs#set_embed_inv embed_inv;
             let vass_prog =
                 do_counter_abstraction vass_funcs solver caches prog proc_names
+                    ~keep_symbolic:true
             in
             caches#set_struc vass_prog (compute_struc vass_prog);
             write_to_file false "abs-vass.prm"
@@ -107,13 +106,13 @@ class pc_plugin_t (plugin_name: string) =
             let data_ctx = rt#caches#analysis#get_pia_data_ctx in
 
             let concretize_ex = function
-            | BinEx(EQ, BinEx(ARR_ACCESS, Var a, Const i), Const v) ->
+            | BinEx(EQ, BinEx(ARR_ACCESS, Var a, IntConst i), IntConst v) ->
                 (* TODO: check, whether "a" is a counter array? *)
-                let el = BinEx(ARR_ACCESS, Var a, Const i) in
+                let el = BinEx(ARR_ACCESS, Var a, IntConst i) in
                 let conc_ex = dom#expr_is_concretization el v in
                 conc_ex
 
-            | BinEx(EQ, Var x, Const v) as e ->
+            | BinEx(EQ, Var x, IntConst v) as e ->
                 if data_ctx#must_keep_concrete (Var x)
                 then dom#expr_is_concretization (Var x) v
                 else e

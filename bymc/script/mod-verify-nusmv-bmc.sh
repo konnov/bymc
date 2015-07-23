@@ -8,16 +8,12 @@ DEPTH=${DEPTH:-10} # parse options?
 
 . $BYMC_HOME/script/mod-verify-nusmv-common.sh
 
-if [ "$PLINGELING" -eq "0" ]; then
-    LINGELING_TOOL=${LINGELING_TOOL:-lingeling}
-    LINGELING_TOOL=`which $LINGELING_TOOL` || die "$LINGELING_TOOL not found"
-else
-    LINGELING_TOOL=${LINGELING_TOOL:-plingeling}
-    LINGELING_TOOL=`which $LINGELING_TOOL` || die "$LINGELING_TOOL not found"
-    LINGELING_TOOL="$LINGELING_TOOL -t ${PLINGELING}"
+if [ "$PLINGELING" -ne "0" ]; then
+    CUSTOM_SAT=${LINGELING_TOOL:-plingeling}
+    CUSTOM_SAT="$LINGELING_TOOL -t ${PLINGELING}"
 fi
 
-LINGELING_OUT="lingeling.out"
+SAT_OUT="sat.out"
 
 function comp_symb_skel {
     OF="$BYMC_FLAGS"
@@ -58,19 +54,21 @@ function abs_symb_skel {
 }
 
 function mc_compile_first {
-    common_mc_compile_first
-
-    if [ "$SKEL" == "1" ]; then
-        comp_symb_skel
-        abs_symb_skel
-        comp_symb_skel
+    if [ "$SKEL" != "1" ]; then
+        common_mc_compile_first
+    else
+        CAMLRUNPARAM="b" $TIME ${TOOL} --target nusmv --chain skelSmv -a ${PROG} \
+            || die "Failure: ${TOOL} -a ${PROG}"
     fi
 }
 
 function mc_verify_spec {
     if [ "$SKEL" == "1" ]; then
         SRC="main-sum.smv"
-        BYMC_FLAGS="--target nusmv --chain skelSmv"
+    fi
+
+    if [ "$NO_JUSTICE" != "" -a "$NO_JUSTICE" != "0" ]; then
+        perl -pi -e 's/JUSTICE /-- JUSTICE/g' $SRC
     fi
 
     SCRIPT="script.nusmv"
@@ -83,10 +81,11 @@ function mc_verify_spec {
     else
         if [ "$COMPLETENESS" != "1" ]; then CF=""; else CF="-c"; fi
         if [ "$NO_UNROLLING" != "1" ]; then VU=""; else VU="-N"; fi
+        if [ "$NO_LOOPBACK" != "1" ]; then LB=""; else LB="-l -1"; fi
         if [ "$ONE_SHOT" != "1" ]; then
             echo "check_ltlspec_sbmc_inc $CF $VU -k $DEPTH -P ${PROP}" >>${SCRIPT}
         else
-            echo "gen_ltlspec_sbmc -k $DEPTH -1 -P ${PROP}" >>${SCRIPT}
+            echo "gen_ltlspec_sbmc -k $DEPTH -1 $LB -P ${PROP}" >>${SCRIPT}
 #            echo "check_ltlspec_bmc_onepb -k $DEPTH -P ${PROP}" >>${SCRIPT}
         fi
     fi
@@ -99,32 +98,35 @@ function mc_verify_spec {
         $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "${SCRIPT}" "${SRC}"
     # the exit code of grep is the return code
     if [ '!' -f ${CEX} ]; then
-        if [ "$LINGELING" -ne 0 ]; then
-            CNF="oneshot${LINGELING}"
+        if [ "$ONE_SHOT_LEN" != "0" ]; then
+            CNF="oneshot${ONE_SHOT_LEN}"
+            if [ "$NO_LOOPBACK" != "1" ]; then LB=""; else LB="-l -1"; fi
             # lingeling solves one-shot problems much faster!
             echo "--------------------------------------"
             echo " Finished refinement for length $DEPTH."
-            echo " Now running lingeling for length $LINGELING"
+            echo " Now running $CUSTOM_SAT for length $ONE_SHOT_LEN"
             echo "--------------------------------------"
-            SCRIPT2="script-oneshot-lingeling.nusmv"
+            SCRIPT2="script-oneshot-custom-sat.smv"
             echo "set on_failure_script_quits" >$SCRIPT2
             echo "go_bmc" >>$SCRIPT2
             echo "time" >>$SCRIPT2
-            echo "gen_ltlspec_sbmc -1 -k $LINGELING -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            echo "gen_ltlspec_sbmc -1 $LB -k $ONE_SHOT_LEN -P ${PROP} -o ${CNF}" >>${SCRIPT2}
+            # that consumes lots of memory
             #echo "gen_ltlspec_bmc_onepb -k $LINGELING -P ${PROP} -o ${CNF}" >>$SCRIPT2
             echo "time" >>$SCRIPT2
             echo "quit" >>$SCRIPT2
             tee_or_die "$MC_OUT" "nusmv failed"\
                 $TIME ${NUSMV} -df -v $NUSMV_VERBOSE -source "$SCRIPT2" "${SRC}"
             set -o pipefail
-            $TIME ${LINGELING_TOOL} 2>&1 "${CNF}.dimacs" | tee ${LINGELING_OUT}
+            $TIME ${CUSTOM_SAT} 2>&1 "${CNF}.dimacs" | tee ${SAT_OUT}
             RET=${PIPESTATUS}
 
             if [ "$RET" -eq 20 ]; then
                 echo "--------------------------------------"
                 echo "No counterexample found with bounded model checking."
-                echo "WARNING: To guarantee completeness, make sure that --lingeling is set properly"
-                echo "as per completeness threshold"
+                echo "WARNING: To guarantee completeness, make sure"
+                echo "         that -K (or --lingeling) is set properly"
+                echo "         as per completeness threshold"
                 true
             elif [ "$RET" -eq 10 ]; then
                 false
@@ -161,8 +163,8 @@ function mc_collect_stat {
     last=`grep 'Creating the formula specific k-dependent constraints' $MC_OUT \
         | perl -n -e 'if (/for k=(\d+)/) { print "$1\n" }' \
         | tail -n 2 | head -n 1`
-    if [ "$LINGELING" -ne 0 ]; then
-        time_stat=`grep maxresident $LINGELING_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
+    if [ "$ONE_SHOT_LEN" != "0" ]; then
+        time_stat=`grep maxresident $SAT_OUT | tail -n 1 | perl -n -e 'if (/(.*)user (.*)system (.*)elapsed.*avgdata\D*(\d+)maxresident.*/) { print "$1 $2 $3 $4\n" }'`
         lingeling_elapsed=`echo $time_stat | cut -d ' ' -f 3`
         lingeling_maxres=`echo $time_stat | cut -d ' ' -f 4`
     fi

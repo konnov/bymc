@@ -28,16 +28,16 @@ let check_invariant rtm xducers_prog inv_name =
             [([inv], [], (StringMap.singleton "proc" proctype));
              ([not_inv], [], StringMap.empty)] in
         solver#set_collect_asserts true;
-        solver#set_need_evidence true;
+        solver#set_need_model true;
         solver#push_ctx;
-        simulate_in_smt solver xducers_prog ctr_ctx_tbl 1;
-        let res, smt_rev_map = check_trail_asserts solver step_asserts 1 in
+        let pile = simulate_in_smt solver xducers_prog ctr_ctx_tbl 1 in
+        let res, pile = check_trail_asserts solver pile step_asserts 1 in
         solver#pop_ctx;
         solver#set_collect_asserts false;
         if res then begin
             printf "Expression %s is not an invariant!\n\n" inv_name;
             printf "Here is an example:\n";
-            print_vass_trace xducers_prog solver 2;
+            print_vass_trace xducers_prog pile solver 2;
             raise (Failure (sprintf "Expression %s is not an invariant!" inv_name))
         end
     in

@@ -13,7 +13,7 @@ fi
 
 ORIG_DIR=`pwd`
 
-trap "cd $ORIG_DIR; exit" SIGHUP SIGINT SIGTERM
+trap "cd $ORIG_DIR; kill 0" SIGHUP SIGINT SIGTERM
 set -e # fail on first error
 export CAMLRUNPARAM="b"
 
@@ -21,8 +21,12 @@ PROG=`readlink -f $1`
 PROP=$2
 BYMC_HOME=`dirname $0`
 BYMC_HOME=`cd $BYMC_HOME/..; pwd`
+PLUGIN_DIR=`cd $BYMC_HOME/../plugins; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
+# the experiment number: if not set, then use the number of seconds since 1970
+exp_no=${EXP_NO:-`date -u '+%s'`}
+# hash the arguments to identify the experiment
 
 cmd=""
 step="0"
@@ -56,7 +60,7 @@ function die {
 
 function to_verdict() {
     if [ "$out" == "" ]; then
-        out="|00:exitcode=abort|01:valid=maybe|02:spurious=maybe"
+        out="|00:exitcode=abort|01:valid=maybe|02:spurious=maybe|09:exp=$exp_no"
     fi
 
     END_TIME=$(date +%s)
@@ -79,6 +83,8 @@ elif [ "${TARGET_MC}" == "nusmv-bdd" ]; then
     . "${BYMC_HOME}/script/mod-verify-nusmv-bdd.sh"
 elif [ "${TARGET_MC}" == "analysis" ]; then
     . "${BYMC_HOME}/script/mod-analyse.sh"
+elif [ "${TARGET_MC}" == "post" ]; then
+    . "${BYMC_HOME}/script/mod-post.sh"
 elif [ "${TARGET_MC}" == "fast" ]; then
     . "${BYMC_HOME}/script/mod-fast.sh"
 else
@@ -90,11 +96,11 @@ cd $BYMC_HOME
 if [ -d "src" ]; then
     # source distribution, compile the latest version
     if [ "x$DEBUG" == "x" ]; then
-        ./make.sh || (cd $ORIG_DIR; exit 1)
-        TOOL="$BYMC_HOME/bymc.native ${BYMC_FLAGS} "
+        make || (cd $ORIG_DIR; exit 1)
+        TOOL="$BYMC_HOME/bymc.native --plugin-dir ${PLUGIN_DIR} ${BYMC_FLAGS} "
     else
-        BYTE="1" ./make.sh || (cd $ORIG_DIR; exit 1)
-        TOOL="ocamldebug $BYMC_HOME/bymc.byte "
+        BYTE="1" make || (cd $ORIG_DIR; exit 1)
+        TOOL="ocamldebug $BYMC_HOME/bymc.byte --plugin-dir ${PLUGIN_DIR} "
     fi
 else
     # binary distribution
@@ -103,7 +109,7 @@ fi
 cd $ORIG_DIR
 
 mkdir -p "$ORIG_DIR/x"
-work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-`date \"+%y%m%d-%H%M\"`.XXXXXX"
+work_dir_template="$ORIG_DIR/x/`basename $PROG .pml`-$PROP-exp${exp_no}-`date \"+%y%m%d-%H%M\"`.XXXXXX"
 work_dir=`mktemp -d $work_dir_template`
 cd "$work_dir"
 echo "Changed directory to $work_dir"
@@ -125,7 +131,7 @@ while [ "$cmd" != "q" ]; do
 
     if [ "$code" == "0" ]; then
         echo "The property is verified in $step refinement steps"
-        out="|00:exitcode=ok|01:valid=yes|02:spurious=no"
+        out="|00:exitcode=ok|01:valid=yes|02:spurious=no|09:exp=$exp_no"
         cmd="q"
     else
         mc_refine
@@ -141,7 +147,7 @@ while [ "$cmd" != "q" ]; do
         elif grep "error" refinement.out \
                 || grep "trace-concrete-example" refinement.out; then
             echo "It took $step refinement steps"
-            out="|00:exitcode=ok|01:valid=no|02:spurious=no"
+            out="|00:exitcode=ok|01:valid=no|02:spurious=no|09:exp=$exp_no"
             cmd="q"
         elif grep "trace-refined" refinement.out; then
             step=$((step+1))

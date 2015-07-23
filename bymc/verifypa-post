@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# Verify properties with SMT by partial order schema tree.
+#
+# Igor Konnov, 2014
+
+# parse options
+TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o h --long help,limit-time:,limit-mem: -n '$@' -- "$@"`
+if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
+
+MEM_LIMIT="unlimited"
+TIME_LIMIT="unlimited"
+
+function help_and_quit() {
+    echo "use $0 [switches] prog spec bymc_options"
+    echo " where spec is one of those: all"
+    echo " and the switches are"
+    echo "  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)"
+    echo "  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)"
+    echo "  -h|--help: show this help message"
+    exit 1
+}
+
+eval set -- "$TEMPOPTS"
+while true ; do
+    case "$1" in
+    -h|--help) help_and_quit ;;
+    --limit-time) TIME_LIMIT=$2 ; shift 2 ;;
+    --limit-mem) MEM_LIMIT=$((1024*$2)) ; shift 2 ;;
+    --) shift ; break ;;
+    *) echo "Internal error!" ; help_and_quit ;;
+    esac
+done
+
+if [ "$#" -lt 2 ]; then
+    help_and_quit
+fi
+
+PROG=$1
+SPEC=$2
+shift 2
+export BYMC_FLAGS="$@ $BYMC_FLAGS"
+
+echo ulimit -SHv $MEM_LIMIT
+ulimit -SHv $MEM_LIMIT
+echo ulimit -SHt $TIME_LIMIT
+ulimit -SHt $TIME_LIMIT
+
+# run the tool
+export TARGET_MC=post
+`dirname $0`/script/refinement-loop.sh $PROG $SPEC
+

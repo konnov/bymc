@@ -1,8 +1,10 @@
-(* Converting a symbolic skeleton into the format of FASTer 2.1.
+(** Converting a symbolic skeleton into the format of FASTer 2.1.
  *
  * FAST: http://tapas.labri.fr/trac/wiki/FASTer
  *
- * Igor Konnov, 2014
+ * TODO: multiple process types
+ *
+ * @author Igor Konnov, 2014
  *)
 
 open Accums
@@ -14,52 +16,6 @@ module F = Format
 
 let ppn ff () = F.pp_print_newline ff ()
 
-type qtype = QAll | QExist | QCard
-
-let write_quant ff prog skels ~quant e =
-    let pname = Ltl.find_proc_name ~err_not_found:true e in
-    let sk =
-        try List.find (fun sk -> sk.Sk.name = pname) skels
-        with Not_found -> raise (Failure ("No skeleton " ^ pname))
-    in
-    let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
-    let is_matching_loc loc =
-        let lookup = List.combine var_names loc in
-        let val_fun = function
-            | Var v ->
-            begin
-                try List.assoc v#get_name lookup
-                with Not_found ->
-                    raise (Failure (Printf.sprintf "Var %s not found" v#get_name))
-            end
-
-            | e ->
-                raise (Failure ("val_fun(%s) is undefined" ^ (SpinIrImp.expr_s e)))
-        in
-        (* QAll needs negation *)
-        (SpinIrEval.Bool (quant <> QAll)) = SpinIrEval.eval_expr val_fun e
-    in
-    let matching = List.filter is_matching_loc sk.Sk.locs in
-    let each_loc not_first l =
-        match quant with
-        | QExist -> (* there is a non-zero location *)
-            if not_first then F.fprintf ff "@ || ";
-            F.fprintf ff "(%s > 0)" (Sk.locname l);
-            true
-
-        | QAll -> (* forall: all other locations are zero *)
-            if not_first then F.fprintf ff "@ && ";
-            F.fprintf ff "(%s = 0)" (Sk.locname l);
-            true
-
-        | QCard ->
-            if not_first then F.fprintf ff "@ + ";
-            F.fprintf ff "%s " (Sk.locname l);
-            true
-    in
-    if quant <> QCard then F.fprintf ff "@[<hov 2>(";
-    ignore (List.fold_left each_loc false matching);
-    if quant <> QCard then F.fprintf ff "@])"
 
 
 let print_def_expr ff e =
@@ -115,7 +71,7 @@ let print_expr ?printex:(pex=print_def_expr) ?in_act:(ina=false) ff e =
  *)
 let eliminate_div e =
     let rec divisor = function
-        | BinEx (DIV, l, Const k) ->
+        | BinEx (DIV, l, IntConst k) ->
              k * (divisor l)
         | BinEx (DIV, _, r) ->
              raise (Failure "Division over non-constant")
@@ -126,7 +82,7 @@ let eliminate_div e =
         | _ -> 1
     in
     let rec mult div = function
-        | BinEx (DIV, l, Const k) ->
+        | BinEx (DIV, l, IntConst k) ->
              assert (div mod k = 0);
              if k = div
              then l
@@ -143,8 +99,8 @@ let eliminate_div e =
         | UnEx (t, r) ->
              UnEx (t, mult div r)
              
-        | Const k -> Const (k * div)
-        | Var v -> BinEx (MULT, Const div, Var v)
+        | IntConst k -> IntConst (k * div)
+        | Var v -> BinEx (MULT, IntConst div, Var v)
         | e -> raise (Failure ("Unsupported: " ^ (SpinIrImp.expr_s e)))
     in
     let rec in_logical = function
@@ -168,7 +124,6 @@ let eliminate_div e =
         | _ as e -> e
     in
     in_logical e
-
 
 
 let write_vars ff skels =
@@ -200,10 +155,10 @@ let write_rule ff prog sk num r =
     let src_name = Sk.locname (List.nth sk.Sk.locs r.Sk.src) in
     let dst_name = Sk.locname (List.nth sk.Sk.locs r.Sk.dst) in
     F.fprintf ff "%s > 0@ " src_name;
-    if r.Sk.guard <> Const 1
+    if r.Sk.guard <> IntConst 1
     then begin
         F.fprintf ff "&& ";
-        print_expr ff (eliminate_div r.Sk.guard);
+        print_expr ff (Simplif.canonical (eliminate_div r.Sk.guard));
     end;
     F.fprintf ff "@];@,";
     F.fprintf ff "  action := @[<hov 2>";
@@ -224,108 +179,32 @@ let write_rule ff prog sk num r =
 let write_skel ff prog sk =
     List.iter2 (write_rule ff prog sk) (range 0 sk.Sk.nrules) sk.Sk.rules
 
-type spec_t = 
-    (* (p && <> !q) *)
-    | CondSafety of token expr (* p *) * token expr (* q *)
-    | Unsupported of token expr
-
-
-let classify_spec prog = function
-    (* (p -> [] q) *)
-    | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
-            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
-        then CondSafety (lhs, Ltl.normalize_form (UnEx (NEG, rhs)))
-        else Unsupported e
-
-    | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
-        if (Ltl.is_propositional (Program.get_type_tab prog) lhs)
-            && (Ltl.is_propositional (Program.get_type_tab prog) rhs)
-        then CondSafety (Ltl.normalize_form (UnEx (NEG, lhs)),
-                         Ltl.normalize_form (UnEx (NEG, rhs)))
-        else Unsupported e
-
-    | e -> Unsupported e
-
-    
-
-let write_prop ff prog skels prop_form =
-    let atomics = Program.get_atomics_map prog in
-    let tt = Program.get_type_tab prog in
-    let rec expand_card = function
-        | UnEx (CARD, r) ->
-                write_quant ff prog skels ~quant:QCard r
-        | UnEx (t, r) ->
-                F.fprintf ff "%s" (SpinIrImp.token_s t);
-                expand_card r
-        | BinEx (t, l, r) ->
-                expand_card l;
-                F.fprintf ff "@ %s " (SpinIrImp.token_s t);
-                expand_card r
-        
-        | e -> print_def_expr ff e
-    in
-    let rec pr_atomic neg = function
-        | PropGlob e ->
-            expand_card e
-
-        | PropAll e ->
-            write_quant ff prog skels ~quant:QAll e
-
-        | PropSome e ->
-            write_quant ff prog skels ~quant:QExist e
-
-        | PropAnd (l, r) ->
-            F.fprintf ff "("; pr_atomic neg l;
-            F.fprintf ff ")@ && ("; pr_atomic neg r; F.fprintf ff ")"
-
-        | PropOr (l, r) ->
-            F.fprintf ff "("; pr_atomic neg l;
-            F.fprintf ff ")@ || ("; pr_atomic neg r; F.fprintf ff ")"
-    in
-    let rec pr neg = function
-    | BinEx (AND as t, l, r)
-    | BinEx (OR as t, l, r) ->
-        let op, nop = if t = AND then "&&", "||" else "||", "&&" in
-        F.fprintf ff "("; pr neg l;
-        F.fprintf ff ")@ %s (" (if neg then nop else op);
-        pr neg r; F.fprintf ff ")"
-
-    | UnEx (NEG, r) ->
-        pr (not neg) r
-
-    | Var v ->
-        let op = if neg then "!" else "" in
-        if (tt#get_type v)#basetype = SpinTypes.TPROPOSITION
-        then pr_atomic neg (StrMap.find v#get_name atomics)
-        else F.fprintf ff "%s%s" op v#get_name
-
-    | e ->
-        let ne = if neg then UnEx (NEG, e) else e in
-        print_expr ff ~in_act:true (Ltl.normalize_form ne)
-    in
-    pr false prop_form
-
 
 let write_init_region ff prog skels init_form =
     F.fprintf ff "@[<hov 2>state = normal";
     let p_expr e =
         F.fprintf ff "@ && @[<h>";
-        print_expr ff ~in_act:true (eliminate_div e);
+        print_expr ff ~in_act:true (Simplif.canonical (eliminate_div e));
         F.fprintf ff "@]"
     in
     List.iter p_expr (Program.get_assumes prog);
     let each_skel sk = List.iter p_expr sk.Sk.inits in
     List.iter each_skel skels;
-    F.fprintf ff "@ && @[<h>";
-    write_prop ff prog skels init_form;
-    F.fprintf ff "@]"
+    if init_form <> (IntConst 1)
+    then begin
+        F.fprintf ff "@ && @[<h>";
+        print_expr ff ~in_act:true (Simplif.canonical (eliminate_div init_form));
+        F.fprintf ff "@]"
+    end
 
 
 let write_bad_region ff prog skels bad_form =
     F.fprintf ff "@[<hov 2>state = normal";
-    F.fprintf ff "@ && ";
-    write_prop ff prog skels bad_form
+    if bad_form <> IntConst 1
+    then begin
+        F.fprintf ff "@ && ";
+        print_expr ff ~in_act:true bad_form
+    end
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
@@ -350,12 +229,14 @@ let write_cond_safety ff prog skels name init_form bad_form =
 
 let write_all_specs ff prog skels =
     let each_spec name s =
-        match classify_spec prog s with
-        | Unsupported e ->
+        match Ltl.classify_spec (Program.get_type_tab prog) s with
+        | Ltl.CondGeneral e ->
             F.fprintf ff "@[<hov 2>/* %s is not supported:@," name;
             print_expr ff ~in_act:false e;
             F.fprintf ff " */@]@,@,";
-        | CondSafety (init, bad) ->
+        | Ltl.CondSafety (init, bad) ->
+            let init = SymbSkel.expand_props_in_ltl prog skels init in
+            let bad = SymbSkel.expand_props_in_ltl prog skels bad in
             write_cond_safety ff prog skels name init bad
     in
     F.fprintf ff "@[<v 2>strategy s1 {@,";

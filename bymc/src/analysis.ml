@@ -150,7 +150,7 @@ let transfer_roles stmt input =
     let output = Hashtbl.copy input
     in
     let rec eval = function
-        | Const v -> IntervalInt (v, v)
+        | IntConst v -> IntervalInt (v, v)
         | Var var ->
             if Hashtbl.mem input var then Hashtbl.find input var else Undefined
         | UnEx (_, _) -> Undefined
@@ -183,7 +183,7 @@ let transfer_var_use stmt input =
     let output = Hashtbl.copy input
     in
     let rec eval = function
-        | Const v ->
+        | IntConst v ->
             VarUsesUndef
         | Var var ->
             VarUses (VarSet.add var VarSet.empty)

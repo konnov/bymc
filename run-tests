@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# The script file to run the tests from buildbot
+#
+# Igor Konnov, 2014
+
+case $1 in
+    unit)
+        cd bymc
+        make test
+        ;;
+
+    integrate)
+        cd bymc
+        make integrate
+        ;;
+
+    *)
+        echo "Unexpected parameter: $1"
+esac

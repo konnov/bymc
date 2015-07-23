@@ -56,7 +56,9 @@ let write_handler (wts, fdout) =
         done;
         max_yields := !max_yields * 2
     done;
+    (* if you want to see this annoying message, uncomment it:
     printf "[writer thread]: about %d yields in 1 msec\n" !max_yields;
+    *)
     (* process the input lines *)
     let yields = ref 0 in
     while !(wts.state) <> Stopping do
@@ -80,11 +82,11 @@ let write_handler (wts, fdout) =
             let writeln l = 
                 trace Trc.cmd (fun _ -> sprintf "writeln: %s" l);
                 let ln = l ^ "\n" in
-                try
-                    let _ = Unix.write fdout ln 0 (String.length ln) in ()
+                try let _ = Unix.write fdout ln 0 (String.length ln) in ()
                 with Unix.Unix_error (e, op, msg) ->
                 begin
                     let uem = Unix.error_message e in
+                    trace Trc.cmd (fun _ -> sprintf "critical error: %s" uem);
                     fprintf stderr
                         "[writer thread] %s: on '%s'. Terminated." uem ln;
                     Thread.exit ()
@@ -110,9 +112,17 @@ let writeline st s =
 
 
 let readline st =
-    try
-        input_line st.cin
-    with End_of_file ->
+    try let line = input_line st.cin in
+        let errlen = String.length "!error! " in
+        if (String.length line >= errlen) && (String.sub line 0 errlen) = "!error! "
+        then raise (Comm_error (String.sub line errlen ((String.length line) - errlen)))
+        else line
+
+    with
+    | Unix.Unix_error _ ->
+        raise (Comm_error
+            ("Process terminated prematurely, see: " ^ st.err_filename))
+    | End_of_file ->
         raise (Comm_error
             ("Process terminated prematurely, see: " ^ st.err_filename))
 
@@ -140,11 +150,20 @@ let create prog args err_filename =
         Unix.close out_pipe_i; Unix.close out_pipe_o; 
         Unix.dup2 fderr Unix.stderr; Unix.close fderr;
         let exec _ =
-            let _ = Unix.execvp prog (Array.append [|prog|] args) in
-            Unix.close Unix.stderr;
-            () in
+            ignore (Unix.execvp prog (Array.append [|prog|] args));
+            ignore (Unix.close Unix.stderr)
+        in
         (* exit, if an error occurs *)
-        let _ = Unix.handle_unix_error exec () in ()
+        try exec ()
+        with Unix.Unix_error (e, _, p) ->
+            let m = sprintf "!error! exec %s failed: %s\n"  p (Unix.error_message e) in
+            print_endline m; flush stdout;
+            prerr_endline m; flush stderr;
+            (* if we terminate immediately, the parent will bounce
+                with 'Broken pipe', which we cannot handle carefully in ocaml.
+                Thus, write an error message and echo several messages
+                with 'head' *)
+            ignore (Unix.execvp prog ([|"head"|]))
     end else begin
         (* the parent *)
         Unix.close in_pipe_o; 
@@ -155,8 +174,7 @@ let create prog args err_filename =
         state = ref Running; dirty = ref false;
         mutex = Mutex.create (); pending_writes = ref []
     } in
-    let writer_thread =
-        Thread.create write_handler (writer_state, out_pipe_o) in
+    let writer_thread = Thread.create write_handler (writer_state, out_pipe_o) in
     let cin = Unix.in_channel_of_descr in_pipe_i in
     set_binary_mode_in cin false;
     {
@@ -166,10 +184,13 @@ let create prog args err_filename =
 
 
 let destroy st =
-    st.writer_st.state := Stopping;
-    Thread.join st.writer_thr;
-    close_in st.cin;
-    Unix.close st.fdout;
-    let _ = Unix.waitpid [] st.pid in
+    if not (is_null st)
+    then begin
+        st.writer_st.state := Stopping;
+        Thread.join st.writer_thr;
+        close_in st.cin;
+        Unix.close st.fdout;
+        ignore (Unix.waitpid [] st.pid)
+    end;
     true
 

@@ -24,7 +24,7 @@ let global_state_fmt prog =
     in
     let ref_var lst v =
         let add_elem_ref es i =
-            (BinEx(ARR_ACCESS, Var v, Const i) :: es) in
+            (BinEx(ARR_ACCESS, Var v, IntConst i) :: es) in
         let tp = Program.get_type prog v in
         if tp#is_array
         then List.fold_left add_elem_ref lst (range 0 tp#nelems)
@@ -59,7 +59,7 @@ let parse_global_state prog text =
     let re = global_state_re fmt in
     let bind group_s expr =
         let value = int_of_string group_s in
-        BinEx(EQ, expr, Const value)
+        BinEx(EQ, expr, IntConst value)
     in
     let re_s =
         Str.global_replace (Str.regexp_string "%d") "\\([0-9]+\\)" fmt in

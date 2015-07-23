@@ -88,8 +88,8 @@ echo "Ran: $ntotal tests in: $diff_time seconds"
 
 # try to be compatible with the format by ounit
 if [ "$nfail" -ne "0" ]; then
-    echo "FAILED: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo"
+    echo "FAILED: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo Timeouts:0."
 else
-    echo "SUCCESS: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo"
+    echo "SUCCESS: Cases:$ntotal Tried:$((ntotal-nskip)) Errors:0 Failures:$nfail Skip:$nskip Todo:$ntodo Timeouts:0."
 fi
 

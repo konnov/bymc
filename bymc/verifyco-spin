@@ -47,7 +47,7 @@ fi
 CUR_DIR=`pwd`; CUR_DIR=`cd $CUR_DIR; pwd`
 cd $BYMC_HOME
 if [ -d "src" ]; then
-    ./make.sh || (cd $CUR_DIR; exit 1)
+    make || (cd $CUR_DIR; exit 1)
 fi
 cd $CUR_DIR
 

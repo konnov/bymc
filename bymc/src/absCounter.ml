@@ -3,7 +3,7 @@
   This code was written in an ad-hoc way and requires refactoring.
 
   NOTE: many decisions in this code were dictated by the need to check
-  the abstraction in Spin. Some operations can be done in a much more
+  the abstraction in Spin. Many operations can be done in a much more
   efficient way symbolically.
 
   Igor Konnov 2012
@@ -98,10 +98,10 @@ let is_local_sat exp valuation =
 let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     let mk_cons c_ctx tok sep indices =
         let add_cons e idx =
-            let ke = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx) in
+            let ke = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst idx) in
             if is_nop e
-            then BinEx (tok, ke, Const 0)
-            else BinEx (sep, e, BinEx (tok, ke, Const 0)) in
+            then BinEx (tok, ke, IntConst 0)
+            else BinEx (sep, e, BinEx (tok, ke, IntConst 0)) in
         List.fold_left add_cons (Nop "") indices
     in
     let mk_all c_ctx check_fun =
@@ -112,18 +112,18 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
     (* abstract expressions over locals as one boolean function *)
     let rec eval_bool_expr e vals =
         match e with
-        | BinEx (EQ, Var var, Const value) ->
+        | BinEx (EQ, Var var, IntConst value) ->
             if not (Program.is_global prog var)
             then value = (Hashtbl.find vals var)
             else true (* don't touch global variables *)
-        | BinEx (EQ, Const value, Var var) ->
-            eval_bool_expr (BinEx (EQ, Var var, Const value)) vals
-        | BinEx (NE, Var var, Const value) ->
+        | BinEx (EQ, IntConst value, Var var) ->
+            eval_bool_expr (BinEx (EQ, Var var, IntConst value)) vals
+        | BinEx (NE, Var var, IntConst value) ->
             if not (Program.is_global prog var)
             then value != (Hashtbl.find vals var)
             else true (* don't touch global variables *)
-        | BinEx (NE, Const value, Var var) ->
-            eval_bool_expr (BinEx (NE, Var var, Const value)) vals 
+        | BinEx (NE, IntConst value, Var var) ->
+            eval_bool_expr (BinEx (NE, Var var, IntConst value)) vals 
         | BinEx (AND, l, r) ->
             (eval_bool_expr l vals) && (eval_bool_expr r vals)
         | BinEx (OR, l, r) ->
@@ -169,7 +169,7 @@ let trans_prop_decl solver ctr_ctx_tbl prog atomic_expr =
             let c_ctx = ctr_ctx_tbl#get_ctx proc_name in
             let indices = c_ctx#all_indices_for (is_local_sat rhs) in
             let mk_sum l i =
-                let arr = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i)
+                let arr = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst i)
                 in
                 if not_nop l then BinEx (PLUS, l, arr) else arr
             in
@@ -320,8 +320,8 @@ class abs_ctr_funcs dom prog solver =
                 let add_var (var, i) = Hashtbl.add valuation var i in
                 List.iter add_var local_vals;
                 let idx = c_ctx#pack_to_const valuation in
-                let lhs = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx) in
-                MExpr (fresh_id (), BinEx (ASGN, lhs, Const abs_size))
+                let lhs = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst idx) in
+                MExpr (fresh_id (), BinEx (ASGN, lhs, IntConst abs_size))
             in
             let option_list =
                 List.map
@@ -331,20 +331,20 @@ class abs_ctr_funcs dom prog solver =
             (omit_local_assignments prog init_stmts)
             @ 
             (mk_nondet_choice option_list)
-                @ self#mk_post_asserts c_ctx active_expr (Const (-1)) (Const 0)
+                @ self#mk_post_asserts c_ctx active_expr (IntConst (-1)) (IntConst 0)
 
         method mk_counter_guard c_ctx =
             let make_opt idx =
                 let guard =
                     (BinEx (NE,
-                        BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const idx),
-                        Const 0))
+                        BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst idx),
+                        IntConst 0))
                 in
                 MExpr (fresh_id (), guard) :: (* and then assignments *)
                     (Hashtbl.fold
                         (fun var value lst -> 
                             MExpr (fresh_id (),
-                                   BinEx (ASGN, Var var, Const value)) :: lst)
+                                   BinEx (ASGN, Var var, IntConst value)) :: lst)
                         (c_ctx#unpack_from_const idx) [])
             in
             let indices = range 0 c_ctx#get_ctr_dim in
@@ -360,7 +360,7 @@ class abs_ctr_funcs dom prog solver =
                 in
                 let expr_abs_vals =
                     mk_expr_abstraction solver dom is_deref
-                        (BinEx (tok, ktr_i, Const 1)) in
+                        (BinEx (tok, ktr_i, IntConst 1)) in
                 mk_assign_unfolding ktr_i expr_abs_vals
             in
             let mk_ne (prev, next) = BinEx (NE, Var prev, Var next) in
@@ -408,20 +408,20 @@ class vass_funcs dom prog solver =
 
         method mk_pre_loop c_ctx active_expr =
             [MHavoc (fresh_id (), delta);
-             MAssume (fresh_id (), BinEx (GT, Var delta, Const 0));]
+             MAssume (fresh_id (), BinEx (GT, Var delta, IntConst 0));]
 
         method mk_pre_asserts c_ctx active_expr prev_idx next_idx =
-            let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i) in
-            let add s i = if s <> Const 0 then BinEx (PLUS, acc i, s) else acc i
+            let acc i = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst i) in
+            let add s i = if s <> IntConst 0 then BinEx (PLUS, acc i, s) else acc i
             in
             (* counter are non-negative, non-obvious for an SMT solver! *)
             let all_indices = (range 0 c_ctx#get_ctr_dim) in
             let mk_non_neg i =
-                MAssume (fresh_id (), BinEx (GE, acc i, Const 0)) in
+                MAssume (fresh_id (), BinEx (GE, acc i, IntConst 0)) in
             (* the sum of counters is indeed the number of processes! *)
             (* though it is preserved in VASS, it is lost in the counter abs. *)
             let sum =
-                List.fold_left add (Const 0) (range 0 c_ctx#get_ctr_dim) in
+                List.fold_left add (IntConst 0) (range 0 c_ctx#get_ctr_dim) in
             MAssume (fresh_id (), BinEx (EQ, active_expr, sum));
             :: (List.map mk_non_neg all_indices)
 
@@ -439,7 +439,7 @@ class vass_funcs dom prog solver =
             in
             let indices = c_ctx#all_indices_for has_val in
             let sum_fun e i =
-                let ctr_ex = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, Const i)
+                let ctr_ex = BinEx (ARR_ACCESS, Var c_ctx#get_ctr, IntConst i)
                 in
                 if is_nop e then ctr_ex else BinEx (PLUS, e, ctr_ex)
             in
@@ -450,12 +450,12 @@ class vass_funcs dom prog solver =
                 List.filter (fun i -> not (List.mem i indices))
                     (range 0 c_ctx#get_ctr_dim) in
             let mk_oth i =
-                MAssume (fresh_id (), BinEx (EQ, Const 0, sum_fun (Nop "") i))
+                MAssume (fresh_id (), BinEx (EQ, IntConst 0, sum_fun (Nop "") i))
             in
             let other0 = List.map mk_oth other_indices in
             (omit_local_assignments prog init_stmts)
             @ sum_eq_n :: other0
-                @ (self#mk_post_asserts c_ctx active_expr (Const 0) (Const 0))
+                @ (self#mk_post_asserts c_ctx active_expr (IntConst 0) (IntConst 0))
 
         (* on the SMT level we can always use free variables instead
            of explicit enumeration of indices *)
@@ -464,7 +464,7 @@ class vass_funcs dom prog solver =
             let havocs = List.map (fun v -> MHavoc (fresh_id (), v)) prevs in
             let access =
                 BinEx (ARR_ACCESS, Var c_ctx#get_ctr, c_ctx#pack_index_expr) in
-            let ne = MExpr (fresh_id (), BinEx (NE, access, Const 0)) in
+            let ne = MExpr (fresh_id (), BinEx (NE, access, IntConst 0)) in
             havocs @ [ne]
 
         method mk_counter_update c_ctx prev_next_list prev_idx next_idx =
@@ -499,7 +499,7 @@ class vass_funcs dom prog solver =
                 path (currently we are checking invividual transitions).
              *)
            | MExpr (id, BinEx (ASGN, Var x,
-                    BinEx (PLUS, Var y, Const 1))) as s ->
+                    BinEx (PLUS, Var y, IntConst 1))) as s ->
                 if t_ctx#must_keep_concrete (Var x) && x#id = y#id
                 then MExpr (id,
                         BinEx (ASGN, Var x,
@@ -531,7 +531,7 @@ class vass_funcs dom prog solver =
 (* Transform the program using counter abstraction over the piaDomain.
    Updates proc_struc#regions.
  *)
-let do_counter_abstraction funcs solver caches prog proc_names =
+let do_counter_abstraction ~keep_symbolic funcs solver caches prog proc_names =
     let t_ctx = caches#analysis#get_pia_data_ctx in
     let ctr_ctx_tbl = caches#analysis#get_pia_ctr_ctx_tbl in
     let replace_update c_ctx active_expr update atomics stmts =
@@ -540,7 +540,7 @@ let do_counter_abstraction funcs solver caches prog proc_names =
             let replace_expr = function
                 | MExpr (id, BinEx (ASGN, Var var, _)) as s ->
                     if var#proc_name <> ""
-                    then MExpr (id, BinEx (ASGN, Var var, Const 0))
+                    then MExpr (id, BinEx (ASGN, Var var, IntConst 0))
                     else s
                 | _ as s -> s
             in
@@ -619,8 +619,8 @@ let do_counter_abstraction funcs solver caches prog proc_names =
         (* re-construct the regions *)
         new_struc#set_regions p#get_name (extract_skel new_body);
         let new_proc = proc_replace_body p new_body in
-        new_proc#set_active_expr (Const 1);
-        new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, Const 0));
+        new_proc#set_active_expr (IntConst 1);
+        new_proc#set_provided (BinEx (EQ, Var c_ctx#get_spur, IntConst 0));
         new_proc
     in
     let abstract_atomic (av, ae) =
@@ -628,23 +628,25 @@ let do_counter_abstraction funcs solver caches prog proc_names =
     let new_atomics = List.map abstract_atomic (Program.get_atomics prog) in
     let new_decls = ctr_ctx_tbl#get_spur :: funcs#introduced_vars in
     let counters =
-        List.map (fun v -> (v, Const 0)) ctr_ctx_tbl#all_counters in
+        List.map (fun v -> (v, IntConst 0)) ctr_ctx_tbl#all_counters in
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let new_ltl_forms = (* exclude computations containing spurious states *)
         Accums.StringMap.add "fairness_ctr"
         (UnEx(ALWAYS, UnEx(NEG, Var ctr_ctx_tbl#get_spur)))
         (Program.get_ltl_forms prog) in
     funcs#register_new_vars ctr_ctx_tbl new_type_tab;
+    let new_params = if keep_symbolic then Program.get_params prog else [] in
+    let new_assumes = if keep_symbolic then Program.get_assumes prog else [] in
     let new_prog =
-        (Program.set_params []
-        (Program.set_assumes []
-        (Program.set_shared_with_init
+        Program.set_params new_params Program.empty
+        |> Program.set_assumes new_assumes
+        |> Program.set_shared_with_init
             (counters @ (Program.get_shared_with_init prog))
-        (Program.set_instrumental new_decls
-        (Program.set_type_tab new_type_tab
-        (Program.set_atomics new_atomics
-        (Program.set_ltl_forms new_ltl_forms
-        Program.empty))))))) in
+        |> Program.set_instrumental new_decls
+        |> Program.set_type_tab new_type_tab
+        |> Program.set_atomics new_atomics
+        |> Program.set_ltl_forms new_ltl_forms
+    in
     let new_struc = empty_proc_struc () in
     let new_procs =
         let trp p =

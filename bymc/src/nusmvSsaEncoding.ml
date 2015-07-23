@@ -226,7 +226,7 @@ let collect_rhs solver type_tab dom ctr_ctx op =
     solver#append_var_def x tp; 
     solver#append_var_def y tp; 
     let tbl = Hashtbl.create 10 in
-    let chg = BinEx (EQ, Var x, BinEx (op, Var y, Const 1)) in
+    let chg = BinEx (EQ, Var x, BinEx (op, Var y, IntConst 1)) in
     let on_point p =
         let add xv yv =
             if Hashtbl.mem tbl xv
@@ -247,7 +247,7 @@ let indexed_var v idx = sprintf "%s_%dI" v#mangled_name idx
 
 let elim_array_access sym_tab exp =
     let rec elim = function
-    | BinEx (ARR_ACCESS, Var arr, Const i) ->
+    | BinEx (ARR_ACCESS, Var arr, IntConst i) ->
         Var ((sym_tab#lookup (indexed_var arr i))#as_var)
     | BinEx (ARR_ACCESS, Var arr, idx_exp) ->
         raise (NusmvEncoding_error
@@ -291,7 +291,7 @@ let module_of_proc rt out_becomes_next elim_deadlocks prog =
     (* both locals and shared are the parameters of our module *)
     let make_options p i =
         let choose =
-            MExpr (fresh_id (), (BinEx (ASGN, Var pid, Const i))) in
+            MExpr (fresh_id (), (BinEx (ASGN, Var pid, IntConst i))) in
         MOptGuarded (choose :: (get_comp p))
     in
     (* we have a single process for everything *)
@@ -435,16 +435,16 @@ let module_of_counter rt proc_syms proc_types ctrabs_prog pid p num =
     let myval = new_var "myval" in
     let mk_case local_ex prev_val next_vals =
         let guard =
-            BinEx (AND, local_ex, BinEx (EQ, Var myval, Const prev_val))
+            BinEx (AND, local_ex, BinEx (EQ, Var myval, IntConst prev_val))
         in
-        let rhs = List.map (fun i -> Const i) next_vals in
+        let rhs = List.map (fun i -> IntConst i) next_vals in
         (guard, rhs)
     in
     let prev_cases = hashtbl_map (mk_case prev_eq) dec_tbl in
     let next_cases = hashtbl_map (mk_case next_eq) inc_tbl in
     let cases =
         (* if the process is not selected, keep the value *)
-          (BinEx (NE, Var pid, Const num), [Var myval])
+          (BinEx (NE, Var pid, IntConst num), [Var myval])
         (* if the in and out coincide, keep the value *)
         :: (BinEx (AND, prev_eq, next_eq), [Var myval])
         (* decrease if the process moves out of this location *)
@@ -487,7 +487,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
             let eq =
                 BinEx (EQ,
                     Var (ctr#copy (sprintf "%s_%dI" ctr#get_name idx)),
-                    Const abs_size) in
+                    IntConst abs_size) in
             (IntSet.add idx hits, eq :: l)
         in
         let mk_one_vec d =
@@ -497,7 +497,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
                 if not (IntSet.mem i hits)
                 then BinEx (EQ,
                     Var (ctr#copy (sprintf "%s_%dI" ctr#get_name i)),
-                    Const 0) :: l
+                    IntConst 0) :: l
                 else l
             in
             let ess = List.fold_left zero ess (range 0 ctr_ctx#get_ctr_dim) in
@@ -508,7 +508,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         ex :: l
     in
     let bymc_loc = new_var "bymc_loc" in
-    let init_global i v = BinEx (EQ, Var v, Const i) in
+    let init_global i v = BinEx (EQ, Var v, IntConst i) in
     let init_ess =
         (init_global 1 bymc_loc)
         :: (List.map (init_global 0) (Program.get_shared intabs_prog))
@@ -519,7 +519,7 @@ let init_of_ctrabs rt intabs_prog ctrabs_prog =
         SVar [(bymc_loc, t)]
     in
     let change_loc =
-        ANext (bymc_loc, [(Var nusmv_true, [ Const 2 (* TODO: 0? *) ])]) 
+        ANext (bymc_loc, [(Var nusmv_true, [ IntConst 2 (* TODO: 0? *) ])]) 
     in
     [ bymc_loc_decl; SInit init_ess; SAssign [change_loc] ]
     
@@ -538,7 +538,7 @@ let create_counter_mods rt proc_syms proc_types ctrabs_prog pid =
             let myctr = ctr#copy (sprintf "%s_%dI" ctr#get_name idx) in
             let valtab = ctr_ctx#unpack_from_const idx in
             let get_val v =
-                try Const (Hashtbl.find valtab v)
+                try IntConst (Hashtbl.find valtab v)
                 with Not_found ->
                     raise (Failure ("Not found " ^ v#get_name))
             in
@@ -549,7 +549,7 @@ let create_counter_mods rt proc_syms proc_types ctrabs_prog pid =
             let ne v = BinEx (NE, Var v, get_val v) in
             let invar =
                 SInvar ([BinEx (OR,
-                    BinEx (NE, Var myctr, Const 0),
+                    BinEx (NE, Var myctr, IntConst 0),
                     list_to_binex OR (List.map ne prev))])
             in
             (SVar [(myctr, tp)])
@@ -650,7 +650,7 @@ let reach_inv_of_ctrabs rt ctrabs_prog =
         let idx_spec l idx = 
             let name = sprintf "r_%s_%dI" ctr#get_name idx in
             let vals = ctr_ctx#unpack_from_const idx in
-            let f n v a = (BinEx (NE, Var n, Const v)) :: a in
+            let f n v a = (BinEx (NE, Var n, IntConst v)) :: a in
             (SInvarSpec (name, list_to_binex OR (Hashtbl.fold f vals []))) :: l
         in
         List.fold_left idx_spec lst (ctr_ctx#all_indices_for (fun _ -> true))
@@ -668,7 +668,7 @@ let reach_transitions_of_ctrabs rt ctrabs_prog hidden_set =
         let ctr = ctr_ctx#get_ctr in
         let not_state varf i =
             let vals = ctr_ctx#unpack_from_const i in
-            let f n v a = (BinEx (NE, Var (varf n), Const v)) :: a in
+            let f n v a = (BinEx (NE, Var (varf n), IntConst v)) :: a in
             list_to_binex OR (Hashtbl.fold f vals [])
         in
         let idx_spec l i = 
@@ -704,7 +704,7 @@ let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
         let init_vals = SkelStruc.comp_seq ctr_ctx#var_vec (decl @ init) in
         let to_and asgns =
             list_to_binex AND
-                (List.map (fun (v, i) -> BinEx (EQ, Var v, Const i)) asgns) in
+                (List.map (fun (v, i) -> BinEx (EQ, Var v, IntConst i)) asgns) in
         let ex = list_to_binex OR (List.map to_and init_vals) in
         ex :: l
     in
@@ -713,8 +713,8 @@ let exec_of_ctrabs_procs rt intabs_prog ctrabs_prog pid =
             rt#caches#analysis#get_pia_ctr_ctx_tbl#get_ctx p#get_name in
         let bind lst v =
             let n = ctr_ctx#get_next v in
-            let enabled = BinEx (EQ, Var pid, Const num) in
-            let disabled = BinEx (NE, Var pid, Const num) in
+            let enabled = BinEx (EQ, Var pid, IntConst num) in
+            let disabled = BinEx (NE, Var pid, IntConst num) in
             let move_or_keep =
                 BinEx (AND,
                     BinEx (IMPLIES,
@@ -751,19 +751,19 @@ let hide_vars names sections =
         | Var v as e ->
             if is_vis v#mangled_name
             then e
-            else Const 0  (* unreachable meaning always 0 *)
+            else IntConst 0  (* unreachable meaning always 0 *)
 
-        | BinEx (EQ, Var v, Const i) as e ->
+        | BinEx (EQ, Var v, IntConst i) as e ->
             if is_vis v#mangled_name
             then e
             (* unreachable meaning always 0 *)
-            else if i > 0 then Const 0 else Const 1
+            else if i > 0 then IntConst 0 else IntConst 1
 
-        | BinEx (NE, Var v, Const i) as e ->
+        | BinEx (NE, Var v, IntConst i) as e ->
             if is_vis v#mangled_name
             then e
             (* unreachable, always 0 *)
-            else if i > 0 then Const 1 else Const 0
+            else if i > 0 then IntConst 1 else IntConst 0
 
         | BinEx (t, l, r) -> BinEx (t, rewrite l, rewrite r)
 

@@ -1,0 +1,9 @@
+# ocamlbuild tags
+#
+# check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
+
+<mlsrc>: include
+<**/*.cmxs>: package(ctypes.foreign), package(batteries)
+
+<mlsrc/*.ml>: package(ctypes.foreign), package(batteries)
+

@@ -72,7 +72,7 @@ let block_to_constraints (proc_name: string)
 
     (* control flow passes to a successor: at_i -> (at_s1 || ... || at_sk) *)
     let parents_cons l edges =
-        let f l (p, i) = BinEx (EQ, succ_var p, Const (1 + i)) :: l in
+        let f l (p, i) = BinEx (EQ, succ_var p, IntConst (1 + i)) :: l in
         List.fold_left f l edges
     in
     let parents_activate =
@@ -85,16 +85,16 @@ let block_to_constraints (proc_name: string)
     let flow_succ =
         if n_succ > 1 && n_pred <> 0
         then if is_nop parents_activate
-            then mkez (BinEx (NE, succ_var bb, Const 0))
+            then mkez (BinEx (NE, succ_var bb, IntConst 0))
             else mkez (* predecessors activate *)
-                (BinEx (EQUIV, BinEx (NE, succ_var bb, Const 0), parents_activate))
+                (BinEx (EQUIV, BinEx (NE, succ_var bb, IntConst 0), parents_activate))
         else mkez (Nop "") (* no succ variable for this block *)
     in
     (* convert statements *)
     let at_impl_expr e =
         if n_succ > 1
         (* we have the variable succ${i} for this block *)
-        then BinEx (IMPLIES, BinEx (NE, succ_var bb, Const 0), e)
+        then BinEx (IMPLIES, BinEx (NE, succ_var bb, IntConst 0), e)
         else (* use the parents' variables *)
             BinEx (IMPLIES, parents_activate, e)
     in
@@ -123,8 +123,8 @@ let block_to_constraints (proc_name: string)
             let mk_arr v i = BinEx (ARR_ACCESS, Var v, i) in
             let keep_val l i =
                 let eq = BinEx (EQ,
-                    mk_arr new_arr (Const i), mk_arr old_arr (Const i)) in
-                (mkez (at_impl_expr (BinEx (OR, BinEx (EQ, idx, Const i), eq))))
+                    mk_arr new_arr (IntConst i), mk_arr old_arr (IntConst i)) in
+                (mkez (at_impl_expr (BinEx (OR, BinEx (EQ, idx, IntConst i), eq))))
                 :: l
             in
             let nelems = (new_type_tab#get_type new_arr)#nelems in
@@ -241,13 +241,13 @@ let cfg_to_constraints proc_name new_sym_tab new_type_tab cfg =
     in
     let activation =
         let succ0 = Var (new_sym_tab#lookup "succ0")#as_var in
-        BinEx (EQUIV, at_var, BinEx (NE, succ0, Const 0))
+        BinEx (EQUIV, at_var, BinEx (NE, succ0, IntConst 0))
     in
     if may_log DEBUG
     then begin
-        printf "SMT constraints: \n";
+        printf "constraints: \n";
         let print_stmt = function
-        | MExpr (_, e) -> printf "%s\n" (expr_to_smt e)
+        | MExpr (_, e) -> printf "%s\n" (expr_s e)
         | _ -> () in
         List.iter print_stmt cons;
     end;

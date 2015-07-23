@@ -20,9 +20,10 @@ class por_bounds_plugin_t (plugin_name: string)
         method transform rt =
             let dom = rt#caches#analysis#get_pia_dom in
             let dom_size = dom#length in
-            List.iter
-                (fun s -> ignore (PorBounds.compute_diam rt#solver dom_size s))
-                sk_plugin#skels;
+            (* TODO: construct the paths for several process types properly *)
+            assert (1 = (List.length sk_plugin#skels));
+            let sk = List.hd sk_plugin#skels in
+            PorBounds.compute_diam rt#solver dom_size sk;
             self#get_input0
 
         method update_runtime rt =

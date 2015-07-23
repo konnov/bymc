@@ -11,6 +11,12 @@ exception Ltl_error of string
 exception Fairness_error of string
 exception Prop_error of string
 
+type spec_t = 
+    (* (p && <> !q) *)
+    | CondSafety of token expr (* p *) * token expr (* q *)
+    | CondGeneral of token expr
+
+
 let is_propositional type_tab e =
     let rec isp = function
     | Var v -> (type_tab#get_type v)#basetype = TPROPOSITION
@@ -41,7 +47,7 @@ let is_propositional type_tab e =
 let normalize_form form =
     let rec norm neg = function
         | Var _ as f -> if neg then UnEx(NEG, f) else f
-        | Const _ as f -> f
+        | IntConst _ as f -> f
         | BinEx(GT, l, r) as f -> if neg then BinEx(LE, l, r) else f
         | BinEx(GE, l, r) as f -> if neg then BinEx(LT, l, r) else f
         | BinEx(LT, l, r) as f -> if neg then BinEx(GE, l, r) else f
@@ -67,13 +73,55 @@ let normalize_form form =
 
         | BinEx(EQUIV, l, r) ->
                 BinEx(EQUIV, norm neg l, norm neg r)
+
+        | UnEx (EVENTUALLY as t, l)
+        | UnEx (ALWAYS as t, l) ->
+            let nop = if t = EVENTUALLY then ALWAYS else EVENTUALLY in
+            UnEx ((if neg then nop else t), norm neg l)
+
+        | BinEx (UNTIL, l, r) as e ->
+            if neg
+            then BinEx (RELEASE, norm neg r, norm neg l)
+            else e
+
+        | BinEx (RELEASE, r, l) as e ->
+            if neg
+            then BinEx (UNTIL, norm neg l, norm neg r)
+            else e
+
+        (* although we are not using nexttime, its negation is awesome *)
+        | UnEx (NEXT, l) ->
+            UnEx (NEXT, norm neg l)
         
         | _ as f ->
-                let m = (sprintf "Not a propositional formula: %s" (expr_s f))
+                let m = (sprintf "Unsupported temporal formula: %s" (expr_s f))
                 in
                 raise (Ltl_error m)
     in
     norm false form
+
+
+let classify_spec type_tab = function
+    (* (p -> [] q) *)
+    | BinEx (IMPLIES, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (is_propositional type_tab lhs)
+            && (is_propositional type_tab rhs)
+        then CondSafety (lhs, normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
+    | UnEx (ALWAYS, rhs) as e ->
+        if is_propositional type_tab rhs
+        then CondSafety (IntConst 1, normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
+    | BinEx (OR, lhs, UnEx (ALWAYS, rhs)) as e ->
+        if (is_propositional type_tab lhs)
+            && (is_propositional type_tab rhs)
+        then CondSafety (normalize_form (UnEx (NEG, lhs)),
+                         normalize_form (UnEx (NEG, rhs)))
+        else CondGeneral e
+
+    | e -> CondGeneral e
 
 
 let embed_atomics type_tab aprops form =
@@ -83,7 +131,7 @@ let embed_atomics type_tab aprops form =
             | PropGlob e -> e
             | _ ->
                 fprintf stderr "WARN: skipped atomic expression: %s\n" name;
-                Const 1
+                IntConst 1
         with Not_found ->
             raise (Ltl_error ("Atomic expr not found: " ^ name))
     in

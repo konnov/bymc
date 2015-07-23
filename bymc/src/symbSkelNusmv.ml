@@ -29,7 +29,7 @@ let make_invar rt prog proc sk =
     let next_locals =
         List.map (fun v -> List.assoc v prev_next) locals in
     let map_loc vars l =
-        let eq var value = BinEx (EQ, Var var, Const value) in
+        let eq var value = BinEx (EQ, Var var, IntConst value) in
         list_to_binex AND (List.map2 eq vars l)
     in
     let rule_locs_cond r =

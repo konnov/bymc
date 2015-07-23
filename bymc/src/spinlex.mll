@@ -65,6 +65,7 @@ rule token = parse
  | ']'                   { RBRACE }
  | '{'                   { LCURLY }
  | '}'                   { RCURLY }
+ | '''                   { PRIME }
  | "[]"                  { ALWAYS }
  | "always"              { ALWAYS }
  | "<>"                  { EVENTUALLY }
