@@ -88,6 +88,7 @@ let test_fuse_several _ =
             mk_eq locFoo_map 1 (IntConst 0);
         ];
         Sk.loc_vars = locFoo_map;
+        Sk.assumes = [];
     }
     in
     let skBar = {
@@ -105,6 +106,7 @@ let test_fuse_several _ =
             BinEx (EQ, Var x, IntConst 0);
         ];
         Sk.loc_vars = locBar_map;
+        Sk.assumes = [];
     }
     in
     let fused = SymbSkel.fuse [skFoo; skBar] "fusion" in
@@ -227,6 +229,7 @@ let test_optimize_guards _ =
             mk_eq locFoo_map 1 (IntConst 0);
         ];
         Sk.loc_vars = locFoo_map;
+        Sk.assumes = [];
     }
     in
     let sk = SymbSkel.optimize_guards skFoo in
