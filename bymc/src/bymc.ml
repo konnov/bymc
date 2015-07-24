@@ -26,26 +26,26 @@ let print_version_if_needed opts =
 
 
 let run_solver opts =
-    match opts.smt with
+    let mk_solver =
+        match opts.smt with
         | SmtYices ->
                 new Smt.yices_smt "yices"
 
         | SmtLib2 args ->
                 let prog = args.(0) in
                 let args = Array.sub args 1 ((Array.length args) - 1) in
-                let solver = new Smt.lib2_smt prog args in
-                if Some "1" = (Options.get_plugin_opt opts "smt.log")
-                then solver#set_enable_log true;
-                if Some "1" = (Options.get_plugin_opt opts "smt.lockstep")
-                then solver#set_enable_lockstep true;
-                solver
+                new Smt.lib2_smt prog args
 
         | SmtMathsat5 ->
                 MsatLoader.load_plugin_mathsat4ml opts.Options.plugin_dir;
-                let solver = new Smt.mathsat5_smt in
-                if Some "1" = (Options.get_plugin_opt opts "smt.log")
-                then solver#set_enable_log true;
-                solver
+                new Smt.mathsat5_smt
+    in
+    let solver = mk_solver in
+    if Some "1" = (Options.get_plugin_opt opts "smt.log")
+    then solver#set_enable_log true;
+    if Some "1" = (Options.get_plugin_opt opts "smt.lockstep")
+    then solver#set_enable_lockstep true;
+    solver
 
 
 let main () =
