@@ -14,6 +14,7 @@ open SpinIr
 open SpinIrImp
 
 exception Smt_error of string
+exception Smt_undefined of string
 
 
 module Q = struct
