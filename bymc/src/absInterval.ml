@@ -557,7 +557,11 @@ let do_interval_abstraction rt prog proc_names =
         let univ = trans_prop_decl rt#solver rt#caches prog UnivAbs ae in
         let ex = trans_prop_decl rt#solver rt#caches prog ExistAbs ae in
         if Ltl.is_invariant_atomic v#get_name
-        then (v, ae) :: lst
+        (* BUG: longstanding bug, resulting in keeping all(x < N - T)
+            not translated if a part of an invariant.
+           FIX: replacing an invariant with its existential abstraction.
+         *)
+        then (v, ex) :: lst
         else (v#fresh_copy (v#get_name ^ "_E"), ex)
             :: (v#fresh_copy (v#get_name ^ "_A"), univ)
             :: lst
