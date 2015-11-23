@@ -120,8 +120,10 @@ let extract_skel proc_body =
 let extract_loop_sig prog reg_tbl proc =
     let update = mir_to_lir (reg_tbl#get "update" proc#get_stmts) in
     let prev_next = hashtbl_as_list (Analysis.find_copy_pairs update) in
-    (* bugfix: sort the variables,
-        as the hashtable can arbitrarily change their order *)
+    (* BUGFIX on 2014-09-20: Sort the variables,
+      as the hashtable can arbitrarily change their order.
+      Similar bugfix was introduced in the uppaal branch on 2015-11-23.
+    *)
     let prev_next = List.sort (fun (x, _) (y, _) -> cmp_vars x y) prev_next in
     let pn = (List.map fst prev_next) @ (List.map snd prev_next) in
     if (List.length pn) <> (List.length proc#get_locals)
