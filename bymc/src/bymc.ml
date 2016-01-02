@@ -49,7 +49,7 @@ let run_solver opts =
 
 
 let main () =
-    let opts = parse_options in
+    let opts = parse_options () in
     print_version_if_needed opts;
     try
         printf "\n%s\n\n" banner;
@@ -104,5 +104,6 @@ let _ =
     ignore (Sys.set_signal Sys.sigusr1 (Signal_handle q));
     ignore (Unix.sigprocmask Unix.SIG_UNBLOCK [sigint]);
     try main ()
-    with e -> on_exception e
+    with e ->
+        on_exception e
 

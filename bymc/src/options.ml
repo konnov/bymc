@@ -9,7 +9,7 @@ open Str
 open Accums
 
 let version = [0; 9; 7]
-let version_full = "ByMC-0.9.7-feature-CAV15"
+let version_full = "ByMC-1.1.0-feature-CAV16-liveness"
 
 let macro_prefix = "macro."
 
@@ -92,10 +92,9 @@ let parse_smt s =
     end
 
 
-let parse_options =
+let parse_options _ =
     let opts = ref {empty with filename = ""} in
-    (Arg.parse
-        [
+    let specs = [
             ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"; "post"; "fast"; "skelSmv"],
                 (fun s -> opts := {!opts with chain = s}))),
                 " choose a transformation/refinement chain (default: piaDataCtr)."
@@ -143,10 +142,13 @@ let parse_options =
                 (fun _ -> opts := {!opts with action = OptVersion }),
              "print version number.");
         ]
-        (fun s ->
-            if !opts.filename = ""
-            then opts := {!opts with filename = s})
-        "Use: bymc [options] promela_file");
-
+    in
+    let anon_fun s =
+        if !opts.filename = ""
+        then opts := { !opts with filename = s }
+    in
+    let usage_msg = "Use: bymc [options] promela_file"
+    in
+    Arg.parse specs anon_fun usage_msg;
     !opts
 
