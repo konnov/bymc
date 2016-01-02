@@ -240,11 +240,11 @@ let test_optimize_guards _ =
         ~msg:(sprintf "expected optimized guard %s, found %s"
             (expr_s exp0) (expr_s r0.Sk.guard));
     let exp1 = (BinEx (OR,
-            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))),
-            (interval y (IntConst 1) (Var n)))) in
+            (interval y (IntConst 1) (Var n)),
+            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))))) in
     assert_equal exp1 r1.Sk.guard
         ~msg:(sprintf "expected optimized guard %s, found %s"
-                (expr_s r0.Sk.guard) (expr_s r1.Sk.guard))
+                (expr_s exp1) (expr_s r1.Sk.guard))
 
 
 let suite = "symbSkel-suite" >:::
