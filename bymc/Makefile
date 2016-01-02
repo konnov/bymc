@@ -1,6 +1,6 @@
 # Makefile to build them all
 #
-# Igor Konnov, 2012-2014
+# Igor Konnov, 2012-2016
 
 CFLAGS=-cflag -g -lflag -g -lflag -thread # the options at the end fix a bug
 
@@ -50,6 +50,9 @@ doc:
 	mkdir -p _build/doc
 	ocamldoc -I _build/src -html -keep-code -colorize-code \
 		src/*.ml src/*.mli -d _build/doc
+
+tags:
+	otags src/*.ml src/*.mli test/*.ml
 
 clean:
 	$(info CLEANING)
