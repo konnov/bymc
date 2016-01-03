@@ -1,4 +1,15 @@
-(* The refinement for our counter abstraction *)
+(**
+  A refinement loop for the parametric counter abstraction.
+
+  See the following tutorial for a theoretical description:
+
+  Annu Gmeiner, Igor Konnov, Ulrich Schmid, Helmut Veith, Josef Widder.
+  Tutorial on Parameterized Model Checking of Fault-Tolerant Distributed
+  Algorithms. Formal Methods for Executable Software Models, pp. 122-171,
+  2014, Springer.
+
+  @author Igor Konnov, 2013-2015.
+ *)
 
 open Printf
 open Str
@@ -154,6 +165,14 @@ let activate_process procs step =
     BinEx (AND, at_least_one, mux)
 
 
+(**
+   Check, whether the concretization constraints of the assertions from
+   the spin trail are satisfiable, i.e., there is a spurious counterexample.
+
+   WARNING: The user has to manually pop the context, i.e., call solver#pop_ctx.
+   The function cannot pop the context itself, as some solvers, e.g., Z3,
+   evaluate unsat cores only in the context where (check) was executed.
+ *)
 let check_trail_asserts solver pile trail_asserts n_steps =
     let append_one_assert state_no is_traceable pile asrt =
         let new_e =
@@ -183,7 +202,7 @@ let check_trail_asserts solver pile trail_asserts n_steps =
     in
     logtm INFO "    waiting for SMT...";
     let result = solver#check in
-    solver#pop_ctx;
+    (* do it manually later: solver#pop_ctx; *)
     (result, new_pile)
 
 
@@ -396,11 +415,17 @@ let intro_new_pred new_type_tab prefix step_no (* pred_reach or pred_recur *) =
     pred
 
 
-(* retrieve unsat cores, map back corresponding constraints on abstract values,
-   partition the constraints into two categories:
-       before the transition, after the transition
- *)
-let retrieve_unsat_cores rt pile src_state_no =
+(**
+  Retrieve unsat cores, map back corresponding constraints on abstract values,
+  partition the constraints into two categories:
+       before the transition, after the transition.
+
+  WARNING: This function interacts with the context stack in a complex way: it
+  retrieves unsat cores, which have to be retrieved before the unsatisfiable
+  context is popped, pops the context using pop_fun and then uses the solver
+  to compute abstractions.
+  *)
+let retrieve_unsat_cores rt pile src_state_no clean_ctx_f =
     let leaf_fun = function
         | BinEx (ARR_ACCESS, Var _, _) -> true
         | Var _ as e -> not (is_symbolic e)
@@ -418,6 +443,9 @@ let retrieve_unsat_cores rt pile src_state_no =
         List.filter (fun id -> B.has_assert_id pile id) core_ids in
     let mapped = List.map (fun id -> B.get_assert pile id) filtered in
     (* List.iter (fun (s, e) -> printf "   %d: %s\n" s (expr_s e)) mapped; *)
+    (* clean_ctx_f the unsatisfiable context using the provided function *)
+    clean_ctx_f ();
+    (* compute the abstractions *)
     rt#solver#push_ctx;
     let aes = List.map abstract mapped in
     let pre, post = List.partition (fun (s, _) -> s = src_state_no) aes in
@@ -427,11 +455,11 @@ let retrieve_unsat_cores rt pile src_state_no =
     (pre, post)
 
 
-let refine_spurious_step rt smt_rev_map src_state_no ref_step prog =
+let refine_spurious_step rt ref_step prog pre post =
     let new_type_tab = (Program.get_type_tab prog)#copy in
     let sym_tab = Program.get_sym_tab prog in
     let bymc_spur = (sym_tab#lookup "bymc_spur")#as_var in
-    let pre, post = retrieve_unsat_cores rt smt_rev_map src_state_no in
+
     let pred = intro_new_pred new_type_tab pred_reach ref_step in
 
     if pre = [] && post = []
@@ -510,8 +538,9 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     let step_asserts = [(asserts, [fairness], annot); ([], [], StringMap.empty)]
     in
     (* simulate one step *)
-    rt#solver#push_ctx;
+    rt#solver#push_ctx; (* (A) *)
     let pile = simulate_in_smt rt#solver prog ctr_ctx_tbl 1 in
+    (* note that check_trail_asserts pushed one more context (B) *)
     let res, new_pile = check_trail_asserts rt#solver pile step_asserts 1 in
 
     (* collect unsat cores if the assertions contradict fairness,
@@ -519,19 +548,20 @@ let is_loop_state_fair_by_step rt prog ctr_ctx_tbl fairness
     let core_exprs, _ =
         if not res
         then retrieve_unsat_cores rt new_pile 0
+                (fun _ -> rt#solver#pop_ctx (* pop (B) *))
         else [], []
     in
-    rt#solver#pop_ctx;
-    let core_exprs_and = list_to_binex AND core_exprs in
-
+    let core_exprs_and = list_to_binex AND core_exprs
+    in
     if res then begin
         logtm INFO
             (sprintf "State %d of the loop is fair. See the trace." state_num);
         print_vass_trace prog new_pile rt#solver 2;
+        rt#solver#pop_ctx; (* pop (B) *)
     end else begin
-        printf "core_exprs_s: %s\n" (expr_s core_exprs_and)
+        printf "core_exprs_s: %s\n" (expr_s core_exprs_and);
     end;
-
+    rt#solver#pop_ctx; (* pop (A) *)
     rt#solver#set_collect_asserts false;
     rt#solver#set_need_model false;
     rt#solver#pop_ctx;
@@ -646,31 +676,31 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     let check_trans pile st = 
         let next_st = if st = num_states - 1 then loop_start else st + 1 in
         let step_asserts = [List.nth apath st; List.nth apath next_st] in
-        rt#solver#push_ctx;
+        rt#solver#push_ctx; (* B *)
         rt#solver#comment
             (sprintf ";; Checking the transition %d -> %d" st next_st);
         rt#solver#set_collect_asserts true;
+        (* note that check_trail_asserts pushed one more context (C) *)
         let res, new_pile = check_trail_asserts rt#solver pile step_asserts 1 in
         rt#solver#set_collect_asserts false;
         if not res
         then begin
             logtm INFO
                 (sprintf "  The transition %d -> %d is spurious." st next_st);
-            rt#solver#pop_ctx;
-            (* speedup trick: pop out  here the transition relation
-               saved in (A),
-               as we do not need it when looking for unsat cores.
-               Otherwise, it will be popped in (C) *)
-            (* XXX: bad design, refactor *)
-            rt#solver#pop_ctx; (* (B) *)
+            let pre, post =
+                retrieve_unsat_cores rt new_pile 0
+                    (fun _ -> rt#solver#pop_ctx (* pop (C) *))
+            in
+            rt#solver#pop_ctx; (* pop B *)
 
             let new_prog =
-                refine_spurious_step rt new_pile 0 ref_step ctr_prog in
+                refine_spurious_step rt ref_step ctr_prog pre post in
             (true, new_pile, new_prog)
         end else begin
+            rt#solver#pop_ctx; (* pop (C) *)
             logtm INFO (sprintf "  The transition %d -> %d (of %d) is OK."
                     st next_st total_steps);
-            rt#solver#pop_ctx;
+            rt#solver#pop_ctx; (* pop B *)
             (false, new_pile, ctr_prog)
         end
     in
@@ -690,12 +720,12 @@ let do_refinement (rt: Runtime.runtime_t) ref_step
     let (refined, pile, new_prog) =
         List.fold_left find_first (false, init_pile, ctr_prog) (range 0 last_state)
     in
+    rt#solver#pop_ctx; (* pop (A) *)
     if refined
     then begin
         log INFO "(status trace-refined)";
         (true, new_prog)
     end else begin
-        rt#solver#pop_ctx; (* (C) pop the transition relation *)
         (* try to detect fairness supression *)
         let ltl_forms = Program.get_ltl_forms_as_hash xducer_prog in
         let type_tab = Program.get_type_tab xducer_prog in

@@ -32,6 +32,7 @@ let check_invariant rtm xducers_prog inv_name =
         solver#push_ctx;
         let pile = simulate_in_smt solver xducers_prog ctr_ctx_tbl 1 in
         let res, pile = check_trail_asserts solver pile step_asserts 1 in
+        solver#pop_ctx; (* pop the context by check_trail_asserts *)
         solver#pop_ctx;
         solver#set_collect_asserts false;
         if res then begin
