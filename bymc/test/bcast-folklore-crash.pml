@@ -119,17 +119,17 @@ ltl fairness { <>[](!in_transit) }
 
 /*
 #BEGIN-TEST correct-unforg
-$bymc_dir/verifypa-spin ${testsource} unforg
+$bymc_dir/verifypa-spin ${testsource} unforg -O smt.log=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
 #BEGIN-TEST correct-fisman_kupferman_lustig
-$bymc_dir/verifypa-spin ${testsource} fisman_kupferman_lustig
+$bymc_dir/verifypa-spin ${testsource} fisman_kupferman_lustig -O smt.log=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
 #BEGIN-TEST bug-unforg
-$bymc_dir/verifypa-spin ${testsource} unforg -D BUG=1
+$bymc_dir/verifypa-spin ${testsource} unforg -D BUG=1 -O smt.log=1
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
 

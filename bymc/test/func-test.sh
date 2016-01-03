@@ -83,7 +83,6 @@ diff_time=$((end_time - start_time))
 echo ""
 echo "Check $logfile for details"
 echo ""
-
 echo "Ran: $ntotal tests in: $diff_time seconds"
 
 # try to be compatible with the format by ounit
