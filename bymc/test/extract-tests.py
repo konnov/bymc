@@ -15,21 +15,21 @@ try:
     for l in f:
         if l.find('BEGIN-TEST') != -1:
             name = l[l.rfind('BEGIN-TEST') + len('BEGIN-TEST') :].strip()
-            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
+            out = open('%s-%04d-%s.test' % (prefix, test_no, name), 'w+')
             out.write('testsource=%s\n' % filename)
-            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
+            eva = open('%s-%04d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write('set -e\n')
         elif l.find('SKIP-TEST') != -1:
             name = l[l.rfind('SKIP-TEST') + len('SKIP-TEST') :].strip()
             disabled = True
-            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
-            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
+            out = open('%s-%04d-%s.test' % (prefix, test_no, name), 'w+')
+            eva = open('%s-%04d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write("echo 'SKIP. Failed, in order to keep you warned.' && exit 101")
         elif l.find('TODO-TEST') != -1:
             name = l[l.rfind('TODO-TEST') + len('TODO-TEST') :].strip()
             disabled = True
-            out = open('%s-%d-%s.test' % (prefix, test_no, name), 'w+')
-            eva = open('%s-%d-%s.eval' % (prefix, test_no, name), 'w+')
+            out = open('%s-%04d-%s.test' % (prefix, test_no, name), 'w+')
+            eva = open('%s-%04d-%s.eval' % (prefix, test_no, name), 'w+')
             eva.write("echo 'TODO. Failed, in order to keep you warned.' && exit 102")
         elif l.find('END-TEST') != -1:
             out.close()
