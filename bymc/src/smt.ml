@@ -42,23 +42,31 @@ module Q = struct
     let new_query expr_to_smt_f = 
         { frozen = false; expr_to_smt_f; tab = Hashtbl.create 10 }
 
+    let copy (q: query_t): query_t =
+        { frozen = q.frozen;
+            expr_to_smt_f = q.expr_to_smt_f; tab = Hashtbl.copy q.tab }
+
     let try_get (q: query_t) (key: token expr) =
         let e_s = q.expr_to_smt_f key in
-        try Hashtbl.find q.tab e_s
+        try
+            let res = Hashtbl.find q.tab e_s in
+            if q.frozen && res = Cached
+            then raise (Smt_error ("No result for (declared) " ^ e_s ))
+            else res
         with Not_found ->
             if q.frozen
             then begin
                 print_contents q;
-                raise (Smt_error ("No result for " ^ e_s))
+                raise (Smt_error ("No result for (undeclared) " ^ e_s))
             end else begin
-                Hashtbl.add q.tab e_s Cached;
+                Hashtbl.replace q.tab e_s Cached;
                 Cached
             end
 
     let add_result (q: query_t) (nq: query_t) (key: string) (value: token expr) =
         try begin
             let _ = Hashtbl.find q.tab key in
-            Hashtbl.add nq.tab key (Result value);
+            Hashtbl.replace nq.tab key (Result value);
             nq
         end with Not_found ->
             nq
@@ -349,7 +357,7 @@ let parse_smt_model_q query lines =
             newq
         end else newq
     in
-    let new_query = List.fold_left parse_line (Q.new_query expr_to_smt) lines in
+    let new_query = List.fold_left parse_line (Q.copy query) lines in
     { new_query with Q.frozen = true }
 
 
@@ -581,11 +589,11 @@ class yices_smt (solver_cmd: string) =
 
 
 (*
-    An interface to a solver supporting SMTLIB2. This class invoke a solver
+    An interface to a solver supporting SMTLIB2. This class invokes a solver
     and communicates with it via pipes.
 
     Logging to a file is disabled by default. If you want to enable it,
-    pass option -O smt.log=1
+    pass the argument -O smt.log=1
 *)
 class lib2_smt solver_cmd solver_args =
     object(self)
@@ -856,11 +864,11 @@ class lib2_smt solver_cmd solver_args =
 
 
 (*
-    An interface to Mathsat5.
+    An interface to Mathsat5 via Mathsat's library.
     It requires plugin mathsat4ml compiled in plugins/mathsat4ml
 
     Logging to a file is disabled by default. If you want to enable it,
-    pass option -O smt.log=1
+    pass the option -O smt.log=1
 *)
 class mathsat5_smt =
     object(self)
