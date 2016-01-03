@@ -15,13 +15,15 @@ let setup_yices _ =
     if not !is_started
     then begin
         solver := new yices_smt "yices";
+        (!solver)#set_enable_log true;
         (!solver)#start;
         is_started := true;
     end
 
 let reset_yices _ =
     assert (!is_started);
-    ignore (!solver)#reset
+    ignore (!solver)#reset;
+    (!solver)#set_enable_log true
 
 let shutdown_yices _ =
     ignore (!solver)#stop;
@@ -31,12 +33,14 @@ let setup_smt2 _ =
     if not !is_started
     then begin
         solver := new lib2_smt "z3" [| "-smt2"; "-in"|];
+        (!solver)#set_enable_log true;
         (!solver)#start;
         is_started := true;
     end
 
 let reset_smt2 _ =
-    ignore (!solver)#reset
+    ignore (!solver)#reset;
+    (!solver)#set_enable_log true
 
 let shutdown_smt2 _ =
     ignore (!solver)#stop
@@ -181,8 +185,28 @@ let test_get_model_one_var _ =
 
 
 let test_get_model_bool _ =
-    todo "not important right now, needs type extensions";
-    let x = new_var "x" in
+    (*todo "fails with yices, requires type extensions";*)
+    let x = new_var "test_get_model_bool" in
+    let t = new data_type SpinTypes.TBIT in
+    (!solver)#set_need_model true;
+    (!solver)#append_var_def x t;
+    ignore ((!solver)#append_expr (Var x));
+
+    let res = (!solver)#check in
+    assert_equal ~msg:"sat expected" res true;
+    let query = (!solver)#get_model_query in
+    assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
+    let query = (!solver)#submit_query query in
+    (* the solver behaves as expected *)
+    let res = Q.try_get query (Var x) in
+    assert_bool
+        (sprintf "expected 0 or 1, found %s" (Q.query_result_s query res))
+        ((Q.Result (IntConst 1)) = res || (Q.Result (IntConst 0)) = res)
+
+
+let test_get_model_bool_unconstrained solver_name _ =
+    (*todo "fails with yices, requires type extensions";*)
+    let x = new_var "test_get_model_bool_unconstrained_x" in
     let t = new data_type SpinTypes.TBIT in
     (!solver)#set_need_model true;
     (!solver)#append_var_def x t;
@@ -190,11 +214,25 @@ let test_get_model_bool _ =
     assert_equal ~msg:"sat expected" res true;
     let query = (!solver)#get_model_query in
     assert_equal Q.Cached (Q.try_get query (Var x)) ~msg:"Cached expected";
-    let query = (!solver)#submit_query query in
-    let res = Q.try_get query (Var x) in
-    assert_bool
-        (sprintf "expected 0 or 1, found %s" (Q.query_result_s query res))
-        ((Q.Result (IntConst 1)) = res || (Q.Result (IntConst 0)) = res)
+    let query = (!solver)#submit_query query
+    in
+    if solver_name <> "yices"
+    then begin
+        (* the solver behaves as expected *)
+        let res = Q.try_get query (Var x) in
+        assert_bool
+            (sprintf "expected 0 or 1, found %s" (Q.query_result_s query res))
+            ((Q.Result (IntConst 1)) = res || (Q.Result (IntConst 0)) = res)
+    end else begin
+        (* LEGACY: Yices 1.x does not produce a value for an unconstrained
+           variable.  We document this behavior here, though it is not going
+           to be fixed. Yices 1.x support will be discontinued soon. *)
+        try ignore (Q.try_get query (Var x));
+            assert_failure "expected (Smt_error \"...\")"
+        with Smt_error msg ->
+            assert_bool ("expected 'No result for (declared)...', found" ^ msg)
+                ("No result for (declared) test_get_model_bool_unconstrained_x" = msg)
+    end
         
 
 
@@ -361,6 +399,8 @@ let suite = "smt-suite" >:::
             >:: (bracket setup_yices test_get_model_one_var reset_yices);
         "test_get_model_bool_yices"
             >:: (bracket setup_yices test_get_model_bool reset_yices);
+        "test_get_model_bool_unconstrained_yices"
+            >:: (bracket setup_yices (test_get_model_bool_unconstrained "yices") reset_yices);
         "test_get_model_array_yices"
             >:: (bracket setup_yices test_get_model_array reset_yices);
         "test_get_model_var_with_underscore_yices"
@@ -399,6 +439,8 @@ let suite = "smt-suite" >:::
             >:: (bracket setup_smt2 test_get_model_one_var reset_smt2);
         "test_get_model_bool_smt2"
             >:: (bracket setup_smt2 test_get_model_bool reset_smt2);
+        "test_get_model_bool_unconstrained_smt2"
+            >:: (bracket setup_smt2 (test_get_model_bool_unconstrained "z3") reset_smt2);
         "test_get_model_array_smt2"
             >:: (bracket setup_smt2 test_get_model_array reset_smt2);
         "test_get_model_var_with_underscore_smt2"
