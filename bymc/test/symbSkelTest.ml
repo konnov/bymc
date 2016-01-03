@@ -252,7 +252,7 @@ let test_optimize_guards _ =
     assert_bool 
         (sprintf "found %s, expected one of %s and %s"
                 (expr_s r1.Sk.guard) (expr_s x_or_y) (expr_s y_or_x))
-        (x_or_y = r1.Sk.guard)
+        (x_or_y = r1.Sk.guard || y_or_x = r1.Sk.guard)
 
 
 let suite = "symbSkel-suite" >:::
