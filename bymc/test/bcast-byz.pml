@@ -333,4 +333,15 @@ $bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} unforg -D BUG=1 --smt 'li
 $bymc_dir/verifypa-nusmv-bmc --length 50 ${testsource} relay -D NGE3T=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
+
+#BEGIN-TEST z3-correct-post-unforg
+$bymc_dir/verifypa-post ${testsource} unforg --smt 'lib2|z3|-smt2|-in' -O smt.log=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-post-unforg
+$bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1
+#EXPECT grep "counterexample for unforg found" ${testlog}
+#END-TEST
 */
+

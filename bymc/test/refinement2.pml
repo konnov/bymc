@@ -107,7 +107,7 @@ ltl progall { [](prec_initA -> <>allA) }
 ltl progex { [](prec_initA -> <>exA) }
 
 /*
-#BEGIN-TEST progall
+#TODO-TEST progall
 $bymc_dir/verifypa-spin ${testsource} progall -O smt.log=1
 #EXPECT grep "no-refinement" ${testlog}
 #END-TEST
