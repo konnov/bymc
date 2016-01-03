@@ -7,12 +7,11 @@ open SpinIr
 open SpinIrImp
 open SymbSkel
 
-(* overload operators for convenience *)
-let (>=) l r = BinEx (GE, Var l, Var r)
+let ge l r = BinEx (GE, Var l, Var r)
 
-let (<) l r = BinEx (LT, Var l, Var r)
+let lt l r = BinEx (LT, Var l, Var r)
 
-let (=) l e = BinEx (EQ, UnEx (NEXT, Var l), e)
+let asgn l e = BinEx (EQ, UnEx (NEXT, Var l), e)
 
 let keep x = BinEx (EQ, UnEx (NEXT, Var x), Var x)
 
@@ -79,8 +78,8 @@ let test_fuse_several _ =
         Sk.locals = [ pc1 ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
         Sk.nrules = 2;
         Sk.rules = [
-            mk_rule 0 1 (y < t) [ keep x; keep y ];
-            mk_rule 1 2 tru [ x = x + 1; keep y ];
+            mk_rule 0 1 (lt y t) [ keep x; keep y ];
+            mk_rule 1 2 tru [ asgn x (x + 1); keep y ];
         ];
         Sk.inits = [
             BinEx (EQ, Var x, IntConst 0);
@@ -97,8 +96,8 @@ let test_fuse_several _ =
         Sk.locals = [ pc2 ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
         Sk.nrules = 2;
         Sk.rules = [
-            mk_rule 0 1 (x >= t) [ keep x; keep y ];
-            mk_rule 1 2 tru [ keep x; y = y + 1 ];
+            mk_rule 0 1 (ge x t) [ keep x; keep y ];
+            mk_rule 1 2 tru [ keep x; asgn y (y + 1) ];
         ];
         Sk.inits = [
             mk_eq locBar_map 0 (Var t);
@@ -221,7 +220,7 @@ let test_optimize_guards _ =
         Sk.nrules = 2;
         Sk.rules = [
             mk_rule 0 1 g1 [ keep x; keep y ];
-            mk_rule 1 2 g3 [ x = x + 1; keep y ];
+            mk_rule 1 2 g3 [ asgn x (x + 1); keep y ];
         ];
         Sk.inits = [
             BinEx (EQ, Var x, IntConst 0);
@@ -239,12 +238,21 @@ let test_optimize_guards _ =
     assert_equal exp0 r0.Sk.guard
         ~msg:(sprintf "expected optimized guard %s, found %s"
             (expr_s exp0) (expr_s r0.Sk.guard));
-    let exp1 = (BinEx (OR,
+    let y_or_x =
+        BinEx (OR,
             (interval y (IntConst 1) (Var n)),
-            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))))) in
-    assert_equal exp1 r1.Sk.guard
-        ~msg:(sprintf "expected optimized guard %s, found %s"
-                (expr_s exp1) (expr_s r1.Sk.guard))
+            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t)))
+        )
+    and x_or_y =
+        BinEx (OR,
+            (interval x (IntConst 1) (BinEx (MINUS, Var n, Var t))),
+            (interval y (IntConst 1) (Var n))
+        )
+    in
+    assert_bool 
+        (sprintf "found %s, expected one of %s and %s"
+                (expr_s r1.Sk.guard) (expr_s x_or_y) (expr_s y_or_x))
+        (x_or_y = r1.Sk.guard)
 
 
 let suite = "symbSkel-suite" >:::
