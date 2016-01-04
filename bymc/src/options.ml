@@ -9,7 +9,7 @@ open Str
 open Accums
 
 let version = [1; 0; 0]
-let version_full = "ByMC-1.0.0"
+let version_full = "ByMC-1.0.1"
 
 let macro_prefix = "macro."
 
