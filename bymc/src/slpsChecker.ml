@@ -440,17 +440,8 @@ let display_depth depth is_last =
     then logtm INFO (sprintf "%s|" (String.make depth '/'))
     else logtm INFO (String.make (1 + depth) '/')
 
-(*
- UNUSED
-let rec sum_factors = function
-    | [] -> IntConst 0
-    | [frame] -> Var frame.F.accel_v
-    | frame :: tl -> BinEx (Spin.PLUS, Var frame.F.accel_v, sum_factors tl)
-in
- *)
 
-
-let check_tree rt tt sk bad_form on_leaf form_name deps tac tree =
+let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
     let each_rule is_milestone rule_no =
         let frame = tac#top in
         let rule = List.nth sk.Sk.rules rule_no in
@@ -527,6 +518,9 @@ let check_tree rt tt sk bad_form on_leaf form_name deps tac tree =
            submission: if the current segment is unreachable, then its branches
            are also unreachable -- prune the whole subtree.
          *)
+        (* uncomment the following line, if you want to get
+           the same behavior as in the CAV'15 paper *)
+        (* let is_reachable = true in *)
         let is_reachable = rt#solver#check in
         let is_error_found =
             if not is_reachable
@@ -584,7 +578,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     if not (is_c_true init_form)
     then tac#assert_top [init_form];
 
-    let err = check_tree rt ntt sk bad_form on_leaf form_name deps tac tree in
+    let err = check_static_tree rt ntt sk bad_form on_leaf form_name deps tac tree in
     rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     err

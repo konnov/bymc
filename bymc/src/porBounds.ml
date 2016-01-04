@@ -771,14 +771,14 @@ let is_rule_unlocked deps uset lset rule_no =
 (**
    Compute the tree of representative executions.
 
-   Here we compute a schema (see our CAV'15 submission).
+   Here we compute a schema (see our CAV'15 paper).
    It has some relation to semi-linear path scheme (SLPS), but not
    exactly the same thing, see, e.g., Flat counter automata almost everywhere.
 
    The difference is that they prove existence of SLPS iff their algorithm
    converges, but we construct SLPS explicitly.
  *)
-let compute_slps_tree sk deps =
+let compute_static_schema_tree sk deps =
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
 
     let rec build_tree uset lset =
@@ -888,6 +888,12 @@ let compute_diam solver dom_size sk =
         sk.Sk.name (max_bound * (dom_size - 1)))
 
 
+(**
+  Compute the complete schema tree. Note that many branches may be unreachable.
+
+  @param solver a SMT solver
+  @param sk a skeleton
+ *)
 let make_schema_tree solver sk =
     logtm INFO "Building the schema tree...";
     logtm INFO (sprintf "> found %d locations..." sk.Sk.nlocs);
@@ -903,7 +909,7 @@ let make_schema_tree solver sk =
     PSetMap.iter print_potential_mstone guards_card;
 
     log INFO ("> Computing the schema tree...");
-    let tree = compute_slps_tree sk deps in
+    let tree = compute_static_schema_tree sk deps in
 
     log INFO ("> You can find the SLPS tree in slps-paths.txt and in slps-milestones.txt");
     let out = open_out "slps-paths.txt" in
