@@ -2,9 +2,12 @@
 #
 # The script to extract and run functional tests.
 #
-# This script is as minimal as possible. No overgrown frameworks please.
+# Run it with DRYRUN=1 ./func-test.sh, if you want to enumerate the tests without
+# executing them.
 #
-# Igor Konnov, 2013-2014.
+# This script is as minimal as possible. No overdeveloped frameworks please.
+#
+# Igor Konnov, 2013-2016.
 
 bymc_dir=`dirname $0`
 export bymc_dir=`cd $bymc_dir/.. && pwd`
@@ -48,7 +51,12 @@ for t in ${args:-*.test}; do
     export testlog="$tlog"
     export AUTO=1
     if [ -f "$t" ]; then
-        sh >"${tlog}" 2>${terr} $t
+        if [ -z "$DRYRUN" ]; then
+            sh >"${tlog}" 2>${terr} $t
+        else
+            echo "Dry run: skipped ${t}" >> $logfile
+            nskip=$((nskip+1))
+        fi
     else
         false
     fi
@@ -58,22 +66,24 @@ for t in ${args:-*.test}; do
         echo "FAILED to exec. Check $tlog" >>$logfile
         nfail=$((nfail+1))
     else
-        sh $teva $tlog >>$logfile
-        ret="$?"
-        if [ "$ret" == "101" ]; then
-            echo "SKIPPED"
-            nskip=$((nskip+1))
-        elif [ "$ret" == "102" ]; then
-            echo "TODO"
-            ntodo=$((ntodo+1))
-        elif [ "$ret" != "0" ]; then
-            echo "FAILED"
-            echo "FAILED. Check $tlog" >>$logfile
-            nfail=$((nfail+1))
-        else
-            echo "OK"
-            echo "OK" >>$logfile
-            nok=$((nok+1))
+        if [ -z "$DRYRUN" ]; then
+            sh $teva $tlog >>$logfile
+            ret="$?"
+            if [ "$ret" == "101" ]; then
+                echo "SKIPPED"
+                nskip=$((nskip+1))
+            elif [ "$ret" == "102" ]; then
+                echo "TODO"
+                ntodo=$((ntodo+1))
+            elif [ "$ret" != "0" ]; then
+                echo "FAILED"
+                echo "FAILED. Check $tlog" >>$logfile
+                nfail=$((nfail+1))
+            else
+                echo "OK"
+                echo "OK" >>$logfile
+                nok=$((nok+1))
+            fi
         fi
     fi
 done
