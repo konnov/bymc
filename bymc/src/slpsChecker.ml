@@ -522,25 +522,37 @@ let check_tree rt tt sk bad_form on_leaf form_name deps tac tree =
         let stack_level = rt#solver#get_stack_level in
         tac#enter_node node;
         display_depth depth true;
-        let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
-        List.iter (each_rule false) seg;
-        let err = tac#check_property bad_form (get_counterex rt sk form_name) in
 
-        if node = Leaf
-        then begin
-            on_leaf (tac#top.F.no + 1)
-        end;
+        (* We overlooked the following natural optimization in the CAV'15
+           submission: if the current segment is unreachable, then its branches
+           are also unreachable -- prune the whole subtree.
+         *)
+        let is_reachable = rt#solver#check in
+        let is_error_found =
+            if not is_reachable
+            then false (* prune the subtree and do not report any error *)
+            else begin (* check the property and the subtree *)
+                let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
+                List.iter (each_rule false) seg;
+                let err = tac#check_property bad_form (get_counterex rt sk form_name) in
 
-        (* and check the subtree *)
-        let each_succ err s =
-            if err then err else check_node (1 + depth) s
+                if node = Leaf
+                then begin
+                    on_leaf (tac#top.F.no + 1)
+                end;
+
+                (* and check the subtree *)
+                let each_succ err s =
+                    if err then err else check_node (1 + depth) s
+                in
+                List.fold_left each_succ err succ
+            end
         in
-        let res = List.fold_left each_succ err succ in
         tac#leave_node node;
         assert (stack_level = rt#solver#get_stack_level);
 
         tac#leave_context;
-        res
+        is_error_found
     in
     check_node 0 tree
 
