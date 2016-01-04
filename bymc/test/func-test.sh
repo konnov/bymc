@@ -5,6 +5,8 @@
 # Run it with DRYRUN=1 ./func-test.sh, if you want to enumerate the tests without
 # executing them.
 #
+# Check test/bcast-byz.pml for the syntax of the tests.
+#
 # This script is as minimal as possible. No overdeveloped frameworks please.
 #
 # Igor Konnov, 2013-2016.
@@ -61,29 +63,29 @@ for t in ${args:-*.test}; do
         false
     fi
 
-    if [ "$?" != "0" ]; then
-        echo "FAILED"
-        echo "FAILED to exec. Check $tlog" >>$logfile
-        nfail=$((nfail+1))
-    else
-        if [ -z "$DRYRUN" ]; then
-            sh $teva $tlog >>$logfile
-            ret="$?"
-            if [ "$ret" == "101" ]; then
-                echo "SKIPPED"
-                nskip=$((nskip+1))
-            elif [ "$ret" == "102" ]; then
-                echo "TODO"
-                ntodo=$((ntodo+1))
-            elif [ "$ret" != "0" ]; then
-                echo "FAILED"
-                echo "FAILED. Check $tlog" >>$logfile
-                nfail=$((nfail+1))
-            else
-                echo "OK"
-                echo "OK" >>$logfile
-                nok=$((nok+1))
-            fi
+    # a non-zero exit code can indicate the output, as in the sat solvers
+    texitcode="$?"
+    if [ "$texitcode" -ne 0 ]; then
+        echo "A non-zero exit code ${texitcode}">>${terr}
+    fi
+
+    if [ -z "$DRYRUN" ]; then
+        sh $teva $tlog >>$logfile
+        ret="$?"
+        if [ "$ret" == "101" ]; then
+            echo "SKIPPED"
+            nskip=$((nskip+1))
+        elif [ "$ret" == "102" ]; then
+            echo "TODO"
+            ntodo=$((ntodo+1))
+        elif [ "$ret" != "0" ]; then
+            echo "FAILED"
+            echo "FAILED. Check $tlog" >>$logfile
+            nfail=$((nfail+1))
+        else
+            echo "OK"
+            echo "OK" >>$logfile
+            nok=$((nok+1))
         fi
     fi
 done

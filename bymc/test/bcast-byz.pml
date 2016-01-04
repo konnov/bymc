@@ -341,6 +341,7 @@ $bymc_dir/verifypa-post ${testsource} unforg --smt 'lib2|z3|-smt2|-in' -O smt.lo
 
 #BEGIN-TEST z3-f_LE_t_P_1-post-unforg
 $bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1
+#EXPECT test ${texitcode} 1
 #EXPECT grep "counterexample for unforg found" ${testlog}
 #END-TEST
 */
