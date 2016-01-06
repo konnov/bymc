@@ -58,6 +58,38 @@ let test_mk_po_matrix_antisymmetric2 _ =
             ~msg:(sprintf "Expected %s, found '%s'" expected_msg msg)
 
 
+let test_linord_iter_first_singleton _ =
+    let iter = linord_iter_first 1 [] in
+    let init_order = Array.to_list (linord_iter_get iter) in
+    let expected = [0] in
+    assert_equal expected init_order
+        ~msg:(sprintf "Expected [%s], found [%s]"
+            (str_join ", " (List.map int_s expected))
+            (str_join ", " (List.map int_s init_order)))
+
+
+let test_linord_iter_first_pair _ =
+    let iter = linord_iter_first 2 [(1, 0)] in
+    let init_order = Array.to_list (linord_iter_get iter) in
+    let expected = [1; 0] in
+    assert_equal expected init_order
+        ~msg:(sprintf "Expected [%s], found [%s]"
+            (str_join ", " (List.map int_s expected))
+            (str_join ", " (List.map int_s init_order)))
+
+
+let test_linord_iter_first9 _ =
+    let iter =
+        linord_iter_first 9
+        [(2, 1); (3, 1); (1, 4); (0, 4); (5, 6); (6, 7); (4, 8); (7, 8)] in
+    let init_order = Array.to_list (linord_iter_get iter) in
+    let expected = [0; 2; 3; 5; 1; 6; 4; 7; 8] in
+    assert_equal expected init_order
+        ~msg:(sprintf "Expected [%s], found [%s]"
+            (str_join ", " (List.map int_s expected))
+            (str_join ", " (List.map int_s init_order)))
+
+
 let suite = "poset-suite" >:::
     [
         "test_mk_po_matrix" >:: test_mk_po_matrix;
@@ -66,5 +98,8 @@ let suite = "poset-suite" >:::
         "test_mk_po_matrix_antisymmetric" >:: test_mk_po_matrix_antisymmetric;
         "test_mk_po_matrix_antisymmetric2" >:: test_mk_po_matrix_antisymmetric2;
         "test_mk_po_matrix_transitive" >:: test_mk_po_matrix_transitive;
+        "test_linord_iter_first_singleton" >:: test_linord_iter_first_singleton;
+        "test_linord_iter_first_pair" >:: test_linord_iter_first_pair;
+        "test_linord_iter_first9" >:: test_linord_iter_first9;
     ]
 

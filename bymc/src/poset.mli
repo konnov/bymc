@@ -17,6 +17,8 @@ exception Poset_error of string
 
 type po_matrix = int array array
 
+type linord_iter
+
 (**
   Create a matrix representation of a (strict) partial order.
 
@@ -31,6 +33,47 @@ type po_matrix = int array array
       if m.(a).(b) = 2, then a \prec b and there is c: a \prec c \prec b.
  *)
 val mk_po_matrix: int -> (int * int) list -> int array array
+
+
+(**
+  Create an initial linearization of a (strict) partial order
+  according to the algorithm PC (p. 70).
+
+  @param n the poset's cardinality: the set \{0, ..., n-1\}
+    with the partial order defined by the list pairs
+
+  @param pairs a list of integers (a, b) meaning a < b for 0 <= a, b <= n-1
+
+  @return an iterator
+ *)
+val linord_iter_first: int -> (int * int) list -> linord_iter
+
+
+(**
+  Get the linear order saved in an iterator.
+
+  @param iter an iterator
+  @return the saved linear order: a list of integers
+ *)
+val linord_iter_get: linord_iter -> int array
+
+
+(**
+  Check, whether an iterator can be advanced.
+
+  @param iter an iterator
+  @return true, if there is the next iterator value
+ *)
+val linord_iter_has_next: linord_iter -> bool
+
+
+(**
+  Advance an iterator.
+
+  @param iter an iterator
+  @return the next iterator value
+ *)
+val linord_iter_next: linord_iter -> linord_iter
 
 
 (**

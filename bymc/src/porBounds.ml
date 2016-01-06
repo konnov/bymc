@@ -838,6 +838,71 @@ let compute_static_schema_tree sk deps =
     }
 
 
+(**
+  Construct the schema tree and check it on-the-fly.
+
+  The construction is similar to compute_static_schema_tree, but it dynamic.
+ *)
+let compute_on_the_fly_schema_tree sk deps =
+    let uconds = deps.D.uconds and lconds = deps.D.lconds in
+
+    let rec build_tree uset lset =
+        let is_guarded_with cond_id rule_no =
+            let conds =
+                PSet.inter (PSet.union deps.D.umask deps.D.lmask)
+                    (IntMap.find rule_no deps.D.rule_pre)
+            in
+            PSet.mem cond_id conds
+        in
+        let each_cond accum (name, cond_id, expr, lockt) =
+            if (PSet.mem cond_id uset) || (PSet.mem cond_id lset)
+            then accum (* already covered *)
+            else (* create a branch *)
+                let new_uset, new_lset =
+                    if lockt = Unlock
+                    then (PSet.union uset (get_cond_impls deps cond_id lockt)), lset
+                    else uset, (PSet.union lset (get_cond_impls deps cond_id lockt))
+                in
+                (* NOTE: we use new uset and old lset to filter out milestones,
+                    as the milestone is expected to be unlocked
+                *)
+                let all_guarded_with_and_enabled = 
+                    List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
+                        |> List.filter (is_rule_unlocked deps new_uset lset)
+                in
+                let unlocked =
+                    List.filter (is_rule_unlocked deps new_uset new_lset) deps.D.full_segment
+                in
+                let maxlen, succ = build_tree new_uset new_lset in
+                let node = 
+                    {
+                        T.pre_rule_set = pack_rule_set all_guarded_with_and_enabled;
+                        T.pre_cond = (name, cond_id, expr, lockt);
+                        T.segment = pack_rule_set unlocked;
+                        T.succ
+                    }
+                in
+                (maxlen, node) :: accum
+        in
+        let len_and_nodes = List.fold_left each_cond [] (uconds @ lconds) in
+        let cmp (i, _) (j, _) = compare i j in
+        let nodes = List.map snd (List.sort cmp len_and_nodes) in
+        let maxlen = List.fold_left max 0 (List.map fst len_and_nodes) in
+        (1 + maxlen, nodes)
+    in
+    let _, children = build_tree PSet.empty PSet.empty in
+    let unlocked =
+        List.filter (is_rule_unlocked deps PSet.empty PSet.empty)
+            deps.D.full_segment
+    in
+    {
+        T.pre_rule_set = (BatBitSet.create 0);
+        T.pre_cond = ("_", (PSet.new_thing ()), SpinIr.Nop "", Unlock);
+        T.segment = pack_rule_set unlocked;
+        T.succ = children
+    }
+
+
 
 let collect_actions accum sk =
     let rec each_rule set r = ExprSet.add (list_to_binex AND r.Sk.act) set in
