@@ -12,6 +12,7 @@ let _ =
         SymbSkelTest.suite;
         SummaryTest.suite;
         PorBoundsTest.suite;
+        PosetTest.suite;
     ]
     in
     run_test_tt_main all
