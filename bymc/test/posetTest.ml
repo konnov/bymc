@@ -5,6 +5,25 @@ open Accums
 
 open Poset
 
+let assert_iter_eq expected iter =
+    let order = Array.to_list (linord_iter_get iter) in
+    assert_equal expected order
+        ~msg:(sprintf "Expected order = [%s], found [%s]"
+            (str_join ", " (List.map int_s expected))
+            (str_join ", " (List.map int_s order)))
+
+
+let assert_iter_list expected_list iter =
+    let each order =
+        assert_iter_eq order iter;
+        linord_iter_next iter;
+    in
+    List.iter each expected_list;
+    assert_equal true (linord_iter_is_end iter)
+        ~msg:(sprintf "Expected end iterator")
+
+
+
 let test_mk_po_matrix _ =
     let matrix = mk_po_matrix 3 [(0, 1); (0, 2)] in
     assert_equal 3 (Array.length matrix);
@@ -90,6 +109,145 @@ let test_linord_iter_first9 _ =
             (str_join ", " (List.map int_s init_order)))
 
 
+let test_linord_iter_next2 _ =
+    (*        (0)  (1)       *)
+    let iter = linord_iter_first 2 [] in
+    assert_iter_eq [0; 1] iter;
+    linord_iter_next iter;
+    assert_equal false (linord_iter_is_end iter)
+        ~msg:(sprintf "Unexpected end iterator");
+    assert_iter_eq [1; 0] iter;
+    linord_iter_next iter;
+    assert_equal true (linord_iter_is_end iter)
+        ~msg:(sprintf "Expected end iterator")
+
+
+let test_linord_iter_next4x4 _ =
+    (*        (2)  (3)
+               | \/ |
+               | /\ |
+              (0)  (1)       *)
+    let iter = linord_iter_first 4 [(0, 2); (1, 2); (0, 3); (1, 3)] in
+    assert_iter_list [
+        [0; 1; 2; 3];
+        [1; 0; 2; 3];
+        [1; 0; 3; 2];
+        [0; 1; 3; 2];
+    ] iter
+   
+
+let test_linord_iter_next4x6 _ =
+    (*        (2)  (3)
+               |    |
+               |    |
+              (0)  (1)       *)
+    let iter = linord_iter_first 4 [(0, 2); (1, 3)] in
+    assert_iter_list [
+        [0; 1; 2; 3];
+        [0; 2; 1; 3];
+        [1; 0; 2; 3];
+        [1; 0; 3; 2];
+        [1; 3; 0; 2];
+        [0; 1; 3; 2];
+    ] iter
+ 
+
+let test_linord_iter_next3x2 _ =
+    (*          (2)
+                / \ 
+               /   \
+              (0) (1)       *)
+    let iter = linord_iter_first 3 [(0, 2); (1, 2)] in
+    assert_iter_list [
+        [0; 1; 2;];
+        [1; 0; 2;];
+    ] iter
+
+
+let test_linord_iter_next4x2 _ =
+    (*          (3)
+                / \ 
+               /   \
+             (1)   (2)
+               \   /
+                \ /
+                (0)
+     *)
+    let iter = linord_iter_first 4 [(0, 1); (0, 2); (1, 3); (2, 3)] in
+    assert_iter_list [
+        [0; 1; 2; 3];
+        [0; 2; 1; 3];
+    ] iter
+
+
+let test_linord_iter_next7 _ =
+    (*          (6)
+                / \ 
+               /   \
+             (4)   (5)
+               \   /
+                \ /
+                (3)
+                / \ 
+               /   \
+             (1)   (2)
+               \   /
+                \ /
+                (0)
+     *)
+    let iter = linord_iter_first 7
+        [(0, 1); (0, 2); (1, 3); (2, 3); (3, 4); (3, 5); (4, 6); (5, 6)]
+    in
+    assert_iter_list [
+        [0; 1; 2; 3; 4; 5; 6];
+        [0; 2; 1; 3; 4; 5; 6];
+        [0; 2; 1; 3; 5; 4; 6];
+        [0; 1; 2; 3; 5; 4; 6];
+    ] iter
+
+
+let test_linord_iter_next6 _ =
+    (*          (5)
+                / \ 
+               /   \
+             (3)   (4)
+              |\   /|
+              | \ / |
+              |  X  |
+              | / \ |
+              |/   \|
+             (1)   (2)
+               \   /
+                \ /
+                (0)
+     *)
+    let iter = linord_iter_first 6
+        [(0, 1); (0, 2); (1, 3); (2, 4); (1, 4); (2, 3); (3, 5); (4, 5)]
+    in
+    assert_iter_list [
+        [0; 1; 2; 3; 4; 5];
+        [0; 2; 1; 3; 4; 5];
+        [0; 2; 1; 4; 3; 5];
+        [0; 1; 2; 4; 3; 5];
+    ] iter
+
+
+let test_linord_iter_next_3_lines _ =
+    (*        (1)  (3)  (5)
+               |    |    |
+               |    |    |
+              (0)  (2)  (4)   *)
+    Debug.enable_tracing () Trc.pos;
+    let iter = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
+    assert_iter_list [
+        [0; 2; 1; 3; 4; 5];
+        [0; 1; 2; 3; 4; 5];
+        [1; 0; 2; 4; 3; 5];
+        [1; 0; 2; 4; 3; 5];
+    ] iter;
+    Debug.disable_tracing () Trc.pos
+
+
 let suite = "poset-suite" >:::
     [
         "test_mk_po_matrix" >:: test_mk_po_matrix;
@@ -101,5 +259,12 @@ let suite = "poset-suite" >:::
         "test_linord_iter_first_singleton" >:: test_linord_iter_first_singleton;
         "test_linord_iter_first_pair" >:: test_linord_iter_first_pair;
         "test_linord_iter_first9" >:: test_linord_iter_first9;
+        "test_linord_iter_next2" >:: test_linord_iter_next2;
+        "test_linord_iter_next4x4" >:: test_linord_iter_next4x4;
+        "test_linord_iter_next4x6" >:: test_linord_iter_next4x6;
+        "test_linord_iter_next4x2" >:: test_linord_iter_next4x2;
+        "test_linord_iter_next7" >:: test_linord_iter_next7;
+        "test_linord_iter_next6" >:: test_linord_iter_next6;
+        "test_linord_iter_next_3_lines" >:: test_linord_iter_next_3_lines;
     ]
 

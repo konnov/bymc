@@ -29,6 +29,15 @@ let initialize_debug opts =
         (StringMap.find "trace.mods" opts.plugin_opts) in
         List.iter (fun m -> Hashtbl.add enabled_trace_modules m 1) mods
 
+
+let enable_tracing _ mod_name =
+    Hashtbl.replace enabled_trace_modules mod_name 1
+
+
+let disable_tracing _ mod_name =
+    Hashtbl.remove enabled_trace_modules mod_name
+
+
 let verbosity_s = function
     | QUIET -> ""
     | ERROR -> "ERR  "
@@ -61,8 +70,13 @@ let logtm level message =
       flush stdout;
     end
 
-(* Trace output. To enable tracing of FOO and BAR, pass an option:
-    -O trace.mods=FOO,BAR *)
+(*
+  Trace output. To enable tracing of FOO and BAR, pass an option:
+    -O trace.mods=FOO,BAR.
+
+  When debugging a unit test, add manually calls to enable_tracing
+  and disable_tracing (see above).
+ *)
 let trace (mod_code: string) (text_fun: unit -> string) =
     if Hashtbl.mem enabled_trace_modules mod_code
     then begin
