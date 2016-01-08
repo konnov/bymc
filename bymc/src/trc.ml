@@ -20,4 +20,5 @@ let bnd = "BND" (* porBounds *)
 let sum = "SUM" (* summary *)
 let cfg = "CFG" (* cfg *)
 let ssk = "SSK" (* symbSkel *)
+let pos = "POS" (* poset *)
 

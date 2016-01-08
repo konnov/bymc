@@ -15,9 +15,9 @@
 
 exception Poset_error of string
 
-type po_matrix = int array array
+type po_matrix_t = int array array
 
-type linord_iter
+type linord_iter_t
 
 (**
   Create a matrix representation of a (strict) partial order.
@@ -46,7 +46,7 @@ val mk_po_matrix: int -> (int * int) list -> int array array
 
   @return an iterator
  *)
-val linord_iter_first: int -> (int * int) list -> linord_iter
+val linord_iter_first: int -> (int * int) list -> linord_iter_t
 
 
 (**
@@ -55,25 +55,25 @@ val linord_iter_first: int -> (int * int) list -> linord_iter
   @param iter an iterator
   @return the saved linear order: a list of integers
  *)
-val linord_iter_get: linord_iter -> int array
+val linord_iter_get: linord_iter_t -> int array
 
 
 (**
-  Check, whether an iterator can be advanced.
+  Check, whether the iterator is beyond the last element.
 
   @param iter an iterator
-  @return true, if there is the next iterator value
+  @return true, if the iterator is beyond the last element
  *)
-val linord_iter_has_next: linord_iter -> bool
+val linord_iter_is_end: linord_iter_t -> bool
 
 
 (**
-  Advance an iterator.
+  Advance an iterator. The iterator is modified in place.
 
   @param iter an iterator
   @return the next iterator value
  *)
-val linord_iter_next: linord_iter -> linord_iter
+val linord_iter_next: linord_iter_t -> unit
 
 
 (**
@@ -84,7 +84,7 @@ val linord_iter_next: linord_iter -> linord_iter
   @param b an element that is expected to be larger
   @return true iff a precedes b
  *)
-val prec: po_matrix -> (* a *) int -> int -> bool
+val prec: po_matrix_t -> (* a *) int -> int -> bool
 
 (**
   Check, whether a precedes b or a equals b.
@@ -94,5 +94,5 @@ val prec: po_matrix -> (* a *) int -> int -> bool
   @param b an element that is expected to be larger
   @return true iff a precedes b or a equals b
  *)
-val prec_eq: po_matrix -> (* a *) int -> int -> bool
+val prec_eq: po_matrix_t -> (* a *) int -> int -> bool
 

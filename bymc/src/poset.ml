@@ -19,15 +19,33 @@ open Accums
 
 exception Poset_error of string
 
-type po_matrix = int array array
+type po_matrix_t = int array array
 
-type linord_iter = {
+type sign_t = POS | NEG
+
+let sign_s s = if s = POS then "+" else "-"
+
+type linord_iter_t = {
+    (* the poset cardinality *)
+    m_size: int;
+    (** an array of signs, called S_i in the paper *)
+    m_signs: sign_t array;
+    (** an array of epsilon signs, called \eps_i in the paper *)
+    m_epss: sign_t array;
     (** the current order, initialized with L0 in the paper*)
     m_order: int array;
     (** a precedence matrix *)
-    m_matrix: po_matrix;
-    (** the indices of minimal pairs (called J in the paper) *)
-    m_pair_indices: int array;
+    m_matrix: po_matrix_t;
+    (** the indices of minimal pairs (called J in the paper, even length) *)
+    m_J: int array;
+    (** the length of m_pair_indices / 2, called k in the paper *)
+    m_npairs: int;
+    (** the current value of the indices from m_J *)
+    m_I: int array;
+    (** an array controling the enumeration, called v in the paper *)
+    m_v: bool array;
+    (** a flag indicating, whether we have reached the end *)
+    m_halt: bool ref;
 }
 
 let val_no_prec       = 0
@@ -76,6 +94,14 @@ let mk_po_matrix n poset =
     mx
 
 
+let prec mx a b =
+    mx.(a).(b) > 0
+
+
+let prec_eq mx a b =
+    a = b || prec mx a b
+
+
 (* if you want to understand this function,
    read the paper by Canfield and Williamson, p. 70, the algorithm PC
  *)
@@ -106,6 +132,7 @@ let linord_iter_first n poset =
     BatEnum.iter set_col (0--^n);
     (* the number of elements yet to be processed *)
     let nleft = ref n in
+    (* append an element to the order, remove from the set *)
     let cross_out v =
         m_order.(n - !nleft) <- v;
         let dec j =
@@ -129,8 +156,10 @@ let linord_iter_first n poset =
             (* append pair indices *)
             let j = n - !nleft in
             pair_indices := (j + 1) :: j :: !pair_indices;
-            (*printf "a = %d, b = %d, bi = %d, j = %d\n" a b bi j;*)
+            Debug.trace Trc.pos
+                (fun _ -> sprintf "a pair: a = %d, b = %d, bi = %d, j = %d\n" a b bi j);
 
+            (* TODO: do it w/o shifting, just by setting preceding to -1 *)
             (* shift sorted by one from 1 to bi - 1 *)
             if bi > 1
             then Array.blit sorted 1 sorted 0 (bi - 1);
@@ -139,36 +168,420 @@ let linord_iter_first n poset =
             then Array.blit sorted (bi + 1) sorted (bi - 1) (!nleft - (bi + 1));
             (* remove a and b and write them to m_order *)
             cross_out a; cross_out b;
-
         with Not_found -> begin
             (* a is the only minimal element *)
-            (*printf "a = %d\n" a;*)
+            Debug.trace Trc.pos (fun _ -> sprintf "a singleton: a = %d\n" a);
             Array.blit sorted 1 sorted 0 (!nleft - 1);
             cross_out a
         end
     done;
+    let js = BatArray.of_list (List.rev !pair_indices) in
+    let npairs = (BatArray.length js) / 2 in
+    assert ((BatArray.length js) mod 2 = 0);
     {
+        m_size = n;
+        m_signs = BatArray.make (npairs + 1) POS;
+        m_epss = BatArray.make npairs POS;
         m_order; m_matrix;
-        m_pair_indices = BatArray.of_list !pair_indices
+        m_J = js; m_I = BatArray.copy js;
+        m_npairs = npairs;
+        m_v = BatArray.make (npairs + 1) true;
+        m_halt = ref false;
     }
 
 
-let linord_iter_has_next iter =
-    false
+type move_result_t =
+    | NO_MOVE | FLIP_SIGN
+    | RIGHT_SWAP_A | RIGHT_SWAP_B | LEFT_SWAP_A | LEFT_SWAP_B
+
+(*
+  Next move as explained in Theorem 3 (p. 67).
+  If you really want to understand what is going on here,
+  then read the paper by Canfield and Williamson.
+
+  The only difference is that we pass the array directly and its offset.
+ *)
+let next_move offs sign iter i j =
+    let pos p = p + offs            (* the position within the suffix *)
+    in
+    let i1, i2 = min i j, max i j in
+    if i2 = pos 1 (* I2 = 2 in Thm. 3: a and b are in the leftmost positions *)
+    then begin
+    (* Case 1 of Thm. 3 *)
+        Debug.trace Trc.pos (fun _ -> sprintf "  case 1\n");
+        if sign = NEG
+        then NO_MOVE (* the end of the canonical path *)
+        else begin
+            (* switch b with its right neighbor, if possible *)
+            let b = iter.m_order.(i2) in
+            if i2 + 1 < iter.m_size
+                && not (prec iter.m_matrix b iter.m_order.(i2 + 1))
+            then RIGHT_SWAP_B
+            else begin
+                if not (i2 + 1 < iter.m_size)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    b is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    b = %d < %d\n" b iter.m_order.(i2 + 1));
+                FLIP_SIGN (* jumping to the rightmost position *)
+            end
+        end
+    end
+    else if i2 > (pos 1) && i1 = (pos 0) && sign = NEG
+    (* Case 2: I2 > 2, I1 = 1, S = - => the express lane *)
+    then begin
+        Debug.trace Trc.pos (fun _ -> sprintf "  case 2\n");
+        LEFT_SWAP_B
+    end else begin
+    (* Case 3 *)
+        Debug.trace Trc.pos (fun _ -> sprintf "  case 3\n");
+        let a = iter.m_order.(i1) in
+        let is_i2_odd = (i2 - offs + 1) mod 2 <> 0 in (* mind the offset *)
+        match (is_i2_odd, sign) with
+        | (true,  POS) ->
+            (* a is moving right *)
+            if i1 + 1 < iter.m_size (* XXX: redundant? *)
+                && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
+                && i1 + 1 <> i2 (* do not swap a and b *)
+            then RIGHT_SWAP_A
+            else begin
+                if not (i1 + 1 < iter.m_size)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
+                FLIP_SIGN
+            end
+
+        | (true,  NEG) ->
+            (* a is moving left *)
+            if i1 - 1 >= pos 0
+                && not (prec iter.m_matrix a iter.m_order.(i1 - 1))
+                && i1 - 1 <> i2 (* do not swap a and b *)
+            then LEFT_SWAP_A
+            else begin
+                (* try move upwards, i.e., b moves right *)
+                let b = iter.m_order.(i2) in
+                if i2 + 1 < iter.m_size
+                    && not (prec iter.m_matrix b iter.m_order.(i2 + 1))
+                then RIGHT_SWAP_B   (* move upwards: b moves right *)
+                else begin
+                    Debug.trace Trc.pos (fun _ -> sprintf "    EXPRESS LANE!\n");
+                    LEFT_SWAP_A    (* switch to the express lane *)
+                end
+            end
+
+        | (false, POS) ->
+            (* a is moving left *)
+            if i1 - 1 >= pos 0
+                && not (prec iter.m_matrix a iter.m_order.(i1 - 1))
+                && i1 - 1 <> i2 (* do not swap a and b *)
+            then LEFT_SWAP_A
+            else begin
+                (* try move upwards, i.e., b moves right *)
+                let b = iter.m_order.(i2) in
+                if i2 + 1 < iter.m_size
+                    && not (prec iter.m_matrix b iter.m_order.(i2 + 1))
+                then RIGHT_SWAP_B   (* move upwards: b moves right *)
+                else begin
+                    Debug.trace Trc.pos (fun _ -> sprintf "    EXPRESS LANE!\n");
+                    FLIP_SIGN      (* switch to the express lane *)
+                end
+            end
+
+        | (false, NEG) ->
+            (* a is moving right *)
+            if i1 + 1 < iter.m_size (* XXX: redundant? *)
+                && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
+                && i1 + 1 <> i2 (* do not swap a and b *)
+                && i1 + 1 <> iter.m_size - 1 (* no express lane yet *)
+            then RIGHT_SWAP_A
+            else begin
+                if not (i1 + 1 < iter.m_size)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
+                FLIP_SIGN
+            end
+    end
 
 
+(*
+  Reverse the next move as explained in Theorem 3 (p. 67).
+  If you really want to understand what is going on here,
+  then read the paper by Canfield and Williamson.
+ *)
+let prev_move offs sign iter i j =
+    let pos p = p + offs            (* the position within the suffix *)
+    in
+    let i1, i2 = min i j, max i j in
+    if i2 = pos 1 (* I2 = 2 in Thm. 3 *)
+    then begin
+    (* Case 1 of Thm. 3: a and b are in the rightmost positions *)
+        if sign = POS
+        then NO_MOVE (* the end of the anti-canonical path *)
+        else begin
+            (* switch b with its right neighbor, if possible *)
+            let b = iter.m_order.(i2) in
+            if i2 + 1 < iter.m_size
+                && not (prec iter.m_matrix b iter.m_order.(i2 + 1))
+            then RIGHT_SWAP_B
+            else begin
+                if not (i2 + 1 < iter.m_size)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    b is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    b = %d < %d\n" b iter.m_order.(i2 + 1));
+                FLIP_SIGN (* jumping to the rightmost position *)
+            end
+        end
+    end
+    else if i2 > (pos 1) && i1 = (pos 0) && sign = NEG
+    (* Case 2: I2 > 2, I1 = 1, S = - => the express lane *)
+    then if i2 + 1 < iter.m_size
+         && not (prec iter.m_matrix iter.m_order.(i2) iter.m_order.(i2 + 1))
+        then RIGHT_SWAP_B (* move upwards the express lane *)
+        else if (i2 - offs + 1) mod 2 <> 0
+            then begin
+                Debug.trace Trc.pos
+                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (ODD)!\n");
+                FLIP_SIGN      (* jump off the express lane in the odd case*)
+            end
+            else begin
+                Debug.trace Trc.pos
+                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (EVEN)!\n");
+                RIGHT_SWAP_A   (* jump off the express lane in the even case *)
+            end
+    else begin
+    (* Case 3 *)
+        let a = iter.m_order.(i1) in
+        let is_i2_odd = (i2 - offs + 1) mod 2 <> 0 in (* mind the offset *)
+        match (is_i2_odd, sign) with
+        | (true,  POS) (* odd+ *)->
+            (* a is moving left *)
+            if i1 - 1 >= pos 0
+                && not (prec iter.m_matrix a iter.m_order.(i1 - 1)) 
+                && i1 - 1 <> i2 (* do not swap a and b *)
+            then LEFT_SWAP_A
+            else begin
+                (* try move downwards, i.e., b moves left *)
+                let b = iter.m_order.(i2) in
+                if i2 - 1 > i1
+                    && not (prec iter.m_matrix b iter.m_order.(i2 - 1))
+                then LEFT_SWAP_B   (* move downwards: b moves left *)
+                else assert(false) (* XXX: looks like an impossible case *)
+            end
+
+        | (true,  NEG) (* odd- *) ->
+            (* a is moving right *)
+            if i1 + 1 < iter.m_size
+                && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
+                && i1 + 1 <> i2 (* do not swap a and b *)
+            then RIGHT_SWAP_A
+            else begin
+                if not (i1 + 1 < iter.m_size)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
+                FLIP_SIGN
+            end
+
+        | (false, POS) (* even+ *) ->
+            (* a is moving right *)
+            if i1 + 1 < iter.m_size
+                && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
+                && i1 + 1 <> i2 (* do not swap a and b *)
+                && i1 + 1 <> iter.m_size - 1 (* no express lane yet *)
+            then RIGHT_SWAP_A
+            else begin
+                if not (i1 + 1 < iter.m_size && i1 + 1 <> i2)
+                then Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a is in the rightmost position\n")
+                else Debug.trace Trc.pos
+                    (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
+                FLIP_SIGN
+            end
+
+
+        | (false, NEG) (* even- *) ->
+            (* a is moving left *)
+            if i1 - 1 >= pos 0
+                && not (prec iter.m_matrix a iter.m_order.(i1 - 1)) 
+                && i1 - 1 <> i2 (* do not swap a and b *)
+            then LEFT_SWAP_A
+            else begin
+                (* try move downwards, i.e., b moves left *)
+                let b = iter.m_order.(i2) in
+                if i2 - 1 > i1
+                    && not (prec iter.m_matrix b iter.m_order.(i2 - 1))
+                then LEFT_SWAP_B   (* move downwards: b moves left *)
+                else assert(false) (* XXX: looks like an impossible case *)
+            end
+    end
+
+
+let next_or_prev_move offs eps sign iter i j =
+    if eps = POS
+    then next_move offs sign iter i j
+    else prev_move offs sign iter i j
+
+
+(* one iteration of the algorithm GLPPR. Read the paper. *)
+let linord_iter_next_signed iter =
+    let getJ i = (* like J_t in the algorithm *)
+        iter.m_J.(i)
+    in
+    let getI i = (* like I_j in the algorithm *)
+        iter.m_I.(i)
+    in
+    let setI i v = (* like I_j in the algorithm *)
+        iter.m_I.(i) <- v
+    in
+    let swap i j =
+        let t = iter.m_order.(i) in
+        iter.m_order.(i) <- iter.m_order.(j);
+        iter.m_order.(j) <- t
+    in
+    let flip_eps i =
+        let j1, j2 = getJ (2 * i), getJ (2 * i + 1) in
+        let i1, i2 = getI (2 * i), getI (2 * i + 1) in
+        (* line 5: L(I_{i1}) and L(I_{i2}) came to the end of their circuit *)
+        let eps = iter.m_epss.(i) and s = iter.m_signs.(i) in
+        if (eps = POS && s = NEG || eps = NEG && s = POS) && i1 = j1 && i2 = j2
+        then begin
+            Debug.trace Trc.pos
+                (fun _ -> sprintf "  flip eps_%d, v[%d] <- false\n" i i);
+            iter.m_epss.(i) <- if eps = POS then NEG else POS;
+            iter.m_v.(i) <- false;
+        end else begin
+            Debug.trace Trc.pos (fun _ -> sprintf "  v[%d] <- true\n" i);
+            iter.m_v.(i) <- true; (* redundant? *)
+        end
+    in
+    if !(iter.m_halt)
+    then () (* already beyond the last element *)
+    else if iter.m_npairs = 0
+    (* the only order was created with linord_iter_first *)
+    then iter.m_halt := true
+    else
+        try (* line 3 *)
+            let i = BatArray.findi (fun b -> b) iter.m_v in
+            let k = iter.m_npairs in
+            Debug.trace Trc.pos (fun _ ->
+                sprintf "i = %d, k = %d, v = [%s], eps = [%s], S = [%s], L=[%s]\n"
+                    i k (str_join "," (List.map string_of_bool (BatArray.to_list iter.m_v)))
+                    (str_join "," (List.map sign_s (BatArray.to_list iter.m_epss)))
+                    (str_join "," (List.map sign_s (BatArray.to_list iter.m_signs)))
+                    (str_join "," (List.map int_s (BatArray.to_list iter.m_order)))
+            );
+            if i = k (* line 4a *)
+            then begin
+                (* line 4d *)
+                iter.m_v.(k) <- false;
+                (* line 4b *)
+                swap (getI (2 * k - 2)) (getI (2 * k - 1));
+                (* line 4c *)
+                (* this value is never used *)
+                iter.m_signs.(k) <- NEG; (* S_i starts with 0, so add one *)
+                (* line 6 *)
+                BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i);
+                Debug.trace Trc.pos (fun _ ->
+                    sprintf "  => [%s]\n"
+                        (str_join ", " (BatArray.to_list (BatArray.map int_s iter.m_order))));
+            end else begin
+                let i1, i2 = getI (2 * i), getI (2 * i + 1) in
+                let j1, j2 = getJ (2 * i), getJ (2 * i + 1) in
+                let ji = getJ (2 * i) in
+                let s = iter.m_signs.(i) in
+                let eps = iter.m_epss.(i) in
+                Debug.trace Trc.pos (fun _ ->
+                    sprintf "  eps = %s, S = %s, i1 = %d, i2 = %d, j1 = %d, j2 = %d, ji = %d\n"
+                        (if eps = POS then "+" else "-")
+                        (if s = POS then "+" else "-")
+                        i1 i2 j1 j2 ji);
+                begin
+                    (* line 4f *)
+                    match next_or_prev_move ji eps s iter i1 i2 with
+                    | FLIP_SIGN ->
+                        Debug.trace Trc.pos (fun _ -> sprintf "  flip sign\n");
+                        (* line 4g *)
+                        iter.m_signs.(i) <- (* +1 *)
+                            (if iter.m_signs.(i) = POS then NEG else POS);
+                        if i > 0
+                        then swap (getI (2 * i - 2)) (getI (2 * i - 1));
+                        (* Canfield and Williamson missed
+                           this simple case in their paper: *)
+                        flip_eps i
+
+                    | RIGHT_SWAP_A ->
+                        Debug.trace Trc.pos (fun _ -> sprintf "  right swap a\n");
+                        (* line 4h *)
+                        swap i1 (i1 + 1);
+                        setI (2 * i) (i1 + 1);
+                        flip_eps i
+
+                    | RIGHT_SWAP_B ->
+                        Debug.trace Trc.pos (fun _ -> sprintf "  right swap b\n");
+                        (* line 4h *)
+                        swap i2 (i2 + 1);
+                        setI (2 * i + 1) (i2 + 1);
+                        flip_eps i
+
+                    | LEFT_SWAP_A ->
+                        Debug.trace Trc.pos (fun _ -> sprintf "  left swap a\n");
+                        (* line 4h *)
+                        swap i1 (i1 - 1);
+                        setI (2 * i) (i1 - 1);
+                        flip_eps i
+
+                    | LEFT_SWAP_B ->
+                        Debug.trace Trc.pos (fun _ -> sprintf "  left swap b\n");
+                        (* line 4h *)
+                        swap i2 (i2 - 1);
+                        setI (2 * i + 1) (i2 - 1);
+                        flip_eps i
+
+                    | NO_MOVE ->
+                        (* this case should never happen in the algorithm *)
+                        printf "  NO MOVE\n";
+                        assert(false);
+                end;
+                (* line 6 *)
+                BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i);
+                Debug.trace Trc.pos (fun _ ->
+                    sprintf "  => [%s]\n"
+                        (str_join ", " (BatArray.to_list (BatArray.map int_s iter.m_order)))
+                );
+            end
+        with Not_found ->
+            (* line 2: the end *)
+            Debug.trace Trc.pos (fun _ -> sprintf "  => HALT\n");
+            flush stdout;
+            iter.m_halt := true
+
+
+(* As explained in the paper, we leave only the orders with
+   the positive master sign (S_0).
+ *)
 let linord_iter_next iter =
-    iter
+    flush stdout;
+    if not !(iter.m_halt)
+    then begin 
+        linord_iter_next_signed iter;
+        while not !(iter.m_halt) && iter.m_signs.(0) = NEG do
+            linord_iter_next_signed iter;
+        done
+    end
+
+
+let linord_iter_is_end iter =
+    !(iter.m_halt)
 
 
 let linord_iter_get iter =
-    iter.m_order
-
-
-let prec mx a b =
-    mx.(a).(b) > 0
-
-
-let prec_eq mx a b =
-    a = b || prec mx a b
+    if !(iter.m_halt)
+    then raise (Poset_error "The end of the sequence has been reached")
+    else iter.m_order
 
