@@ -13,15 +13,21 @@ let assert_iter_eq expected iter =
             (str_join ", " (List.map int_s order)))
 
 
+let assert_iter_end iter =
+    if not (linord_iter_is_end iter)
+    then let order = Array.to_list (linord_iter_get iter) in
+        assert_equal true (linord_iter_is_end iter)
+            ~msg:(sprintf "Expected end iterator, found: [%s]"
+                (str_join ", " (List.map int_s order)))
+
+
 let assert_iter_list expected_list iter =
     let each order =
         assert_iter_eq order iter;
         linord_iter_next iter;
     in
     List.iter each expected_list;
-    assert_equal true (linord_iter_is_end iter)
-        ~msg:(sprintf "Expected end iterator")
-
+    assert_iter_end iter
 
 
 let test_mk_po_matrix _ =
@@ -237,15 +243,53 @@ let test_linord_iter_next_3_lines _ =
                |    |    |
                |    |    |
               (0)  (2)  (4)   *)
-    Debug.enable_tracing () Trc.pos;
+    (* Debug.enable_tracing () Trc.pos; *)
     let iter = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
     assert_iter_list [
-        [0; 2; 1; 3; 4; 5];
-        [0; 1; 2; 3; 4; 5];
-        [1; 0; 2; 4; 3; 5];
-        [1; 0; 2; 4; 3; 5];
+        [0; 2; 1; 3; 4; 5]; [0; 1; 2; 3; 4; 5]; [0; 1; 4; 2; 3; 5];
+        [0; 1; 2; 4; 3; 5]; [0; 2; 1; 4; 3; 5]; [0; 2; 4; 1; 3; 5];
+        [0; 4; 2; 1; 3; 5]; [4; 0; 2; 1; 3; 5]; [4; 2; 0; 1; 3; 5];
+        [2; 4; 0; 1; 3; 5]; [2; 0; 4; 1; 3; 5]; [2; 0; 1; 4; 3; 5];
+        [2; 0; 1; 3; 4; 5]; [2; 0; 3; 1; 4; 5]; [2; 3; 0; 1; 4; 5];
+        [2; 3; 4; 0; 1; 5]; [2; 3; 0; 4; 1; 5]; [2; 0; 3; 4; 1; 5];
+        [2; 0; 3; 4; 5; 1]; [2; 3; 0; 4; 5; 1]; [0; 2; 3; 4; 5; 1];
+        [0; 2; 4; 3; 5; 1]; [0; 4; 2; 3; 5; 1]; [4; 0; 2; 3; 5; 1];
+        [0; 4; 5; 2; 3; 1]; [4; 0; 5; 2; 3; 1]; [4; 5; 0; 2; 3; 1];
+        [4; 0; 2; 5; 3; 1]; [0; 4; 2; 5; 3; 1]; [0; 2; 4; 5; 3; 1];
+        [2; 0; 4; 5; 3; 1]; [2; 4; 0; 5; 3; 1]; [4; 2; 0; 5; 3; 1];
+        [4; 2; 3; 5; 0; 1]; [2; 4; 3; 5; 0; 1]; [2; 4; 3; 0; 5; 1];
+        [4; 2; 3; 0; 5; 1]; [4; 2; 0; 3; 5; 1]; [2; 4; 0; 3; 5; 1];
+        [2; 0; 4; 3; 5; 1]; [2; 0; 4; 3; 1; 5]; [2; 4; 0; 3; 1; 5];
+        [4; 2; 0; 3; 1; 5]; [4; 0; 2; 3; 1; 5]; [0; 4; 2; 3; 1; 5];
+        [0; 2; 4; 3; 1; 5]; [0; 2; 3; 4; 1; 5]; [0; 2; 3; 1; 4; 5];
     ] iter;
-    Debug.disable_tracing () Trc.pos
+    ()
+    (* Debug.disable_tracing () Trc.pos *)
+
+
+let test_linord_iter_next_3_lines_no_dups _ =
+    (*        (1)  (3)  (5)
+               |    |    |
+               |    |    |
+              (0)  (2)  (4)   *)
+    (* Debug.enable_tracing () Trc.pos; *)
+    let hits = Hashtbl.create 1024 in
+    let iter = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
+    Hashtbl.add hits (linord_iter_get iter) 1;
+    while not (linord_iter_is_end iter) do
+        let order = linord_iter_get iter in
+        linord_iter_next iter;
+        if not (linord_iter_is_end iter)
+        then begin
+            assert_bool
+                (sprintf "Found a duplicate: [%s]"
+                    (str_join ", " (List.map int_s (BatArray.to_list order))))
+                (not (Hashtbl.mem hits order));
+            Hashtbl.add hits (linord_iter_get iter) 1;
+        end
+    done;
+    ()
+    (* Debug.disable_tracing () Trc.pos *)
 
 
 let suite = "poset-suite" >:::
@@ -266,5 +310,7 @@ let suite = "poset-suite" >:::
         "test_linord_iter_next7" >:: test_linord_iter_next7;
         "test_linord_iter_next6" >:: test_linord_iter_next6;
         "test_linord_iter_next_3_lines" >:: test_linord_iter_next_3_lines;
+        "test_linord_iter_next_3_lines_no_dups"
+            >:: test_linord_iter_next_3_lines_no_dups;
     ]
 
