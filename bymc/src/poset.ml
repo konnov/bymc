@@ -238,7 +238,7 @@ let next_move offs sign iter i j =
         let a = iter.m_order.(i1) in
         let is_i2_odd = (i2 - offs + 1) mod 2 <> 0 in (* mind the offset *)
         match (is_i2_odd, sign) with
-        | (true,  POS) ->
+        | (true,  POS) -> (* odd+ *)
             (* a is moving right *)
             if i1 + 1 < iter.m_size (* XXX: redundant? *)
                 && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
@@ -253,7 +253,7 @@ let next_move offs sign iter i j =
                 FLIP_SIGN
             end
 
-        | (true,  NEG) ->
+        | (true,  NEG) -> (* odd- *)
             (* a is moving left *)
             if i1 - 1 >= pos 0
                 && not (prec iter.m_matrix a iter.m_order.(i1 - 1))
@@ -271,7 +271,7 @@ let next_move offs sign iter i j =
                 end
             end
 
-        | (false, POS) ->
+        | (false, POS) -> (* even+ *)
             (* a is moving left *)
             if i1 - 1 >= pos 0
                 && not (prec iter.m_matrix a iter.m_order.(i1 - 1))
@@ -289,7 +289,7 @@ let next_move offs sign iter i j =
                 end
             end
 
-        | (false, NEG) ->
+        | (false, NEG) -> (* even- *)
             (* a is moving right *)
             if i1 + 1 < iter.m_size (* XXX: redundant? *)
                 && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
@@ -342,23 +342,24 @@ let prev_move offs sign iter i j =
     then if i2 + 1 < iter.m_size
          && not (prec iter.m_matrix iter.m_order.(i2) iter.m_order.(i2 + 1))
         then RIGHT_SWAP_B (* move upwards the express lane *)
-        else if (i2 - offs + 1) mod 2 <> 0
+        else if (i2 - offs + 1) mod 2 = 0
             then begin
                 Debug.trace Trc.pos
-                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (ODD)!\n");
+                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (EVEN)!\n");
                 FLIP_SIGN      (* jump off the express lane in the odd case*)
             end
             else begin
                 Debug.trace Trc.pos
-                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (EVEN)!\n");
+                    (fun _ -> sprintf "    OFF THE EXPRESS LANE (ODD)!\n");
                 RIGHT_SWAP_A   (* jump off the express lane in the even case *)
             end
     else begin
     (* Case 3 *)
         let a = iter.m_order.(i1) in
+        let b = iter.m_order.(i2) in
         let is_i2_odd = (i2 - offs + 1) mod 2 <> 0 in (* mind the offset *)
         match (is_i2_odd, sign) with
-        | (true,  POS) (* odd+ *)->
+        | (true,  POS) (* antipath: odd+ *)->
             (* a is moving left *)
             if i1 - 1 >= pos 0
                 && not (prec iter.m_matrix a iter.m_order.(i1 - 1)) 
@@ -366,14 +367,13 @@ let prev_move offs sign iter i j =
             then LEFT_SWAP_A
             else begin
                 (* try move downwards, i.e., b moves left *)
-                let b = iter.m_order.(i2) in
                 if i2 - 1 > i1
                     && not (prec iter.m_matrix b iter.m_order.(i2 - 1))
                 then LEFT_SWAP_B   (* move downwards: b moves left *)
                 else assert(false) (* XXX: looks like an impossible case *)
             end
 
-        | (true,  NEG) (* odd- *) ->
+        | (true,  NEG) (* antipath: odd- *) ->
             (* a is moving right *)
             if i1 + 1 < iter.m_size
                 && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
@@ -388,7 +388,7 @@ let prev_move offs sign iter i j =
                 FLIP_SIGN
             end
 
-        | (false, POS) (* even+ *) ->
+        | (false, POS) (* antipath: even+ *) ->
             (* a is moving right *)
             if i1 + 1 < iter.m_size
                 && not (prec iter.m_matrix a iter.m_order.(i1 + 1))
@@ -401,13 +401,22 @@ let prev_move offs sign iter i j =
                     (fun _ -> sprintf "    a is in the rightmost position\n")
                 else Debug.trace Trc.pos
                     (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
-                FLIP_SIGN
+
+                if i1 <> pos 0
+                then FLIP_SIGN (* from + to - *)
+                else (* If we flip the sign, then we are back on the express lane.
+                        Try move downwards, i.e., b moves left. *)
+                    if i2 - 1 >= pos 0
+                        && not (prec iter.m_matrix iter.m_order.(i2 - 1) b)
+                        && i2 - 1 <> i1 (* do not swap a and b *)
+                    then LEFT_SWAP_B
+                    else assert(false);
             end
 
 
-        | (false, NEG) (* even- *) ->
+        | (false, NEG) (* antipath: even- *) ->
             (* a is moving left *)
-            if i1 - 1 >= pos 0
+            if i1 - 1 >= pos 1 (* do not jump on the express lane! *)
                 && not (prec iter.m_matrix a iter.m_order.(i1 - 1)) 
                 && i1 - 1 <> i2 (* do not swap a and b *)
             then LEFT_SWAP_A
