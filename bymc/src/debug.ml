@@ -35,7 +35,9 @@ let enable_tracing _ mod_name =
 
 
 let disable_tracing _ mod_name =
-    Hashtbl.remove enabled_trace_modules mod_name
+    while Hashtbl.mem enabled_trace_modules mod_name do
+        Hashtbl.remove enabled_trace_modules mod_name
+    done
 
 
 let verbosity_s = function
