@@ -378,7 +378,9 @@ let test_linord_iter_next_count_2_lines_2_dots _ =
         linord_iter_next iter;
     done;
     Debug.trace Trc.pos (fun _ -> sprintf "-------------------------------\n");
-    (* collect the linearizations by brute force *)
+    (* collect the linearizations by brute force and check,
+       whether some orders are missing
+      *)
     let is_invalid pair_fun order =
         let rec check = function
         | [] -> false
@@ -408,6 +410,67 @@ let test_linord_iter_next_count_2_lines_2_dots _ =
     let expected_count = 180 in
     assert_equal expected_count !count
         ~msg:(sprintf "Expected %d elements, found %d" expected_count !count)
+
+
+let test_linord_iter_next_2_lines_4_dots _ =
+    (*
+              (1)  (3)  (5)
+               |    |
+               |    |
+              (0)  (2)  (4)
+     *)
+    (* collect what the algorithm thinks should be the linearizations *)
+    let iter = linord_iter_first 8 [(0, 1); (2, 3)] in
+    let hits = Hashtbl.create 1024 in
+    while not (linord_iter_is_end iter) do
+        let order = linord_iter_get iter in
+        let key = str_join "," (List.map int_s (BatArray.to_list order)) in
+        Hashtbl.add hits key 1;
+        linord_iter_next iter;
+    done;
+    Debug.trace Trc.pos (fun _ -> sprintf "-------------------------------\n");
+    let expected_count = 10080 in
+    let count = Hashtbl.length hits in
+    assert_equal expected_count count
+        ~msg:(sprintf "Expected %d elements, found %d" expected_count count);
+
+    if (false) then begin
+        (* if the above assertion fails, use the following code to find the
+           missing elements *)
+
+        (* collect the linearizations by brute force and check,
+           whether some orders are missing
+          *)
+        let is_invalid pair_fun order =
+            let rec check = function
+            | [] -> false
+
+            | a :: tl ->
+                if List.exists (pair_fun a) tl
+                then true
+                else check tl
+            in
+            check order
+        in
+        let iter = linord_iter_first 8 [] in
+
+        let count = ref 0 in
+        while not (linord_iter_is_end iter) do
+            let order = BatArray.to_list (linord_iter_get iter) in
+            if not (is_invalid (fun a b -> a = 1 && b = 0 || a = 3 && b = 2) order)
+            then begin
+                let key = str_join "," (List.map int_s order) in
+                assert_bool
+                    (sprintf "The linear order is missing: [%s]" key)
+                    (Hashtbl.mem hits key);
+                count := 1 + !count;
+            end;
+            linord_iter_next iter;
+        done;
+        let expected_count = 10080 in
+        assert_equal expected_count !count
+            ~msg:(sprintf "Expected %d elements, found %d" expected_count !count)
+    end
 
 
 let test_linord_iter_next_2_lines_2_dots _ =
@@ -490,14 +553,34 @@ let test_linord_iter_next_8_dots _ =
     assert_order_preserved (mk_iter ())
 
 
-let test_linord_iter_next_1_line_3_dots _ =
+let test_linord_next_broom _ =
+    (*             
+             (3)(4)(5)
+               \ | / 
+                \|/  
+                (2)  
+                 | 
+                (1) 
+                 |
+                (0)
+     *)
     let mk_iter _ = linord_iter_first 6 [(0, 1); (1, 2); (2, 3); (2, 4); (2, 5)] in
     assert_iter_count (fact 3) (mk_iter ());
     assert_no_dups (mk_iter ());
     assert_order_preserved (mk_iter ())
 
 
-let test_linord_iter_next_3_dots_1_line _ =
+let test_linord_iter_next_broom_inverse _ =
+    (*             
+                (5)  
+                 | 
+                (4) 
+                 |
+                (3)
+                /|\  
+               / | \ 
+             (0)(1)(2)
+     *)
     let mk_iter _ = linord_iter_first 6 [(0, 3); (1, 3); (2, 3); (3, 4); (4, 5)] in
     assert_iter_count (fact 3) (mk_iter ());
     assert_no_dups (mk_iter ());
@@ -546,10 +629,9 @@ let suite = "poset-suite" >:::
 
         "test_linord_iter_next_3_dots" >:: test_linord_iter_next_3_dots;
         "test_linord_iter_next_4_dots" >:: test_linord_iter_next_4_dots;
-        "test_linord_iter_next_1_line_3_dots"
-            >:: test_linord_iter_next_1_line_3_dots;
-        "test_linord_iter_next_3_dots_1_line"
-            >:: test_linord_iter_next_3_dots_1_line;
+        "test_linord_next_broom" >:: test_linord_next_broom;
+        "test_linord_iter_next_broom_inverse"
+            >:: test_linord_iter_next_broom_inverse;
         "test_linord_iter_next_x_fighter"
             >:: test_linord_iter_next_x_fighter;
         "test_linord_iter_next_pyramide"
@@ -567,5 +649,7 @@ let suite = "poset-suite" >:::
             >:: test_linord_iter_next_count_2_lines_2_dots;
         "test_linord_iter_next_2_lines_2_dots"
             >:: test_linord_iter_next_2_lines_2_dots;
+        "test_linord_iter_next_2_lines_4_dots"
+            >:: test_linord_iter_next_2_lines_4_dots;
     ]
 
