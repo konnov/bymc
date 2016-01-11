@@ -25,6 +25,10 @@ type sign_t = POS | NEG
 
 let sign_s s = if s = POS then "+" else "-"
 
+(* the infinity value for linord_iter_t.m_p *)
+let infty = -8      (* for m_p, any negative number will do the job *)
+
+
 type linord_iter_t = {
     (* the poset cardinality *)
     m_size: int;
@@ -44,6 +48,11 @@ type linord_iter_t = {
     m_I: int array;
     (** an array controling the enumeration, called v in the paper *)
     m_v: bool array;
+    (** an efficient representation of m_v (see p. 62 in the paper).
+        To implement p as in the paper, we use the indices from 1 to k + 1,
+        so index 0 is never updated.
+     *)
+    m_p: int array;
     (** a flag indicating, whether we have reached the end *)
     m_halt: bool ref;
 }
@@ -186,6 +195,7 @@ let linord_iter_first n poset =
         m_J = js; m_I = BatArray.copy js;
         m_npairs = npairs;
         m_v = BatArray.make (npairs + 1) true;
+        m_p = BatArray.make (npairs + 2) 0;
         m_halt = ref false;
     }
 
@@ -608,6 +618,43 @@ let linord_iter_next_signed iter =
     let setI i v = (* like I_j in the algorithm *)
         iter.m_I.(i) <- v
     in
+    let set_v_to_false j =
+        let j1 = j + 1 in
+        if j1 = iter.m_npairs + 1
+        then iter.m_p.(j1) <- infty
+        else if iter.m_p.(j1 + 1) = 0
+            then iter.m_p.(j1) <- j1 + 1
+            else begin (* iter.m_p.(i + 1) <> infty *)
+                iter.m_p.(j1) <- iter.m_p.(j1 + 1);
+                iter.m_p.(j1 + 1) <- 0
+            end;
+        (*printf "set_v_to_false %d results in: %s\n" j
+            (str_join "," (List.map int_s (BatArray.to_list iter.m_p)));*)
+    in
+    let set_v_to_true j =
+        iter.m_p.(j + 1) <- 0; (* 0-based to 1-based *)
+        (*printf "set_v_to_true %d results in: %s\n" j
+            (str_join "," (List.map int_s (BatArray.to_list iter.m_p)));*)
+    in
+    let set_smaller_vs_to_true j =
+        if j > 0                (* if j = 0, do not reset anything *)
+        then iter.m_p.(1) <- 0; (* set v[j] to true for j < i *)
+        (*printf "set_smaller_vs_to_true %d results in: %s\n" j
+            (str_join "," (List.map int_s (BatArray.to_list iter.m_p)));*)
+    in
+    let find_min_v_true _ =
+        let v = iter.m_p.(1) in
+        let res =
+            if v = infty
+            then infty      (* there is no i s.t. v[i] = true *)
+            else if v = 0
+                then 0      (* index 0 *)
+                else v - 1  (* the minimum such i that v[i] = true *)
+        in
+        (*printf "find_min_v_true on %s results in %d\n"
+            (str_join "," (List.map int_s (BatArray.to_list iter.m_p))) res;*)
+        res
+    in
     let swap i j =
         let t = iter.m_order.(i) in
         iter.m_order.(i) <- iter.m_order.(j);
@@ -623,10 +670,14 @@ let linord_iter_next_signed iter =
             Debug.trace Trc.pos
                 (fun _ -> sprintf "  flip eps_%d, v[%d] <- false\n" i i);
             iter.m_epss.(i) <- if eps = POS then NEG else POS;
-            iter.m_v.(i) <- false;
+
+            (* iter.m_v.(i) <- false; *)
+            (* use the p-representation, see Theorem 2 *)
+            set_v_to_false i
         end else begin
             Debug.trace Trc.pos (fun _ -> sprintf "  v[%d] <- true\n" i);
-            iter.m_v.(i) <- true; (* redundant? *)
+            (*iter.m_v.(i) <- true;*) (* redundant? *)
+            set_v_to_true i
         end
     in
     if !(iter.m_halt)
@@ -635,8 +686,18 @@ let linord_iter_next_signed iter =
     (* the only order was created with linord_iter_first *)
     then iter.m_halt := true
     else
-        try (* line 3 *)
-            let i = BatArray.findi (fun b -> b) iter.m_v in
+        (* line 3 *)
+        (* use the p-representation instead (see Theorem 2) *)
+        let i = find_min_v_true () in
+        (* let i = BatArray.findi (fun b -> b) iter.m_v in *)
+        if i = infty
+        then begin
+            (* line 2: the end *)
+            Debug.trace Trc.pos (fun _ -> sprintf "  => HALT\n");
+            flush stdout;
+            iter.m_halt := true
+        end else begin
+            (* compute the next linear order *)
             let seq_s pos n =
                 if pos = 2 * i || pos = 2 * i + 1
                 then sprintf "%d+" n
@@ -644,8 +705,8 @@ let linord_iter_next_signed iter =
             in
             let k = iter.m_npairs in
             Debug.trace Trc.pos (fun _ ->
-                sprintf "i = %d, k = %d, v = [%s], eps = [%s], S = [%s], L=[%s]\n"
-                    i k (str_join "," (List.map bool_s (BatArray.to_list iter.m_v)))
+                sprintf "i = %d, k = %d, p = [%s], eps = [%s], S = [%s], L=[%s]\n"
+                    i k (str_join "," (List.map int_s (BatArray.to_list iter.m_p)))
                     (str_join "," (List.map sign_s (BatArray.to_list iter.m_epss)))
                     (str_join "," (List.map sign_s (BatArray.to_list iter.m_signs)))
                     (str_join "" (List.map2 seq_s (range 0 iter.m_size) (BatArray.to_list iter.m_order)))
@@ -653,14 +714,17 @@ let linord_iter_next_signed iter =
             if i = k (* line 4a *)
             then begin
                 (* line 4d *)
-                iter.m_v.(k) <- false;
+                (*iter.m_v.(k) <- false;*)
+                set_v_to_false k;
                 (* line 4b *)
                 swap (getI (2 * k - 2)) (getI (2 * k - 1));
                 (* line 4c *)
                 (* this value is never used *)
                 iter.m_signs.(k) <- NEG; (* S_i starts with 0, so add one *)
                 (* line 6 *)
-                BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i);
+                (* BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i); *)
+                (* use the p-representation instead *)
+                set_smaller_vs_to_true k;
                 Debug.trace Trc.pos (fun _ ->
                     sprintf "  => [%s]\n"
                         (str_join ", " (BatArray.to_list (BatArray.map int_s iter.m_order))));
@@ -724,17 +788,16 @@ let linord_iter_next_signed iter =
                         assert(false);
                 end;
                 (* line 6 *)
-                BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i);
+                (* BatEnum.iter (fun j -> iter.m_v.(j) <- true) (0--^i); *)
+                (* use the p-representation instead (see Theorem 2) *)
+                set_smaller_vs_to_true i;
+
                 Debug.trace Trc.pos (fun _ ->
                     sprintf "  => [%s]\n"
                         (str_join ", " (BatArray.to_list (BatArray.map int_s iter.m_order)))
                 );
             end
-        with Not_found ->
-            (* line 2: the end *)
-            Debug.trace Trc.pos (fun _ -> sprintf "  => HALT\n");
-            flush stdout;
-            iter.m_halt := true
+        end
 
 
 (* As explained in the paper, we leave only the orders with
@@ -749,7 +812,6 @@ let linord_iter_next iter =
         while not !(iter.m_halt) && iter.m_signs.(0) = NEG do
             linord_iter_next_signed iter;
         done
-
 
         (* if you want to debug next_move and prev_move,
            comment out the previous four lines and uncomment
