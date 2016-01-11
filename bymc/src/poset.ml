@@ -258,7 +258,23 @@ let next_move offs sign iter i j =
             then begin (* a cannot be moved to the right *)
                 Debug.trace Trc.pos
                     (fun _ -> sprintf "    a = %d < %d\n" a iter.m_order.(i1 + 1));
-                FLIP_SIGN
+                if i1 = pos 0 && i2 + 1 < iter.m_size
+                then begin
+                    (* If we flip the sign right here, we will jump on the express lane
+                       and miss all the cases when b moves to the right. So, try to
+                       push b to the right first. *)
+                    Debug.trace Trc.pos
+                        (fun _ -> "    check, whether b can be pushed to the right\n");
+                    let b = iter.m_order.(i2) in
+                    if not (prec iter.m_matrix b iter.m_order.(i2 + 1))
+                    then RIGHT_SWAP_B
+                    else begin
+                        Debug.trace Trc.pos
+                            (fun _ -> sprintf "    b = %d < %d\n" b iter.m_order.(i2 + 1));
+                        FLIP_SIGN
+                    end
+                end
+                else FLIP_SIGN (* a will be moved to the left *)
             end
             else RIGHT_SWAP_A
 

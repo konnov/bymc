@@ -368,6 +368,17 @@ let test_linord_iter_next_count_2_lines_2_dots _ =
                |    |
               (0)  (2)  (4)
      *)
+    (* collect what the algorithm thinks should be the linearizations *)
+    let iter = linord_iter_first 6 [(0, 1); (2, 3)] in
+    let hits = Hashtbl.create 1024 in
+    while not (linord_iter_is_end iter) do
+        let order = linord_iter_get iter in
+        let key = str_join "," (List.map int_s (BatArray.to_list order)) in
+        Hashtbl.add hits key 1;
+        linord_iter_next iter;
+    done;
+    Debug.trace Trc.pos (fun _ -> sprintf "-------------------------------\n");
+    (* collect the linearizations by brute force *)
     let is_invalid pair_fun order =
         let rec check = function
         | [] -> false
@@ -385,7 +396,13 @@ let test_linord_iter_next_count_2_lines_2_dots _ =
     while not (linord_iter_is_end iter) do
         let order = BatArray.to_list (linord_iter_get iter) in
         if not (is_invalid (fun a b -> a = 1 && b = 0 || a = 3 && b = 2) order)
-        then count := 1 + !count;
+        then begin
+            let key = str_join "," (List.map int_s order) in
+            assert_bool
+                (sprintf "The linear order is missing: [%s]" key)
+                (Hashtbl.mem hits key);
+            count := 1 + !count;
+        end;
         linord_iter_next iter;
     done;
     let expected_count = 180 in
@@ -542,7 +559,8 @@ let suite = "poset-suite" >:::
 
         "test_linord_iter_next_5_dots" >:: test_linord_iter_next_5_dots;
         "test_linord_iter_next_10_dots" >:: test_linord_iter_next_8_dots;
-        "test_linord_iter_next_3_lines" >:: test_linord_iter_next_3_lines;
+        "test_linord_iter_next_3_lines"
+            >:: test_linord_iter_next_3_lines;
         "test_linord_iter_next_2_lines_1_dot"
             >:: test_linord_iter_next_2_lines_1_dot;
         "test_linord_iter_next_count_2_lines_2_dots"
