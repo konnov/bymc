@@ -49,18 +49,41 @@ let assert_iter_list expected_list iter =
 
 let assert_no_dups iter =
     let hits = Hashtbl.create 1024 in
-    Hashtbl.add hits (linord_iter_get iter) 1;
     while not (linord_iter_is_end iter) do
         let order = linord_iter_get iter in
+        let key = str_join "," (List.map int_s (BatArray.to_list order)) in
+        assert_bool
+            (sprintf "Found a duplicate: [%s]" key)
+            (not (Hashtbl.mem hits key));
+        Hashtbl.add hits key 1;
         linord_iter_next iter;
-        if not (linord_iter_is_end iter)
-        then begin
-            assert_bool
-                (sprintf "Found a duplicate: [%s]"
-                    (str_join ", " (List.map int_s (BatArray.to_list order))))
-                (not (Hashtbl.mem hits order));
-            Hashtbl.add hits (linord_iter_get iter) 1;
-        end
+    done
+
+
+let assert_order_preserved iter =
+    let mx = linord_iter_get_matrix iter in
+    let pr order =
+        str_join "" (List.map int_s order)
+    in
+    let asrt order a b =
+        assert_bool
+            (sprintf "Found wrong order %d < %d: [%s]" a b (pr order))
+            (not (prec mx b a ));
+        assert_bool
+            (sprintf "Corrupted order, contains %d two times" a)
+            (a != b);
+    in
+    while not (linord_iter_is_end iter) do
+        let order = BatArray.to_list (linord_iter_get iter) in
+        let rec check = function
+            | [] -> ()
+
+            | a :: tl ->
+                List.iter (asrt order a) tl;
+                check tl
+        in
+        check order;
+        linord_iter_next iter;
     done
 
 
@@ -80,6 +103,19 @@ let assert_iter_count nexpected iter =
         ~msg:(sprintf "Expected %d elements, found: %d" nexpected !count)
 
 
+let mk_binary_level_poset height =
+    (* perhaps, it is not very efficient, but it was easy to write *)
+    let rec mk prec start level level_cnt =
+        if level > height
+        then (start + level_cnt, prec)
+        else let beyond = start + level_cnt in
+            let connections = BatList.cartesian_product
+                (BatList.of_enum (beyond --^ (beyond + 2 * level_cnt)))
+                (BatList.of_enum (start --^ beyond))
+            in
+            mk (prec @ connections) beyond (level + 1) (2 * level_cnt)
+    in
+    mk [] 0 1 1
 
 
 let test_mk_po_matrix _ =
@@ -178,6 +214,19 @@ let test_linord_iter_next2 _ =
     linord_iter_next iter;
     assert_equal true (linord_iter_is_end iter)
         ~msg:(sprintf "Expected end iterator")
+
+
+let test_linord_iter_next3 _ =
+    (*        (2)
+               |
+               |
+              (0)  (1)       *)
+    let iter = linord_iter_first 3 [(0, 2)] in
+    assert_iter_list [
+        [0; 1; 2];
+        [0; 2; 1];
+        [1; 0; 2];
+    ] iter
 
 
 let test_linord_iter_next4x4 _ =
@@ -295,34 +344,10 @@ let test_linord_iter_next_3_lines _ =
                |    |    |
                |    |    |
               (0)  (2)  (4)   *)
-    let iter = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
-    assert_iter_list [
-        [0; 2; 1; 3; 4; 5]; [0; 1; 2; 3; 4; 5]; [0; 1; 4; 2; 3; 5];
-        [0; 1; 2; 4; 3; 5]; [0; 2; 1; 4; 3; 5]; [0; 2; 4; 1; 3; 5];
-        [0; 4; 2; 1; 3; 5]; [4; 0; 2; 1; 3; 5]; [4; 2; 0; 1; 3; 5];
-        [2; 4; 0; 1; 3; 5]; [2; 0; 4; 1; 3; 5]; [2; 0; 1; 4; 3; 5];
-        [2; 0; 1; 3; 4; 5]; [2; 0; 3; 1; 4; 5]; [2; 3; 0; 1; 4; 5];
-        [2; 3; 4; 0; 1; 5]; [2; 3; 0; 4; 1; 5]; [2; 0; 3; 4; 1; 5];
-        [2; 0; 3; 4; 5; 1]; [2; 3; 0; 4; 5; 1]; [0; 2; 3; 4; 5; 1];
-        [0; 2; 4; 3; 5; 1]; [0; 4; 2; 3; 5; 1]; [4; 0; 2; 3; 5; 1];
-        [0; 4; 5; 2; 3; 1]; [4; 0; 5; 2; 3; 1]; [4; 5; 0; 2; 3; 1];
-        [4; 0; 2; 5; 3; 1]; [0; 4; 2; 5; 3; 1]; [0; 2; 4; 5; 3; 1];
-        [2; 0; 4; 5; 3; 1]; [2; 4; 0; 5; 3; 1]; [4; 2; 0; 5; 3; 1];
-        [4; 2; 3; 5; 0; 1]; [2; 4; 3; 5; 0; 1]; [2; 4; 3; 0; 5; 1];
-        [4; 2; 3; 0; 5; 1]; [4; 2; 0; 3; 5; 1]; [2; 4; 0; 3; 5; 1];
-        [2; 0; 4; 3; 5; 1]; [2; 0; 4; 3; 1; 5]; [2; 4; 0; 3; 1; 5];
-        [4; 2; 0; 3; 1; 5]; [4; 0; 2; 3; 1; 5]; [0; 4; 2; 3; 1; 5];
-        [0; 2; 4; 3; 1; 5]; [0; 2; 3; 4; 1; 5]; [0; 2; 3; 1; 4; 5];
-    ] iter
-
-
-let test_linord_iter_next_3_lines_no_dups _ =
-    (*        (1)  (3)  (5)
-               |    |    |
-               |    |    |
-              (0)  (2)  (4)   *)
-    let iter = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
-    assert_no_dups iter
+    let mk_iter _ = linord_iter_first 6 [(0, 1); (2, 3); (4, 5);] in
+    assert_no_dups (mk_iter ());
+    assert_iter_count 90 (mk_iter ());
+    assert_order_preserved (mk_iter ())
 
 
 let test_linord_iter_next_2_lines_1_dot _ =
@@ -330,43 +355,156 @@ let test_linord_iter_next_2_lines_1_dot _ =
                |    |
                |    |
               (0)  (2)  (4)   *)
-    let iter = linord_iter_first 5 [(0, 1); (2, 3); ] in
-    assert_iter_list [
-        [0; 2; 1; 3; 4]; [0; 1; 2; 3; 4]; [0; 1; 4; 2; 3];
-        [0; 1; 2; 4; 3]; [0; 2; 1; 4; 3]; [0; 2; 4; 1; 3];
-        [0; 4; 2; 1; 3]; [4; 0; 2; 1; 3]; [4; 2; 0; 1; 3];
-        [2; 4; 0; 1; 3]; [2; 0; 4; 1; 3]; [2; 0; 1; 4; 3];
-        [2; 0; 1; 3; 4]; [2; 0; 3; 1; 4]; [2; 3; 0; 1; 4];
-        [2; 3; 4; 0; 1]; [2; 3; 0; 4; 1]; [2; 0; 3; 4; 1];
-        [2; 0; 4; 3; 1]; [2; 4; 0; 3; 1]; [4; 2; 0; 3; 1];
-        [4; 0; 2; 3; 1]; [0; 4; 2; 3; 1]; [0; 2; 4; 3; 1];
-        [0; 2; 3; 4; 1]; [0; 2; 3; 1; 4];
-    ] iter;
-    let iter = linord_iter_first 5 [(0, 1); (2, 3); ] in
-    assert_no_dups iter
+    let mk_iter () = linord_iter_first 5 [(0, 1); (2, 3)] in
+    assert_no_dups (mk_iter ());
+    assert_iter_count 30 (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_count_2_lines_2_dots _ =
+    (*
+              (1)  (3)  (5)
+               |    |
+               |    |
+              (0)  (2)  (4)
+     *)
+    let is_invalid pair_fun order =
+        let rec check = function
+        | [] -> false
+
+        | a :: tl ->
+            if List.exists (pair_fun a) tl
+            then true
+            else check tl
+        in
+        check order
+    in
+    let iter = linord_iter_first 6 [] in
+
+    let count = ref 0 in
+    while not (linord_iter_is_end iter) do
+        let order = BatArray.to_list (linord_iter_get iter) in
+        if not (is_invalid (fun a b -> a = 1 && b = 0 || a = 3 && b = 2) order)
+        then count := 1 + !count;
+        linord_iter_next iter;
+    done;
+    let expected_count = 180 in
+    assert_equal expected_count !count
+        ~msg:(sprintf "Expected %d elements, found %d" expected_count !count)
+
+
+let test_linord_iter_next_2_lines_2_dots _ =
+    (*        (1)  (3)  (5)
+               |    |
+               |    |
+              (0)  (2)  (4)   *)
+    let mk_iter () = linord_iter_first 6 [(0, 1); (2, 3)] in
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ());
+    assert_iter_count 180 (mk_iter ())
+
 
 
 let test_linord_iter_next_3_dots _ =
-    let iter = linord_iter_first 3 [] in
-    assert_iter_count (fact 3) iter
+    let mk_iter _ = linord_iter_first 3 [] in
+    assert_no_dups (mk_iter ());
+    assert_iter_count (fact 3) (mk_iter ());
+    assert_order_preserved (mk_iter ())
 
 
 let test_linord_iter_next_4_dots _ =
     let mk_iter _ = linord_iter_first 4 [] in
     assert_no_dups (mk_iter ());
-    assert_iter_count (fact 4) (mk_iter ())
+    assert_iter_count (fact 4) (mk_iter ());
+    assert_order_preserved (mk_iter ())
 
 
 let test_linord_iter_next_5_dots _ =
     let mk_iter _ = linord_iter_first 5 [] in
     assert_iter_count (fact 5) (mk_iter ());
-    assert_no_dups (mk_iter ())
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_x_fighter _ =
+    (*             
+             (3)   (4)
+               \   / 
+                \ /  
+                (2)  
+                / \  
+               /   \ 
+             (0)   (1)
+     *)
+    let mk_iter _ = linord_iter_first 5 [(0, 2); (1, 2); (2, 3); (2, 4)] in
+    assert_iter_count 4 (mk_iter ());
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_pyramide _ =
+    (*             
+             (4)     (5)
+              | \   / |
+              |  \ /  |
+              |   X   | 
+              |  /|\  |   
+              | / | \ |  
+             (0) (1) (3)
+     *)
+    let mk_iter _ =
+        linord_iter_first 5 [(0, 3); (0, 4); (1, 3); (1, 4); (2, 3); (2, 4)] in
+    assert_iter_count 12 (mk_iter ());
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
 
 
 let test_linord_iter_next_7_dots _ =
     let mk_iter _ = linord_iter_first 7 [] in
     assert_no_dups (mk_iter ());
-    assert_iter_count (fact 7) (mk_iter ())
+    assert_iter_count (fact 7) (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_8_dots _ =
+    let mk_iter _ = linord_iter_first 8 [] in
+    assert_no_dups (mk_iter ());
+    assert_iter_count (fact 8) (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_1_line_3_dots _ =
+    let mk_iter _ = linord_iter_first 6 [(0, 1); (1, 2); (2, 3); (2, 4); (2, 5)] in
+    assert_iter_count (fact 3) (mk_iter ());
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_3_dots_1_line _ =
+    let mk_iter _ = linord_iter_first 6 [(0, 3); (1, 3); (2, 3); (3, 4); (4, 5)] in
+    assert_iter_count (fact 3) (mk_iter ());
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
+let test_linord_iter_next_level2 _ =
+    let height = 2 in
+    let rec count_linearizations level level_cnt =
+        if level > height
+        then fact level_cnt
+        else (fact level_cnt) * (count_linearizations (1 + level) (2 * level_cnt))
+    in
+    let expected_count = count_linearizations 1 1 in
+    let mk_iter _ =
+        let n, prec = mk_binary_level_poset height in
+        let pr (a, b) = sprintf "(%d, %d)" a b in
+        Debug.trace Trc.pos
+            (fun _ -> sprintf "n = %d, ord = [%s]\n" n (str_join ", " (List.map pr prec)));
+        linord_iter_first n prec
+    in
+    assert_iter_count expected_count (mk_iter ());
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
 
 
 let suite = "poset-suite" >:::
@@ -377,25 +515,39 @@ let suite = "poset-suite" >:::
         "test_mk_po_matrix_antisymmetric" >:: test_mk_po_matrix_antisymmetric;
         "test_mk_po_matrix_antisymmetric2" >:: test_mk_po_matrix_antisymmetric2;
         "test_mk_po_matrix_transitive" >:: test_mk_po_matrix_transitive;
+
         "test_linord_iter_first_singleton" >:: test_linord_iter_first_singleton;
         "test_linord_iter_first_pair" >:: test_linord_iter_first_pair;
         "test_linord_iter_first9" >:: test_linord_iter_first9;
         "test_linord_iter_next2" >:: test_linord_iter_next2;
+        "test_linord_iter_next3" >:: test_linord_iter_next3;
         "test_linord_iter_next4x4" >:: test_linord_iter_next4x4;
         "test_linord_iter_next4x6" >:: test_linord_iter_next4x6;
         "test_linord_iter_next4x2" >:: test_linord_iter_next4x2;
         "test_linord_iter_next7" >:: test_linord_iter_next7;
         "test_linord_iter_next6" >:: test_linord_iter_next6;
+
         "test_linord_iter_next_3_dots" >:: test_linord_iter_next_3_dots;
         "test_linord_iter_next_4_dots" >:: test_linord_iter_next_4_dots;
-        "test_linord_iter_next_5_dots" >:: (with_tracing test_linord_iter_next_5_dots);
-        (*
+        "test_linord_iter_next_1_line_3_dots"
+            >:: test_linord_iter_next_1_line_3_dots;
+        "test_linord_iter_next_3_dots_1_line"
+            >:: test_linord_iter_next_3_dots_1_line;
+        "test_linord_iter_next_x_fighter"
+            >:: test_linord_iter_next_x_fighter;
+        "test_linord_iter_next_pyramide"
+            >:: test_linord_iter_next_pyramide;
+        "test_linord_iter_next_level2"
+            >:: test_linord_iter_next_level2;
+
+        "test_linord_iter_next_5_dots" >:: test_linord_iter_next_5_dots;
+        "test_linord_iter_next_10_dots" >:: test_linord_iter_next_8_dots;
         "test_linord_iter_next_3_lines" >:: test_linord_iter_next_3_lines;
-        "test_linord_iter_next_3_lines_no_dups"
-            >:: test_linord_iter_next_3_lines_no_dups;
         "test_linord_iter_next_2_lines_1_dot"
             >:: test_linord_iter_next_2_lines_1_dot;
-        "test_linord_iter_next_7_dots" >:: test_linord_iter_next_7_dots;
-        *)
+        "test_linord_iter_next_count_2_lines_2_dots"
+            >:: test_linord_iter_next_count_2_lines_2_dots;
+        "test_linord_iter_next_2_lines_2_dots"
+            >:: test_linord_iter_next_2_lines_2_dots;
     ]
 

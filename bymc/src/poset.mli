@@ -59,6 +59,15 @@ val linord_iter_get: linord_iter_t -> int array
 
 
 (**
+  Get the partial order matrix.
+
+  @param iter an iterator
+  @return the matrix used
+ *)
+val linord_iter_get_matrix: linord_iter_t -> po_matrix_t
+
+
+(**
   Check, whether the iterator is beyond the last element.
 
   @param iter an iterator
