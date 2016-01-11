@@ -484,6 +484,34 @@ let test_linord_iter_next_2_lines_2_dots _ =
     assert_iter_count 180 (mk_iter ())
 
 
+let test_linord_iter_next_1_line_14 _ =
+    (* a very long line of 67 nodes *)
+    let rec mk_line n =
+        if n > 1
+        then (n - 2, n - 1) :: (mk_line (n - 1))
+        else []
+    in
+    let n = 14 in
+    let mk_iter () = linord_iter_first n (mk_line n) in
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ());
+    assert_iter_count 1 (mk_iter ())
+
+
+let test_linord_iter_next_1_line_13 _ =
+    (* a very long line of 66 nodes *)
+    let rec mk_line n =
+        if n > 1
+        then (n - 1, n - 2) :: (mk_line (n - 1))
+        else []
+    in
+    let n = 13 in
+    let mk_iter () = linord_iter_first n (mk_line n) in
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ());
+    assert_iter_count 1 (mk_iter ())
+
+
 
 let test_linord_iter_next_3_dots _ =
     let mk_iter _ = linord_iter_first 3 [] in
@@ -651,5 +679,9 @@ let suite = "poset-suite" >:::
             >:: test_linord_iter_next_2_lines_2_dots;
         "test_linord_iter_next_2_lines_4_dots"
             >:: test_linord_iter_next_2_lines_4_dots;
+        "test_linord_iter_next_1_line_13"
+            >:: test_linord_iter_next_1_line_13;
+        "test_linord_iter_next_1_line_14"
+            >:: test_linord_iter_next_1_line_14;
     ]
 

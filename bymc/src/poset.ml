@@ -744,21 +744,23 @@ let linord_iter_next iter =
     flush stdout;
     if not !(iter.m_halt)
     then begin 
-        (*
+
         linord_iter_next_signed iter;
         while not !(iter.m_halt) && iter.m_signs.(0) = NEG do
             linord_iter_next_signed iter;
         done
-        *)
+
 
         (* if you want to debug next_move and prev_move,
            comment out the previous four lines and uncomment
-           the following code:
+           the following code, which is much easier to follow:
          *)
+        (*
         linord_iter_next_signed_w_loops iter;
         while not !(iter.m_halt) && iter.m_signs.(0) = NEG do
             linord_iter_next_signed_w_loops iter;
         done
+        *)
     end
 
 
