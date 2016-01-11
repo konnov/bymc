@@ -26,6 +26,7 @@ CONTENTS
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (OPTIONAL: if you want to run unit tests)
  * sexplib
+ * ctypes
  * at least one SMT solver:
     * yices 1.x: http://yices.csl.sri.com/download.shtml
     * Microsoft Z3
@@ -124,7 +125,7 @@ the new way to do that is (our CAV'15 submission):
 
 The latter will check the properties as well (Sec. 4.6).
 
-4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 submission)
+4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 paper)
 
 using Z3:
 
@@ -149,7 +150,7 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install batteries ounit ocamlgraph sexplib
+$ opam install batteries ounit ocamlgraph sexplib ctypes
 
 (Do not forget to include the line
 'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
