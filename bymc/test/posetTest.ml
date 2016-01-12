@@ -635,6 +635,22 @@ let test_linord_iter_next_level2 _ =
     assert_order_preserved (mk_iter ())
 
 
+let test_linord_iter_next_random _ =
+    Random.init 12012016; (* fix the seed *)
+    let n = 5 in
+    let gen_deps _ =
+        BatList.filter
+            (fun (i, j) -> i < j && Random.bool ())
+            (BatList.cartesian_product (Accums.range 0 n) (Accums.range 0 n))
+    in
+    for i = 0 to 10 do
+        let deps = gen_deps () in
+        let mk_iter _ = linord_iter_first n deps in
+        assert_order_preserved (mk_iter ());
+        assert_no_dups (mk_iter ())
+    done
+
+
 let suite = "poset-suite" >:::
     [
         "test_mk_po_matrix" >:: test_mk_po_matrix;
@@ -683,5 +699,7 @@ let suite = "poset-suite" >:::
             >:: test_linord_iter_next_1_line_13;
         "test_linord_iter_next_1_line_14"
             >:: test_linord_iter_next_1_line_14;
+        "test_linord_iter_next_random"
+            >:: test_linord_iter_next_random;
     ]
 
