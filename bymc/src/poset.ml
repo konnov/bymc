@@ -607,7 +607,12 @@ let linord_iter_next_signed_w_loops iter =
         end
 
 
-(* one iteration of the algorithm GLPPR. Read the paper. *)
+(*
+   One iteration of the algorithm GLPPR (as in the paper).
+   In our experiments, its running time is comparable
+   to linord_iter_next_signed_w_loops. As the latter is much easier to understand,
+   we will perhaps switch to it in the future.
+ *)
 let linord_iter_next_signed iter =
     let getJ i = (* like J_t in the algorithm *)
         iter.m_J.(i)
