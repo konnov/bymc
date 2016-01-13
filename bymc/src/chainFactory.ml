@@ -153,7 +153,7 @@ module PiaPost = struct
         vr: VarRolePlugin.vr_plugin_t;
         pdom: PiaDomPlugin.pia_dom_plugin_t;
         pdg: PiaDataPlugin.pd_plugin_t;
-        slps: SlpsCheckerPlugin.slps_checker_plugin_t;
+        slps: SchemaCheckerPlugin.slps_checker_plugin_t;
     }
 
     let mk_plugins () =
@@ -162,7 +162,7 @@ module PiaPost = struct
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
-        let slps = new SlpsCheckerPlugin.slps_checker_plugin_t "slps" in
+        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" in
         { pp; vr; pdom; pdg; slps }
 
     let mk_chain plugins =
