@@ -95,7 +95,7 @@ class slps_checker_plugin_t (plugin_name: string) =
                 end
             in
             let check_tree name form tree =
-                SlpsChecker.is_error_tree rt ntt sk on_leaf name form deps tree
+                SchemaChecker.is_error_tree rt ntt sk on_leaf name form deps tree
             in
 
             log INFO "  > Running SlpsChecker...";
