@@ -99,6 +99,138 @@ module F = struct
 end
 
 
+(**
+
+ Auxillary functions for the SMT encoding.
+
+ *)
+module B = struct
+    let not_redundant_action = function
+            | BinEx (Spin.EQ, UnEx (Spin.NEXT, Var l), Var r) ->
+                    l#get_name <> r#get_name
+            | _ -> true
+
+
+    let accelerate_expr accel_var e =
+        let rec f = function
+            | UnEx (t, e) ->
+                    UnEx (t, f e)
+
+            | BinEx (t, l, r) ->
+                    BinEx (t, f l, f r)
+
+            | IntConst i ->
+                    if i = 1
+                    then Var accel_var
+                    else BinEx (Spin.MULT, IntConst i, Var accel_var)
+
+            | e -> e
+        in
+        f e
+
+
+    let collect_next_vars e =
+        let rec f set = function
+            | UnEx (Spin.NEXT, Var v) -> IntSet.add v#id set
+            | UnEx (_, e) -> f set e
+            | BinEx (_, l, r) -> f (f set l) r
+            | _ -> set
+        in
+        f IntSet.empty e
+
+
+    type var_kind_t = KWarp | KGlob | KLoc | KUndef
+
+
+    let demangle v =
+        let name_re =
+            Str.regexp "F\\([0-9]+\\)_\\(g_\\|at_\\|\\)\\([_A-Za-z][_A-Za-z0-9]*\\)"
+        in
+        let name = v#get_name in
+        if Str.string_match name_re name 0
+        then begin
+            let tp = Str.matched_group 2 name in
+            let short = Str.matched_group 3 name in
+            match tp with
+            | "" -> (KWarp, short)
+            | "g_" -> (KGlob, short)
+            | "at_" -> (KLoc, short)
+            | _ -> (KUndef, name)
+        end
+        else (KUndef, name)
+
+
+    let get_counterex rt sk form_name frame_hist =
+        let reverse no v m = StrMap.add v#get_name no m in
+        let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
+        let get_vars vars =
+            let query = rt#solver#get_model_query in
+            List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
+            let new_query = rt#solver#submit_query query in
+            let map v =
+                match Smt.Q.try_get new_query (Var v) with
+                    | Smt.Q.Result e ->
+                        let k, n = demangle v in
+                        (k, n, e)
+                    | Smt.Q.Cached ->
+                        raise (Failure "Unexpected Cached")
+            in
+            List.map map vars
+        in
+        let p is_init_frame out (k, n, e) =
+            match k with
+            | KLoc ->
+                    let locno = StrMap.find n revmap in
+                    let loc = List.nth sk.Sk.locs locno in
+                    let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
+                    in
+                    let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
+                    if not is_init_frame || e <> IntConst 0
+                    then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+
+            | _ ->
+                    fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
+        in
+        let rec each_frame out num = function
+            | [] -> ()
+
+            | f :: tl ->
+                let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
+                let (_, _, accel), other = List.hd vals, List.tl vals in
+                let new_num =
+                    if f.F.no = 0 || accel <> IntConst 0
+                    then begin
+                        fprintf out "%4d (F%4d) x%2s: "
+                            num f.F.no (SpinIrImp.expr_s accel);
+                        List.iter (p (f.F.no = 0) out) other;
+                        if f.F.no = 0
+                        then fprintf out " K[*]: = 0;\n"
+                        else fprintf out "\n";
+                        1 + num
+                    end
+                    else num
+                in
+                each_frame out new_num tl
+        in
+        let fname = sprintf "cex-%s.trx" form_name in
+        let out = open_out fname in
+        fprintf out "----------------\n";
+        fprintf out " Counterexample\n";
+        fprintf out "----------------\n";
+        rt#solver#set_need_model true;
+        fprintf out "           ";
+        List.iter (p false out) (get_vars sk.Sk.params);
+        fprintf out "\n";
+        each_frame out 0 frame_hist;
+        fprintf out "----------------\n";
+        fprintf out " Gute Nacht. Spokoinoy nochi.\n";
+        rt#solver#set_need_model false;
+        close_out out;
+        printf "    > Saved counterexample to %s\n" fname
+
+end
+
+
 type node_kind_t = Leaf | Intermediate
 
 
@@ -115,79 +247,92 @@ different tactics that apply to a depth-first search over the schema tree.
 class type tac_t =
     object
         (**
-            Declare a new frame, which corresponds to a new state.
-            This frame is pushed on the frame stack.
+         Declare a new frame, which corresponds to a new state.
+         This frame is pushed on the frame stack.
          *)
         method push_frame: F.frame_t -> unit
 
         (**
-            Return the frame on the top
+         Return the frame on the top
          *)
         method top: F.frame_t
 
         (**
-            Return the sequence of frames generated so far
-            (starting with the initial one)
+         Return the sequence of frames generated so far
+         (starting with the initial one)
          *)
         method frame_hist: F.frame_t list
 
         
         (**
-            Add assertions to the frame on the top of the frame stack.
-            @param expressions the expressions to assert
+         Add assertions to the frame on the top of the frame stack.
+         
+         @param expressions the expressions to assert
          *)
         method assert_top:
             Spin.token SpinIr.expr list -> unit
 
         
         (** 
-            Add assertion to a pair of frames on the top.
-            @param expressions to assert, where Next(Var _) refers to the
+         Add assertion to a pair of frames on the top.
+         
+         @param expressions to assert, where Next(Var _) refers to the
                 topmost frame and (Var _) refers to the second topmost
                 frame
          *)
         method assert_top2:
             Spin.token SpinIr.expr list -> unit
 
-        (** This function is called when a new tree node is entered.
-            The functions enter/leave are called in the depth-first order.
+        (**
+         This function is called when a new tree node is entered.
+         The functions enter/leave are called in the depth-first order.
 
-            @param node_kind indicates whether the node is
+         @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
         method enter_node: node_kind_t -> unit
 
         (**
-         * Check, whether the property is violated in the current frame.
-         * The actual check can be postponed, depending on the actual tactic
-         * implementation. The only guarantee is that if the property is violated
-         * for some tree node, then it will be eventually reported for some call
-         * of check_property
-         *
-         * @form ltl propositional formula
-         * @error_fun function handler to be called on error,
-         * e.g., to print the trace
+         Check, whether the property is violated in the current frame.
+         The actual check can be postponed, depending on the actual tactic
+         implementation. The only guarantee is that if the property is violated
+         for some tree node, then it will be eventually reported for some call
+         of check_property
+         
+         @form ltl propositional formula
+         @error_fun function handler to be called on error,
+            e.g., to print the trace
          *)
         method check_property:
             Spin.token SpinIr.expr -> (F.frame_t list -> unit) -> bool
 
-        (** This function is called when a tree node is left.
-            The functions enter/leave are called in the depth-first order.
+        (**
+         This function is called when a tree node is left.
+         The functions enter/leave are called in the depth-first order.
 
-            @param node_kind indicates whether the node is
+         @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
         method leave_node: node_kind_t -> unit
 
-        (* Enter the new context, also called a branch in the schema tree.
-           The functions enter/leave are called in the depth-first order.
+        (**
+         Enter the new context, also called a branch in the schema tree.
+         The functions enter/leave are called in the depth-first order.
          *)
         method enter_context: unit
 
-        (* Leave the context, also called a branch in the schema tree.
-           The functions enter/leave are called in the depth-first order.
+        (**
+         Leave the context, also called a branch in the schema tree.
+         The functions enter/leave are called in the depth-first order.
          *)
         method leave_context: unit
+
+        (**
+         Push a rule into the SMT solver.
+
+         @param rule_no a rule number
+         *)
+        method push_rule: D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
     end
 
 
@@ -308,131 +453,50 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
                 m_depth frame_no);
             slv#pop_ctx
 
-    end
 
-
-let not_redundant_action = function
-        | BinEx (Spin.EQ, UnEx (Spin.NEXT, Var l), Var r) ->
-                l#get_name <> r#get_name
-        | _ -> true
-
-
-let accelerate_expr accel_var e =
-    let rec f = function
-        | UnEx (t, e) ->
-                UnEx (t, f e)
-
-        | BinEx (t, l, r) ->
-                BinEx (t, f l, f r)
-
-        | IntConst i ->
-                if i = 1
-                then Var accel_var
-                else BinEx (Spin.MULT, IntConst i, Var accel_var)
-
-        | e -> e
-    in
-    f e
-
-
-let collect_next_vars e =
-    let rec f set = function
-        | UnEx (Spin.NEXT, Var v) -> IntSet.add v#id set
-        | UnEx (_, e) -> f set e
-        | BinEx (_, l, r) -> f (f set l) r
-        | _ -> set
-    in
-    f IntSet.empty e
-
-
-type var_kind_t = KWarp | KGlob | KLoc | KUndef
-
-
-let demangle v =    
-    let name_re =
-        Str.regexp "F\\([0-9]+\\)_\\(g_\\|at_\\|\\)\\([_A-Za-z][_A-Za-z0-9]*\\)"
-    in
-    let name = v#get_name in
-    if Str.string_match name_re name 0
-    then begin
-        let tp = Str.matched_group 2 name in
-        let short = Str.matched_group 3 name in
-        match tp with
-        | "" -> (KWarp, short)
-        | "g_" -> (KGlob, short)
-        | "at_" -> (KLoc, short)
-        | _ -> (KUndef, name)
-    end
-    else (KUndef, name)
-
-
-let get_counterex rt sk form_name frame_hist =
-    let reverse no v m = StrMap.add v#get_name no m in
-    let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
-    let get_vars vars =
-        let query = rt#solver#get_model_query in
-        List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
-        let new_query = rt#solver#submit_query query in
-        let map v =
-            match Smt.Q.try_get new_query (Var v) with
-                | Smt.Q.Result e ->
-                    let k, n = demangle v in
-                    (k, n, e)
-                | Smt.Q.Cached ->
-                    raise (Failure "Unexpected Cached")
-        in
-        List.map map vars
-    in
-    let p is_init_frame out (k, n, e) =
-        match k with
-        | KLoc ->
-                let locno = StrMap.find n revmap in
-                let loc = List.nth sk.Sk.locs locno in
-                let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
-                in
-                let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
-                if not is_init_frame || e <> IntConst 0
-                then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
-
-        | _ ->
-                fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
-    in
-    let rec each_frame out num = function
-        | [] -> ()
-
-        | f :: tl ->
-            let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
-            let (_, _, accel), other = List.hd vals, List.tl vals in
-            let new_num =
-                if f.F.no = 0 || accel <> IntConst 0
-                then begin
-                    fprintf out "%4d (F%4d) x%2s: "
-                        num f.F.no (SpinIrImp.expr_s accel);
-                    List.iter (p (f.F.no = 0) out) other;
-                    if f.F.no = 0
-                    then fprintf out " K[*]: = 0;\n"
-                    else fprintf out "\n";
-                    1 + num
-                end
-                else num
+        method push_rule deps sk rule_no =
+            let frame = self#top in
+            let rule = List.nth sk.Sk.rules rule_no in
+            let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
+            let dst_loc_v = List.nth frame.F.loc_vars rule.Sk.dst in
+            let actions = List.filter B.not_redundant_action rule.Sk.act in
+            let next_shared =
+                List.fold_left IntSet.union IntSet.empty
+                    (List.map B.collect_next_vars actions) in
+            let is_new_f basev v =
+                v#id = src_loc_v#id || v#id = dst_loc_v#id
+                    || IntSet.mem basev#id next_shared
             in
-            each_frame out new_num tl
-    in
-    let fname = sprintf "cex-%s.trx" form_name in
-    let out = open_out fname in
-    fprintf out "----------------\n";
-    fprintf out " Counterexample\n";
-    fprintf out "----------------\n";
-    rt#solver#set_need_model true;
-    fprintf out "           ";
-    List.iter (p false out) (get_vars sk.Sk.params);
-    fprintf out "\n";
-    each_frame out 0 frame_hist;
-    fprintf out "----------------\n";
-    fprintf out " Gute Nacht. Spokoinoy nochi.\n";
-    rt#solver#set_need_model false;
-    close_out out;
-    printf "    > Saved counterexample to %s\n" fname
+            let new_frame = F.advance_frame tt sk frame is_new_f in
+            self#push_frame new_frame;
+            let move loc sign =
+                let prev = List.nth frame.F.loc_vars loc in
+                let next = List.nth new_frame.F.loc_vars loc in
+                (* k'[loc] = k[loc] +/- accel *)
+                BinEx (Spin.EQ, UnEx (Spin.NEXT, Var next),
+                    BinEx (sign, Var prev, Var new_frame.F.accel_v))
+            in
+            self#assert_top2 [move rule.Sk.src Spin.MINUS];
+            self#assert_top2 [move rule.Sk.dst Spin.PLUS];
+
+            let rule_guard =
+                (* Milestone conditions are either:
+                    known a priori in a segment,
+                    or checked once for a milestone.
+                  Thus, check only non-milestone conditions
+                 *)
+                PorBounds.D.non_milestones deps rule_no
+            in
+            let guard = (* if acceleration factor > 0 then guard *)
+                BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
+            if rule_guard <> IntConst 1
+            then self#assert_top2 [guard];
+
+            let accelerated =
+                List.map (B.accelerate_expr new_frame.F.accel_v) actions in
+            self#assert_top2 accelerated
+
+    end
 
 
 let display_depth depth is_last =
@@ -442,48 +506,6 @@ let display_depth depth is_last =
 
 
 let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
-    let each_rule is_milestone rule_no =
-        let frame = tac#top in
-        let rule = List.nth sk.Sk.rules rule_no in
-        let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
-        let dst_loc_v = List.nth frame.F.loc_vars rule.Sk.dst in
-        let actions = List.filter not_redundant_action rule.Sk.act in
-        let next_shared =
-            List.fold_left IntSet.union IntSet.empty
-                (List.map collect_next_vars actions) in
-        let is_new_f basev v =
-            v#id = src_loc_v#id || v#id = dst_loc_v#id
-                || IntSet.mem basev#id next_shared
-        in
-        let new_frame = F.advance_frame tt sk frame is_new_f in
-        tac#push_frame new_frame;
-        let move loc sign =
-            let prev = List.nth frame.F.loc_vars loc in
-            let next = List.nth new_frame.F.loc_vars loc in
-            (* k'[loc] = k[loc] +/- accel *)
-            BinEx (Spin.EQ, UnEx (Spin.NEXT, Var next),
-                BinEx (sign, Var prev, Var new_frame.F.accel_v))
-        in
-        tac#assert_top2 [move rule.Sk.src Spin.MINUS];
-        tac#assert_top2 [move rule.Sk.dst Spin.PLUS];
-
-        let rule_guard =
-            (* Milestone conditions are either:
-                known a priori in a segment,
-                or checked once for a milestone.
-              Thus, check only non-milestone conditions
-             *)
-            PorBounds.D.non_milestones deps rule_no
-        in
-        let guard = (* if acceleration factor > 0 then guard *)
-            BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
-        if rule_guard <> IntConst 1
-        then tac#assert_top2 [guard];
-
-        let accelerated =
-            List.map (accelerate_expr new_frame.F.accel_v) actions in
-        tac#assert_top2 accelerated
-    in
     let rec check_node depth
             { T.pre_rule_set; T.pre_cond; T.segment; T.succ } =
         (* check the context *)
@@ -500,7 +522,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
             (* and this effects into firing of the following rules *)
             let cond_rules =
                 PorBounds.unpack_rule_set pre_rule_set deps.D.full_segment in
-            List.iter (each_rule true) cond_rules;
+            List.iter (tac#push_rule deps sk) cond_rules;
             (* REMOVED: why having more constraints than necessary?
             (* only one rule fires *)
             let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
@@ -527,8 +549,8 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
             then false (* prune the subtree and do not report any error *)
             else begin (* check the property and the subtree *)
                 let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
-                List.iter (each_rule false) seg;
-                let err = tac#check_property bad_form (get_counterex rt sk form_name) in
+                List.iter (tac#push_rule deps sk) seg;
+                let err = tac#check_property bad_form (B.get_counterex rt sk form_name) in
 
                 if node = Leaf
                 then begin
