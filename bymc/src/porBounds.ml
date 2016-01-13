@@ -1,13 +1,13 @@
-(*
- * Computing completeness bounds using partial orders.
- *
- * The idea is introduced in:
- *
- * 	 Igor Konnov, Helmut Veith, Josef Widder.
- *   On the Completeness of Bounded Model Checking for Threshold-Based
- *   Distributed Algorithms: Reachability. CONCUR'14.
- *
- * Igor Konnov, 2014
+(**
+ Computing completeness bounds using partial orders (CONCUR'14).
+ 
+ The idea is introduced in:
+ 
+ Igor Konnov, Helmut Veith, Josef Widder.
+ On the Completeness of Bounded Model Checking for Threshold-Based
+ Distributed Algorithms: Reachability. CONCUR'14.
+ 
+ Igor Konnov, 2014
  *)
 
 
