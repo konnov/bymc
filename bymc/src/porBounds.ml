@@ -558,6 +558,7 @@ let compute_post sk =
 let compute_cond_implications solver shared uconds lconds =
     let does_cond_imply (lname, _, left, llockt) (rname, _, right, rlockt) =
         if llockt <> rlockt
+        (* TODO: why not, actually? E.g., !(x < t) always precedes (x >= 2 * t) *)
         then false (* do not compare conditions of different type *)
         else begin
             solver#push_ctx;
@@ -592,8 +593,17 @@ let compute_cond_implications solver shared uconds lconds =
     impl_map
 
 
-(* find and deps various dependencies *)    
-let compute_deps solver sk =
+(*
+  Collect the guards and actions. Find various dependencies between them.
+
+  @param against_only (optional) when equals true (default), the unlocking (or locking)
+    dependencies against (or with) the flow are ignored.
+  @param solver an SMT solver
+  @param sk a symbolic skeleton
+
+  @return a dependencies record
+ *)    
+let compute_deps ?(against_only=true) solver sk =
     let rule_flow = make_rule_flow sk in
     let nflow = MGraph.nb_edges rule_flow in
     logtm INFO (sprintf "> %d transition flow dependencies" nflow);
@@ -611,28 +621,24 @@ let compute_deps solver sk =
     logtm INFO (sprintf "> found %d postconditions..." (PSetEltMap.cardinal act_map));
 
     logtm INFO (sprintf "> constructing unlocking milestones...");
-    let umiles = compute_unlocking loc_reach Unlock solver sk
-        cond_map rule_pre act_map rule_post in
+    let umiles = 
+        compute_unlocking ~against_only:against_only
+            loc_reach Unlock solver sk cond_map rule_pre act_map rule_post
+    in
     let n_umiles = List.length umiles in
-    logtm INFO (sprintf "> %d unlocking milestones" n_umiles);
+    logtm INFO (sprintf "> %d %sunlocking milestones"
+        n_umiles
+        (if against_only then "" else "forward + backward "));
     List.iter (print_milestone Unlock) umiles;
-    let n_back_forth =
-        List.length (compute_unlocking ~against_only:false loc_reach Unlock
-            solver sk cond_map rule_pre act_map rule_post) in
-    logtm INFO
-        (sprintf "> %d forward + backward unlocking milestones" n_back_forth);
 
     logtm INFO (sprintf "> constructing locking milestones...");
-    let lmiles = compute_unlocking loc_reach Lock solver sk
-        cond_map rule_pre act_map rule_post in
+    let lmiles = compute_unlocking ~against_only:against_only
+        loc_reach Lock solver sk cond_map rule_pre act_map rule_post in
     let n_lmiles = List.length lmiles in
-    logtm INFO (sprintf "> %d locking milestones" n_lmiles);
+    logtm INFO (sprintf "> %d %slocking milestones"
+        n_lmiles
+        (if against_only then "" else "forward + backward "));
     List.iter (print_milestone Lock) lmiles;
-    let n_back_forth =
-        List.length (compute_unlocking ~against_only:false loc_reach Lock
-            solver sk cond_map rule_pre act_map rule_post) in
-    logtm INFO
-        (sprintf "> %d forward + backward locking milestones" n_back_forth);
 
     logtm INFO (sprintf "> constructing implications...");
     let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
@@ -779,71 +785,6 @@ let is_rule_unlocked deps uset lset rule_no =
    converges, but we construct SLPS explicitly.
  *)
 let compute_static_schema_tree sk deps =
-    let uconds = deps.D.uconds and lconds = deps.D.lconds in
-
-    let rec build_tree uset lset =
-        let is_guarded_with cond_id rule_no =
-            let conds =
-                PSet.inter (PSet.union deps.D.umask deps.D.lmask)
-                    (IntMap.find rule_no deps.D.rule_pre)
-            in
-            PSet.mem cond_id conds
-        in
-        let each_cond accum (name, cond_id, expr, lockt) =
-            if (PSet.mem cond_id uset) || (PSet.mem cond_id lset)
-            then accum (* already covered *)
-            else (* create a branch *)
-                let new_uset, new_lset =
-                    if lockt = Unlock
-                    then (PSet.union uset (get_cond_impls deps cond_id lockt)), lset
-                    else uset, (PSet.union lset (get_cond_impls deps cond_id lockt))
-                in
-                (* NOTE: we use new uset and old lset to filter out milestones,
-                    as the milestone is expected to be unlocked
-                *)
-                let all_guarded_with_and_enabled = 
-                    List.filter (is_guarded_with cond_id) (range 0 sk.Sk.nrules)
-                        |> List.filter (is_rule_unlocked deps new_uset lset)
-                in
-                let unlocked =
-                    List.filter (is_rule_unlocked deps new_uset new_lset) deps.D.full_segment
-                in
-                let maxlen, succ = build_tree new_uset new_lset in
-                let node = 
-                    {
-                        T.pre_rule_set = pack_rule_set all_guarded_with_and_enabled;
-                        T.pre_cond = (name, cond_id, expr, lockt);
-                        T.segment = pack_rule_set unlocked;
-                        T.succ
-                    }
-                in
-                (maxlen, node) :: accum
-        in
-        let len_and_nodes = List.fold_left each_cond [] (uconds @ lconds) in
-        let cmp (i, _) (j, _) = compare i j in
-        let nodes = List.map snd (List.sort cmp len_and_nodes) in
-        let maxlen = List.fold_left max 0 (List.map fst len_and_nodes) in
-        (1 + maxlen, nodes)
-    in
-    let _, children = build_tree PSet.empty PSet.empty in
-    let unlocked =
-        List.filter (is_rule_unlocked deps PSet.empty PSet.empty)
-            deps.D.full_segment
-    in
-    {
-        T.pre_rule_set = (BatBitSet.create 0);
-        T.pre_cond = ("_", (PSet.new_thing ()), SpinIr.Nop "", Unlock);
-        T.segment = pack_rule_set unlocked;
-        T.succ = children
-    }
-
-
-(**
-  Construct the schema tree and check it on-the-fly.
-
-  The construction is similar to compute_static_schema_tree, but it dynamic.
- *)
-let compute_on_the_fly_schema_tree sk deps =
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
 
     let rec build_tree uset lset =
