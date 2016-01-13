@@ -18,19 +18,19 @@ module F = struct
      A data structure for an SMT frame.
      *)
     type frame_t = {
-        (** sequential number of the frame *)
         no: int;
-        (** acceleration factor of the transition leading to the frame *)
-        accel_v: var; 
-        (** one copy per location *)
-        loc_vars: var list; 
-        (** one copy per shared variable *)
-        shared_vars: var list;
-        (**  the variables (from loc_vars and shared_vars)
-            introduced in this frame  *)
-        new_vars: var list;
-        (** mapping id of the original variable to its copy in the frame *) 
-        var_map: var IntMap.t;
+            (** sequential number of the frame *)
+        accel_v: SpinIr.var;
+            (** acceleration factor of the transition leading to the frame *)
+        loc_vars: SpinIr.var list;
+            (** one copy per location *)
+        shared_vars: SpinIr.var list;
+            (** one copy per shared variable *)
+        new_vars: SpinIr.var list;
+            (**  the variables (from loc_vars and shared_vars)
+                introduced in this frame  *)
+        var_map: SpinIr.var Accums.IntMap.t;
+            (** mapping id of the original variable to its copy in the frame *) 
     }
 
     (* auxillary functions *)
@@ -179,8 +179,8 @@ class type tac_t =
          for some tree node, then it will be eventually reported for some call
          of check_property
          
-         @form ltl propositional formula
-         @error_fun function handler to be called on error,
+         @param form ltl propositional formula
+         @param error_fun function handler to be called on error,
             e.g., to print the trace
          *)
         method check_property:

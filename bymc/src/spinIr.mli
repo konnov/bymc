@@ -1,7 +1,7 @@
 (**
  * The intermediate representation of the Promela code parsed by ocamlyacc.
  *
- * @author Igor Konnov <konnov@forsyte.at>, 2012-2014.
+ * @author Igor Konnov <konnov at forsyte.at>, 2012-2014.
  *
  * The idea of this OCAML code was first derivated from the original
  * code of Spin 6.1.0, but since then the code has been refactored a
