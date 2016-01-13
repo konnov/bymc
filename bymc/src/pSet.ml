@@ -30,7 +30,11 @@ let new_thing () =
     before := succ_big_int new_prime;
     new_prime
 
-let str = string_of_big_int        
+let str = string_of_big_int
+
+let elem_str = string_of_big_int
+
+let elem_eq a b = eq_big_int a b
 
 let empty = unit_big_int (* it corresponds to an empty set *)
 

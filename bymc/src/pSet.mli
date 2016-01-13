@@ -15,6 +15,10 @@ val new_thing: unit -> elt
 
 val str: t -> string
 
+val elem_str: elt -> string
+
+val elem_eq: elt -> elt -> bool
+
 val empty: t
 
 val singleton: elt -> t
