@@ -43,7 +43,8 @@ let reset_smt2 _ =
     (!solver)#set_enable_log true
 
 let shutdown_smt2 _ =
-    ignore (!solver)#stop
+    ignore (!solver)#stop;
+    is_started := false
 
 
 let test_wrong_solver _ =
