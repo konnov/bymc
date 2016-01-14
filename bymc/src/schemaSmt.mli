@@ -121,6 +121,8 @@ class virtual tac_t:
          @param form ltl propositional formula
          @param error_fun function handler to be called on error,
             e.g., to print the trace
+         
+         @return true, if there is an execution that satisfies the property
          *)
         method virtual check_property:
             Spin.token SpinIr.expr -> (F.frame_t list -> unit) -> bool
