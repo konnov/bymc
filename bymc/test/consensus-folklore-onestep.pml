@@ -199,14 +199,38 @@ ltl fairness { []<>(!in_transit0) && []<>(!in_transit1) }
 #endif
 
 /*
-#BEGIN-TEST z3-correct-post-onestep0
-$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1
+#BEGIN-TEST z3-correct-post-ltl-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -O schema.tech=ltl
 #EXPECT test ${texitcode} 0
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-FeqTp1-post-onestep0
-$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -D BUG1=1
+#BEGIN-TEST z3-FeqTp1-post-ltl-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -D BUG1=1 -O schema.tech=ltl
+#EXPECT test ${texitcode} 1
+#EXPECT grep "counterexample for one_step0 found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-cav15-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -O schema.tech=cav15
+#EXPECT test ${texitcode} 0
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-FeqTp1-post-cav15-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -D BUG1=1 -O schema.tech=cav15
+#EXPECT test ${texitcode} 1
+#EXPECT grep "counterexample for one_step0 found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-cav15-opt-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -O schema.tech=cav15-opt
+#EXPECT test ${texitcode} 0
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-FeqTp1-post-cav15-opt-onestep0
+$bymc_dir/verifypa-post ${testsource} one_step0 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -D CASE2=1 -D BUG1=1 -O schema.tech=cav15-opt
 #EXPECT test ${texitcode} 1
 #EXPECT grep "counterexample for one_step0 found" ${testlog}
 #END-TEST
