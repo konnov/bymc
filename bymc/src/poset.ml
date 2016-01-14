@@ -65,6 +65,7 @@ let val_prec_trans    = 2
 let mk_po_matrix n poset =
     if n <= 0 then raise (Poset_error "matrix size must be positive");
     let mx = Array.make_matrix n n val_no_prec in
+    (* the precedence matrix *)
     let check_range a =
         if a >= 0 && a < n
         then a
@@ -100,6 +101,13 @@ let mk_po_matrix n poset =
     in
     fill_matrix poset;
     BatEnum.iter closure (BatEnum.cartesian_product (0--^n) (0--^n));
+    (*
+    let prow i =
+        let pp j = sprintf "%2d" mx.(i).(j) in
+        printf "  %s\n" (str_join " " (List.map pp (range 0 n)))
+    in
+    List.iter prow (range 0 n);
+    *)
     mx
 
 
@@ -115,7 +123,6 @@ let prec_eq mx a b =
    read the paper by Canfield and Williamson, p. 70, the algorithm PC
  *)
 let linord_iter_first n poset =
-    (* the precedence matrix *)
     let m_matrix = mk_po_matrix n poset in
     (* the linear order as we compute it *)
     let m_order = BatArray.make n 0 in
@@ -126,11 +133,13 @@ let linord_iter_first n poset =
     let cmp a b =
         let a_prec_b = m_matrix.(a).(b) <> val_no_prec
         and b_prec_a = m_matrix.(b).(a) <> val_no_prec in
-        if a = b || (not a_prec_b && not b_prec_a)
+        if a = b
         then 0
-        else if a_prec_b then -1 else 1
+        else if not a_prec_b && not b_prec_a
+            then compare a b     (* use the natural order *)
+            else if a_prec_b then -1 else 1
     in
-    BatArray.stable_sort cmp sorted;
+    BatArray.sort cmp sorted;
     (* for each element, we record the number of the preceding elements *)
     let preceding = BatArray.make n 0 in
     let sum_cell j s i =
@@ -155,6 +164,7 @@ let linord_iter_first n poset =
     while !nleft > 0 do
         (* the first element is always minimal *)
         let a = sorted.(0) in
+        (* printf "sorted = %s\n" (str_join ", " (List.map int_s (Array.to_list sorted))); *)
         assert (preceding.(a) = 0);
         (* try to find another minimal element *)
         try
