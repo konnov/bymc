@@ -21,4 +21,5 @@ let sum = "SUM" (* summary *)
 let cfg = "CFG" (* cfg *)
 let ssk = "SSK" (* symbSkel *)
 let pos = "POS" (* poset *)
+let scl = "SCL" (* schemaCheckerLtl *)
 
