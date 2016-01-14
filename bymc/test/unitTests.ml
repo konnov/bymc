@@ -13,6 +13,7 @@ let _ =
         SummaryTest.suite;
         PorBoundsTest.suite;
         PosetTest.suite;
+        SchemaCheckerLtlTest.suite;
     ]
     in
     run_test_tt_main all
