@@ -80,13 +80,13 @@ module B = struct
         else (KUndef, name)
 
 
-    let get_counterex rt sk form_name frame_hist =
+    let get_counterex solver sk form_name frame_hist =
         let reverse no v m = StrMap.add v#get_name no m in
         let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
         let get_vars vars =
-            let query = rt#solver#get_model_query in
+            let query = solver#get_model_query in
             List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
-            let new_query = rt#solver#submit_query query in
+            let new_query = solver#submit_query query in
             let map v =
                 match Smt.Q.try_get new_query (Var v) with
                     | Smt.Q.Result e ->
@@ -137,18 +137,21 @@ module B = struct
         fprintf out "----------------\n";
         fprintf out " Counterexample\n";
         fprintf out "----------------\n";
-        rt#solver#set_need_model true;
+        solver#set_need_model true;
         fprintf out "           ";
         List.iter (p false out) (get_vars sk.Sk.params);
         fprintf out "\n";
         each_frame out 0 frame_hist;
         fprintf out "----------------\n";
         fprintf out " Gute Nacht. Spokoinoy nochi.\n";
-        rt#solver#set_need_model false;
+        solver#set_need_model false;
         close_out out;
-        printf "    > Saved counterexample to %s\n" fname
+        printf "    > Saved counterexample to %s\n" fname;
+        fname
 
-end
+end 
+
+let get_counterex = B.get_counterex (* XXX *)
 
 
 type frame_stack_elem_t =
@@ -370,8 +373,10 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
             else begin (* check the property and the subtree *)
                 let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
                 List.iter (tac#push_rule deps sk) seg;
-                let err = tac#check_property bad_form (B.get_counterex rt sk form_name) in
-
+                let err =
+                    tac#check_property bad_form
+                        (fun hist -> ignore (B.get_counterex rt#solver sk form_name hist))
+                in
                 if node = Leaf
                 then begin
                     on_leaf (tac#top.F.no + 1)

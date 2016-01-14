@@ -1,8 +1,10 @@
-(*
- * Checking the properties using semi-linear regular path schema
- * that is computed with respect to the diameter, cf. porBounds
- *
- * Igor Konnov, 2014
+(**
+ Checking the properties using semi-linear regular path schema
+ that is computed with respect to the diameter
+ 
+ @see PorBounds, SchemaChecker, SchemaCheckerLtl
+ 
+ @author Igor Konnov, 2014-2016
  *)
 
 open Printf
@@ -55,12 +57,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             sprog
 
 
-        method check rt sprog sk =
-            let loc_vars = IntMap.values sk.Sk.loc_vars in
-            let ntt = (Program.get_type_tab sprog)#copy in
-            let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
-            BatEnum.iter set_type loc_vars;
-
+        method check_reachability_cav15 rt sprog sk tt =
             let tree, deps = PorBounds.make_schema_tree rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
 
@@ -95,10 +92,10 @@ class slps_checker_plugin_t (plugin_name: string) =
                 end
             in
             let check_tree name form tree =
-                SchemaChecker.is_error_tree rt ntt sk on_leaf name form deps tree
+                SchemaChecker.is_error_tree rt tt sk on_leaf name form deps tree
             in
 
-            log INFO "  > Running SlpsChecker...";
+            log INFO "  > Running SchemaChecker...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
                 reset_stat ();
@@ -115,6 +112,38 @@ class slps_checker_plugin_t (plugin_name: string) =
             let specs = get_proper_specs rt#caches#options sprog [sk] in
             StrMap.iter each_form specs
 
+
+        method check_ltl rt sprog sk tt =
+            let deps = PorBounds.compute_deps rt#solver sk in
+            PorBounds.D.to_dot "flow.dot" sk deps;
+
+            let check name form =
+                SchemaCheckerLtl.find_error rt tt sk name form deps
+            in
+            log INFO "  > Running SchemaCheckerLtl (on the fly)...";
+            let each_form name form =
+                logtm INFO (sprintf "      > Checking %s..." name);
+                let result = check name form in
+                let msg =
+                    if result.SchemaCheckerLtl.m_is_err_found
+                    then sprintf "    > SLPS: counterexample for %s found" name
+                    else sprintf "      > Spec %s holds" name
+                in
+                log INFO msg
+            in
+            let specs = get_proper_specs rt#caches#options sprog [sk] in
+            StrMap.iter each_form specs
+
+
+        method check rt sprog sk =
+            let loc_vars = IntMap.values sk.Sk.loc_vars in
+            let ntt = (Program.get_type_tab sprog)#copy in
+            let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+            BatEnum.iter set_type loc_vars;
+
+            if (Options.get_plugin_opt rt#caches#options "schema.tech") = Some "cav15"
+            then self#check_reachability_cav15 rt sprog sk ntt
+            else self#check_ltl rt sprog sk ntt
 
         method update_runtime rt =
             ()

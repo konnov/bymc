@@ -12,6 +12,23 @@ open Accums
 open PorBounds
 open SymbSkel
 open Poset
+open SchemaSmt
+
+(**
+ The record type of a result returned by check_schema_tree_on_the_fly.
+ *)
+type result_t = {
+    m_is_err_found: bool;
+    m_counterexample_filename: string;
+}
+
+(* run the first function and if it does not fail, run the second one *)
+let fail_first a b =
+    let res = Lazy.force a in
+    if res.m_is_err_found
+    then res
+    else Lazy.force b
+
 
 let get_unlocked_rules sk deps uset lset =
     let unlocked_rule_nos =
@@ -23,16 +40,22 @@ let get_unlocked_rules sk deps uset lset =
     PorBounds.unpack_rule_set unlocked_rule_nos deps.D.full_segment
 
 
-let check_one_order sk bad_form deps tac id_order =
+let check_one_order solver sk bad_form deps tac id_order =
     let check_steady_schema uset lset =
         (* push all the unlocked rules *)
         (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk);
-        (* TODO: in case of error, return a counterexample *)
-        tac#check_property bad_form (fun _ -> ())
+        let fname = ref "" in
+        let on_error frame_hist =
+            fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist) (* FIXME *)
+        in
+        if tac#check_property bad_form on_error
+        then { m_is_err_found = true; m_counterexample_filename = !fname }
+        else { m_is_err_found = false; m_counterexample_filename = "" }
     in
     let rec search uset lset = function
         | [] ->
-            false (* no errors: we have already checked the prefix *)
+            (* no errors: we have already checked the prefix *)
+            { m_is_err_found = false; m_counterexample_filename = "" }
 
         | id :: tl -> (* activate the context, check a schema and go further *)
             let node_type = (if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
@@ -52,30 +75,28 @@ let check_one_order sk bad_form deps tac id_order =
                 else uset, (PSet.add id lset)
             in
             tac#enter_node node_type;
-            let err_found =
-                if check_steady_schema new_uset new_lset
-                then true (* found a bug *)
-                else search new_uset new_lset tl
+            let result =
+                fail_first
+                    (lazy (check_steady_schema new_uset new_lset))
+                    (lazy (search new_uset new_lset tl))
             in
             tac#leave_node node_type;
             tac#leave_context;
-            err_found
+            result
     in
     (* check the empty context first *)
     let first_type =
         (if id_order = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
     tac#enter_context;
     tac#enter_node first_type;
-    let err_found =
-        if check_steady_schema PSet.empty PSet.empty
-        (* found a bug immediately *)
-        then true
-        (* explore the whole tree recursively *)
-        else search PSet.empty PSet.empty id_order
+    let result =
+        fail_first
+            (lazy (check_steady_schema PSet.empty PSet.empty))
+            (lazy (search PSet.empty PSet.empty id_order))
     in
     tac#leave_node first_type;
     tac#leave_context;
-    err_found
+    result
 
 
 (**
@@ -83,7 +104,7 @@ let check_one_order sk bad_form deps tac id_order =
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
-let check_schema_tree_on_the_fly sk bad_form deps tac =
+let gen_and_check_schemas_on_the_fly solver sk bad_form deps tac =
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
     let all_ids = List.map (fun (_, id, _, _) -> id) (uconds @ lconds) in
     (* rename the condition ids to the range 0 .. nconds - 1 *)
@@ -105,20 +126,49 @@ let check_schema_tree_on_the_fly sk bad_form deps tac =
     in
     let prec_order = PSetEltMap.fold add_orders deps.D.cond_imp [] in
     (* enumerate all the linear extensions *)
-    let found_bug = ref false in
+    let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
     let iter = linord_iter_first n prec_order in
-    while not (linord_iter_is_end iter) && not !found_bug do
+    while not (linord_iter_is_end iter) && not !result.m_is_err_found do
         let order = BatArray.to_list (linord_iter_get iter) in
         let id_order = List.map get_id order in
         printf "  Exploring [%s]\n" (str_join "," (List.map PSet.elem_str id_order));
-        if check_one_order sk bad_form deps tac id_order
-        then begin
-            (* found a bug *)
-            printf "Found a bug! Stay tuned...\n";
-            found_bug := true;
-        end
-        else linord_iter_next iter;
+        result := check_one_order solver sk bad_form deps tac id_order;
+        if not !result.m_is_err_found
+        then linord_iter_next iter;
     done;
-    !found_bug
+    !result
 
+
+(* XXX: extend to LTL(F, G) *)
+let extract_spec type_tab s =
+    match Ltl.classify_spec type_tab s with
+    | Ltl.CondSafety (init, bad) -> (init, bad)
+    | _ ->
+        let m = sprintf "unsupported LTL formula: %s" (SpinIrImp.expr_s s) in
+        raise (Ltl.Ltl_error m)
+
+
+let find_error rt tt sk form_name ltl_form deps =
+    let init_form, bad_form = extract_spec tt ltl_form in
+    if SpinIr.is_c_false bad_form
+    then raise (Failure "Bad condition is trivially false");
+
+    rt#solver#push_ctx;
+    rt#solver#set_need_model true;
+
+    let ntt = tt#copy in
+    let tac = new SchemaChecker.tree_tac_t rt ntt in
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
+    tac#assert_top sk.Sk.inits;
+    rt#solver#comment "initial constraints from the spec";
+    if SpinIr.is_c_false init_form
+    then raise (Failure "Initial condition is trivially false");
+    if not (SpinIr.is_c_true init_form)
+    then tac#assert_top [init_form];
+
+    let result = gen_and_check_schemas_on_the_fly rt#solver sk bad_form deps tac in
+    rt#solver#set_need_model false;
+    rt#solver#pop_ctx;
+    result
 

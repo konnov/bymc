@@ -179,12 +179,17 @@ class mock_tac_t =
     end
 
 
-let compute_schema_tree_on_the_fly _ =
+let gen_and_check_schemas_on_the_fly _ =
     let sk = prepare_skeleton () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t in
     let bad_form = BinEx (GT, IntConst 2, IntConst 1) in
-    ignore (SchemaCheckerLtl.check_schema_tree_on_the_fly sk bad_form deps (tac :> tac_t));
+    let result =
+        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+            !SmtTest.solver sk bad_form deps (tac :> tac_t) in
+    assert_equal false result.SchemaCheckerLtl.m_is_err_found
+        ~msg:"Expected no errors, found one";
+
     let hist = tac#get_call_history in
     let check_prop = sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form) in
     let expected_hist = [
@@ -301,6 +306,6 @@ let suite = "schemaCheckerLtl-suite" >:::
     [
         "compute_schema_tree_on_the_fly"
             >::(bracket SmtTest.setup_smt2
-                compute_schema_tree_on_the_fly SmtTest.shutdown_smt2);
+                gen_and_check_schemas_on_the_fly SmtTest.shutdown_smt2);
     ]
 

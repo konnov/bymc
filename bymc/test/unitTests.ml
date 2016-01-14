@@ -3,6 +3,7 @@ open OUnit
 let _ =
     let all = "all-tests" >:::
     [
+        (*
         PipeCmdTest.suite;
         SmtTest.suite;
         AccumsTest.suite;
@@ -13,6 +14,7 @@ let _ =
         SummaryTest.suite;
         PorBoundsTest.suite;
         PosetTest.suite;
+        *)
         SchemaCheckerLtlTest.suite;
     ]
     in
