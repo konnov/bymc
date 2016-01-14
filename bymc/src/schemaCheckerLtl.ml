@@ -136,7 +136,7 @@ let gen_and_check_schemas_on_the_fly solver sk bad_form deps tac =
         let order = BatArray.to_list (linord_iter_get iter) in
         let id_order = List.map get_id order in
         let pp e = sprintf "%3s" (PSet.elem_str e) in
-        printf "    %s...\n" (str_join "  " (List.map pp id_order));
+        printf "  -> %s...\n" (str_join "  " (List.map pp id_order));
         result := check_one_order solver sk bad_form deps tac id_order;
         if not !result.m_is_err_found
         then linord_iter_next iter;
