@@ -129,6 +129,9 @@ let gen_and_check_schemas_on_the_fly solver sk bad_form deps tac =
         sprintf "%s < %s" (PSet.elem_str (get_id a)) (PSet.elem_str (get_id b))
     in
     printf "The partial order is:\n    %s\n\n" (str_join ", " (List.map pord prec_order));
+    let ppord (a, b) = sprintf "%d < %d" a b in
+    Debug.ltrace Trc.scl
+        (lazy (sprintf "The partial order is:\n    %s\n\n" (str_join ", " (List.map ppord prec_order))));
     (* enumerate all the linear extensions *)
     let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
     let iter = linord_iter_first n prec_order in
