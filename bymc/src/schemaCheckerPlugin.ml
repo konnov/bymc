@@ -141,7 +141,8 @@ class slps_checker_plugin_t (plugin_name: string) =
             let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
             BatEnum.iter set_type loc_vars;
 
-            if (Options.get_plugin_opt rt#caches#options "schema.tech") = Some "cav15"
+            let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
+            if tech = Some "cav15" || tech = Some "cav15-opt"
             then self#check_reachability_cav15 rt sprog sk ntt
             else self#check_ltl rt sprog sk ntt
 

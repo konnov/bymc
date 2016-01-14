@@ -329,6 +329,9 @@ let display_depth depth is_last =
 
 
 let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
+    let no_optimization =
+        (Options.get_plugin_opt rt#caches#options "schema.tech") <> Some "cav15-opt"
+    in
     let rec check_node depth
             { T.pre_rule_set; T.pre_cond; T.segment; T.succ } =
         (* check the context *)
@@ -365,8 +368,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
          *)
         (* uncomment the following line, if you want to get
            the same behavior as in the CAV'15 paper *)
-        (* let is_reachable = true in *)
-        let is_reachable = rt#solver#check in
+        let is_reachable = no_optimization || rt#solver#check in
         let is_error_found =
             if not is_reachable
             then false (* prune the subtree and do not report any error *)

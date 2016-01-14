@@ -122,16 +122,21 @@ let gen_and_check_schemas_on_the_fly solver sk bad_form deps tac =
                 if not (PSet.elem_eq a_id b_id) && PSet.mem b_id implications
                 then (get_num b_id, get_num a_id) :: orders
                 else orders)
-            [] all_ids
+            lst all_ids
     in
     let prec_order = PSetEltMap.fold add_orders deps.D.cond_imp [] in
+    let pord (a, b) =
+        sprintf "%s < %s" (PSet.elem_str (get_id a)) (PSet.elem_str (get_id b))
+    in
+    printf "The partial order is:\n    %s\n\n" (str_join ", " (List.map pord prec_order));
     (* enumerate all the linear extensions *)
     let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
     let iter = linord_iter_first n prec_order in
     while not (linord_iter_is_end iter) && not !result.m_is_err_found do
         let order = BatArray.to_list (linord_iter_get iter) in
         let id_order = List.map get_id order in
-        printf "  Exploring [%s]\n" (str_join "," (List.map PSet.elem_str id_order));
+        let pp e = sprintf "%3s" (PSet.elem_str e) in
+        printf "    %s...\n" (str_join "  " (List.map pp id_order));
         result := check_one_order solver sk bad_form deps tac id_order;
         if not !result.m_is_err_found
         then linord_iter_next iter;
