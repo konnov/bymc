@@ -93,7 +93,6 @@ let assert_iter_count nexpected iter =
     then count := !count + 1;
 
     while not (linord_iter_is_end iter) do
-        let order = linord_iter_get iter in
         linord_iter_next iter;
         if not (linord_iter_is_end iter)
         then count := !count + 1;

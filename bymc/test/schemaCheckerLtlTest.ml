@@ -301,6 +301,6 @@ let suite = "schemaCheckerLtl-suite" >:::
     [
         "compute_schema_tree_on_the_fly"
             >::(bracket SmtTest.setup_smt2
-                compute_schema_tree_on_the_fly SmtTest.reset_smt2);
+                compute_schema_tree_on_the_fly SmtTest.shutdown_smt2);
     ]
 
