@@ -86,3 +86,18 @@ let trace (mod_code: string) (text_fun: unit -> string) =
         flush stdout
     end
 
+(*
+  Trace output using lazy types, which are much nicer than functions.
+  To enable tracing of FOO and BAR, pass an option:
+    -O trace.mods=FOO,BAR.
+
+  When debugging a unit test, add manually calls to enable_tracing
+  and disable_tracing (see above).
+ *)
+let ltrace (mod_code: string) (text: string lazy_t) =
+    if Hashtbl.mem enabled_trace_modules mod_code
+    then begin
+        printf "@%s*%s* %s" (short_time_now ()) mod_code (Lazy.force text);
+        flush stdout
+    end
+
