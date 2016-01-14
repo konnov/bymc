@@ -124,24 +124,24 @@ end
  branches of the schema tree.  Here we introduce a general interface for
  different tactics that apply to a depth-first search over the schema tree.
 *)
-class type tac_t =
+class virtual tac_t =
     object
         (**
          Declare a new frame, which corresponds to a new state.
          This frame is pushed on the frame stack.
          *)
-        method push_frame: F.frame_t -> unit
+        method virtual push_frame: F.frame_t -> unit
 
         (**
          Return the frame on the top
          *)
-        method top: F.frame_t
+        method virtual top: F.frame_t
 
         (**
          Return the sequence of frames generated so far
          (starting with the initial one)
          *)
-        method frame_hist: F.frame_t list
+        method virtual frame_hist: F.frame_t list
 
         
         (**
@@ -149,7 +149,7 @@ class type tac_t =
          
          @param expressions the expressions to assert
          *)
-        method assert_top:
+        method virtual assert_top:
             Spin.token SpinIr.expr list -> unit
 
         
@@ -160,7 +160,7 @@ class type tac_t =
                 topmost frame and (Var _) refers to the second topmost
                 frame
          *)
-        method assert_top2:
+        method virtual assert_top2:
             Spin.token SpinIr.expr list -> unit
 
         (**
@@ -170,7 +170,7 @@ class type tac_t =
          @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
-        method enter_node: node_kind_t -> unit
+        method virtual enter_node: node_kind_t -> unit
 
         (**
          Check, whether the property is violated in the current frame.
@@ -183,7 +183,7 @@ class type tac_t =
          @param error_fun function handler to be called on error,
             e.g., to print the trace
          *)
-        method check_property:
+        method virtual check_property:
             Spin.token SpinIr.expr -> (F.frame_t list -> unit) -> bool
 
         (**
@@ -193,25 +193,25 @@ class type tac_t =
          @param node_kind indicates whether the node is
                 leaf (Leaf), or not (Intermediate)
          *)
-        method leave_node: node_kind_t -> unit
+        method virtual leave_node: node_kind_t -> unit
 
         (**
          Enter the new context, also called a branch in the schema tree.
          The functions enter/leave are called in the depth-first order.
          *)
-        method enter_context: unit
+        method virtual enter_context: unit
 
         (**
          Leave the context, also called a branch in the schema tree.
          The functions enter/leave are called in the depth-first order.
          *)
-        method leave_context: unit
+        method virtual leave_context: unit
 
         (**
          Push a rule into the SMT solver.
 
          @param rule_no a rule number
          *)
-        method push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
+        method virtual push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
     end
 

@@ -160,8 +160,10 @@ type frame_stack_elem_t =
 (**
  A simple implementation of tac_t with SMT.
  *)
-class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab): tac_t =
+class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
     object(self)
+        inherit tac_t
+
         val mutable m_frames = []
         val mutable m_depth  = 0
         
