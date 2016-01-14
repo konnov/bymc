@@ -650,6 +650,17 @@ let test_linord_iter_next_random _ =
     done
 
 
+let test_linord_iter_next_bugfix1 _ =
+    (*        (1)  (0)
+               |    |
+               |    |
+              (2)  (3)  (4)   *)
+    let mk_iter () = linord_iter_first 5 [(2, 1); (3, 0)] in
+    assert_no_dups (mk_iter ());
+    assert_iter_count 30 (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
 let suite = "poset-suite" >:::
     [
         "test_mk_po_matrix" >:: test_mk_po_matrix;
@@ -700,5 +711,9 @@ let suite = "poset-suite" >:::
             >:: test_linord_iter_next_1_line_14;
         "test_linord_iter_next_random"
             >:: test_linord_iter_next_random;
+
+        (* bugfixes *)
+        "test_linord_iter_next_bugfix1"
+            >:: test_linord_iter_next_bugfix1;
     ]
 
