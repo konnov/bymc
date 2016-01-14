@@ -114,7 +114,7 @@ class slps_checker_plugin_t (plugin_name: string) =
 
 
         method check_ltl rt sprog sk tt =
-            let deps = PorBounds.compute_deps rt#solver sk in
+            let deps = PorBounds.compute_deps ~against_only:false rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
 
             let check name form =

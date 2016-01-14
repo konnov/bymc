@@ -23,10 +23,81 @@ let declare_parameters sk tt =
     let append_expr e = ignore (!(SmtTest.solver)#append_expr e) in
     List.iter append_expr sk.Sk.assumes
 
+
+let pad_list lst len desired_len =
+    if len < desired_len
+    then lst @ (BatList.make (desired_len - len) "()")
+    else lst
+
+
+(*
+  Create a symbolic skeleton of the reliable broadcast (STRB).
+  *)
+let prepare_strb () =
+    let opts = Options.empty in
+    let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
+    let tt = new data_type_tab in
+    let pc = new_var "pc" in
+    let nlocs = 4 in
+    tt#set_type pc (mk_int_range 0 (nlocs + 1));
+    let x, n, t, f = new_var "x", new_var "n", new_var "t", new_var "f" in
+    n#set_symbolic; t#set_symbolic; f#set_symbolic;
+    List.iter
+        (fun v -> tt#set_type v (new data_type SpinTypes.TUNSIGNED))
+        [x; n; t; f];
+    let add_loc map i =
+        let loc = new_var (sprintf "loc%d" i) in
+        IntMap.add i loc map
+    in
+    let loc_map = List.fold_left add_loc IntMap.empty (range 0 (nlocs + 1)) in
+    let mk_eq loc_map loc_no e =
+        BinEx (EQ, Var (IntMap.find loc_no loc_map), e)
+    in
+    let g1 = (* x >= t + 1 - f *)
+        BinEx (GE, Var x,
+            BinEx (MINUS,
+                    (BinEx (PLUS, IntConst 1, Var t)),
+                    Var f))
+    in
+    let g2 = (* x >= n - t - f *)
+        BinEx (GE, Var x,
+            BinEx (MINUS,
+                    BinEx (MINUS, Var n, Var t),
+                    Var f))
+    in
+    let sk = {
+        Sk.name = "asyn-agreement";
+        Sk.nlocs = nlocs; Sk.locs = [ [0]; [1]; [2]; [3]; [4] ];
+        Sk.locals = [ pc ]; Sk.shared = [ x ]; Sk.params = [ n; t; f ];
+        Sk.nrules = 4;
+        Sk.rules = [
+            mk_rule 1 2 (IntConst 1) [ asgn x (sum x 1) ];
+            mk_rule 0 2 g1 [ asgn x (sum x 1) ];
+            mk_rule 0 3 g2 [ asgn x (sum x 1) ];
+            mk_rule 2 3 g2 [ keep x ];
+        ];
+        Sk.inits = [
+            BinEx (EQ, Var x, IntConst 0);
+            mk_eq loc_map 0 (BinEx (MINUS, Var n, Var f));
+            mk_eq loc_map 1 (IntConst 0);
+            mk_eq loc_map 2 (IntConst 0);
+            mk_eq loc_map 3 (IntConst 0);
+        ];
+        Sk.loc_vars = loc_map;
+        Sk.assumes = [
+            BinEx (GT, Var n, BinEx (MULT, IntConst 3, Var t));
+            BinEx (GE, Var t, Var f);
+            BinEx (GE, Var f, IntConst 0);
+        ];
+    }
+    in
+    declare_parameters sk tt;
+    SymbSkel.optimize_guards sk
+
 (*
   Create a symbolic skeleton. This is in fact the example that appeared in our CAV'15 paper.
   *)
-let prepare_skeleton () =
+let prepare_aba () =
     let opts = Options.empty in
     let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
     let tt = new data_type_tab in
@@ -87,7 +158,8 @@ let prepare_skeleton () =
         Sk.loc_vars = loc_map;
         Sk.assumes = [
             BinEx (GT, Var n, BinEx (MULT, IntConst 3, Var t));
-            BinEx (GE, Var t, Var f)
+            BinEx (GE, Var t, Var f);
+            BinEx (GE, Var f, IntConst 0);
         ];
     }
     in
@@ -179,8 +251,55 @@ class mock_tac_t =
     end
 
 
-let gen_and_check_schemas_on_the_fly _ =
-    let sk = prepare_skeleton () in
+let gen_and_check_schemas_on_the_fly_strb _ =
+    let sk = prepare_strb () in
+    let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
+    let tac = new mock_tac_t in
+    let bad_form = BinEx (GT, IntConst 2, IntConst 1) in
+    let result =
+        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+            !SmtTest.solver sk bad_form deps (tac :> tac_t) in
+    assert_equal false result.SchemaCheckerLtl.m_is_err_found
+        ~msg:"Expected no errors, found one";
+
+    let hist = tac#get_call_history in
+    let check_prop = sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form) in
+    let expected_hist = [
+        (* the only path *)
+        "(enter_context)";
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)";
+        check_prop;
+        "(enter_context)";
+        "(push_rule _ _ 0)"; (* enables g1 *)
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        check_prop;
+        "(enter_context)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)"; (* enables g2 *)
+        "(enter_node Leaf)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        "(push_rule _ _ 2)"; "(push_rule _ _ 3)";
+        check_prop;
+        "(leave_node Leaf)";
+        "(leave_context)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+    ] in
+    (* pad the histories *)
+    let nexpected, nfound = List.length expected_hist, List.length hist in
+    let expected_hist = pad_list expected_hist nexpected nfound in
+    let hist = pad_list hist nfound nexpected in
+    let pp a b = sprintf "    %-30s ----    %-30s" a b in
+    assert_equal expected_hist hist
+        ~msg:("The histories do not match (expected ---- encountered):\n"
+            ^ (str_join "\n" (List.map2 pp expected_hist hist)))
+
+
+let gen_and_check_schemas_on_the_fly_aba _ =
+    let sk = prepare_aba () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t in
     let bad_form = BinEx (GT, IntConst 2, IntConst 1) in
@@ -289,11 +408,6 @@ let gen_and_check_schemas_on_the_fly _ =
     ] in
     (* pad the histories *)
     let nexpected, nfound = List.length expected_hist, List.length hist in
-    let pad_list lst len desired_len =
-        if len < desired_len
-        then lst @ (BatList.make (desired_len - len) "()")
-        else lst
-    in
     let expected_hist = pad_list expected_hist nexpected nfound in
     let hist = pad_list hist nfound nexpected in
     let pp a b = sprintf "    %-30s ----    %-30s" a b in
@@ -304,8 +418,11 @@ let gen_and_check_schemas_on_the_fly _ =
 
 let suite = "schemaCheckerLtl-suite" >:::
     [
-        "compute_schema_tree_on_the_fly"
+        "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
-                gen_and_check_schemas_on_the_fly SmtTest.shutdown_smt2);
+                gen_and_check_schemas_on_the_fly_strb SmtTest.shutdown_smt2);
+        "compute_schema_tree_on_the_fly_aba"
+            >::(bracket SmtTest.setup_smt2
+                gen_and_check_schemas_on_the_fly_aba SmtTest.shutdown_smt2);
     ]
 
