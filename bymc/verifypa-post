@@ -18,6 +18,10 @@ function help_and_quit() {
     echo "  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)"
     echo "  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)"
     echo "  -h|--help: show this help message"
+    echo ""
+    echo " bymc_options are as follows:"
+    echo "  -O schema.tech=cav15    (do reachability as in the CAV'15 paper)"
+    echo "  -O schema.tech=ltl      (default, the latest technique including liveness)"
     exit 1
 }
 
