@@ -8,6 +8,7 @@ open SpinIrImp
 open SymbSkel
 
 open SchemaSmt
+open SchemaCheckerLtl
 
 let keep x = BinEx (EQ, UnEx (NEXT, Var x), Var x)
 
@@ -34,8 +35,6 @@ let pad_list lst len desired_len =
   Create a symbolic skeleton of the reliable broadcast (STRB).
   *)
 let prepare_strb () =
-    let opts = Options.empty in
-    let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
     let tt = new data_type_tab in
     let pc = new_var "pc" in
     let nlocs = 4 in
@@ -98,8 +97,6 @@ let prepare_strb () =
   Create a symbolic skeleton. This is in fact the example that appeared in our CAV'15 paper.
   *)
 let prepare_aba () =
-    let opts = Options.empty in
-    let caches = new Infra.pass_caches opts (new Infra.analysis_cache) in
     let tt = new data_type_tab in
     let pc = new_var "pc" in
     let nlocs = 5 in
@@ -259,7 +256,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk bad_form deps (tac :> tac_t) in
-    assert_equal false result.SchemaCheckerLtl.m_is_err_found
+    assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
     let hist = tac#get_call_history in
@@ -306,7 +303,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk bad_form deps (tac :> tac_t) in
-    assert_equal false result.SchemaCheckerLtl.m_is_err_found
+    assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
     let hist = tac#get_call_history in
@@ -416,6 +413,25 @@ let gen_and_check_schemas_on_the_fly_aba _ =
             ^ (str_join "\n" (List.map2 pp expected_hist hist)))
 
 
+let to_utl_corr _ =
+    let sk = prepare_strb () in
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let all_at_loc1 =
+        list_to_binex AND [eq0 0; eq0 2; eq0 3; eq0 4]
+    in
+    let ltl_form =
+        BinEx (AND, all_at_loc1, (UnEx (ALWAYS, eq0 4)))
+    in
+    let expected_utl =
+        TL_and [TL_p (And_Keq0 [4; 3; 0; 2]); TL_G (TL_p (And_Keq0 [4]))]
+    in
+    let result_utl = SchemaCheckerLtl.to_utl sk ltl_form in
+    assert_equal expected_utl result_utl
+        ~msg:(sprintf "Expected %s, found %s"
+            (utl_spec_s expected_utl) (utl_spec_s result_utl))
+
+
 let suite = "schemaCheckerLtl-suite" >:::
     [
         "compute_schema_tree_on_the_fly_strb"
@@ -424,5 +440,7 @@ let suite = "schemaCheckerLtl-suite" >:::
         "compute_schema_tree_on_the_fly_aba"
             >::(bracket SmtTest.setup_smt2
                 gen_and_check_schemas_on_the_fly_aba SmtTest.shutdown_smt2);
+        "to_utl_corr"
+            >::(bracket SmtTest.setup_smt2 to_utl_corr SmtTest.shutdown_smt2);
     ]
 
