@@ -67,20 +67,26 @@ let check_one_order solver sk bad_form deps tac id_order =
             (* assert that the condition is now unlocked (resp. locked) *)
             tac#assert_top [cond_expr];
 
-            (* try to find an execution
-                that does not enable new conditions and reaches a bad state *)
-            let new_uset, new_lset =
-                if is_unlocking
-                then (PSet.add id uset), lset
-                else uset, (PSet.add id lset)
-            in
-            tac#enter_node node_type;
             let result =
-                fail_first
-                    (lazy (check_steady_schema new_uset new_lset))
-                    (lazy (search new_uset new_lset tl))
+                if solver#check
+                then begin
+                    (* try to find an execution
+                        that does not enable new conditions and reaches a bad state *)
+                    let new_uset, new_lset =
+                        if is_unlocking
+                        then (PSet.add id uset), lset
+                        else uset, (PSet.add id lset)
+                    in
+                    tac#enter_node node_type;
+                    let res = fail_first
+                        (lazy (check_steady_schema new_uset new_lset))
+                        (lazy (search new_uset new_lset tl))
+                    in
+                    tac#leave_node node_type;
+                    res
+                end else (* this frame is unreachable *)
+                    { m_is_err_found = false; m_counterexample_filename = "" }
             in
-            tac#leave_node node_type;
             tac#leave_context;
             result
     in
