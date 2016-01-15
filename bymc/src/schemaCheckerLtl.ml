@@ -13,6 +13,11 @@ open PorBounds
 open SymbSkel
 open Poset
 open SchemaSmt
+open Spin
+open SpinIr
+
+exception IllegalLtl_error of string
+
 
 (**
  The record type of a result returned by check_schema_tree_on_the_fly.
@@ -21,6 +26,54 @@ type result_t = {
     m_is_err_found: bool;
     m_counterexample_filename: string;
 }
+
+
+(**
+ The type of atomic formulas supported by the model checker
+ *)
+type atomic_spec_t =
+    | And_Keq0 of int list          (** /\_{i \in X} k_i = 0 *)
+    | AndOr_Kne0 of int list list   (** /\_{X_j \in Y} \/_{i \in X_j} k_i \ne 0 *)
+
+
+(**
+ LTL(F, G) formulas as supported by the model checker
+ *)
+type utl_spec_t =
+    | TL_p of atomic_spec_t     (** a conjunction of atomic formulas *)
+    | TL_F of utl_spec_t        (** F \phi *)
+    | TL_G of utl_spec_t        (** G \phi *)
+    | TL_and of utl_spec_t list (* a conjunction *)
+
+
+(** Convert an atomic formula to a string *)
+let rec atomic_spec_s = function
+    | And_Keq0 indices ->
+        let p i = sprintf "k[%d] = 0" i in
+        sprintf "(%s)" (str_join " /\\ " (List.map p indices))
+
+    | AndOr_Kne0 disjs ->
+        let p i = sprintf "k[%d] != 0" i in
+        let pd indices =
+            sprintf "(%s)" (str_join " \\/ " (List.map p indices))
+        in
+        sprintf "(%s)" (str_join " /\\ " (List.map pd disjs))
+
+
+(** Convert a UTL formula to a string *)
+let rec utl_spec_s = function
+    | TL_p prop ->
+        atomic_spec_s prop
+
+    | TL_F form ->
+        sprintf "F (%s)" (utl_spec_s form)
+
+    | TL_G form ->
+        sprintf "G (%s)" (utl_spec_s form)
+
+    | TL_and forms ->
+        sprintf "(%s)" (str_join " /\\ " (List.map utl_spec_s forms))
+
 
 (* run the first function and if it does not fail, run the second one *)
 let fail_first a b =
@@ -160,6 +213,158 @@ let extract_spec type_tab s =
     | _ ->
         let m = sprintf "unsupported LTL formula: %s" (SpinIrImp.expr_s s) in
         raise (Ltl.Ltl_error m)
+
+
+type atomic_ext_t =
+    | Eq0 of int
+    | Ne0 of int
+    | ExtOrNe0 of int list
+    | ExtAndEq0 of int list
+    | ExtAndOrNe0 of int list list
+
+
+let atomic_ext_to_atomic = function
+    | Eq0 i -> And_Keq0 [i]
+    | Ne0 i -> AndOr_Kne0 [[i]]
+    | ExtOrNe0 is -> AndOr_Kne0 [is]
+    | ExtAndEq0 is -> And_Keq0 is
+    | ExtAndOrNe0 ors -> AndOr_Kne0 ors
+
+
+exception Unexpected_err    
+
+let merge_or = function
+    | (Ne0 i, Ne0 j) ->
+        ExtOrNe0 [i; j]
+
+    | (ExtOrNe0 is, Ne0 j) ->
+        ExtOrNe0 (j :: is)
+
+    | (Ne0 i, ExtOrNe0 js) ->
+        ExtOrNe0 (i :: js)
+
+    | (ExtOrNe0 is, ExtOrNe0 js) ->
+        ExtOrNe0 (is @ js)
+
+    | _ ->
+        raise Unexpected_err
+
+
+(* an amazing number of combinations *)
+let merge_and = function
+    | (Eq0 i, Eq0 j) ->
+        ExtAndEq0 [i; j]
+
+    | (ExtAndEq0 is, Eq0 j) ->
+        ExtAndEq0 (j :: is)
+
+    | (Eq0 j, ExtAndEq0 is) ->
+        ExtAndEq0 (j :: is)
+
+    | (ExtAndEq0 is, ExtAndEq0 js) ->
+        ExtAndEq0 (is @ js)
+
+    | (ExtOrNe0 is, ExtOrNe0 js) ->
+        ExtAndOrNe0 [is; js]
+
+    | (ExtAndOrNe0 ors, ExtAndOrNe0 ors2) ->
+        ExtAndOrNe0 (ors @ ors2)
+
+    | (ExtAndOrNe0 ors, ExtOrNe0 js) ->
+        ExtAndOrNe0 (js :: ors)
+
+    | (ExtOrNe0 js, ExtAndOrNe0 ors) ->
+        ExtAndOrNe0 (js :: ors)
+
+    | (Ne0 j, ExtOrNe0 is) ->
+        ExtAndOrNe0 [[j]; is]
+
+    | (ExtOrNe0 is, Ne0 j) ->
+        ExtAndOrNe0 [[j]; is]
+
+    | (Ne0 j, ExtAndOrNe0 ors) ->
+        ExtAndOrNe0 ([j] :: ors)
+
+    | (ExtAndOrNe0 ors, Ne0 j) ->
+        ExtAndOrNe0 ([j] :: ors)
+
+    | _ ->
+        raise Unexpected_err
+
+
+exception TemporalOp_found
+
+let to_utl sk exp =
+    let var_to_int i v map =
+        IntMap.add v#id i map
+    in
+    let rev_map = IntMap.fold var_to_int sk.Sk.loc_vars IntMap.empty in
+    let rec collect_prop = function
+        | BinEx (NE, Var v, IntConst 0) ->
+            Ne0 (IntMap.find v#id rev_map)
+
+        | BinEx (EQ, Var v, IntConst 0) ->
+            Eq0 (IntMap.find v#id rev_map)
+
+        | BinEx (OR, l, r) as e ->
+            begin
+                try merge_or (collect_prop l, collect_prop r)
+                with Unexpected_err ->
+                    let m = sprintf "Unexpected %s in %s"
+                            (SpinIrImp.expr_s e) (SpinIrImp.expr_s exp) in
+                    raise (IllegalLtl_error m)
+            end
+
+        | BinEx (AND, l, r) as e ->
+            begin
+                try merge_and (collect_prop l, collect_prop r)
+                with Unexpected_err ->
+                    let m = sprintf "Unexpected %s in %s"
+                            (SpinIrImp.expr_s e) (SpinIrImp.expr_s exp) in
+                    raise (IllegalLtl_error m)
+            end
+        
+        | UnEx (ALWAYS, _) 
+        | UnEx (EVENTUALLY, _)
+        | UnEx (NEXT, _)
+        | UnEx (UNTIL, _)
+        | UnEx (RELEASE, _) ->
+            raise TemporalOp_found
+
+        | _ as e ->
+            raise (IllegalLtl_error
+                (sprintf "Expected an and-or combinations of counter tests, found %s"
+                    (SpinIrImp.expr_s e)))
+    in
+    let rec transform = function
+        | BinEx (OR, _, _) as f ->
+            TL_p (atomic_ext_to_atomic (collect_prop f))
+
+        | BinEx (EQ, Var _, IntConst 0) as f ->
+            TL_p (atomic_ext_to_atomic (collect_prop f))
+
+        | BinEx (NE, Var _, IntConst 0) as f ->
+            TL_p (atomic_ext_to_atomic (collect_prop f))
+
+        | UnEx (ALWAYS, e) ->
+            TL_G (transform e)
+
+        | UnEx (EVENTUALLY, e) ->
+            TL_F (transform e)
+
+        | BinEx (AND, l, r) as f ->
+            begin
+                try TL_p (atomic_ext_to_atomic (collect_prop f))
+                with TemporalOp_found ->
+                    TL_and [transform l; transform r]
+            end
+
+        | _ as e ->
+            raise (IllegalLtl_error
+                (sprintf "Unexpected LTL formula: %s" (SpinIrImp.expr_s e)))
+
+    in
+    transform exp
 
 
 let find_error rt tt sk form_name ltl_form deps =
