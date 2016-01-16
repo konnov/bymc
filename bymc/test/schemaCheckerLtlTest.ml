@@ -413,7 +413,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
             ^ (str_join "\n" (List.map2 pp expected_hist hist)))
 
 
-let to_utl_corr _ =
+let extract_utl_corr _ =
     let sk = prepare_strb () in
     let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
     let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
@@ -426,7 +426,27 @@ let to_utl_corr _ =
     let expected_utl =
         TL_and [TL_p (And_Keq0 [4; 3; 0; 2]); TL_G (TL_p (And_Keq0 [4]))]
     in
-    let result_utl = SchemaCheckerLtl.to_utl sk ltl_form in
+    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    assert_equal expected_utl result_utl
+        ~msg:(sprintf "Expected %s, found %s"
+            (utl_spec_s expected_utl) (utl_spec_s result_utl))
+
+
+let extract_utl_relay _ =
+    let sk = prepare_strb () in
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let ne0 i = BinEx (NE, get_loc i, IntConst 0) in
+    let ex4 = ne0 4 in
+    let exNot4 = list_to_binex OR [ne0 0; ne0 2; ne0 3; ne0 4] in
+    let ltl_form =
+        UnEx (EVENTUALLY,
+            BinEx (AND, ex4, (UnEx (ALWAYS, exNot4))))
+    in
+    let expected_utl =
+        TL_F (TL_and [TL_p (AndOr_Kne0 [[4]]); TL_G (TL_p (AndOr_Kne0 [[4; 3; 0; 2]]))])
+    in
+    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
     assert_equal expected_utl result_utl
         ~msg:(sprintf "Expected %s, found %s"
             (utl_spec_s expected_utl) (utl_spec_s result_utl))
@@ -440,7 +460,9 @@ let suite = "schemaCheckerLtl-suite" >:::
         "compute_schema_tree_on_the_fly_aba"
             >::(bracket SmtTest.setup_smt2
                 gen_and_check_schemas_on_the_fly_aba SmtTest.shutdown_smt2);
-        "to_utl_corr"
-            >::(bracket SmtTest.setup_smt2 to_utl_corr SmtTest.shutdown_smt2);
+        "extract_utl_corr"
+            >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
+        "extract_utl_relay"
+            >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
     ]
 
