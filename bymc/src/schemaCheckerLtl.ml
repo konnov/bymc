@@ -294,7 +294,7 @@ let merge_and = function
 
 exception TemporalOp_found
 
-let to_utl sk exp =
+let extract_utl sk exp =
     let var_to_int i v map =
         IntMap.add v#id i map
     in

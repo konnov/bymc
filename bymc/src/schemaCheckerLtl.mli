@@ -72,6 +72,6 @@ val gen_and_check_schemas_on_the_fly:
  @param form a spin expression that encodes an ltl formula.
  @return an LTL(F,G)-formula over counters.
  *)
-val to_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> utl_spec_t
+val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> utl_spec_t
 
 
