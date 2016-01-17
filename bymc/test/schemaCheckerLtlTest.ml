@@ -31,6 +31,20 @@ let pad_list lst len desired_len =
     else lst
 
 
+let assert_eq_hist expected_hist hist =
+    let nexpected, nfound = List.length expected_hist, List.length hist in
+    let expected_hist = pad_list expected_hist nexpected nfound in
+    let hist = pad_list hist nfound nexpected in
+    let pp a b =
+        let delim = if a = b then "======" else "<<<>>>" in
+        sprintf "    %-30s %s    %-30s" a delim b
+    in
+    assert_equal expected_hist hist
+        ~msg:("The histories do not match (expected <<<>>> encountered):\n"
+            ^ (str_join "\n" (List.map2 pp expected_hist hist)))
+
+
+
 (*
   Create a symbolic skeleton of the reliable broadcast (STRB).
   *)
@@ -91,7 +105,37 @@ let prepare_strb () =
     }
     in
     declare_parameters sk tt;
-    SymbSkel.optimize_guards sk
+    SymbSkel.optimize_guards sk, tt
+
+
+let make_strb_unforg sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let all_at_loc0 =
+        list_to_binex AND [eq0 1; eq0 2; eq0 3; eq0 4]
+    in
+    BinEx (AND, all_at_loc0, (UnEx (EVENTUALLY, eq0 4)))
+
+
+let make_strb_corr sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let all_at_loc1 =
+        list_to_binex AND [eq0 0; eq0 2; eq0 3; eq0 4]
+    in
+    BinEx (AND, all_at_loc1, (UnEx (ALWAYS, eq0 4)))
+
+
+let make_strb_relay sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let ne0 i = BinEx (NE, get_loc i, IntConst 0) in
+    let ex4 = ne0 4 in
+    let exNot4 = list_to_binex OR [ne0 0; ne0 2; ne0 3; ne0 4] in
+    UnEx (EVENTUALLY,
+        BinEx (AND, ex4, (UnEx (ALWAYS, exNot4))))
+
+
 
 (*
   Create a symbolic skeleton. This is in fact the example that appeared in our CAV'15 paper.
@@ -161,7 +205,16 @@ let prepare_aba () =
     }
     in
     declare_parameters sk tt;
-    SymbSkel.optimize_guards sk
+    SymbSkel.optimize_guards sk, tt
+
+
+let make_aba_unforg sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let all_at_loc0 =
+        list_to_binex AND [eq0 1; eq0 2; eq0 3; eq0 4]
+    in
+    BinEx (AND, all_at_loc0, (UnEx (EVENTUALLY, eq0 4)))
 
 
 type frame_stack_elem_t =
@@ -213,9 +266,19 @@ class mock_tac_t =
         method push_frame f =
             m_frames <- (Frame f) :: m_frames
 
-        method assert_top _ = ()
+        method assert_top es =
+            let each e =
+                let tag = sprintf "(assert_top %s _)" (SpinIrImp.expr_s e) in
+                m_call_stack <- tag :: m_call_stack
+            in
+            List.iter each es
 
-        method assert_top2 _ = ()
+        method assert_top2 es =
+            let each e =
+                let tag = sprintf "(assert_top2 %s _)" (SpinIrImp.expr_s e) in
+                m_call_stack <- tag :: m_call_stack
+            in
+            List.iter each es
 
         method enter_node tp =
             let tag =
@@ -249,13 +312,19 @@ class mock_tac_t =
 
 
 let gen_and_check_schemas_on_the_fly_strb _ =
-    let sk = prepare_strb () in
+    let sk, tt = prepare_strb () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t in
-    let bad_form = BinEx (GT, IntConst 2, IntConst 1) in
+    let ltl_form = make_strb_unforg sk in
+    let spec = extract_safety_or_utl tt sk ltl_form in
+    let bad_form =
+        match spec with
+        | SchemaCheckerLtl.Safety (_, bf) -> bf
+        | _ -> assert_failure "Unexpected formula"
+    in
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk bad_form deps (tac :> tac_t) in
+            !SmtTest.solver sk spec deps (tac :> tac_t) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
@@ -265,15 +334,18 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         (* the only path *)
         "(enter_context)";
         "(enter_node Intermediate)";
+        "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g1 *)
+        "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 1)"; (* enables g2 *)
+        "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 3)";
@@ -285,24 +357,23 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(leave_node Intermediate)";
         "(leave_context)";
     ] in
-    (* pad the histories *)
-    let nexpected, nfound = List.length expected_hist, List.length hist in
-    let expected_hist = pad_list expected_hist nexpected nfound in
-    let hist = pad_list hist nfound nexpected in
-    let pp a b = sprintf "    %-30s ----    %-30s" a b in
-    assert_equal expected_hist hist
-        ~msg:("The histories do not match (expected ---- encountered):\n"
-            ^ (str_join "\n" (List.map2 pp expected_hist hist)))
+    assert_eq_hist expected_hist hist
 
 
 let gen_and_check_schemas_on_the_fly_aba _ =
-    let sk = prepare_aba () in
+    let sk, tt = prepare_aba () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t in
-    let bad_form = BinEx (GT, IntConst 2, IntConst 1) in
+    let ltl_form = make_aba_unforg sk in
+    let spec = extract_safety_or_utl tt sk ltl_form in
+    let bad_form =
+        match spec with
+        | SchemaCheckerLtl.Safety (_, bf) -> bf
+        | _ -> assert_failure "Unexpected formula"
+    in
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk bad_form deps (tac :> tac_t) in
+            !SmtTest.solver sk spec deps (tac :> tac_t) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
@@ -312,15 +383,18 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         (* the first path *)
         "(enter_context)";
         "(enter_node Intermediate)";
+        "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g1 *)
+        "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 0)"; "(push_rule _ _ 3)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 0)"; "(push_rule _ _ 3)"; (* enables g2 *)
+        "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)";
@@ -328,6 +402,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(enter_context)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
+        "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -343,22 +418,26 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         (* the second path *)
         "(enter_context)";
         "(enter_node Intermediate)";
+        "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g2 *)
+        "(assert_top (y >= ((t + 1) - f)) _)"; (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g3 *)
+        "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
-        "(push_rule _ _ 4)"; "(push_rule _ _ 5)"; (* enables g1 *)
+        "(push_rule _ _ 4)"; "(push_rule _ _ 5)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 5)"; (* enables g1 *)
+        "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)";  (* g1 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -374,15 +453,18 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         (* the third path *)
         "(enter_context)";
         "(enter_node Intermediate)";
+        "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g2 *)
+        "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g1 *)
+        "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)";
@@ -390,6 +472,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(enter_context)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
+        "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -403,26 +486,75 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(leave_node Intermediate)";
         "(leave_context)";
     ] in
-    (* pad the histories *)
-    let nexpected, nfound = List.length expected_hist, List.length hist in
-    let expected_hist = pad_list expected_hist nexpected nfound in
-    let hist = pad_list hist nfound nexpected in
-    let pp a b = sprintf "    %-30s ----    %-30s" a b in
-    assert_equal expected_hist hist
-        ~msg:("The histories do not match (expected ---- encountered):\n"
-            ^ (str_join "\n" (List.map2 pp expected_hist hist)))
+    assert_eq_hist expected_hist hist
+
+
+let gen_and_check_schemas_on_the_fly_strb_corr _ =
+    let sk, tt = prepare_strb () in
+    let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
+    let tac = new mock_tac_t in
+    let ltl_form = make_strb_corr sk in
+    let spec = extract_safety_or_utl tt sk ltl_form in
+    let result =
+        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+            !SmtTest.solver sk spec deps (tac :> tac_t) in
+    assert_equal false result.m_is_err_found
+        ~msg:"Expected no errors, found one";
+
+    let hist = tac#get_call_history in
+    let expected_hist = [
+        (* a schema that does not unlock anything and goes to a loop *)
+        "(enter_context)";
+        "(enter_node Intermediate)";
+             (* the initial constraint *)
+        "(assert_top ((((loc4 == 0) && (loc3 == 0)) && (loc0 == 0)) && (loc2 == 0)) _)";
+        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 0)";
+        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
+        "(enter_node Loop)";            (* entering the loop *)
+        "(push_rule _ _ 0)";
+        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
+        "(assert_frame_eq 1 3)";    (* the reached frame equals to the loop start *)
+        "(check_property 1 _)";     (* the point where the property should be checked *)
+        "(leave_node Loop)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+
+        (* TODO: finish the other schemas *)
+
+        (* a schema that unlocks g1, then g2 and then reaches a loop *)
+        "(enter_context)";
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)";
+        "(enter_context)";
+        "(push_rule _ _ 0)"; (* enables g1 *)
+        "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        "(enter_context)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)"; (* enables g2 *)
+        "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        "(push_rule _ _ 2)"; "(push_rule _ _ 3)";
+        "(enter_node Loop)";                      (* entering the loop *)
+        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        "(push_rule _ _ 2)"; "(push_rule _ _ 3)";
+        "(check_property 1 _)";     (* the point where the property should be checked *)
+        "(leave_node Loop)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+    ] in
+    assert_eq_hist expected_hist hist
 
 
 let extract_utl_corr _ =
-    let sk = prepare_strb () in
-    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
-    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
-    let all_at_loc1 =
-        list_to_binex AND [eq0 0; eq0 2; eq0 3; eq0 4]
-    in
-    let ltl_form =
-        BinEx (AND, all_at_loc1, (UnEx (ALWAYS, eq0 4)))
-    in
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_corr sk in
     let expected_utl =
         TL_and [TL_p (And_Keq0 [4; 3; 0; 2]); TL_G (TL_p (And_Keq0 [4]))]
     in
@@ -433,16 +565,8 @@ let extract_utl_corr _ =
 
 
 let extract_utl_relay _ =
-    let sk = prepare_strb () in
-    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
-    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
-    let ne0 i = BinEx (NE, get_loc i, IntConst 0) in
-    let ex4 = ne0 4 in
-    let exNot4 = list_to_binex OR [ne0 0; ne0 2; ne0 3; ne0 4] in
-    let ltl_form =
-        UnEx (EVENTUALLY,
-            BinEx (AND, ex4, (UnEx (ALWAYS, exNot4))))
-    in
+    let sk, _ = prepare_strb () in
+    let ltl_form = make_strb_relay sk in
     let expected_utl =
         TL_F (TL_and [TL_p (AndOr_Kne0 [[4]]); TL_G (TL_p (AndOr_Kne0 [[4; 3; 0; 2]]))])
     in
@@ -454,15 +578,20 @@ let extract_utl_relay _ =
 
 let suite = "schemaCheckerLtl-suite" >:::
     [
+        "extract_utl_corr"
+            >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
+        "extract_utl_relay"
+            >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
+
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
                 gen_and_check_schemas_on_the_fly_strb SmtTest.shutdown_smt2);
         "compute_schema_tree_on_the_fly_aba"
             >::(bracket SmtTest.setup_smt2
                 gen_and_check_schemas_on_the_fly_aba SmtTest.shutdown_smt2);
-        "extract_utl_corr"
-            >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
-        "extract_utl_relay"
-            >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
+
+        "gen_and_check_schemas_on_the_fly_strb_corr"
+            >::(bracket SmtTest.setup_smt2
+                gen_and_check_schemas_on_the_fly_strb_corr SmtTest.shutdown_smt2);
     ]
 
