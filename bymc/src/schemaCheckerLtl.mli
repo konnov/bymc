@@ -36,6 +36,15 @@ type utl_spec_t =
     | TL_G of utl_spec_t        (** G \phi *)
     | TL_and of utl_spec_t list (* a conjunction *)
 
+(**
+ A classification of temporal formulas
+ *)
+type spec_t =
+    | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
+        (* a safety violation: init_form -> F bad_form *)
+    | UTL of utl_spec_t
+        (* a UTL formula *)
+
 
 (** Convert an atomic formula to a string *)
 val atomic_spec_s: atomic_spec_t -> string
@@ -61,7 +70,7 @@ val find_error:
  *)
 val gen_and_check_schemas_on_the_fly:
     Smt.smt_solver
-        -> SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr
+        -> SymbSkel.Sk.skel_t -> spec_t
         -> PorBounds.D.deps_t -> SchemaSmt.tac_t
         -> result_t
 
@@ -74,4 +83,13 @@ val gen_and_check_schemas_on_the_fly:
  *)
 val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> utl_spec_t
 
+(**
+ Try to convert an LTL formula to UTL.
+
+ @param form a spin expression that encodes an ltl formula.
+ @return an LTL(F,G)-formula over counters.
+ *)
+val extract_safety_or_utl:
+    SpinIr.data_type_tab -> SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr
+    -> spec_t
 

@@ -18,6 +18,11 @@ open SpinIr
 
 exception IllegalLtl_error of string
 
+(* The initial state and the state where the loop starts
+   have fixed indices in the partial order.
+ *)
+let po_init = 1
+let po_loop = 0
 
 (**
  The record type of a result returned by check_schema_tree_on_the_fly.
@@ -44,6 +49,135 @@ type utl_spec_t =
     | TL_F of utl_spec_t        (** F \phi *)
     | TL_G of utl_spec_t        (** G \phi *)
     | TL_and of utl_spec_t list (* a conjunction *)
+
+
+(**
+ A classification of temporal formulas
+ *)
+type spec_t =
+    | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
+        (* a safety violation: init_form -> F bad_form *)
+    | UTL of utl_spec_t
+        (* a UTL formula *)
+
+
+(**
+ Find the propositional subformulas that are not covered by a temporal operator.
+ *)
+let find_uncovered_utl_props form =
+    let rec collect col = function
+    | TL_p prop ->
+        prop :: col
+
+    | TL_and fs ->
+        List.fold_left collect col fs
+
+    | _ -> (* skip the temporal operators *)
+        col
+    in
+    collect [] form
+
+
+(**
+ Find the propositional subformulas that are not covered by a temporal operator
+ in an LTL formula. Similar to find_uncovered_utl_props, but works for LTL, not UTL.
+ *)
+let keep_uncovered_ltl_props form =
+    (* a special expression denoting a deleted subexpression *)
+    let deleted = IntConst (-1) in
+    let fuse op l r =
+        if l = deleted
+        then r
+        else if r = deleted
+            then l
+            else BinEx (op, l, r)
+    in
+    (* remove everything but the propositional formulas *)
+    let rec keep = function
+    | BinEx(EQ, _, _)
+    | BinEx(NE, _, _)
+    | BinEx(LT, _, _)
+    | BinEx(LE, _, _)
+    | BinEx(GT, _, _)
+    | BinEx(GE, _, _) as exp ->
+        exp
+
+    | UnEx (NEG, exp) ->
+        UnEx (NEG, keep exp)
+
+    | BinEx (AND, l, r) ->
+        fuse AND (keep l) (keep r)
+
+    | BinEx (OR, l, r) ->
+        fuse OR (keep l) (keep r)
+
+    | BinEx (IMPLIES, l, r) ->
+        fuse IMPLIES (keep l) (keep r)
+
+    | UnEx (EVENTUALLY, _)
+    | UnEx (ALWAYS, _)
+    | UnEx (NEXT, _) ->         (* although we do not support nexttime *)
+        deleted
+
+    | BinEx (UNTIL, _, _)       (* nor until and release *)
+    | BinEx (RELEASE, _, _) ->
+        deleted
+
+    | _ as e ->
+        raise (Failure ("Unexpected formula: " ^ (SpinIrImp.expr_s e)))
+    in
+    let res = keep form in
+    if res = deleted
+    then IntConst 1 (* just true *)
+    else res
+
+
+let find_temporal_subformulas form =
+    let rec collect col = function
+    | TL_F _ as f ->
+        f :: col
+
+    | TL_G _ as f ->
+        f :: col
+
+    | TL_and fs ->
+        List.fold_left collect col fs
+
+    | _ -> (* skip the propositional subformulas *)
+        col
+    in
+    collect [] form
+
+
+let utl_to_expr sk form =
+    let eq0 i =
+        BinEx (EQ, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
+    in
+    let ne0 i =
+        BinEx (NE, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
+    in
+    let atomic_to_expr = function
+    | And_Keq0 is ->
+        list_to_binex AND (List.map eq0 is)
+
+    | AndOr_Kne0 ors ->
+        let mk_or is = list_to_binex OR (List.map ne0 is) in
+        list_to_binex AND (List.map mk_or ors)
+    in
+    let rec trans = function
+    | TL_p ae ->
+        atomic_to_expr ae
+
+    | TL_F f ->
+        UnEx (EVENTUALLY, trans f)
+
+    | TL_G f ->
+        UnEx (ALWAYS, trans f)
+
+    | TL_and fs ->
+        list_to_binex AND (List.map trans fs)
+    in
+    trans form
 
 
 (** Convert an atomic formula to a string *)
@@ -93,7 +227,40 @@ let get_unlocked_rules sk deps uset lset =
     PorBounds.unpack_rule_set unlocked_rule_nos deps.D.full_segment
 
 
-let check_one_order solver sk bad_form deps tac id_order =
+(**
+ The elements of the constructed partial order
+ *)
+type po_elem_t =
+    | PO_init of utl_spec_t (** the initial state and the associated formulas *)
+    | PO_loop_start         (** the loop start point *)
+    | PO_guard of PSet.elt  (** an unlocking/locking guard *)
+    | PO_tl of utl_spec_t   (** an extremal appearance of a temporal-logic formula *)
+
+
+let po_elem_s sk = function
+    | PO_guard e ->
+        sprintf "G%s" (PSet.elem_str e)
+
+    | PO_tl form ->
+        sprintf "TL(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
+
+    | PO_loop_start ->
+        "LOOP"
+
+    | PO_init form ->
+        sprintf "INIT(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
+
+
+let check_one_order solver sk spec deps tac elem_order =
+    let is_safety, safety_init, safety_bad =
+        (* we have to treat safety differently from the general case *)
+        match spec with
+        | Safety (init, bad) -> true, init, bad
+        | UTL _ -> false, IntConst 1, IntConst 0 
+    in
+    let node_type tl =
+        if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
+    in
     let check_steady_schema uset lset =
         (* push all the unlocked rules *)
         (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk);
@@ -101,7 +268,8 @@ let check_one_order solver sk bad_form deps tac id_order =
         let on_error frame_hist =
             fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist) (* FIXME *)
         in
-        if tac#check_property bad_form on_error
+        (* check, whether a safety property is violated *)
+        if tac#check_property safety_bad on_error
         then { m_is_err_found = true; m_counterexample_filename = !fname }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
@@ -110,8 +278,21 @@ let check_one_order solver sk bad_form deps tac id_order =
             (* no errors: we have already checked the prefix *)
             { m_is_err_found = false; m_counterexample_filename = "" }
 
-        | id :: tl -> (* activate the context, check a schema and go further *)
-            let node_type = (if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
+        | (PO_init utl_form) :: tl ->
+            (* treat the initial state *)
+            tac#enter_context;
+            if not is_safety
+            then tac#assert_top [utl_to_expr sk utl_form]
+            else if not (SpinIr.is_c_true safety_init)
+                then tac#assert_top [safety_init];
+                
+            let result = prune_or_continue uset lset (node_type tl) tl in
+            tac#leave_context;
+            result
+
+        | (PO_guard id) :: tl ->
+            (* an unlocking/locking guard:
+               activate the context, check a schema and continue *)
             let is_unlocking = PSet.mem id deps.D.umask in
             let cond_expr = PSetEltMap.find id deps.D.cond_map in
             tac#enter_context;
@@ -119,43 +300,135 @@ let check_one_order solver sk bad_form deps tac id_order =
             (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk) ;
             (* assert that the condition is now unlocked (resp. locked) *)
             tac#assert_top [cond_expr];
-
-            let result =
-                if solver#check
-                then begin
-                    (* try to find an execution
-                        that does not enable new conditions and reaches a bad state *)
-                    let new_uset, new_lset =
-                        if is_unlocking
-                        then (PSet.add id uset), lset
-                        else uset, (PSet.add id lset)
-                    in
-                    tac#enter_node node_type;
-                    let res = fail_first
-                        (lazy (check_steady_schema new_uset new_lset))
-                        (lazy (search new_uset new_lset tl))
-                    in
-                    tac#leave_node node_type;
-                    res
-                end else (* this frame is unreachable *)
-                    { m_is_err_found = false; m_counterexample_filename = "" }
+            let new_uset, new_lset =
+                if is_unlocking
+                then (PSet.add id uset), lset
+                else uset, (PSet.add id lset)
             in
+            let result = prune_or_continue new_uset new_lset (node_type tl) tl in
             tac#leave_context;
             result
+
+        | PO_loop_start :: tl ->
+            if is_safety    (* it should be the last one, anyways *)
+            then { m_is_err_found = false; m_counterexample_filename = "" }
+            else raise (Failure "Not implemented yet")
+
+        | _ ->
+            raise (Failure "Not implemented yet")
+
+        (*
+        | (PO_tl (TL_F phi)) :: tl ->
+            let node_type = (if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
+            (* assert all the formulas on the propositional level *)
+            List.iter tac#assert_top (find_uncovered_utl_props phi);
+            *)
+    and prune_or_continue uset lset node_type seq =
+        if solver#check
+        then begin
+            (* try to find an execution
+                that does not enable new conditions and reaches a bad state *)
+            tac#enter_node node_type;
+            let res = fail_first
+                (lazy (check_steady_schema uset lset))
+                (lazy (search uset lset seq))
+            in
+            tac#leave_node node_type;
+            res
+        end else (* the current frame is unreachable *)
+            { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    (* check the empty context first *)
-    let first_type =
-        (if id_order = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
-    tac#enter_context;
-    tac#enter_node first_type;
-    let result =
-        fail_first
-            (lazy (check_steady_schema PSet.empty PSet.empty))
-            (lazy (search PSet.empty PSet.empty id_order))
+    (* evaluate the order, but in the case of safety, immediately prone
+        those orders that do not go inside the loops *)
+    if not is_safety || (BatList.last elem_order) = PO_loop_start
+    then search PSet.empty PSet.empty elem_order
+    else { m_is_err_found = false; m_counterexample_filename = "" }
+
+
+(**
+ Add all partial orders induced by the unlocking/locking guards.
+ *)
+let poset_mixin_guards deps start_pos prec_order rev_map =
+    let uconds = deps.D.uconds and lconds = deps.D.lconds in
+    let all_ids = List.map (fun (_, id, _, _) -> id) (uconds @ lconds) in
+    (* rename the condition ids to the range 0 .. nconds - 1 *)
+    let assign_num (n, map) id = (n + 1, PSetEltMap.add id n map) in
+    let end_pos, enum_map = List.fold_left assign_num (start_pos, PSetEltMap.empty) all_ids in
+    let get_num id =
+        try PSetEltMap.find id enum_map
+        with Not_found ->
+            raise (Failure "Not_found in poset_mixin_guards")
     in
-    tac#leave_node first_type;
-    tac#leave_context;
-    result
+    let new_rev_map =
+        PSetEltMap.fold (fun k v m -> IntMap.add v (PO_guard k) m) enum_map rev_map in
+
+    (* construct the partial order *)
+    let add_implications a_id implications lst =
+        (* b should come before a, as a implies b *)
+        let add_impl orders b_id =
+            if not (PSet.elem_eq a_id b_id) && PSet.mem b_id implications
+            then (get_num b_id, get_num a_id) :: orders
+            else orders
+        in
+        List.fold_left add_impl lst all_ids
+    in
+    let impl_order = PSetEltMap.fold add_implications deps.D.cond_imp [] in
+    let after_init lst i = (po_init, i) :: lst in
+    let new_order =
+        List.fold_left after_init impl_order (range start_pos end_pos) in
+    (*
+    let pord (a, b) =
+        sprintf "%s < %s" (PSet.elem_str (get_id a)) (PSet.elem_str (get_id b))
+    in
+    printf "The partial order is:\n    %s\n\n" (str_join ", " (List.map pord new_order));
+    let ppord (a, b) = sprintf "%d < %d" a b in
+    Debug.ltrace Trc.scl
+        (lazy (sprintf "The partial order is:\n    %s\n\n" (str_join ", " (List.map ppord new_order))));
+        *)
+    end_pos, new_order @ prec_order, new_rev_map
+
+
+(**
+ Add all partial orders induced by the unary temporal logic.
+ *)
+let poset_make_utl form =
+    (* positions 1 and 0 correspond to the initial state
+       and the start of the loop respectively *)
+    let add_form pos form map =
+        if IntMap.mem pos map
+        then IntMap.add pos (form :: (IntMap.find pos map)) map
+        else IntMap.add pos [form] map
+    in
+    let rec make in_loop (pos, orders, map) = function
+    | TL_p _ as e ->
+        pos, orders, (add_form pos e map)
+
+    | TL_and fs ->
+        List.fold_left (make in_loop) (pos, orders, map) fs
+
+    | TL_G psi as phi ->
+        let props = List.map (fun ae -> TL_p ae) (find_uncovered_utl_props psi) in
+        let nm = add_form pos (TL_G (TL_and props)) map in
+        (* all subformulas should be also true in the loop part *)
+        make true (pos, orders, nm) psi
+
+    | TL_F psi as phi ->
+        let new_orders =
+            if in_loop
+            (* pos + 1 must be in the loop *)
+            then (po_loop, pos + 1) :: (pos, pos + 1) :: orders
+            (* pos + 1 comes after pos *)
+            else (pos, pos + 1) :: orders
+        in
+        make in_loop (pos + 1, new_orders, map) psi
+    in
+    let n, orders, map = make false (po_init, [], IntMap.empty) form in
+    let remap i fs =
+        if i = po_init
+        then PO_init (TL_and fs)
+        else PO_tl (TL_and fs)
+    in
+    n, orders, (IntMap.mapi remap map)
 
 
 (**
@@ -163,56 +436,41 @@ let check_one_order solver sk bad_form deps tac id_order =
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
-let gen_and_check_schemas_on_the_fly solver sk bad_form deps tac =
-    let uconds = deps.D.uconds and lconds = deps.D.lconds in
-    let all_ids = List.map (fun (_, id, _, _) -> id) (uconds @ lconds) in
-    (* rename the condition ids to the range 0 .. nconds - 1 *)
-    let assign_num (n, map) id = (n + 1, PSetEltMap.add id n map) in
-    let n, enum_map = List.fold_left assign_num (0, PSetEltMap.empty) all_ids in
-    let get_num id = PSetEltMap.find id enum_map in
-    let rev_map =
-        PSetEltMap.fold (fun k v m -> IntMap.add v k m) enum_map IntMap.empty in
-    let get_id num = IntMap.find num rev_map in
-    (* construct the partial order *)
-    let add_orders a_id implications lst =
-        (* b should come before a, as a implies b *)
-        List.fold_left
-            (fun orders b_id ->
-                if not (PSet.elem_eq a_id b_id) && PSet.mem b_id implications
-                then (get_num b_id, get_num a_id) :: orders
-                else orders)
-            lst all_ids
+let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
+    let nelems, order, rev_map =
+        match spec with
+        | UTL utl_form ->
+            (* add all the F-formulas to the poset *)
+            let n, o, m = poset_make_utl utl_form in
+            n, (po_init, po_loop) :: o, m
+
+        | Safety (_, _) ->
+            (* add the initial state and the loop (the loop will be ignored) *)
+            let inite = PO_init (TL_and []) in (* safety is handled explicitely *)
+            2, [(po_init, po_loop)],
+                (IntMap.add po_loop PO_loop_start (IntMap.singleton po_init inite))
     in
-    let prec_order = PSetEltMap.fold add_orders deps.D.cond_imp [] in
-    let pord (a, b) =
-        sprintf "%s < %s" (PSet.elem_str (get_id a)) (PSet.elem_str (get_id b))
+    (* add the guards *)
+    let size, order, rev_map = poset_mixin_guards deps nelems order rev_map in
+    let get_elem num =
+        try IntMap.find num rev_map
+        with Not_found ->
+            raise (Failure 
+                (sprintf "Not_found (key=%d) in gen_and_check_schemas_on_the_fly" num))
     in
-    printf "The partial order is:\n    %s\n\n" (str_join ", " (List.map pord prec_order));
-    let ppord (a, b) = sprintf "%d < %d" a b in
-    Debug.ltrace Trc.scl
-        (lazy (sprintf "The partial order is:\n    %s\n\n" (str_join ", " (List.map ppord prec_order))));
     (* enumerate all the linear extensions *)
     let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
-    let iter = linord_iter_first n prec_order in
+    let iter = linord_iter_first size order in
     while not (linord_iter_is_end iter) && not !result.m_is_err_found do
         let order = BatArray.to_list (linord_iter_get iter) in
-        let id_order = List.map get_id order in
-        let pp e = sprintf "%3s" (PSet.elem_str e) in
-        printf "  -> %s...\n" (str_join "  " (List.map pp id_order));
-        result := check_one_order solver sk bad_form deps tac id_order;
+        let elem_order = List.map get_elem order in
+        let pp e = sprintf "%4s" (po_elem_s sk e) in
+        printf "  -> %s...\n" (str_join "  " (List.map pp elem_order));
+        result := check_one_order solver sk spec deps tac elem_order;
         if not !result.m_is_err_found
         then linord_iter_next iter;
     done;
     !result
-
-
-(* XXX: extend to LTL(F, G) *)
-let extract_spec type_tab s =
-    match Ltl.classify_spec type_tab s with
-    | Ltl.CondSafety (init, bad) -> (init, bad)
-    | _ ->
-        let m = sprintf "unsupported LTL formula: %s" (SpinIrImp.expr_s s) in
-        raise (Ltl.Ltl_error m)
 
 
 type atomic_ext_t =
@@ -338,7 +596,13 @@ let extract_utl sk exp =
     in
     let rec transform = function
         | BinEx (OR, _, _) as f ->
-            TL_p (atomic_ext_to_atomic (collect_prop f))
+            begin
+                try TL_p (atomic_ext_to_atomic (collect_prop f))
+                with TemporalOp_found ->
+                    raise (IllegalLtl_error
+                        ("Unexpected OR with a temporal operator inside: "
+                            ^ (SpinIrImp.expr_s f)))
+            end
 
         | BinEx (EQ, Var _, IntConst 0) as f ->
             TL_p (atomic_ext_to_atomic (collect_prop f))
@@ -362,15 +626,44 @@ let extract_utl sk exp =
         | _ as e ->
             raise (IllegalLtl_error
                 (sprintf "Unexpected LTL formula: %s" (SpinIrImp.expr_s e)))
-
     in
-    transform exp
+    transform (Ltl.normalize_form exp)
+
+
+let extract_safety_or_utl type_tab sk = function
+    (* !(p -> [] q) *)
+    | BinEx (AND, lhs, UnEx (EVENTUALLY, rhs)) as f ->
+        if (Ltl.is_propositional type_tab lhs)
+            && (Ltl.is_propositional type_tab rhs)
+        then Safety (Ltl.normalize_form lhs, Ltl.normalize_form rhs)
+        else UTL (extract_utl sk f)
+
+    (* !([] q) *)
+    | UnEx (EVENTUALLY, sub) as f ->
+        if (Ltl.is_propositional type_tab sub)
+        then Safety (IntConst 1, Ltl.normalize_form sub)
+        else UTL (extract_utl sk f)
+
+    | _ as f ->
+        UTL (extract_utl sk f)
 
 
 let find_error rt tt sk form_name ltl_form deps =
-    let init_form, bad_form = extract_spec tt ltl_form in
-    if SpinIr.is_c_false bad_form
-    then raise (Failure "Bad condition is trivially false");
+    let check_trivial = function
+    | Safety (init_form, bad_form) ->
+        if SpinIr.is_c_false bad_form
+        then raise (Failure
+            (sprintf "%s: bad condition is trivially false" form_name));
+        if SpinIr.is_c_false init_form
+        then raise (Failure
+            (sprintf "%s: initial condition is trivially false" form_name));
+
+    | _ -> ()
+    in
+    let neg_form = Ltl.normalize_form (UnEx (NEG, ltl_form)) in
+    printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);
+    let spec = extract_safety_or_utl tt sk neg_form in
+    check_trivial spec;
 
     rt#solver#push_ctx;
     rt#solver#set_need_model true;
@@ -379,14 +672,11 @@ let find_error rt tt sk form_name ltl_form deps =
     let tac = new SchemaChecker.tree_tac_t rt ntt in
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
+    (* TODO: move to gen_and_check_schemas_on_the_fly, so we can test it *)
     tac#assert_top sk.Sk.inits;
     rt#solver#comment "initial constraints from the spec";
-    if SpinIr.is_c_false init_form
-    then raise (Failure "Initial condition is trivially false");
-    if not (SpinIr.is_c_true init_form)
-    then tac#assert_top [init_form];
 
-    let result = gen_and_check_schemas_on_the_fly rt#solver sk bad_form deps tac in
+    let result = gen_and_check_schemas_on_the_fly rt#solver sk spec deps tac in
     rt#solver#set_need_model false;
     rt#solver#pop_ctx;
     result
