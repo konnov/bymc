@@ -78,10 +78,23 @@ val gen_and_check_schemas_on_the_fly:
 (**
  Try to convert an LTL formula to UTL.
 
+ Raises IllegalLtl_error, when the formula is not supported.
+
  @param form a spin expression that encodes an ltl formula.
  @return an LTL(F,G)-formula over counters.
  *)
 val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> utl_spec_t
+
+
+(**
+ Check, whether an LTL formula is supported by the checker.
+
+ @param form a spin expression that encodes an LTL formula.
+ @return true, if the formula belongs to the supported class.
+ *)
+val can_handle_spec:
+    SpinIr.data_type_tab -> SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> bool
+
 
 (**
  Try to convert an LTL formula to UTL.

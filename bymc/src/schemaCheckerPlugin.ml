@@ -17,24 +17,26 @@ open PorBounds
 open Spin
 open SpinIr
 
-let can_handle_spec prog _ s =
-    match Ltl.classify_spec prog s with
+let is_safety_spec tt s =
+    match Ltl.classify_spec tt s with
     | Ltl.CondSafety (_, _) -> true
     | _ -> false
 
 
-let get_proper_specs opts prog skels =
+let get_proper_specs opts prog skels check_fun =
     let forms = Program.get_ltl_forms prog in
-    let tt = Program.get_type_tab prog in
     let is_good name form =
         let asked = opts.Options.spec in
-        (asked = "all" || asked = name) && (can_handle_spec tt name form)
+        let expanded = expand_props_in_ltl prog skels form in
+        Debug.ltrace Trc.scl
+            (lazy (sprintf " expanded %s = %s\n" name (SpinIrImp.expr_s expanded)));
+        (asked = "all" || asked = name) && (check_fun expanded)
     in
     let good, bad = StrMap.partition is_good forms in
     let p name _ =
         if opts.Options.spec <> "all" && opts.Options.spec <> name
         then printf "      > Skipped %s (since you asked)\n" name
-        else printf "      > Skipped %s (not reachability)\n" name
+        else printf "      > Skipped %s (not supported)\n" name
     in
     StrMap.iter p bad;
     SymbSkel.expand_props_in_ltl_forms prog skels good
@@ -95,7 +97,7 @@ class slps_checker_plugin_t (plugin_name: string) =
                 SchemaChecker.is_error_tree rt tt sk on_leaf name form deps tree
             in
 
-            log INFO "  > Running SchemaChecker...";
+            log INFO "  > Running SchemaChecker (the CAV'15 reachability version)...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form =
                 reset_stat ();
@@ -109,7 +111,8 @@ class slps_checker_plugin_t (plugin_name: string) =
                 log INFO msg;
                 print_stat ()
             in
-            let specs = get_proper_specs rt#caches#options sprog [sk] in
+            let specs =
+                get_proper_specs rt#caches#options sprog [sk] (is_safety_spec tt) in
             StrMap.iter each_form specs
 
 
@@ -131,7 +134,12 @@ class slps_checker_plugin_t (plugin_name: string) =
                 in
                 log INFO msg
             in
-            let specs = get_proper_specs rt#caches#options sprog [sk] in
+            let can_handle f =
+                let negated = Ltl.normalize_form (UnEx (NEG, f)) in
+                SchemaCheckerLtl.can_handle_spec tt sk negated
+            in
+            let specs =
+                get_proper_specs rt#caches#options sprog [sk] can_handle in
             StrMap.iter each_form specs
 
 
