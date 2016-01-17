@@ -737,13 +737,12 @@ let state_pairs_to_rules rt prog proc trs =
     build_with (reconstruct_rules trs) rt prog proc
 
 
-(** expand quantifiers to conditions over location counters *)
-let expand_quant prog skels ~quant e =
-    let pname = Ltl.find_proc_name ~err_not_found:true e in
-    let sk =
-        try List.find (fun sk -> sk.Sk.name = pname) skels
-        with Not_found -> raise (Failure ("No skeleton " ^ pname))
-    in
+(**
+ Expand quantifiers to conditions over location counters.
+ This function works only when an expression contains no shared variables,
+ nor parameters. Use expand_quant_with_shared in the latter case.
+ *)
+let expand_quant prog sk ~quant e =
     let var_names = List.map (fun v -> v#get_name) sk.Sk.locals in
     let is_matching_loc loc_no =
         let lookup = List.combine var_names (Sk.loc_by_no sk loc_no) in
@@ -766,7 +765,7 @@ let expand_quant prog skels ~quant e =
         match quant with
         | QExist -> (* there is a non-zero location *)
             let cmp =
-                BinEx (GT, Var (Sk.locvar sk l), IntConst 0) in
+                BinEx (NE, Var (Sk.locvar sk l), IntConst 0) in
             if is_nop accum then cmp else BinEx (OR, cmp, accum)
 
         | QAll -> (* forall: all other locations are zero *)
@@ -782,13 +781,64 @@ let expand_quant prog skels ~quant e =
     List.fold_left each_loc (Nop "") matching
 
 
+(**
+ Expand quantifiers to conditions over location counters.
+ As opposite to expand_quant, this function works only
+ with shared variables and parameters.
+ *)
+let expand_quant_with_shared prog skels ~quant e =
+    let pname = Ltl.find_proc_name ~err_not_found:true e in
+    let sk =
+        try List.find (fun sk -> sk.Sk.name = pname) skels
+        with Not_found -> raise (Failure ("No skeleton " ^ pname))
+    in
+    let add s v = StrSet.add v#get_name s in
+    let local_set = List.fold_left add StrSet.empty sk.Sk.locals in
+    let expand_if cond e =
+        if not cond then e else expand_quant prog sk ~quant:quant e
+    in
+    (* find the topmost expressions that contain only local variables
+       and expand the quantifier for them
+     *)
+    let rec find_and_replace = function
+    | IntConst i ->
+        (true, IntConst i)
+
+    | Var v ->
+        let is_local = StrSet.mem v#get_name local_set in
+        (is_local, Var v)
+
+    | UnEx (op, e) ->
+        let (is_local, ne) = find_and_replace e in
+        (is_local, UnEx (op, ne))
+
+    | BinEx (IMPLIES as op, l, r)
+    | BinEx (OR as op, l, r)
+    | BinEx (AND as op, l, r) ->
+        let (is_local_l, nl) = find_and_replace l in
+        let (is_local_r, nr) = find_and_replace r in
+        if is_local_l && is_local_r
+        then (true, BinEx (op, nl, nr))
+        else (false, BinEx (op, expand_if is_local_l nl, expand_if is_local_r nr))
+
+    | BinEx (op, l, r) ->
+        let (is_local_l, nl) = find_and_replace l in
+        let (is_local_r, nr) = find_and_replace r in
+        (is_local_l && is_local_r, BinEx (op, nl, nr))
+
+    | _ as e -> (true, e)
+    in
+    let is_local, ne = find_and_replace e in
+    expand_if is_local ne
+
+
 (** expand quantifiers in the propositional symbols *)
 let expand_props_in_ltl prog skels prop_form =
     let atomics = Program.get_atomics_map prog in
     let tt = Program.get_type_tab prog in
     let rec expand_card = function
         | UnEx (CARD, r) ->
-                expand_quant prog skels ~quant:QCard r
+            expand_quant_with_shared prog skels ~quant:QCard r
 
         | UnEx (t, r) ->
                 UnEx (t, expand_card r)
@@ -803,10 +853,10 @@ let expand_props_in_ltl prog skels prop_form =
             expand_card e
 
         | PropAll e ->
-            expand_quant prog skels ~quant:QAll e
+            expand_quant_with_shared prog skels ~quant:QAll e
 
         | PropSome e ->
-            expand_quant prog skels ~quant:QExist e
+            expand_quant_with_shared prog skels ~quant:QExist e
 
         | PropAnd (l, r) ->
             BinEx (AND, pr_atomic l, pr_atomic r)
