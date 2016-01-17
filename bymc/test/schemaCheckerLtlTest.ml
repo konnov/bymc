@@ -1,3 +1,5 @@
+open Batteries
+
 open OUnit
 open Printf
 
@@ -9,6 +11,12 @@ open SymbSkel
 
 open SchemaSmt
 open SchemaCheckerLtl
+
+(* wrap a test with this function to see the tracing output *)
+let with_tracing test_fun arg =
+    Debug.enable_tracing () Trc.scl;
+    let cleanup _ = Debug.disable_tracing () Trc.pos in
+    finally cleanup test_fun arg
 
 let keep x = BinEx (EQ, UnEx (NEXT, Var x), Var x)
 
@@ -333,8 +341,8 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     let expected_hist = [
         (* the only path *)
         "(enter_context)";
-        "(enter_node Intermediate)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
@@ -382,8 +390,8 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     let expected_hist = [
         (* the first path *)
         "(enter_context)";
-        "(enter_node Intermediate)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
@@ -417,8 +425,8 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(leave_context)";
         (* the second path *)
         "(enter_context)";
-        "(enter_node Intermediate)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
@@ -452,8 +460,8 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(leave_context)";
         (* the third path *)
         "(enter_context)";
-        "(enter_node Intermediate)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
@@ -505,9 +513,9 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
         "(enter_context)";
-        "(enter_node Intermediate)";
              (* the initial constraint *)
         "(assert_top ((((loc4 == 0) && (loc3 == 0)) && (loc0 == 0)) && (loc2 == 0)) _)";
+        "(enter_node Intermediate)";
         "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
@@ -592,6 +600,6 @@ let suite = "schemaCheckerLtl-suite" >:::
 
         "gen_and_check_schemas_on_the_fly_strb_corr"
             >::(bracket SmtTest.setup_smt2
-                gen_and_check_schemas_on_the_fly_strb_corr SmtTest.shutdown_smt2);
+                (with_tracing gen_and_check_schemas_on_the_fly_strb_corr) SmtTest.shutdown_smt2);
     ]
 

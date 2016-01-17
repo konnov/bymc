@@ -9,6 +9,7 @@ open Batteries
 open BatPrintf
 
 open Accums
+open Debug
 open PorBounds
 open SymbSkel
 open Poset
@@ -68,6 +69,23 @@ let find_uncovered_utl_props form =
     let rec collect col = function
     | TL_p prop ->
         prop :: col
+
+    | TL_and fs ->
+        List.fold_left collect col fs
+
+    | _ -> (* skip the temporal operators *)
+        col
+    in
+    collect [] form
+
+
+(**
+ Find the propositional subformulas that are covered by G (as constructed by utl_to_expr).
+ *)
+let find_G_props form =
+    let rec collect col = function
+    | TL_G f ->
+        (find_uncovered_utl_props f) @ col
 
     | TL_and fs ->
         List.fold_left collect col fs
@@ -149,24 +167,26 @@ let find_temporal_subformulas form =
     collect [] form
 
 
-let utl_to_expr sk form =
+let atomic_to_expr sk ae =
     let eq0 i =
         BinEx (EQ, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
     in
     let ne0 i =
         BinEx (NE, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
     in
-    let atomic_to_expr = function
+    match ae with
     | And_Keq0 is ->
         list_to_binex AND (List.map eq0 is)
 
     | AndOr_Kne0 ors ->
         let mk_or is = list_to_binex OR (List.map ne0 is) in
         list_to_binex AND (List.map mk_or ors)
-    in
+
+
+let utl_to_expr sk form =
     let rec trans = function
     | TL_p ae ->
-        atomic_to_expr ae
+        (atomic_to_expr sk) ae
 
     | TL_F f ->
         UnEx (EVENTUALLY, trans f)
@@ -251,6 +271,36 @@ let po_elem_s sk = function
         sprintf "INIT(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
 
 
+let po_elem_short_s sk elem =
+    let trim s =
+        if 10 < (String.length s)
+        then (String.sub s 0 10) ^ "..."
+        else s
+    in
+    match elem with
+    | PO_guard e ->
+        sprintf "G%s" (PSet.elem_str e)
+
+    | PO_tl form ->
+        sprintf "TL(%s)" (trim (SpinIrImp.expr_s (utl_to_expr sk form)))
+
+    | PO_loop_start ->
+        "LOOP"
+
+    | PO_init form ->
+        sprintf "INIT(%s)" (trim (SpinIrImp.expr_s (utl_to_expr sk form)))
+
+
+let find_schema_multiplier invs =
+    let count_disjs n = function
+        (* as it follows from the analysis, we need 3 * |Disjs| + 1 *)
+    | AndOr_Kne0 disjs -> n + (List.length disjs)
+        (* this conjunction requires less rules, not more *)
+    | And_Keq0 _ -> n
+    in
+    1 + 3 * (List.fold_left count_disjs 0 invs)
+
+
 let check_one_order solver sk spec deps tac elem_order =
     let is_safety, safety_init, safety_bad =
         (* we have to treat safety differently from the general case *)
@@ -261,9 +311,22 @@ let check_one_order solver sk spec deps tac elem_order =
     let node_type tl =
         if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
     in
-    let check_steady_schema uset lset =
+    let assert_invariants invs =
+        tac#assert_top (List.map (atomic_to_expr sk) invs)
+    in
+    let check_steady_schema uset lset invs =
         (* push all the unlocked rules *)
-        (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk);
+        let push_rule r =
+            tac#push_rule deps sk r;
+            if invs <> [] then assert_invariants invs
+        in
+        (* TODO: inefficient, filter out those rules that violate /\ k_i = 0 *)
+        let push_schema _ =
+            List.iter push_rule (get_unlocked_rules sk deps uset lset)
+        in
+        (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
+           require a schema multiplied several times *)
+        BatEnum.iter push_schema (1--(find_schema_multiplier invs));
         let fname = ref "" in
         let on_error frame_hist =
             fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist) (* FIXME *)
@@ -273,7 +336,7 @@ let check_one_order solver sk spec deps tac elem_order =
         then { m_is_err_found = true; m_counterexample_filename = !fname }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    let rec search uset lset = function
+    let rec search uset lset invs = function
         | [] ->
             (* no errors: we have already checked the prefix *)
             { m_is_err_found = false; m_counterexample_filename = "" }
@@ -286,7 +349,10 @@ let check_one_order solver sk spec deps tac elem_order =
             else if not (SpinIr.is_c_true safety_init)
                 then tac#assert_top [safety_init];
                 
-            let result = prune_or_continue uset lset (node_type tl) tl in
+            let new_invs = find_G_props utl_form in
+            assert_invariants new_invs;
+            let result =
+                prune_or_continue uset lset (new_invs @ invs) (node_type tl) tl in
             tac#leave_context;
             result
 
@@ -305,46 +371,54 @@ let check_one_order solver sk spec deps tac elem_order =
                 then (PSet.add id uset), lset
                 else uset, (PSet.add id lset)
             in
-            let result = prune_or_continue new_uset new_lset (node_type tl) tl in
+            let result = prune_or_continue new_uset new_lset invs (node_type tl) tl in
             tac#leave_context;
             result
 
         | PO_loop_start :: tl ->
             assert (not is_safety);
-            raise (Failure "Not implemented yet")
+            prune_or_continue uset lset invs (node_type tl) tl
+            (* TODO: check that no other guards were activated *)
+            (* TODO: check that frames are equal *)
+
+        | (PO_tl (TL_and fs)) :: tl ->
+            (* an extreme appearance of F *)
+            let props = find_uncovered_utl_props (TL_and fs) in
+            tac#enter_context;
+            (* the propositional subformulas should be satisfied right now *)
+            tac#assert_top (List.map (atomic_to_expr sk) props);
+            let new_invs = find_G_props (TL_and fs) in
+            let result =
+                prune_or_continue uset lset (new_invs @ invs) (node_type tl) tl
+            in
+            tac#leave_context;
+            result
 
         | _ ->
             raise (Failure "Not implemented yet")
-
-        (*
-        | (PO_tl (TL_F phi)) :: tl ->
-            let node_type = (if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate) in
-            (* assert all the formulas on the propositional level *)
-            List.iter tac#assert_top (find_uncovered_utl_props phi);
-            *)
-    and prune_or_continue uset lset node_type seq =
+    and prune_or_continue uset lset invs node_type seq =
         if solver#check
         then begin
             (* try to find an execution
                 that does not enable new conditions and reaches a bad state *)
             tac#enter_node node_type;
             let res = fail_first
-                (lazy (check_steady_schema uset lset))
-                (lazy (search uset lset seq))
+                (lazy (check_steady_schema uset lset invs))
+                (lazy (search uset lset invs seq))
             in
             tac#leave_node node_type;
             res
         end else (* the current frame is unreachable *)
             { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    (* evaluate the order, but in the case of safety, immediately prone
-        those orders that do not go inside the loops *)
+    (* evaluate the order *)
     if is_safety
     then begin
         let first = List.hd elem_order in
         assert (first = PO_loop_start);
-        search PSet.empty PSet.empty (List.tl elem_order)
-    end else search PSet.empty PSet.empty elem_order
+        search PSet.empty PSet.empty [] (List.tl elem_order) (* prune the loop *)
+    end
+        else search PSet.empty PSet.empty [] elem_order
 
 
 (**
@@ -378,16 +452,7 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
     let after_init lst i = (po_init, i) :: lst in
     let new_order =
         List.fold_left after_init impl_order (range start_pos end_pos) in
-    (*
-    let pord (a, b) =
-        sprintf "%s < %s" (PSet.elem_str (get_id a)) (PSet.elem_str (get_id b))
-    in
-    printf "The partial order is:\n    %s\n\n" (str_join ", " (List.map pord new_order));
-    let ppord (a, b) = sprintf "%d < %d" a b in
-    Debug.ltrace Trc.scl
-        (lazy (sprintf "The partial order is:\n    %s\n\n" (str_join ", " (List.map ppord new_order))));
-        *)
-    end_pos, new_order @ prec_order, new_rev_map
+     end_pos, new_order @ prec_order, new_rev_map
 
 
 (**
@@ -408,13 +473,13 @@ let poset_make_utl form =
     | TL_and fs ->
         List.fold_left (make in_loop) (pos, orders, map) fs
 
-    | TL_G psi as phi ->
+    | TL_G psi ->
         let props = List.map (fun ae -> TL_p ae) (find_uncovered_utl_props psi) in
         let nm = add_form pos (TL_G (TL_and props)) map in
         (* all subformulas should be also true in the loop part *)
         make true (pos, orders, nm) psi
 
-    | TL_F psi as phi ->
+    | TL_F psi ->
         let new_orders =
             if in_loop
             (* pos + 1 must be in the loop *)
@@ -444,7 +509,7 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         | UTL utl_form ->
             (* add all the F-formulas to the poset *)
             let n, o, m = poset_make_utl utl_form in
-            n, (po_init, po_loop) :: o, m
+            1 + n, ((po_init, po_loop) :: o), (IntMap.add po_loop PO_loop_start m)
 
         | Safety (_, _) ->
             (* add the initial state and the loop (the loop will be ignored) *)
@@ -462,13 +527,22 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
             raise (Failure 
                 (sprintf "Not_found (key=%d) in gen_and_check_schemas_on_the_fly" num))
     in
+    let pord (a, b) =
+        sprintf "%s < %s" (po_elem_s sk (get_elem a)) (po_elem_s sk (get_elem b))
+    in
+    logtm INFO (sprintf "The partial order is:\n    %s\n\n"
+        (str_join ", " (List.map pord order)));
+    let ppord (a, b) = sprintf "%d < %d" a b in
+    Debug.ltrace Trc.scl
+        (lazy (sprintf "The partial order is:\n    %s\n\n"
+            (str_join ", " (List.map ppord order))));
     (* enumerate all the linear extensions *)
     let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
     let iter = linord_iter_first size order in
     while not (linord_iter_is_end iter) && not !result.m_is_err_found do
         let order = BatArray.to_list (linord_iter_get iter) in
         let elem_order = List.map get_elem order in
-        let pp e = sprintf "%4s" (po_elem_s sk e) in
+        let pp e = sprintf "%6s" (po_elem_short_s sk e) in
         printf "  -> %s...\n" (str_join "  " (List.map pp elem_order));
         result := check_one_order solver sk spec deps tac elem_order;
         if not !result.m_is_err_found
@@ -652,6 +726,14 @@ let extract_safety_or_utl type_tab sk = function
         UTL (extract_utl sk f)
 
 
+let can_handle_spec type_tab sk form =
+    try
+        ignore (extract_safety_or_utl type_tab sk form);
+        true
+    with IllegalLtl_error _ ->
+        false
+
+
 let find_error rt tt sk form_name ltl_form deps =
     let check_trivial = function
     | Safety (init_form, bad_form) ->
@@ -665,7 +747,8 @@ let find_error rt tt sk form_name ltl_form deps =
     | _ -> ()
     in
     let neg_form = Ltl.normalize_form (UnEx (NEG, ltl_form)) in
-    printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);
+    Debug.ltrace Trc.scl
+        (lazy (sprintf "neg_form = %s\n" (SpinIrImp.expr_s neg_form)));
     let spec = extract_safety_or_utl tt sk neg_form in
     check_trivial spec;
 
@@ -676,9 +759,8 @@ let find_error rt tt sk form_name ltl_form deps =
     let tac = new SchemaChecker.tree_tac_t rt ntt in
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
-    (* TODO: move to gen_and_check_schemas_on_the_fly, so we can test it *)
-    tac#assert_top sk.Sk.inits;
     rt#solver#comment "initial constraints from the spec";
+    tac#assert_top sk.Sk.inits;
 
     let result = gen_and_check_schemas_on_the_fly rt#solver sk spec deps tac in
     rt#solver#set_need_model false;
