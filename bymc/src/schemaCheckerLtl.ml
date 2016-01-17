@@ -310,9 +310,8 @@ let check_one_order solver sk spec deps tac elem_order =
             result
 
         | PO_loop_start :: tl ->
-            if is_safety    (* it should be the last one, anyways *)
-            then { m_is_err_found = false; m_counterexample_filename = "" }
-            else raise (Failure "Not implemented yet")
+            assert (not is_safety);
+            raise (Failure "Not implemented yet")
 
         | _ ->
             raise (Failure "Not implemented yet")
@@ -340,9 +339,12 @@ let check_one_order solver sk spec deps tac elem_order =
     in
     (* evaluate the order, but in the case of safety, immediately prone
         those orders that do not go inside the loops *)
-    if not is_safety || (BatList.last elem_order) = PO_loop_start
-    then search PSet.empty PSet.empty elem_order
-    else { m_is_err_found = false; m_counterexample_filename = "" }
+    if is_safety
+    then begin
+        let first = List.hd elem_order in
+        assert (first = PO_loop_start);
+        search PSet.empty PSet.empty (List.tl elem_order)
+    end else search PSet.empty PSet.empty elem_order
 
 
 (**
@@ -447,7 +449,9 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         | Safety (_, _) ->
             (* add the initial state and the loop (the loop will be ignored) *)
             let inite = PO_init (TL_and []) in (* safety is handled explicitely *)
-            2, [(po_init, po_loop)],
+            (* hack: place po_loop BEFORE po_init, so the loop start does not explode
+               the number of combinations *)
+            2, [(po_loop, po_init)],
                 (IntMap.add po_loop PO_loop_start (IntMap.singleton po_init inite))
     in
     (* add the guards *)
