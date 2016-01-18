@@ -338,25 +338,27 @@ let check_one_order solver sk spec deps tac elem_order =
             else { m_is_err_found = false; m_counterexample_filename = "" }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    let at_least_one_step_made loop_frame =
+    let at_least_one_step_made prefix_last_frame =
         (* make sure that at least one rule had a non-zero factor *)
         (* we use <= to prune the loop start frame as well,
            as its acceleration factor still belongs to the prefix *)
-        let in_prefix f = (f.F.no <= loop_frame.F.no) in
-        let frames = BatList.drop_while in_prefix tac#frame_hist in
+        let in_prefix f = (f.F.no <= prefix_last_frame.F.no) in
+        let loop_frames = BatList.drop_while in_prefix tac#frame_hist in
         let pos_factor f = BinEx (GT, Var f.F.accel_v, IntConst 0) in
-        list_to_binex OR (List.map pos_factor frames)
+        list_to_binex OR (List.map pos_factor loop_frames)
     in
-    let rec search loop_frame uset lset invs = function
+    let rec search prefix_last_frame uset lset invs = function
         | [] ->
             if is_safety
                 (* no errors: we have already checked the prefix *)
             then { m_is_err_found = false; m_counterexample_filename = "" }
             else begin
                 (* close the loop *)
-                let lf = get_some loop_frame in
-                tac#assert_top [at_least_one_step_made lf];
-                tac#assert_frame_eq sk lf;
+                let lf = get_some prefix_last_frame in
+                let in_loop f = (f.F.no > lf.F.no) in
+                let loop_start_frame = List.find in_loop tac#frame_hist in
+                tac#assert_frame_eq sk loop_start_frame;
+                tac#assert_top [at_least_one_step_made loop_start_frame];
                 let fname = ref "" in
                 let on_error frame_hist =
                     (* FIXME *)
@@ -378,7 +380,7 @@ let check_one_order solver sk spec deps tac elem_order =
             let new_invs = find_G_props utl_form in
             assert_propositions new_invs;
             let result =
-                prune_or_continue loop_frame uset lset (new_invs @ invs) (node_type tl) tl in
+                prune_or_continue prefix_last_frame uset lset (new_invs @ invs) (node_type tl) tl in
             tac#leave_context;
             result
 
@@ -387,7 +389,7 @@ let check_one_order solver sk spec deps tac elem_order =
                activate the context, check a schema and continue.
                This can be done only outside a loop.
              *)
-            if loop_frame = None
+            if prefix_last_frame = None
             then begin
                 let is_unlocking = PSet.mem id deps.D.umask in
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
@@ -404,22 +406,22 @@ let check_one_order solver sk spec deps tac elem_order =
                     else uset, (PSet.add id lset)
                 in
                 let result =
-                    prune_or_continue loop_frame new_uset new_lset invs (node_type tl) tl in
+                    prune_or_continue prefix_last_frame new_uset new_lset invs (node_type tl) tl in
                 tac#leave_context;
                 result
             end else
-                search loop_frame uset lset invs tl
+                search prefix_last_frame uset lset invs tl
 
         | PO_loop_start :: tl ->
             assert (not is_safety);
             (* TODO: check that no other guards were activated *)
-            let loop_start_frame =
+            let prefix_last_frame =
                 try Some tac#top
                 with Failure m ->
                     printf "PO_loop_start: %s\n" m;
                     raise (Failure m)
             in
-            prune_or_continue loop_start_frame uset lset invs LoopStart tl
+            prune_or_continue prefix_last_frame uset lset invs LoopStart tl
 
         | (PO_tl (TL_and fs)) :: tl ->
             (* an extreme appearance of F *)
@@ -429,14 +431,14 @@ let check_one_order solver sk spec deps tac elem_order =
             tac#assert_top (List.map (atomic_to_expr sk) props);
             let new_invs = find_G_props (TL_and fs) in
             let result =
-                prune_or_continue loop_frame uset lset (new_invs @ invs) (node_type tl) tl
+                prune_or_continue prefix_last_frame uset lset (new_invs @ invs) (node_type tl) tl
             in
             tac#leave_context;
             result
 
         | _ ->
             raise (Failure "Not implemented yet")
-    and prune_or_continue loop_frame uset lset invs node_type seq =
+    and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         if solver#check
         then begin
             (* try to find an execution
@@ -444,7 +446,7 @@ let check_one_order solver sk spec deps tac elem_order =
             tac#enter_node node_type;
             let res = fail_first
                 (lazy (check_steady_schema uset lset invs))
-                (lazy (search loop_frame uset lset invs seq))
+                (lazy (search prefix_last_frame uset lset invs seq))
             in
             tac#leave_node node_type;
             res
