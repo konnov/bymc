@@ -652,12 +652,33 @@ let extract_utl_relay _ =
             (utl_spec_s expected_utl) (utl_spec_s result_utl))
 
 
+let can_handle_corr _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_corr sk in
+    let result = SchemaCheckerLtl.can_handle_spec tt sk ltl_form in
+    assert_equal true result ~msg:(sprintf "Cannot handle corr")
+
+
+let can_handle_relay _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_relay sk in
+    let result = SchemaCheckerLtl.can_handle_spec tt sk ltl_form in
+    assert_equal true result ~msg:(sprintf "Cannot handle relay")
+
+
+
+
 let suite = "schemaCheckerLtl-suite" >:::
     [
         "extract_utl_corr"
             >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
         "extract_utl_relay"
             >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
+
+        "can_handle_corr"
+            >::(bracket SmtTest.setup_smt2 can_handle_corr SmtTest.shutdown_smt2);
+        "can_handle_relay"
+            >::(bracket SmtTest.setup_smt2 can_handle_relay SmtTest.shutdown_smt2);
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
