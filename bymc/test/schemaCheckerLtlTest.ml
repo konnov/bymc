@@ -150,6 +150,33 @@ let make_strb_relay sk =
         BinEx (AND, ex4, (UnEx (ALWAYS, exNot4))))
 
 
+let make_strb_fairness sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let eq0s lst = list_to_binex AND (List.map eq0 lst) in
+    let plus l r = BinEx (PLUS, Var l, Var r) in
+    let minus l r = BinEx (MINUS, Var l, Var r) in
+    let lt l r = BinEx (LT, Var l, r) in
+    let ge l r = BinEx (GE, Var l, r) in
+    let zand l r = BinEx (AND, l, r) in
+    let zor l r = BinEx (OR, l, r) in
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    let e1 = zor (lt nsnt (minus n t)) (eq0 4) in
+    let e2 = zor (lt nsnt (minus n t)) (eq0s [2; 3]) in
+    let e3 = zor (lt nsnt (minus n t)) (eq0s [0; 1]) in
+    let e4 =
+        zor (zor (lt nsnt (BinEx (PLUS, Var t, IntConst 1)))
+                 (ge nsnt (minus n t)))
+            (eq0s [0; 1; 2; 3]) in
+    let expr =
+        zand (zand (zand (e1) (e2)) (e3)) (e4)
+    in
+    UnEx (ALWAYS,
+        UnEx (EVENTUALLY, expr))
+
+
 
 (*
   Create a symbolic skeleton. This is in fact the example that appeared in our CAV'15 paper.
@@ -728,6 +755,23 @@ let can_handle_relay _ =
     assert_equal true result ~msg:(sprintf "Cannot handle relay")
 
 
+let can_handle_fairness _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_fairness sk in
+    let result = SchemaCheckerLtl.can_handle_spec tt sk ltl_form in
+    assert_equal true result ~msg:(sprintf "Cannot handle fairness")
+
+
+let extract_utl_fairness _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_fairness sk in
+    let expected_utl =
+        TL_F (TL_and [TL_p (AndOr_Kne0 [[4]]); TL_G (TL_p (AndOr_Kne0 [[4; 3; 0; 2]]))])
+    in
+    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    assert_equal expected_utl result_utl
+        ~msg:(sprintf "Expected %s, found %s"
+            (utl_spec_s expected_utl) (utl_spec_s result_utl))
 
 
 let suite = "schemaCheckerLtl-suite" >:::
@@ -736,11 +780,15 @@ let suite = "schemaCheckerLtl-suite" >:::
             >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
         "extract_utl_relay"
             >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
+        "extract_utl_fairness"
+            >::(bracket SmtTest.setup_smt2 extract_utl_fairness SmtTest.shutdown_smt2);
 
         "can_handle_corr"
             >::(bracket SmtTest.setup_smt2 can_handle_corr SmtTest.shutdown_smt2);
         "can_handle_relay"
             >::(bracket SmtTest.setup_smt2 can_handle_relay SmtTest.shutdown_smt2);
+        "can_handle_fairness"
+            >::(bracket SmtTest.setup_smt2 can_handle_fairness SmtTest.shutdown_smt2);
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
