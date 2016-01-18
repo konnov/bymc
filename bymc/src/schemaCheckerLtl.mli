@@ -25,6 +25,8 @@ type result_t = {
 type atomic_spec_t =
     | And_Keq0 of int list          (** /\_{i \in X} k_i = 0 *)
     | AndOr_Kne0 of int list list   (** /\_{X_j \in Y} \/_{i \in X_j} k_i \ne 0 *)
+    | Shared_Or_And_Keq0 of Spin.token SpinIr.expr * int list
+                                    (** f(g) \/ /\_{i \in X} k_i = 0 *)
 
 
 (**
