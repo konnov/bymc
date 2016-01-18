@@ -94,7 +94,8 @@ module F = struct
     let init_frame tt sk =
         let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
         let empty_frame = {
-            no = -1; accel_v = new_var "";
+            no = -1; (* advance_frame sets no to 0 *)
+            accel_v = new_var "";
             loc_vars = loc_vars; shared_vars = sk.Sk.shared;
             new_vars = []; var_map = IntMap.empty
         }

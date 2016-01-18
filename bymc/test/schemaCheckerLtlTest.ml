@@ -304,7 +304,8 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
             List.iter each es
 
         method assert_frame_eq sk frame =
-            m_call_stack <- "(assert_frame_eq _ _)" :: m_call_stack
+            let tag = sprintf "(assert_frame_eq _ %d)" frame.F.no in
+            m_call_stack <- tag :: m_call_stack
 
         method enter_node tp =
             let tag = sprintf "(enter_node %s)" (node_type_s tp) in
@@ -564,8 +565,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_frame_eq _ 2)";    (* the reached frame equals to the loop start *)
         "(assert_top ((F3_warp > 0) || (F4_warp > 0)) _)"; (* at least one step was made *)
-        "(assert_frame_eq _ _)";    (* the reached frame equals to the loop start *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
@@ -632,9 +633,9 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 6)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_frame_eq _ 23)";         (* the loop is closed *)
         "(assert_top (((((((F24_warp > 0) || (F25_warp > 0)) || (F26_warp > 0)) || (F27_warp > 0)) || (F28_warp > 0)) || (F29_warp > 0)) || (F30_warp > 0)) _)";
             (* at least one step was made *)
-        "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
@@ -677,8 +678,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 5)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_frame_eq _ 38)";         (* the loop is closed *)
         "(assert_top ((((F39_warp > 0) || (F40_warp > 0)) || (F41_warp > 0)) || (F42_warp > 0)) _)"; (* at least one step is made *)
-        "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
