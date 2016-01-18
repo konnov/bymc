@@ -311,9 +311,9 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     if loop_frames <> []
     then begin
         let start = List.length prefix_frames in
-        fprintf out "-----> LOOP <------\n";
+        fprintf out "****** LOOP *******\n";
         SchemaChecker.write_counterex solver sk out loop_frames ~start_no:start;
-        fprintf out "-----> GOTO %d <------\n" start;
+        fprintf out "****** GOTO %d *******\n" start;
     end;
     fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;
