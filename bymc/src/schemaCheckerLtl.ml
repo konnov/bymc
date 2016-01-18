@@ -6,7 +6,7 @@
  *)
 
 open Batteries
-open BatPrintf
+open Printf
 
 open Accums
 open Debug
@@ -300,6 +300,25 @@ let find_schema_multiplier invs =
     in
     1 + 3 * (List.fold_left count_disjs 0 invs)
 
+let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
+    let fname = sprintf "cex-%s.trx" form_name in
+    let out = open_out fname in
+    fprintf out "----------------\n";
+    fprintf out " Counterexample\n";
+    fprintf out "----------------\n";
+    fprintf out "           \n";
+    SchemaChecker.write_counterex solver sk out prefix_frames;
+    if loop_frames <> []
+    then begin
+        let start = List.length prefix_frames in
+        fprintf out "-----> LOOP <------\n";
+        SchemaChecker.write_counterex solver sk out loop_frames ~start_no:start;
+        fprintf out "-----> GOTO %d <------\n" start;
+    end;
+    fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
+    close_out out;
+    printf "    > Saved counterexample to %s\n" fname
+
 
 let check_one_order solver sk spec deps tac elem_order =
     let is_safety, safety_init, safety_bad =
@@ -327,14 +346,13 @@ let check_one_order solver sk spec deps tac elem_order =
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
         BatEnum.iter push_schema (1--(find_schema_multiplier invs));
-        let fname = ref "" in
         let on_error frame_hist =
-            fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist) (* FIXME *)
+            dump_counterex_to_file solver sk "fixme" frame_hist [];
         in
         (* check, whether a safety property is violated *)
         if is_safety
         then if tac#check_property safety_bad on_error
-            then { m_is_err_found = true; m_counterexample_filename = !fname }
+            then { m_is_err_found = true; m_counterexample_filename = "fixme" }
             else { m_is_err_found = false; m_counterexample_filename = "" }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
@@ -359,13 +377,13 @@ let check_one_order solver sk spec deps tac elem_order =
                 let loop_start_frame = List.find in_loop tac#frame_hist in
                 tac#assert_frame_eq sk loop_start_frame;
                 tac#assert_top [at_least_one_step_made loop_start_frame];
-                let fname = ref "" in
                 let on_error frame_hist =
-                    (* FIXME *)
-                    fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist)
+                    let prefix, loop =
+                        BatList.span (fun f -> not (in_loop f)) frame_hist in
+                    dump_counterex_to_file solver sk "fixme" prefix loop
                 in
                 if tac#check_property (IntConst 1) on_error
-                then { m_is_err_found = true; m_counterexample_filename = !fname }
+                then { m_is_err_found = true; m_counterexample_filename = "fixme" }
                 else { m_is_err_found = false; m_counterexample_filename = "" }
             end
 
