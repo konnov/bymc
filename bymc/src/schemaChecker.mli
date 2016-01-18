@@ -10,6 +10,8 @@
  @author Igor Konnov, 2014-2016
  *)
 
+open Batteries
+
 open SchemaSmt
 
 
@@ -28,10 +30,10 @@ val is_error_tree:
         -> bool
 
 
-(* Retrieve a counterexample from the current SMT context *)
-val get_counterex:
-    Smt.smt_solver -> SymbSkel.Sk.skel_t -> string -> F.frame_t list
-    -> string
+(* Retrieve a counterexample from the current SMT context and write it to the output *)
+val write_counterex:
+    ?start_no:int  -> Smt.smt_solver -> SymbSkel.Sk.skel_t -> unit BatIO.output
+    -> F.frame_t list -> unit
 
 (**
  A simple implementation of tac_t with SMT.

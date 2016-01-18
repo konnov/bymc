@@ -4,7 +4,8 @@
  @author Igor Konnov, 2014-2016
  *)
 
-open Printf
+open Batteries
+open BatPrintf
 
 open Accums
 open Debug
@@ -79,81 +80,82 @@ module B = struct
             | _ -> (KUndef, name)
         end
         else (KUndef, name)
-
-
-    let get_counterex solver sk form_name frame_hist =
-        let reverse no v m = StrMap.add v#get_name no m in
-        let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
-        let get_vars vars =
-            let query = solver#get_model_query in
-            List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
-            let new_query = solver#submit_query query in
-            let map v =
-                match Smt.Q.try_get new_query (Var v) with
-                    | Smt.Q.Result e ->
-                        let k, n = demangle v in
-                        (k, n, e)
-                    | Smt.Q.Cached ->
-                        raise (Failure "Unexpected Cached")
-            in
-            List.map map vars
-        in
-        let p is_init_frame out (k, n, e) =
-            match k with
-            | KLoc ->
-                    let locno = StrMap.find n revmap in
-                    let loc = List.nth sk.Sk.locs locno in
-                    let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
-                    in
-                    let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
-                    if not is_init_frame || e <> IntConst 0
-                    then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
-
-            | _ ->
-                    fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
-        in
-        let rec each_frame out num = function
-            | [] -> ()
-
-            | f :: tl ->
-                let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
-                let (_, _, accel), other = List.hd vals, List.tl vals in
-                let new_num =
-                    if f.F.no = 0 || accel <> IntConst 0
-                    then begin
-                        fprintf out "%4d (F%4d) x%2s: "
-                            num f.F.no (SpinIrImp.expr_s accel);
-                        List.iter (p (f.F.no = 0) out) other;
-                        if f.F.no = 0
-                        then fprintf out " K[*]: = 0;\n"
-                        else fprintf out "\n";
-                        1 + num
-                    end
-                    else num
-                in
-                each_frame out new_num tl
-        in
-        let fname = sprintf "cex-%s.trx" form_name in
-        let out = open_out fname in
-        fprintf out "----------------\n";
-        fprintf out " Counterexample\n";
-        fprintf out "----------------\n";
-        solver#set_need_model true;
-        fprintf out "           ";
-        List.iter (p false out) (get_vars sk.Sk.params);
-        fprintf out "\n";
-        each_frame out 0 frame_hist;
-        fprintf out "----------------\n";
-        fprintf out " Gute Nacht. Spokoinoy nochi. Laku noch.\n";
-        solver#set_need_model false;
-        close_out out;
-        printf "    > Saved counterexample to %s\n" fname;
-        fname
-
 end 
 
-let get_counterex = B.get_counterex (* XXX *)
 
+let write_counterex ?(start_no=0) solver sk out frame_hist =
+    let reverse no v m = StrMap.add v#get_name no m in
+    let revmap = IntMap.fold reverse sk.Sk.loc_vars StrMap.empty in
+    let get_vars vars =
+        let query = solver#get_model_query in
+        List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
+        let new_query = solver#submit_query query in
+        let map v =
+            match Smt.Q.try_get new_query (Var v) with
+                | Smt.Q.Result e ->
+                    let k, n = B.demangle v in
+                    (k, n, e)
+                | Smt.Q.Cached ->
+                    raise (Failure "Unexpected Cached")
+        in
+        List.map map vars
+    in
+    let p is_init_frame out (k, n, e) =
+        match k with
+        | B.KLoc ->
+                let locno = StrMap.find n revmap in
+                let loc = List.nth sk.Sk.locs locno in
+                let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
+                in
+                let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
+                if not is_init_frame || e <> IntConst 0
+                then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+
+        | _ ->
+                fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
+    in
+    let rec each_frame out num = function
+        | [] -> ()
+
+        | f :: tl ->
+            let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
+            let (_, _, accel), other = List.hd vals, List.tl vals in
+            let new_num =
+                if f.F.no = 0 || accel <> IntConst 0
+                then begin
+                    fprintf out "%4d (F%4d) x%2s: "
+                        (start_no + num) f.F.no (SpinIrImp.expr_s accel);
+                    List.iter (p (f.F.no = 0) out) other;
+                    if f.F.no = 0
+                    then fprintf out " K[*]: = 0;\n"
+                    else fprintf out "\n";
+                    1 + num
+                end
+                else num
+            in
+            each_frame out new_num tl
+    in
+    solver#set_need_model true;
+    List.iter (p false out) (get_vars sk.Sk.params);
+    fprintf out "\n";
+    each_frame out 0 frame_hist
+
+
+let dump_counterex_to_file solver sk form_name frame_hist =
+    let fname = sprintf "cex-%s.trx" form_name in
+    let out = open_out fname in
+    fprintf out "----------------\n";
+    fprintf out " Counterexample\n";
+    fprintf out "----------------\n";
+    fprintf out "           ";
+    write_counterex solver sk out frame_hist;
+    fprintf out "----------------\n";
+    fprintf out " Gute Nacht. Spokoinoy nochi. Laku noch.\n";
+    close_out out;
+    printf "    > Saved counterexample to %s\n" fname;
+    fname
+
+(*******************************************************************)
 
 type frame_stack_elem_t =
     | Frame of F.frame_t    (* just a frame *)
@@ -393,7 +395,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
                 List.iter (tac#push_rule deps sk) seg;
                 let err =
                     tac#check_property bad_form
-                        (fun hist -> ignore (B.get_counterex rt#solver sk form_name hist))
+                        (fun hist -> ignore (dump_counterex_to_file rt#solver sk form_name hist))
                 in
                 if node = Leaf
                 then begin
