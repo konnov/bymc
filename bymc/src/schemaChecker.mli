@@ -52,6 +52,9 @@ class tree_tac_t: Runtime.runtime_t -> SpinIr.data_type_tab ->
         method assert_top2:
             Spin.token SpinIr.expr list -> unit
 
+        method assert_frame_eq:
+            SymbSkel.Sk.skel_t -> F.frame_t -> unit
+
         method enter_node: node_kind_t -> unit
 
         method check_property:

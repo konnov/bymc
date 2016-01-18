@@ -113,6 +113,8 @@ let prepare_strb () =
     }
     in
     declare_parameters sk tt;
+    let set_type v = tt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+    BatEnum.iter set_type  (IntMap.values sk.Sk.loc_vars);
     SymbSkel.optimize_guards sk, tt
 
 
@@ -213,6 +215,8 @@ let prepare_aba () =
     }
     in
     declare_parameters sk tt;
+    let set_type v = tt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+    BatEnum.iter set_type (IntMap.values sk.Sk.loc_vars);
     SymbSkel.optimize_guards sk, tt
 
 
@@ -229,6 +233,12 @@ type frame_stack_elem_t =
     | Frame of F.frame_t    (* just a frame *)
     | Node of int           (* a node marker *)
     | Context of int        (* a context marker *)
+
+
+let node_type_s = function
+    | Leaf -> "Leaf"
+    | Intermediate -> "Intermediate"
+    | LoopStart -> "LoopStart" (* not required for safety *)
 
 
 (**
@@ -288,18 +298,15 @@ class mock_tac_t =
             in
             List.iter each es
 
+        method assert_frame_eq sk frame =
+            m_call_stack <- "(assert_frame_eq _ _)" :: m_call_stack
+
         method enter_node tp =
-            let tag =
-                sprintf "(enter_node %s)"
-                    (if tp = Leaf then "Leaf" else "Intermediate")
-            in
+            let tag = sprintf "(enter_node %s)" (node_type_s tp) in
             m_call_stack <- tag :: m_call_stack
 
         method leave_node tp =
-            let tag =
-                sprintf "(leave_node %s)"
-                    (if tp = Leaf then "Leaf" else "Intermediate")
-            in
+            let tag = sprintf "(leave_node %s)" (node_type_s tp) in
             m_call_stack <- tag :: m_call_stack
 
         method check_property exp _ =
@@ -330,6 +337,9 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         | SchemaCheckerLtl.Safety (_, bf) -> bf
         | _ -> assert_failure "Unexpected formula"
     in
+    let ntt = tt#copy in
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk spec deps (tac :> tac_t) in
@@ -379,6 +389,9 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         | SchemaCheckerLtl.Safety (_, bf) -> bf
         | _ -> assert_failure "Unexpected formula"
     in
+    let ntt = tt#copy in
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk spec deps (tac :> tac_t) in
@@ -503,6 +516,9 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let tac = new mock_tac_t in
     let ltl_form = make_strb_corr sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
+    let ntt = tt#copy in
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk spec deps (tac :> tac_t) in
@@ -515,13 +531,14 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_context)";
              (* the initial constraint *)
         "(assert_top ((((loc4 == 0) && (loc3 == 0)) && (loc0 == 0)) && (loc2 == 0)) _)";
+        "(assert_top (loc4 == 0) _)";    (* k[4] = 0 *)
+        "(assert_top (loc4 == 0) _)";    (* G k[4] = 0 *)
         "(enter_node Intermediate)";
-        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
-        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
-        "(enter_node Loop)";            (* entering the loop *)
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(enter_node LoopStart)";            (* entering the loop *)
         "(push_rule _ _ 0)";
-        "(assert_top (loc4 = 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(assert_frame_eq 1 3)";    (* the reached frame equals to the loop start *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node Loop)";
