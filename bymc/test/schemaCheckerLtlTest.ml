@@ -90,12 +90,16 @@ let prepare_strb () =
         Sk.name = "asyn-agreement";
         Sk.nlocs = nlocs; Sk.locs = [ [0]; [1]; [2]; [3]; [4] ];
         Sk.locals = [ pc ]; Sk.shared = [ x ]; Sk.params = [ n; t; f ];
-        Sk.nrules = 4;
+        Sk.nrules = 7;
         Sk.rules = [
             mk_rule 1 2 (IntConst 1) [ asgn x (sum x 1) ];
             mk_rule 0 2 g1 [ asgn x (sum x 1) ];
             mk_rule 0 3 g2 [ asgn x (sum x 1) ];
             mk_rule 2 3 g2 [ keep x ];
+
+            mk_rule 1 1 (IntConst 1) [ keep x ];
+            mk_rule 2 2 g1 [ keep x ];
+            mk_rule 3 3 g2 [ keep x ];
         ];
         Sk.inits = [
             BinEx (EQ, Var x, IntConst 0);
@@ -357,20 +361,33 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(enter_node Intermediate)";
+        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
-        "(push_rule _ _ 0)"; (* enables g1 *)
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";    (* enables g1 *)
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 5)";
         check_prop;
         "(enter_context)";
-        "(push_rule _ _ 0)"; "(push_rule _ _ 1)"; (* enables g2 *)
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 5)";    (* enables g2 *)
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(enter_node Leaf)";
-        "(push_rule _ _ 0)"; "(push_rule _ _ 1)";
-        "(push_rule _ _ 2)"; "(push_rule _ _ 3)";
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 2)";
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 5)";
+        "(push_rule _ _ 3)";
+        "(push_rule _ _ 6)";
         check_prop;
         "(leave_node Leaf)";
         "(leave_context)";
@@ -538,12 +555,16 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* k[4] = 0 *)
         "(assert_top (loc4 == 0) _)";    (* G k[4] = 0 *)
         "(enter_node Intermediate)";
+        "(push_rule _ _ 4)";             (* a self-loop *)
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(enter_node LoopStart)";            (* entering the loop *)
+        "(enter_node LoopStart)";        (* entering the loop *)
+        "(push_rule _ _ 4)";             (* a self-loop *)
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(assert_top (F2_warp > 0) _)"; (* at least one step was made *)
+        "(assert_top ((F3_warp > 0) || (F4_warp > 0)) _)"; (* at least one step was made *)
         "(assert_frame_eq _ _)";    (* the reached frame equals to the loop start *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
@@ -556,41 +577,63 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* k[4] = 0 *)
         "(assert_top (loc4 == 0) _)";    (* G k[4] = 0 *)
         "(enter_node Intermediate)";
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_context)";
+        "(push_rule _ _ 4)"; (* enables g1 *)
         "(push_rule _ _ 0)"; (* enables g1 *)
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 0)";
-        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 1)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(enter_context)";
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 1)"; (* enables g2 *)
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 5)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(enter_context)";
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 5)"; (* enables g2 *)
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 0)";
-        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 1)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 2)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 0)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 5)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 3)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 6)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_node LoopStart)";                      (* entering the loop *)
-        "(push_rule _ _ 0)";
-        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 1)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 2)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 0)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 5)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 3)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(assert_top ((((F13_warp > 0) || (F14_warp > 0)) || (F15_warp > 0)) || (F16_warp > 0)) _)"; (* at least one step was made *)
+        "(push_rule _ _ 6)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top (((((((F24_warp > 0) || (F25_warp > 0)) || (F26_warp > 0)) || (F27_warp > 0)) || (F28_warp > 0)) || (F29_warp > 0)) || (F30_warp > 0)) _)";
+            (* at least one step was made *)
         "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
@@ -607,23 +650,34 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* k[4] = 0 *)
         "(assert_top (loc4 == 0) _)";    (* G k[4] = 0 *)
         "(enter_node Intermediate)";
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_context)";
-        "(push_rule _ _ 0)"; (* enables g1 *)
+        "(push_rule _ _ 4)";
+        "(push_rule _ _ 0)";            (* enables g1 *)
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_node Intermediate)";
+        "(push_rule _ _ 1)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(push_rule _ _ 1)";
+        "(push_rule _ _ 5)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(enter_node LoopStart)";                      (* entering the loop *)
-        "(push_rule _ _ 0)";
-        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 1)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
-        "(assert_top ((F21_warp > 0) || (F22_warp > 0)) _)"; (* at least one step is made *)
+        "(push_rule _ _ 4)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 0)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(push_rule _ _ 5)";
+        "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top ((((F39_warp > 0) || (F40_warp > 0)) || (F41_warp > 0)) || (F42_warp > 0)) _)"; (* at least one step is made *)
         "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
