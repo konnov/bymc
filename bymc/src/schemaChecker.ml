@@ -117,7 +117,6 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     let each_frame out (val_map, num) f =
         let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
         let add map (_, name, value) =
-            printf "%s -> %s\n" name (SpinIrImp.expr_s value);
             StrMap.add name value map
         in
         let new_val_map = BatList.fold_left add val_map (List.tl vals) in
