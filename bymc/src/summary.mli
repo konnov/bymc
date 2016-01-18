@@ -14,5 +14,5 @@ val summarize:
     optimize guards, and merge all summaries into one skeleton
  *)
 val summarize_optimize_fuse:
-    Runtime.runtime_t -> Program.program_t -> SymbSkel.Sk.skel_t
+    keep_selfloops: bool -> Runtime.runtime_t -> Program.program_t -> SymbSkel.Sk.skel_t
 
