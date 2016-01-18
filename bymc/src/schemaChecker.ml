@@ -126,8 +126,10 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
                     fprintf out "%4d (F%4d) x%2s: "
                         (start_no + num) f.F.no (SpinIrImp.expr_s accel);
                     List.iter (p (f.F.no = 0) out) other;
+                    if other = [] && f.F.no <> 0
+                    then fprintf out " <nop>";
                     if f.F.no = 0
-                    then fprintf out " K[*]: = 0;\n"
+                    then fprintf out " K[*] := 0;\n"
                     else fprintf out "\n";
                     1 + num
                 end
