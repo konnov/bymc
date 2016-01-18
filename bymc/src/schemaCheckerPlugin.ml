@@ -46,11 +46,18 @@ class slps_checker_plugin_t (plugin_name: string) =
     object(self)
         inherit analysis_plugin_t plugin_name
 
+        method is_ltl tech =
+            tech <> Some "cav15" && tech <> Some "cav15-opt"
+
         method transform rt =
             let sprog = self#get_input0 in
-            let sk = Summary.summarize_optimize_fuse rt sprog in
+            let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
+            let sk = Summary.summarize_optimize_fuse rt sprog
+                ~keep_selfloops:(self#is_ltl tech)
+                    (* reachability is blind to self-loops *)
+            in
             if "bounds" <> rt#caches#options.Options.spec
-            then self#check rt sprog sk
+            then self#check tech rt sprog sk
             else begin (* compute the bounds using the summary *)
                 let dom = rt#caches#analysis#get_pia_dom in
                 let dom_size = dom#length in
@@ -143,16 +150,15 @@ class slps_checker_plugin_t (plugin_name: string) =
             StrMap.iter each_form specs
 
 
-        method check rt sprog sk =
+        method check tech rt sprog sk =
             let loc_vars = IntMap.values sk.Sk.loc_vars in
             let ntt = (Program.get_type_tab sprog)#copy in
             let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
             BatEnum.iter set_type loc_vars;
 
-            let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
-            if tech = Some "cav15" || tech = Some "cav15-opt"
-            then self#check_reachability_cav15 rt sprog sk ntt
-            else self#check_ltl rt sprog sk ntt
+            if self#is_ltl tech
+            then self#check_ltl rt sprog sk ntt
+            else self#check_reachability_cav15 rt sprog sk ntt
 
         method update_runtime rt =
             ()

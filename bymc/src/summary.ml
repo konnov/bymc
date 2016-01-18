@@ -166,7 +166,7 @@ let summarize rt prog proc =
     SymbSkel.build_with (each_path rt) rt prog proc
 
 
-let summarize_optimize_fuse rt prog =
+let summarize_optimize_fuse ~keep_selfloops:keep_selfloops rt prog =
     let map_proc proc =
         logtm INFO ("  > Computing the summary of " ^ proc#get_name);
         let sk = summarize rt prog proc in
@@ -180,7 +180,10 @@ let summarize_optimize_fuse rt prog =
         logtm INFO
             (sprintf "  > Found %d reachable locations and %d rules" nl nr);
         (* remove self-loops *)
-        let sk = SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
+        let sk =
+            if keep_selfloops
+            then sk
+            else SymbSkel.filter_rules (fun r -> r.Sk.src <> r.Sk.dst) sk in
         (* deal with the effects of interval abstraction *)
         logtm INFO ("  > Optimizing guards...");
         let sk = SymbSkel.optimize_guards sk in

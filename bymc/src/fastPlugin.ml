@@ -18,7 +18,8 @@ class fast_plugin_t (plugin_name: string) =
 
         method transform rt =
             let prog = self#get_input0 in
-            let sk = Summary.summarize_optimize_fuse rt prog in
+            let sk = Summary.summarize_optimize_fuse rt prog
+                    ~keep_selfloops:false in
             FastWriter.write_to_file "model.fst" rt prog [sk];
             prog
 
