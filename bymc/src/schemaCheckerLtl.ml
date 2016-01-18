@@ -396,7 +396,7 @@ let check_one_order solver sk spec deps tac elem_order =
                 tac#leave_context;
                 result
             end else
-                prune_or_continue loop_frame uset lset invs (node_type tl) tl
+                search loop_frame uset lset invs tl
 
         | PO_loop_start :: tl ->
             assert (not is_safety);
