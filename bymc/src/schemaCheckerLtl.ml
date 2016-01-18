@@ -356,14 +356,14 @@ let check_one_order solver sk spec deps tac elem_order =
             else { m_is_err_found = false; m_counterexample_filename = "" }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    let at_least_one_step_made prefix_last_frame =
+    let at_least_one_step_made loop_start_frame =
         (* make sure that at least one rule had a non-zero factor *)
-        (* we use <= to prune the loop start frame as well,
-           as its acceleration factor still belongs to the prefix *)
-        let in_prefix f = (f.F.no <= prefix_last_frame.F.no) in
+        let in_prefix f = (f.F.no < loop_start_frame.F.no) in
         let loop_frames = BatList.drop_while in_prefix tac#frame_hist in
         let pos_factor f = BinEx (GT, Var f.F.accel_v, IntConst 0) in
-        list_to_binex OR (List.map pos_factor loop_frames)
+        (* remove the first frame,
+           as its acceleration factor still belongs to the prefix *)
+        list_to_binex OR (List.map pos_factor (List.tl loop_frames))
     in
     let rec search prefix_last_frame uset lset invs = function
         | [] ->
@@ -373,7 +373,7 @@ let check_one_order solver sk spec deps tac elem_order =
             else begin
                 (* close the loop *)
                 let lf = get_some prefix_last_frame in
-                let in_loop f = (f.F.no > lf.F.no) in
+                let in_loop f = (f.F.no >= lf.F.no) in
                 let loop_start_frame = List.find in_loop tac#frame_hist in
                 tac#assert_frame_eq sk loop_start_frame;
                 tac#assert_top [at_least_one_step_made loop_start_frame];
