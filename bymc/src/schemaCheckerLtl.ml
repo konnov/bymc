@@ -338,13 +338,25 @@ let check_one_order solver sk spec deps tac elem_order =
             else { m_is_err_found = false; m_counterexample_filename = "" }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
+    let at_least_one_step_made loop_frame =
+        (* make sure that at least one rule had a non-zero factor *)
+        (* we use <= to prune the loop start frame as well,
+           as its acceleration factor still belongs to the prefix *)
+        let in_prefix f = (f.F.no <= loop_frame.F.no) in
+        let frames = BatList.drop_while in_prefix tac#frame_hist in
+        let pos_factor f = BinEx (GT, Var f.F.accel_v, IntConst 0) in
+        list_to_binex OR (List.map pos_factor frames)
+    in
     let rec search loop_frame uset lset invs = function
         | [] ->
             if is_safety
-            (* no errors: we have already checked the prefix *)
+                (* no errors: we have already checked the prefix *)
             then { m_is_err_found = false; m_counterexample_filename = "" }
             else begin
-                tac#assert_frame_eq sk (get_some loop_frame);
+                (* close the loop *)
+                let lf = get_some loop_frame in
+                tac#assert_top [at_least_one_step_made lf];
+                tac#assert_frame_eq sk lf;
                 let fname = ref "" in
                 let on_error frame_hist =
                     (* FIXME *)
@@ -489,10 +501,11 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
 let poset_make_utl form =
     (* positions 1 and 0 correspond to the initial state
        and the start of the loop respectively *)
+    let add_empty pos map =
+        IntMap.add pos [] map
+    in
     let add_form pos form map =
-        if IntMap.mem pos map
-        then IntMap.add pos (form :: (IntMap.find pos map)) map
-        else IntMap.add pos [form] map
+        IntMap.add pos (form :: (IntMap.find pos map)) map
     in
     let rec make in_loop (pos, orders, map) = function
     | TL_p _ as e ->
@@ -515,9 +528,12 @@ let poset_make_utl form =
             (* pos + 1 comes after pos *)
             else (pos, pos + 1) :: orders
         in
-        make in_loop (pos + 1, new_orders, map) psi
+        make in_loop (pos + 1, new_orders, (add_empty (pos + 1) map)) psi
     in
-    let n, orders, map = make false (po_init, [], IntMap.empty) form in
+    (* find the subformulas and compute the dependencies *)
+    let n, orders, map =
+        make false (po_init, [], (IntMap.singleton po_init [])) form
+    in
     let remap i fs =
         if i = po_init
         then PO_init (TL_and fs)
@@ -556,7 +572,7 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
                 (sprintf "Not_found (key=%d) in gen_and_check_schemas_on_the_fly" num))
     in
     let pord (a, b) =
-        sprintf "%s < %s" (po_elem_s sk (get_elem a)) (po_elem_s sk (get_elem b))
+        sprintf "%s < %s" (po_elem_short_s sk (get_elem a)) (po_elem_short_s sk (get_elem b))
     in
     logtm INFO (sprintf "The partial order is:\n    %s\n\n"
         (str_join ", " (List.map pord order)));
