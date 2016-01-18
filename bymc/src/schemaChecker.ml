@@ -103,44 +103,61 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     let p is_init_frame out (k, n, e) =
         match k with
         | B.KLoc ->
-                let locno = StrMap.find n revmap in
-                let loc = List.nth sk.Sk.locs locno in
-                let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
-                in
-                let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
-                if not is_init_frame || e <> IntConst 0
-                then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
+            let locno = StrMap.find n revmap in
+            let loc = List.nth sk.Sk.locs locno in
+            let pair locvar locval = sprintf "%s:%d" locvar#get_name locval
+            in
+            let idx = List.map2 pair sk.Sk.locals loc |> str_join "][" in
+            if not is_init_frame || e <> IntConst 0
+            then fprintf out " K[%s] := %s;" idx (SpinIrImp.expr_s e)
 
         | _ ->
-                fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
+            fprintf out " %s := %s;" n (SpinIrImp.expr_s e)
     in
-    let rec each_frame out num = function
-        | [] -> ()
-
-        | f :: tl ->
-            let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
-            let (_, _, accel), other = List.hd vals, List.tl vals in
-            let new_num =
-                if f.F.no = 0 || accel <> IntConst 0
-                then begin
-                    fprintf out "%4d (F%4d) x%2s: "
-                        (start_no + num) f.F.no (SpinIrImp.expr_s accel);
-                    List.iter (p (f.F.no = 0) out) other;
-                    if other = [] && f.F.no <> 0
-                    then fprintf out " <nop>";
-                    if f.F.no = 0
-                    then fprintf out " K[*] := 0;\n"
-                    else fprintf out "\n";
-                    1 + num
-                end
-                else num
-            in
-            each_frame out new_num tl
+    let each_frame out (val_map, num) f =
+        let vals = get_vars (f.F.accel_v :: f.F.new_vars) in
+        let add map (_, name, value) =
+            printf "%s -> %s\n" name (SpinIrImp.expr_s value);
+            StrMap.add name value map
+        in
+        let new_val_map = BatList.fold_left add val_map (List.tl vals) in
+        let (_, _, accel), other = List.hd vals, List.tl vals in
+        if f.F.no = 0 || accel <> IntConst 0
+        then begin
+            fprintf out "%4d (F%4d) x%2s: "
+                (start_no + num) f.F.no (SpinIrImp.expr_s accel);
+            List.iter (p (f.F.no = 0) out) other;
+            if other = [] && f.F.no <> 0
+            then fprintf out " <nop>";
+            if f.F.no = 0
+            then fprintf out " K[*] := 0;\n"
+            else fprintf out "\n";
+            (new_val_map, 1 + num)
+        end
+        else (new_val_map, num)
     in
     solver#set_need_model true;
     List.iter (p false out) (get_vars sk.Sk.params);
     fprintf out "\n";
-    each_frame out 0 frame_hist
+    let val_map, _ =
+        (* print the frames *)
+        BatList.fold_left (each_frame out) (StrMap.empty, 0) frame_hist
+    in
+    (* print the final values *)
+    let pr_loc no =
+        let locvar = Sk.locvar sk no in
+        if StrMap.mem locvar#get_name val_map
+        then let value = StrMap.find locvar#get_name val_map in
+            p false out (B.KLoc, locvar#get_name, value)
+    in
+    let pr_shared v =
+        if StrMap.mem v#get_name val_map
+        then p false out (B.KGlob, v#get_name, StrMap.find v#get_name val_map)
+    in
+    fprintf out "****************\n";
+    List.iter pr_shared sk.Sk.shared;
+    List.iter pr_loc (range 0 sk.Sk.nlocs);
+    fprintf out "\n"
 
 
 let dump_counterex_to_file solver sk form_name frame_hist =
