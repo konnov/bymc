@@ -184,7 +184,8 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 | Frame f -> f :: l
                 | _ -> l
             in
-            List.fold_left m [] (List.rev m_frames)
+            (* do not reverse m_frames as the first frame is the latest one *)
+            List.fold_left m [] m_frames
  
         method private top2 =
             let rec find = function

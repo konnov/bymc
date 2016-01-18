@@ -245,7 +245,7 @@ let node_type_s = function
  A tactic that does not nothing but records the executed methods.
  It is a stripped version of SchemaChecker.tree_tac_t
  *)
-class mock_tac_t =
+class mock_tac_t (tt: SpinIr.data_type_tab) =
     object(self)
         inherit SchemaSmt.tac_t
 
@@ -269,7 +269,8 @@ class mock_tac_t =
                 | Frame f -> f :: l
                 | _ -> l
             in
-            List.fold_left m [] (List.rev m_frames)
+            (* do not reverse the second time *)
+            List.fold_left m [] m_frames
  
         method private top2 =
             let rec find = function
@@ -320,16 +321,19 @@ class mock_tac_t =
         method leave_context =
             m_call_stack <- "(leave_context)" :: m_call_stack
 
-        method push_rule _ _ rule_no =
+        method push_rule _ sk rule_no =
             let tag = sprintf "(push_rule _ _ %d)" rule_no in
-            m_call_stack <- tag :: m_call_stack
+            m_call_stack <- tag :: m_call_stack;
+            let new_frame = F.advance_frame tt sk self#top (fun _ _ -> true) in
+            self#push_frame new_frame
+
     end
 
 
 let gen_and_check_schemas_on_the_fly_strb _ =
     let sk, tt = prepare_strb () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
-    let tac = new mock_tac_t in
+    let tac = new mock_tac_t tt in
     let ltl_form = make_strb_unforg sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let bad_form =
@@ -381,7 +385,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
 let gen_and_check_schemas_on_the_fly_aba _ =
     let sk, tt = prepare_aba () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
-    let tac = new mock_tac_t in
+    let tac = new mock_tac_t tt in
     let ltl_form = make_aba_unforg sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let bad_form =
@@ -513,7 +517,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
 let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let sk, tt = prepare_strb () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
-    let tac = new mock_tac_t in
+    let tac = new mock_tac_t tt in
     let ltl_form = make_strb_corr sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let ntt = tt#copy in
@@ -539,6 +543,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_node LoopStart)";            (* entering the loop *)
         "(push_rule _ _ 0)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top (F2_warp > 0) _)"; (* at least one step was made *)
         "(assert_frame_eq _ _)";    (* the reached frame equals to the loop start *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
@@ -585,6 +590,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 3)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top ((((F13_warp > 0) || (F14_warp > 0)) || (F15_warp > 0)) || (F16_warp > 0)) _)"; (* at least one step was made *)
         "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
@@ -617,6 +623,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
         "(push_rule _ _ 1)";
         "(assert_top (loc4 == 0) _)";    (* the G k[4] = 0 *)
+        "(assert_top ((F21_warp > 0) || (F22_warp > 0)) _)"; (* at least one step is made *)
         "(assert_frame_eq _ _)";         (* the loop is closed *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
