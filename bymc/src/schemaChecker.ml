@@ -18,6 +18,7 @@ open SchemaSmt
 let kind_s = function
     | Leaf -> "Leaf"
     | Intermediate -> "Intermediate"
+    | LoopStart -> "LoopStart" (* not required for safety *)
 
 (**
 
@@ -207,6 +208,11 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             let top, prev = self#top2 in
             F.assert_frame rt#solver tt prev top assertions
 
+        method assert_frame_eq sk loop_frame =
+            let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
+            F.assert_frame_eq rt#solver tt loc_vars loop_frame self#top;
+            F.assert_frame_eq rt#solver tt sk.Sk.shared loop_frame self#top
+
         method enter_node kind =
             let slv = rt#solver in
             let k_s = kind_s kind in
@@ -222,17 +228,21 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             slv#comment "push: check_property";
             let stack_level = slv#get_stack_level in
             
-            slv#push_ctx;
-            slv#comment "is segment bad?";
-            if not (is_c_true form)
-            then self#assert_top [form];
-            let err = slv#check in
-            if err
-            then error_fun self#frame_hist;
-            slv#comment "pop: check_property";
-            slv#pop_ctx;
-            assert (stack_level = slv#get_stack_level);
-            err
+            if SpinIr.is_c_false form
+            then false  (* it never holds *)
+            else begin
+                slv#push_ctx;
+                slv#comment "is segment bad?";
+                if not (is_c_true form)
+                then self#assert_top [form];
+                let err = slv#check in
+                if err
+                then error_fun self#frame_hist;
+                slv#comment "pop: check_property";
+                slv#pop_ctx;
+                assert (stack_level = slv#get_stack_level);
+                err
+            end
 
         method leave_node kind =
             let rec unroll = function

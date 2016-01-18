@@ -49,13 +49,20 @@ module F: sig
      *)
     val assert_frame: Smt.smt_solver -> SpinIr.data_type_tab
         -> frame_t -> frame_t -> Spin.token SpinIr.expr list -> unit
+
+    (**
+     Assert that all the variables in two frames are equal, e.g.,
+     to check whether a loop has been formed.
+     *)
+    val assert_frame_eq: Smt.smt_solver -> SpinIr.data_type_tab
+        -> SpinIr.var list -> frame_t -> frame_t -> unit
 end 
 
 
 (**
- A node type: a leaf or an intermediate node.
+ A node type: an intermediate node, a loop start, or a leaf.
  *)
-type node_kind_t = Leaf | Intermediate
+type node_kind_t = Leaf | Intermediate | LoopStart
 
 
 (**
@@ -101,6 +108,15 @@ class virtual tac_t:
          *)
         method virtual assert_top2:
             Spin.token SpinIr.expr list -> unit
+
+        (** 
+         Add assertion that the variables in two frames are equal.
+         
+         @param skel a symbolic skeleton
+         @param a frame to compare the top against
+         *)
+        method virtual assert_frame_eq:
+            SymbSkel.Sk.skel_t -> F.frame_t -> unit
 
         (**
          This function is called when a new tree node is entered.

@@ -311,14 +311,14 @@ let check_one_order solver sk spec deps tac elem_order =
     let node_type tl =
         if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
     in
-    let assert_invariants invs =
+    let assert_propositions invs =
         tac#assert_top (List.map (atomic_to_expr sk) invs)
     in
     let check_steady_schema uset lset invs =
         (* push all the unlocked rules *)
         let push_rule r =
             tac#push_rule deps sk r;
-            if invs <> [] then assert_invariants invs
+            if invs <> [] then assert_propositions invs
         in
         (* TODO: inefficient, filter out those rules that violate /\ k_i = 0 *)
         let push_schema _ =
@@ -332,54 +332,82 @@ let check_one_order solver sk spec deps tac elem_order =
             fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist) (* FIXME *)
         in
         (* check, whether a safety property is violated *)
-        if tac#check_property safety_bad on_error
-        then { m_is_err_found = true; m_counterexample_filename = !fname }
+        if is_safety
+        then if tac#check_property safety_bad on_error
+            then { m_is_err_found = true; m_counterexample_filename = !fname }
+            else { m_is_err_found = false; m_counterexample_filename = "" }
         else { m_is_err_found = false; m_counterexample_filename = "" }
     in
-    let rec search uset lset invs = function
+    let rec search loop_frame uset lset invs = function
         | [] ->
+            if is_safety
             (* no errors: we have already checked the prefix *)
-            { m_is_err_found = false; m_counterexample_filename = "" }
+            then { m_is_err_found = false; m_counterexample_filename = "" }
+            else begin
+                tac#assert_frame_eq sk (get_some loop_frame);
+                let fname = ref "" in
+                let on_error frame_hist =
+                    (* FIXME *)
+                    fname := (SchemaChecker.get_counterex solver sk "fixme" frame_hist)
+                in
+                if tac#check_property (IntConst 1) on_error
+                then { m_is_err_found = true; m_counterexample_filename = !fname }
+                else { m_is_err_found = false; m_counterexample_filename = "" }
+            end
 
         | (PO_init utl_form) :: tl ->
             (* treat the initial state *)
             tac#enter_context;
             if not is_safety
-            then tac#assert_top [utl_to_expr sk utl_form]
+            then assert_propositions (find_uncovered_utl_props utl_form)
             else if not (SpinIr.is_c_true safety_init)
                 then tac#assert_top [safety_init];
                 
             let new_invs = find_G_props utl_form in
-            assert_invariants new_invs;
+            assert_propositions new_invs;
             let result =
-                prune_or_continue uset lset (new_invs @ invs) (node_type tl) tl in
+                prune_or_continue loop_frame uset lset (new_invs @ invs) (node_type tl) tl in
             tac#leave_context;
             result
 
         | (PO_guard id) :: tl ->
-            (* an unlocking/locking guard:
-               activate the context, check a schema and continue *)
-            let is_unlocking = PSet.mem id deps.D.umask in
-            let cond_expr = PSetEltMap.find id deps.D.cond_map in
-            tac#enter_context;
-            (* fire a sequence of rule that should unlock the condition associated with id *)
-            (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk) ;
-            (* assert that the condition is now unlocked (resp. locked) *)
-            tac#assert_top [cond_expr];
-            let new_uset, new_lset =
-                if is_unlocking
-                then (PSet.add id uset), lset
-                else uset, (PSet.add id lset)
-            in
-            let result = prune_or_continue new_uset new_lset invs (node_type tl) tl in
-            tac#leave_context;
-            result
+            (* An unlocking/locking guard:
+               activate the context, check a schema and continue.
+               This can be done only outside a loop.
+             *)
+            if loop_frame = None
+            then begin
+                let is_unlocking = PSet.mem id deps.D.umask in
+                let cond_expr = PSetEltMap.find id deps.D.cond_map in
+                tac#enter_context;
+                (* fire a sequence of rules that should unlock the condition associated with id *)
+                (* XXX: just one rule must fire, otherwise an invariant can be violated! *)
+                (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk) ;
+                (* assert that the condition is now unlocked (resp. locked) *)
+                tac#assert_top [cond_expr];
+                assert_propositions invs;   (* don't forget the invariants *)
+                let new_uset, new_lset =
+                    if is_unlocking
+                    then (PSet.add id uset), lset
+                    else uset, (PSet.add id lset)
+                in
+                let result =
+                    prune_or_continue loop_frame new_uset new_lset invs (node_type tl) tl in
+                tac#leave_context;
+                result
+            end else
+                prune_or_continue loop_frame uset lset invs (node_type tl) tl
 
         | PO_loop_start :: tl ->
             assert (not is_safety);
-            prune_or_continue uset lset invs (node_type tl) tl
             (* TODO: check that no other guards were activated *)
-            (* TODO: check that frames are equal *)
+            let loop_start_frame =
+                try Some tac#top
+                with Failure m ->
+                    printf "PO_loop_start: %s\n" m;
+                    raise (Failure m)
+            in
+            prune_or_continue loop_start_frame uset lset invs LoopStart tl
 
         | (PO_tl (TL_and fs)) :: tl ->
             (* an extreme appearance of F *)
@@ -389,14 +417,14 @@ let check_one_order solver sk spec deps tac elem_order =
             tac#assert_top (List.map (atomic_to_expr sk) props);
             let new_invs = find_G_props (TL_and fs) in
             let result =
-                prune_or_continue uset lset (new_invs @ invs) (node_type tl) tl
+                prune_or_continue loop_frame uset lset (new_invs @ invs) (node_type tl) tl
             in
             tac#leave_context;
             result
 
         | _ ->
             raise (Failure "Not implemented yet")
-    and prune_or_continue uset lset invs node_type seq =
+    and prune_or_continue loop_frame uset lset invs node_type seq =
         if solver#check
         then begin
             (* try to find an execution
@@ -404,7 +432,7 @@ let check_one_order solver sk spec deps tac elem_order =
             tac#enter_node node_type;
             let res = fail_first
                 (lazy (check_steady_schema uset lset invs))
-                (lazy (search uset lset invs seq))
+                (lazy (search loop_frame uset lset invs seq))
             in
             tac#leave_node node_type;
             res
@@ -416,9 +444,9 @@ let check_one_order solver sk spec deps tac elem_order =
     then begin
         let first = List.hd elem_order in
         assert (first = PO_loop_start);
-        search PSet.empty PSet.empty [] (List.tl elem_order) (* prune the loop *)
+        search None PSet.empty PSet.empty [] (List.tl elem_order) (* prune the loop *)
     end
-        else search PSet.empty PSet.empty [] elem_order
+        else search None PSet.empty PSet.empty [] elem_order
 
 
 (**
