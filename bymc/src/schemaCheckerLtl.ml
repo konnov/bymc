@@ -259,7 +259,7 @@ type po_elem_t =
 
 let po_elem_s sk = function
     | PO_guard e ->
-        sprintf "G%s" (PSet.elem_str e)
+        sprintf "C%s" (PSet.elem_str e)
 
     | PO_tl form ->
         sprintf "TL(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
