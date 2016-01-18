@@ -144,7 +144,7 @@ module B = struct
         fprintf out "\n";
         each_frame out 0 frame_hist;
         fprintf out "----------------\n";
-        fprintf out " Gute Nacht. Spokoinoy nochi.\n";
+        fprintf out " Gute Nacht. Spokoinoy nochi. Laku noch.\n";
         solver#set_need_model false;
         close_out out;
         printf "    > Saved counterexample to %s\n" fname;
@@ -210,6 +210,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             F.assert_frame rt#solver tt prev top assertions
 
         method assert_frame_eq sk loop_frame =
+            rt#solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);
             let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
             F.assert_frame_eq rt#solver tt loc_vars loop_frame self#top;
             F.assert_frame_eq rt#solver tt sk.Sk.shared loop_frame self#top
@@ -298,7 +299,8 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 List.fold_left IntSet.union IntSet.empty
                     (List.map B.collect_next_vars actions) in
             let is_new_f basev v =
-                v#id = src_loc_v#id || v#id = dst_loc_v#id
+                ((v#id = src_loc_v#id || v#id = dst_loc_v#id)
+                    && rule.Sk.src <> rule.Sk.dst)
                     || IntSet.mem basev#id next_shared
             in
             let new_frame = F.advance_frame tt sk frame is_new_f in
@@ -310,8 +312,11 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 BinEx (Spin.EQ, UnEx (Spin.NEXT, Var next),
                     BinEx (sign, Var prev, Var new_frame.F.accel_v))
             in
-            self#assert_top2 [move rule.Sk.src Spin.MINUS];
-            self#assert_top2 [move rule.Sk.dst Spin.PLUS];
+            if rule.Sk.src <> rule.Sk.dst (* don't do it for self-loops *)
+            then begin
+                self#assert_top2 [move rule.Sk.src Spin.MINUS];
+                self#assert_top2 [move rule.Sk.dst Spin.PLUS];
+            end;
 
             let rule_guard =
                 (* Milestone conditions are either:
