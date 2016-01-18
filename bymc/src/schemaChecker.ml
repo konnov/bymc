@@ -138,7 +138,7 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     solver#set_need_model true;
     List.iter (p false out) (get_vars sk.Sk.params);
     fprintf out "\n";
-    let val_map, _ =
+    let val_map, nprinted =
         (* print the frames *)
         BatList.fold_left (each_frame out) (StrMap.empty, 0) frame_hist
     in
@@ -156,7 +156,8 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     fprintf out "****************\n";
     List.iter pr_shared sk.Sk.shared;
     List.iter pr_loc (range 0 sk.Sk.nlocs);
-    fprintf out "\n"
+    fprintf out "\n";
+    nprinted
 
 
 let dump_counterex_to_file solver sk form_name frame_hist =
@@ -166,7 +167,7 @@ let dump_counterex_to_file solver sk form_name frame_hist =
     fprintf out " Counterexample\n";
     fprintf out "----------------\n";
     fprintf out "           ";
-    write_counterex solver sk out frame_hist;
+    ignore (write_counterex solver sk out frame_hist);
     fprintf out "----------------\n";
     fprintf out " Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;

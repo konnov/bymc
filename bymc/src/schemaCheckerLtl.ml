@@ -307,13 +307,13 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     fprintf out " Counterexample\n";
     fprintf out "----------------\n";
     fprintf out "           \n";
-    SchemaChecker.write_counterex solver sk out prefix_frames;
+    let prefix_len = SchemaChecker.write_counterex solver sk out prefix_frames
+    in
     if loop_frames <> []
     then begin
-        let start = List.length prefix_frames in
         fprintf out "****** LOOP *******\n";
-        SchemaChecker.write_counterex solver sk out loop_frames ~start_no:start;
-        fprintf out "****** GOTO %d *******\n" start;
+        ignore (SchemaChecker.write_counterex
+            solver sk out loop_frames ~start_no:prefix_len)
     end;
     fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;

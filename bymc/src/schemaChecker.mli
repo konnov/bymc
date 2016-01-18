@@ -33,7 +33,7 @@ val is_error_tree:
 (* Retrieve a counterexample from the current SMT context and write it to the output *)
 val write_counterex:
     ?start_no:int  -> Smt.smt_solver -> SymbSkel.Sk.skel_t -> unit BatIO.output
-    -> F.frame_t list -> unit
+    -> F.frame_t list -> int
 
 (**
  A simple implementation of tac_t with SMT.
