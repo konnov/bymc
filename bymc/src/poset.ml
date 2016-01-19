@@ -1,5 +1,4 @@
 (**
- 
   Operations on partially-ordered sets.
 
   We generate all linearizations of a poset using the following algorithm:
@@ -8,7 +7,6 @@
   generating the linear extensions of a poset, 1995, Volume 12,
   Issue 1, pp 57-75.
 
-
   @author Igor Konnov, 2016
  *)
 
@@ -16,6 +14,10 @@ open Batteries
 open BatPrintf
 
 open Accums
+
+module G = Graph.Pack.Digraph
+module Topo = Graph.Topological.Make_stable(G)
+
 
 exception Poset_error of string
 
@@ -101,13 +103,11 @@ let mk_po_matrix n poset =
     in
     fill_matrix poset;
     BatEnum.iter closure (BatEnum.cartesian_product (0--^n) (0--^n));
-    (*
     let prow i =
         let pp j = sprintf "%2d" mx.(i).(j) in
         printf "  %s\n" (str_join " " (List.map pp (range 0 n)))
     in
-    List.iter prow (range 0 n);
-    *)
+    Debug.ltrace Trc.pos (lazy (printf "matrix:\n"; List.iter prow (range 0 n); "------\n"));
     mx
 
 
@@ -117,6 +117,38 @@ let prec mx a b =
 
 let prec_eq mx a b =
     a = b || prec mx a b
+
+
+(** Create a linear extension of a poset with equal elements
+    sorted in the natural order. Use a stable topological sort for that.
+ *)
+let mk_sorted_linorder n poset =
+    let pp (a, b) = sprintf "(%d, %d)" a b in
+    Debug.ltrace Trc.pos
+        (lazy (sprintf "poset = [%s]\n"
+            (Accums.str_join ", " (List.map pp poset))));
+    let vertices = Hashtbl.create n in
+    let g = G.create () in
+    let mkv i =
+        try Hashtbl.find vertices i
+        with Not_found ->
+            let v = G.V.create i in
+            G.add_vertex g v;
+            Hashtbl.add vertices i v; v
+    in
+    BatEnum.iter (fun i -> ignore (mkv i)) (0--^n);
+    let add_edge (a, b) =
+        G.add_edge g (mkv a) (mkv b)
+    in
+    List.iter add_edge poset;
+    let sorted = BatArray.of_enum (0--^n) in
+    let set v i =
+        sorted.(i) <- G.V.label v;
+        i + 1
+    in
+    ignore (Topo.fold set g 0);
+    (* an array to keep the elements in the topological order of poset *)
+    sorted
 
 
 (* if you want to understand this function,
@@ -129,17 +161,7 @@ let linord_iter_first n poset =
     (* the indices of paired minimal elements *)
     let pair_indices = ref [] in
     (* an array to keep the elements in the topological order of poset *)
-    let sorted = BatArray.of_enum (0--^n) in
-    let cmp a b =
-        let a_prec_b = m_matrix.(a).(b) <> val_no_prec
-        and b_prec_a = m_matrix.(b).(a) <> val_no_prec in
-        if a = b
-        then 0
-        else if not a_prec_b && not b_prec_a
-            then compare a b     (* use the natural order *)
-            else if a_prec_b then -1 else 1
-    in
-    BatArray.sort cmp sorted;
+    let sorted = mk_sorted_linorder n poset in
     (* for each element, we record the number of the preceding elements *)
     let preceding = BatArray.make n 0 in
     let sum_cell j s i =
@@ -163,8 +185,10 @@ let linord_iter_first n poset =
     (* collect minimal elements, as singletons or pairs *)
     while !nleft > 0 do
         (* the first element is always minimal *)
+        Debug.ltrace Trc.pos
+            (lazy (sprintf "sorted = %s\n"
+                (str_join ", " (List.map int_s (Array.to_list sorted)))));
         let a = sorted.(0) in
-        (* printf "sorted = %s\n" (str_join ", " (List.map int_s (Array.to_list sorted))); *)
         assert (preceding.(a) = 0);
         (* try to find another minimal element *)
         try
@@ -175,8 +199,8 @@ let linord_iter_first n poset =
             (* append pair indices *)
             let j = n - !nleft in
             pair_indices := (j + 1) :: j :: !pair_indices;
-            Debug.trace Trc.pos
-                (fun _ -> sprintf "a pair: a = %d, b = %d, bi = %d, j = %d\n" a b bi j);
+            Debug.ltrace Trc.pos
+                (lazy (sprintf "a pair: a = %d, b = %d, bi = %d, j = %d\n" a b bi j));
 
             (* TODO: do it w/o shifting, just by setting preceding to -1 *)
             (* shift sorted by one from 1 to bi - 1 *)
@@ -189,7 +213,7 @@ let linord_iter_first n poset =
             cross_out a; cross_out b;
         with Not_found -> begin
             (* a is the only minimal element *)
-            Debug.trace Trc.pos (fun _ -> sprintf "a singleton: a = %d\n" a);
+            Debug.ltrace Trc.pos (lazy (sprintf "a singleton: a = %d\n" a));
             Array.blit sorted 1 sorted 0 (!nleft - 1);
             cross_out a
         end

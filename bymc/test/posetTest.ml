@@ -661,6 +661,17 @@ let test_linord_iter_next_bugfix1 _ =
     assert_order_preserved (mk_iter ())
 
 
+let test_linord_iter_next_bugfix2 _ =
+    let mk_iter () = linord_iter_first 10 [
+        (1, 9); (1, 8); (1, 7); (1, 6); (1, 5); (1, 4); (1, 3); (1, 2); (6, 8);
+        (4, 8); (3, 8); (9, 7); (5, 7); (2, 7); (9, 5); (2, 5); (6, 4); (3, 4);
+        (6, 3); (9, 2); (0, 1);
+    ]
+    in
+    assert_no_dups (mk_iter ());
+    assert_order_preserved (mk_iter ())
+
+
 let suite = "poset-suite" >:::
     [
         "test_mk_po_matrix" >:: test_mk_po_matrix;
@@ -715,5 +726,7 @@ let suite = "poset-suite" >:::
         (* bugfixes *)
         "test_linord_iter_next_bugfix1"
             >:: test_linord_iter_next_bugfix1;
+        "test_linord_iter_next_bugfix2"
+            >:: test_linord_iter_next_bugfix2;
     ]
 
