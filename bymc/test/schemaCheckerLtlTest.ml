@@ -765,13 +765,13 @@ let can_handle_fairness _ =
 let extract_utl_fairness _ =
     let sk, tt = prepare_strb () in
     let ltl_form = make_strb_fairness sk in
-    let expected_utl =
-        TL_F (TL_and [TL_p (AndOr_Kne0 [[4]]); TL_G (TL_p (AndOr_Kne0 [[4; 3; 0; 2]]))])
+    let expected_utl_s =
+        "G (F (((((x < (t + 1)) || (x >= (n - t)))) \\/ (k[3] = 0 /\\ k[2] = 0 /\\ k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[4] = 0) /\\ ((x < (n - t))) \\/ (k[2] = 0 /\\ k[3] = 0))))"
     in
     let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
-    assert_equal expected_utl result_utl
-        ~msg:(sprintf "Expected %s, found %s"
-            (utl_spec_s expected_utl) (utl_spec_s result_utl))
+    let result_utl_s = utl_spec_s result_utl in
+    assert_equal expected_utl_s result_utl_s
+        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s)
 
 
 let suite = "schemaCheckerLtl-suite" >:::
@@ -799,6 +799,6 @@ let suite = "schemaCheckerLtl-suite" >:::
 
         "gen_and_check_schemas_on_the_fly_strb_corr"
             >::(bracket SmtTest.setup_smt2
-                (with_tracing gen_and_check_schemas_on_the_fly_strb_corr) SmtTest.shutdown_smt2);
+                gen_and_check_schemas_on_the_fly_strb_corr SmtTest.shutdown_smt2);
     ]
 
