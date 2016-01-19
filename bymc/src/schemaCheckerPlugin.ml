@@ -145,8 +145,9 @@ class slps_checker_plugin_t (plugin_name: string) =
                 let negated = Ltl.normalize_form (UnEx (NEG, f)) in
                 SchemaCheckerLtl.can_handle_spec tt sk negated
             in
+            let fprog = Ltl.embed_fairness sprog in
             let specs =
-                get_proper_specs rt#caches#options sprog [sk] can_handle in
+                get_proper_specs rt#caches#options fprog [sk] can_handle in
             StrMap.iter each_form specs
 
 
