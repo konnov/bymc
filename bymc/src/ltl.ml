@@ -195,7 +195,13 @@ let embed_fairness prog =
     let ltl_forms = Program.get_ltl_forms_as_hash prog in
     let fairness = list_to_binex AND (collect_fairness_forms ltl_forms) in
     let embed map (name, form) =
-        Accums.StringMap.add name (BinEx (IMPLIES, fairness, form)) map in
+        match classify_spec (Program.get_type_tab prog) form with
+        | CondSafety _ ->
+            StringMap.add name form map
+
+        | _ ->
+            StringMap.add name (BinEx (IMPLIES, fairness, form)) map
+    in
     let other_fs = List.filter
         (fun (n, _) -> not (is_fairness_form n)) (hashtbl_as_list ltl_forms) in
     let new_forms = List.fold_left embed Accums.StringMap.empty other_fs in
