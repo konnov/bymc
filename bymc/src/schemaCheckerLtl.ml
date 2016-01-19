@@ -312,6 +312,7 @@ let find_schema_multiplier invs =
     in
     1 + 3 * (List.fold_left count_disjs 0 invs)
 
+
 let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
@@ -484,13 +485,7 @@ let check_one_order solver sk spec deps tac elem_order =
             { m_is_err_found = false; m_counterexample_filename = "" }
     in
     (* evaluate the order *)
-    if is_safety
-    then begin
-        let first = List.hd elem_order in
-        assert (first = PO_loop_start);
-        search None PSet.empty PSet.empty [] (List.tl elem_order) (* prune the loop *)
-    end
-        else search None PSet.empty PSet.empty [] elem_order
+    search None PSet.empty PSet.empty [] elem_order
 
 
 (**
@@ -575,6 +570,56 @@ let poset_make_utl form =
 
 
 (**
+  Given an element order (the elements come from a small set 0..n),
+  we compute the unique fingerprint of the order.
+  For the moment, we use just a simple string representation.
+  *)
+let compute_fingerprint order =
+    let buf = BatBuffer.create (3 * (List.length order)) in
+    let append is_first i =
+        if not is_first
+        then BatBuffer.add_char buf '.';
+        BatBuffer.add_string buf (sprintf "%x" i);
+        false
+    in
+    ignore (List.fold_left append true order);
+    BatBuffer.contents buf
+
+
+let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
+        (is_end_fun: 'r -> bool) (result: 'r ref) (iter: linord_iter_t): 'r =
+    let visited = Hashtbl.create 1024 in
+    let not_loop e = (e <> po_loop) in
+    let not_guard num =
+        match map_fun num with
+        | PO_guard _ -> false
+        | _ -> true
+    in
+    let filter_guards_after_loop order =
+        if po_loop = (List.hd order)
+        then List.tl order (* safety *)
+        else let prefix, loop = BatList.span not_loop order in
+            let floop = List.filter not_guard loop in
+            prefix @ floop (* liveness *)
+    in
+    while not (linord_iter_is_end iter) && not (is_end_fun !result) do
+        let order = BatArray.to_list (linord_iter_get iter) in
+        let filtered = filter_guards_after_loop order in
+        let fingerprint = compute_fingerprint filtered in
+        if not (Hashtbl.mem visited fingerprint)
+        then begin
+            (*printf "  visiting %s\n" fingerprint;*)
+            Hashtbl.add visited fingerprint 1;
+            let eorder = List.map map_fun filtered in
+            result := order_fun eorder;
+        end;
+        if not (is_end_fun !result)
+        then linord_iter_next iter;
+    done;
+    !result
+
+
+(**
   Construct the schema tree and check it on-the-fly.
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
@@ -612,19 +657,25 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
     Debug.ltrace Trc.scl
         (lazy (sprintf "The partial order is:\n    %s\n\n"
             (str_join ", " (List.map ppord order))));
+
+    let total_count = ref 0 in
+    enum_orders get_elem (fun _ -> total_count := 1 + !total_count)
+        (fun _ -> false) (ref ()) (linord_iter_first size order);
+    logtm INFO (sprintf "%d orders to enumerate\n\n" !total_count);
+
+    let current = ref 0 in
+    let each_order eorder = 
+        let pp e = sprintf "%3s" (po_elem_short_s sk e) in
+        let percentage = 100 * !current / !total_count in
+        printf "%3d%% -> %s...\n" percentage (str_join "  " (List.map pp eorder));
+        current := 1 + !current;
+        check_one_order solver sk spec deps tac eorder
+    in
     (* enumerate all the linear extensions *)
-    let result = ref { m_is_err_found = false; m_counterexample_filename = "" } in
-    let iter = linord_iter_first size order in
-    while not (linord_iter_is_end iter) && not !result.m_is_err_found do
-        let order = BatArray.to_list (linord_iter_get iter) in
-        let elem_order = List.map get_elem order in
-        let pp e = sprintf "%6s" (po_elem_short_s sk e) in
-        printf "  -> %s...\n" (str_join "  " (List.map pp elem_order));
-        result := check_one_order solver sk spec deps tac elem_order;
-        if not !result.m_is_err_found
-        then linord_iter_next iter;
-    done;
-    !result
+    let result =
+        ref { m_is_err_found = false; m_counterexample_filename = "" } in
+    enum_orders get_elem each_order
+        (fun r -> r.m_is_err_found) result (linord_iter_first size order)
 
 
 type atomic_ext_t =
