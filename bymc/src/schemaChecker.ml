@@ -127,7 +127,7 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
                 (start_no + num) f.F.no (SpinIrImp.expr_s accel);
             List.iter (p (f.F.no = 0) out) other;
             if other = [] && f.F.no <> 0
-            then fprintf out " <nop>";
+            then fprintf out " <self-loop>";
             if f.F.no = 0
             then fprintf out " K[*] := 0;\n"
             else fprintf out "\n";
@@ -337,7 +337,13 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             then begin
                 self#assert_top2 [move rule.Sk.src Spin.MINUS];
                 self#assert_top2 [move rule.Sk.dst Spin.PLUS];
+            end else begin
+                rt#solver#comment (sprintf "self-loop: %d -> %d" rule.Sk.src rule.Sk.dst)
             end;
+
+            (* There must be enough tokens to fire the transition.
+               This is especially crucial for self-loops. *)
+            self#assert_top [BinEx (Spin.GE, Var src_loc_v, Var new_frame.F.accel_v)];
 
             let rule_guard =
                 (* Milestone conditions are either:
