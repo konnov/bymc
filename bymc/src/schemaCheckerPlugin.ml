@@ -125,7 +125,7 @@ class slps_checker_plugin_t (plugin_name: string) =
 
 
         method check_ltl rt sprog sk tt =
-            let flow_opt = SchemaOpt.is_flow_opt_enabled in
+            let flow_opt = SchemaOpt.is_flow_opt_enabled () in
             let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
 

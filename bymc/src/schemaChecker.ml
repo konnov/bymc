@@ -409,7 +409,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
         (* uncomment the following line, if you want to get
            the same behavior as in the CAV'15 paper *)
         let is_reachable =
-            (not SchemaOpt.is_reach_opt_enabled) || rt#solver#check in
+            (not (SchemaOpt.is_reach_opt_enabled ())) || rt#solver#check in
         let is_error_found =
             if not is_reachable
             then false (* prune the subtree and do not report any error *)
