@@ -346,6 +346,9 @@ let check_one_order solver sk spec deps tac elem_order =
     let assert_propositions invs =
         tac#assert_top (List.map (atomic_to_expr sk) invs)
     in
+    let print_top_frame _ =
+        printf " >%d" tac#top.F.no; flush stdout;
+    in
     let check_steady_schema uset lset invs =
         (* push all the unlocked rules *)
         let push_rule r =
@@ -362,6 +365,7 @@ let check_one_order solver sk spec deps tac elem_order =
         let on_error frame_hist =
             dump_counterex_to_file solver sk "fixme" frame_hist [];
         in
+        print_top_frame ();
         (* check, whether a safety property is violated *)
         if is_safety
         then if tac#check_property safety_bad on_error
@@ -382,14 +386,16 @@ let check_one_order solver sk spec deps tac elem_order =
         | [] ->
             if is_safety
                 (* no errors: we have already checked the prefix *)
-            then { m_is_err_found = false; m_counterexample_filename = "" }
-            else begin
+            then begin
+                { m_is_err_found = false; m_counterexample_filename = "" }
+            end else begin
                 (* close the loop *)
                 let lf = get_some prefix_last_frame in
                 let in_loop f = (f.F.no >= lf.F.no) in
                 let loop_start_frame = List.find in_loop tac#frame_hist in
                 tac#assert_frame_eq sk loop_start_frame;
                 tac#assert_top [at_least_one_step_made loop_start_frame];
+                printf " loop(%d)" loop_start_frame.F.no; flush stdout;
                 let on_error frame_hist =
                     let prefix, loop =
                         BatList.span (fun f -> not (in_loop f)) frame_hist in
@@ -469,8 +475,10 @@ let check_one_order solver sk spec deps tac elem_order =
 
         | _ ->
             raise (Failure "Not implemented yet")
+
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
-        if solver#check
+        (* the following reachability check does not always improve the situation *)
+        if true (*solver#check*)
         then begin
             (* try to find an execution
                 that does not enable new conditions and reaches a bad state *)
@@ -485,7 +493,9 @@ let check_one_order solver sk spec deps tac elem_order =
             { m_is_err_found = false; m_counterexample_filename = "" }
     in
     (* evaluate the order *)
-    search None PSet.empty PSet.empty [] elem_order
+    let result = search None PSet.empty PSet.empty [] elem_order in
+    printf "\n"; flush stdout;
+    result
 
 
 (**
