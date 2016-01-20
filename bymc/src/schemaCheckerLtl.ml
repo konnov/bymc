@@ -478,7 +478,7 @@ let check_one_order solver sk spec deps tac elem_order =
 
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
-        if true (*solver#check*)
+        if not SchemaOpt.is_reach_opt_enabled || solver#check
         then begin
             (* try to find an execution
                 that does not enable new conditions and reaches a bad state *)
