@@ -150,6 +150,18 @@ let make_strb_relay sk =
         BinEx (AND, ex3, (UnEx (ALWAYS, exNot3))))
 
 
+let make_strb_condbased sk =
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
+    let ex3 = eq0 3 in
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    BinEx (AND,
+        (BinEx (LT, get_loc 0, BinEx (PLUS, get_loc 1, Var f))),
+        (UnEx (ALWAYS, ex3)))
+
+
 let make_strb_fairness sk =
     let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
     let eq0 i = BinEx (EQ, get_loc i, IntConst 0) in
@@ -578,9 +590,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
         "(enter_context)";
-             (* the initial constraint *)
-        "(assert_top (((loc3 == 0) && (loc0 == 0)) && (loc2 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
+        "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 4)";             (* a self-loop *)
@@ -597,8 +608,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
 
         (* a schema that unlocks g1, then g2 and then reaches a loop *)
         "(enter_context)";
-        "(assert_top (((loc3 == 0) && (loc0 == 0)) && (loc2 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
+        "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 4)";
@@ -644,8 +655,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
 
         (* a schema that unlocks g1 and then reaches a loop *)
         "(enter_context)";
-        "(assert_top (((loc3 == 0) && (loc0 == 0)) && (loc2 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
+        "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 4)";
@@ -680,13 +691,15 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
 let extract_utl_corr _ =
     let sk, tt = prepare_strb () in
     let ltl_form = make_strb_corr sk in
-    let expected_utl =
-        TL_and [TL_p (And_Keq0 [3; 0; 2]); TL_G (TL_p (And_Keq0 [3]))]
-    in
-    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let expected_utl = TL_G (TL_p (And_Keq0 [3])) in
+    let expected_init_ltl_s = "(((loc0 == 0) && (loc2 == 0)) && (loc3 == 0))" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
     assert_equal expected_utl result_utl
         ~msg:(sprintf "Expected %s, found %s"
-            (utl_spec_s expected_utl) (utl_spec_s result_utl))
+            (utl_spec_s expected_utl) (utl_spec_s result_utl));
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
 
 
 let extract_utl_relay _ =
@@ -695,10 +708,45 @@ let extract_utl_relay _ =
     let expected_utl =
         TL_F (TL_and [TL_p (AndOr_Kne0 [[3]]); TL_G (TL_p (AndOr_Kne0 [[3; 0; 2]]))])
     in
-    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let result_init_ltl, result_utl =
+        SchemaCheckerLtl.extract_utl sk ltl_form in
+    let expected_init_ltl_s = "1" in
     assert_equal expected_utl result_utl
         ~msg:(sprintf "Expected %s, found %s"
-            (utl_spec_s expected_utl) (utl_spec_s result_utl))
+            (utl_spec_s expected_utl) (utl_spec_s result_utl));
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
+
+
+let extract_utl_condbased _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_condbased sk in
+    let expected_utl = TL_G (TL_p (And_Keq0 [3])) in
+    let expected_init_ltl_s = "(loc0 < (loc1 + f))" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    assert_equal expected_utl result_utl
+        ~msg:(sprintf "Expected %s, found %s"
+            (utl_spec_s expected_utl) (utl_spec_s result_utl));
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
+
+
+let extract_utl_fairness _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_fairness sk in
+    let expected_utl_s =
+        "G (F (((((x < (t + 1)) || (x >= (n - t)))) \\/ (k[3] = 0 /\\ k[2] = 0 /\\ k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[4] = 0) /\\ ((x < (n - t))) \\/ (k[2] = 0 /\\ k[3] = 0))))"
+    in
+    let expected_init_ltl_s = "1" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let result_utl_s = utl_spec_s result_utl in
+    assert_equal expected_utl_s result_utl_s
+        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s);
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
 
 
 let can_handle_corr _ =
@@ -715,6 +763,13 @@ let can_handle_relay _ =
     assert_equal true result ~msg:(sprintf "Cannot handle relay")
 
 
+let can_handle_condbased _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_condbased sk in
+    let result = SchemaCheckerLtl.can_handle_spec tt sk ltl_form in
+    assert_equal true result ~msg:(sprintf "Cannot handle condbased")
+
+
 let can_handle_fairness _ =
     let sk, tt = prepare_strb () in
     let ltl_form = make_strb_fairness sk in
@@ -722,33 +777,25 @@ let can_handle_fairness _ =
     assert_equal true result ~msg:(sprintf "Cannot handle fairness")
 
 
-let extract_utl_fairness _ =
-    let sk, tt = prepare_strb () in
-    let ltl_form = make_strb_fairness sk in
-    let expected_utl_s =
-        "G (F (((((x < (t + 1)) || (x >= (n - t)))) \\/ (k[3] = 0 /\\ k[2] = 0 /\\ k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[0] = 0 /\\ k[1] = 0) /\\ ((x < (n - t))) \\/ (k[4] = 0) /\\ ((x < (n - t))) \\/ (k[2] = 0 /\\ k[3] = 0))))"
-    in
-    let result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
-    let result_utl_s = utl_spec_s result_utl in
-    assert_equal expected_utl_s result_utl_s
-        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s)
-
-
 let suite = "schemaCheckerLtl-suite" >:::
     [
-        "extract_utl_corr"
-            >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
-        "extract_utl_relay"
-            >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
-        "extract_utl_fairness"
-            >::(bracket SmtTest.setup_smt2 extract_utl_fairness SmtTest.shutdown_smt2);
-
         "can_handle_corr"
             >::(bracket SmtTest.setup_smt2 can_handle_corr SmtTest.shutdown_smt2);
         "can_handle_relay"
             >::(bracket SmtTest.setup_smt2 can_handle_relay SmtTest.shutdown_smt2);
         "can_handle_fairness"
             >::(bracket SmtTest.setup_smt2 can_handle_fairness SmtTest.shutdown_smt2);
+        "can_handle_condbased"
+            >::(bracket SmtTest.setup_smt2 can_handle_condbased SmtTest.shutdown_smt2);
+
+        "extract_utl_corr"
+            >::(bracket SmtTest.setup_smt2 extract_utl_corr SmtTest.shutdown_smt2);
+        "extract_utl_relay"
+            >::(bracket SmtTest.setup_smt2 extract_utl_relay SmtTest.shutdown_smt2);
+        "extract_utl_fairness"
+            >::(bracket SmtTest.setup_smt2 extract_utl_fairness SmtTest.shutdown_smt2);
+        "extract_utl_condbased"
+            >::(bracket SmtTest.setup_smt2 extract_utl_condbased SmtTest.shutdown_smt2);
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
