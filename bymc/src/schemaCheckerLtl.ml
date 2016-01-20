@@ -61,8 +61,8 @@ type utl_k_spec_t =
 type spec_t =
     | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
         (* a safety violation: init_form -> F bad_form *)
-    | UTL of utl_k_spec_t
-        (* a UTL formula *)
+    | UTL of Spin.token SpinIr.expr * utl_k_spec_t
+        (* an unrestricted formula for the initial state and a UTL formula *)
 
 
 (**
@@ -355,11 +355,11 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
 
 
 let check_one_order solver sk spec deps tac elem_order =
-    let is_safety, safety_init, safety_bad =
+    let is_safety, init_form, safety_bad =
         (* we have to treat safety differently from the general case *)
         match spec with
         | Safety (init, bad) -> true, init, bad
-        | UTL _ -> false, IntConst 1, IntConst 0 
+        | UTL (init, _) -> false, init, IntConst 0 
     in
     let node_type tl =
         if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
@@ -436,9 +436,9 @@ let check_one_order solver sk spec deps tac elem_order =
             (* treat the initial state *)
             tac#enter_context;
             if not is_safety
-            then assert_propositions (find_uncovered_utl_props utl_form)
-            else if not (SpinIr.is_c_true safety_init)
-                then tac#assert_top [safety_init];
+            then assert_propositions (find_uncovered_utl_props utl_form);
+            if not (SpinIr.is_c_true init_form)
+            then tac#assert_top [init_form];
                 
             let new_invs = find_G_props utl_form in
             assert_propositions new_invs;
@@ -666,14 +666,14 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
 let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
     let nelems, order, rev_map =
         match spec with
-        | UTL utl_form ->
+        | UTL (_, utl_form) ->
             (* add all the F-formulas to the poset *)
             let n, o, m = poset_make_utl utl_form in
             1 + n, ((po_init, po_loop) :: o), (IntMap.add po_loop PO_loop_start m)
 
         | Safety (_, _) ->
             (* add the initial state and the loop (the loop will be ignored) *)
-            let inite = PO_init (TL_and []) in (* safety is handled explicitely *)
+            let inite = PO_init (TL_and []) in (* safety is handled explicitly *)
             (* hack: place po_loop BEFORE po_init, so the loop start does not explode
                the number of combinations *)
             2, [(po_loop, po_init)],
@@ -973,9 +973,10 @@ module TL = struct
                 TL_G (join (ps, tls))
         in
         let (props, temps) = utl_tab_of_expr (Ltl.normalize_form form_exp) in
-        let ps = parse_props_p props in
         let tls = List.map parse_tl temps in
-        join (ps, tls)
+        if props = Nop ""
+        then (IntConst 1, join (TL_and [], tls))
+        else (props, join (TL_and [], tls))
 end
 
 let extract_utl = TL.extract_utl
@@ -987,16 +988,19 @@ let extract_safety_or_utl type_tab sk = function
         if (Ltl.is_propositional type_tab lhs)
             && (Ltl.is_propositional type_tab rhs)
         then Safety (Ltl.normalize_form lhs, Ltl.normalize_form rhs)
-        else UTL (TL.extract_utl sk f)
+        else let ltl, utl = TL.extract_utl sk f in
+            UTL (ltl, utl)
 
     (* !([] q) *)
     | UnEx (EVENTUALLY, sub) as f ->
         if (Ltl.is_propositional type_tab sub)
         then Safety (IntConst 1, Ltl.normalize_form sub)
-        else UTL (TL.extract_utl sk f)
+        else let ltl, utl = TL.extract_utl sk f in
+            UTL (ltl, utl)
 
     | _ as f ->
-        UTL (TL.extract_utl sk f)
+        let ltl, utl = TL.extract_utl sk f in
+            UTL (ltl, utl)
 
 
 let can_handle_spec type_tab sk form =

@@ -44,8 +44,9 @@ type utl_k_spec_t =
 type spec_t =
     | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
         (* a safety violation: init_form -> F bad_form *)
-    | UTL of utl_k_spec_t
-        (* a UTL formula *)
+    | UTL of Spin.token SpinIr.expr * utl_k_spec_t
+        (* an unrestricted propositional formula for the initial states
+           and a UTL formula *)
 
 
 (** Convert an atomic formula to a string *)
@@ -85,7 +86,8 @@ val gen_and_check_schemas_on_the_fly:
  @param form a spin expression that encodes an ltl formula.
  @return an LTL(F,G)-formula over counters.
  *)
-val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr -> utl_k_spec_t
+val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr
+    -> Spin.token SpinIr.expr * utl_k_spec_t
 
 
 (**
