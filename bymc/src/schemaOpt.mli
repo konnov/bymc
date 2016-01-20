@@ -5,9 +5,9 @@
  *)
 
 (** is the control flow optimization enabled? *)
-val is_flow_opt_enabled: bool
+val is_flow_opt_enabled: unit -> bool
 (** is the reachability implementation enabled *)
-val is_reach_opt_enabled: bool
+val is_reach_opt_enabled: unit -> bool
 
 (** enable/disable the control flow optimization *)
 val set_flow_opt: bool -> unit
