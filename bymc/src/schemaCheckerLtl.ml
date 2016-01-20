@@ -48,11 +48,11 @@ type atomic_spec_t =
 (**
  LTL(F, G) formulas as supported by the model checker
  *)
-type utl_spec_t =
+type utl_k_spec_t =
     | TL_p of atomic_spec_t     (** a conjunction of atomic formulas *)
-    | TL_F of utl_spec_t        (** F \phi *)
-    | TL_G of utl_spec_t        (** G \phi *)
-    | TL_and of utl_spec_t list (* a conjunction *)
+    | TL_F of utl_k_spec_t        (** F \phi *)
+    | TL_G of utl_k_spec_t        (** G \phi *)
+    | TL_and of utl_k_spec_t list (* a conjunction *)
 
 
 (**
@@ -61,7 +61,7 @@ type utl_spec_t =
 type spec_t =
     | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
         (* a safety violation: init_form -> F bad_form *)
-    | UTL of utl_spec_t
+    | UTL of utl_k_spec_t
         (* a UTL formula *)
 
 
@@ -83,7 +83,7 @@ let find_uncovered_utl_props form =
 
 
 (**
- Find the propositional subformulas that are covered by G (as constructed by utl_to_expr).
+ Find the propositional subformulas that are covered by G (as constructed by utl_k_to_expr).
  *)
 let find_G_props form =
     let rec collect col = function
@@ -120,8 +120,8 @@ let keep_uncovered_ltl_props form =
     | BinEx(LT, _, _)
     | BinEx(LE, _, _)
     | BinEx(GT, _, _)
-    | BinEx(GE, _, _) as exp ->
-        exp
+    | BinEx(GE, _, _) as expr ->
+        expr
 
     | UnEx (NEG, exp) ->
         let ke = keep exp in
@@ -192,7 +192,7 @@ let atomic_to_expr sk ae =
         BinEx (OR, e, list_to_binex AND (List.map eq0 is))
 
 
-let utl_to_expr sk form =
+let utl_k_to_expr sk form =
     let rec trans = function
     | TL_p ae ->
         (atomic_to_expr sk) ae
@@ -282,10 +282,10 @@ let get_unlocked_rules sk deps uset lset invs =
  The elements of the constructed partial order
  *)
 type po_elem_t =
-    | PO_init of utl_spec_t (** the initial state and the associated formulas *)
+    | PO_init of utl_k_spec_t (** the initial state and the associated formulas *)
     | PO_loop_start         (** the loop start point *)
     | PO_guard of PSet.elt  (** an unlocking/locking guard *)
-    | PO_tl of utl_spec_t   (** an extremal appearance of a temporal-logic formula *)
+    | PO_tl of utl_k_spec_t   (** an extremal appearance of a temporal-logic formula *)
 
 
 let po_elem_s sk = function
@@ -293,13 +293,13 @@ let po_elem_s sk = function
         sprintf "C%s" (PSet.elem_str e)
 
     | PO_tl form ->
-        sprintf "TL(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
+        sprintf "TL(%s)" (SpinIrImp.expr_s (utl_k_to_expr sk form))
 
     | PO_loop_start ->
         "LOOP"
 
     | PO_init form ->
-        sprintf "INIT(%s)" (SpinIrImp.expr_s (utl_to_expr sk form))
+        sprintf "INIT(%s)" (SpinIrImp.expr_s (utl_k_to_expr sk form))
 
 
 let po_elem_short_s sk elem =
@@ -313,13 +313,13 @@ let po_elem_short_s sk elem =
         sprintf "G%s" (PSet.elem_str e)
 
     | PO_tl form ->
-        sprintf "TL(%s)" (trim (SpinIrImp.expr_s (utl_to_expr sk form)))
+        sprintf "TL(%s)" (trim (SpinIrImp.expr_s (utl_k_to_expr sk form)))
 
     | PO_loop_start ->
         "LOOP"
 
     | PO_init form ->
-        sprintf "INIT(%s)" (trim (SpinIrImp.expr_s (utl_to_expr sk form)))
+        sprintf "INIT(%s)" (trim (SpinIrImp.expr_s (utl_k_to_expr sk form)))
 
 
 let find_schema_multiplier invs =
@@ -717,221 +717,268 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         (fun r -> r.m_is_err_found) result (linord_iter_first size order)
 
 
-type atomic_ext_t =
-    | Eq0 of int
-    | Ne0 of int
-    | ExtOrNe0 of int list
-    | ExtAndEq0 of int list
-    | ExtAndOrNe0 of int list list
-    | ExtShared_Or_And_Keq0 of Spin.token SpinIr.expr list * int list
-        (* looks complicated *)
-    | ExtList of (Spin.token SpinIr.expr list * int list) list
+(**
+ The functions related to the conversion to an utl_k_spec_t formula.
+ *)
+module TL = struct
+    exception Unexpected_err
+
+    (** Subformulas of LTL(F, G, /\) *)
+    type utl_sub_t =
+        | Utl_F of Spin.token SpinIr.expr (* propositional *) * utl_sub_t list (* temporal *)
+        | Utl_G of Spin.token SpinIr.expr (* propositional *) * utl_sub_t list (* temporal *)
+    
+    (** The top formula *)
+    type utl_top_t =
+        Spin.token SpinIr.expr (* propositional *) * utl_sub_t list (* temporal *)
 
 
-let atomic_ext_to_utl = function
-    | Eq0 i ->
-        TL_p (And_Keq0 [i])
+    (** An atomic formula *)
+    type atomic_ext_t =
+        | Eq0 of int
+        | Ne0 of int
+        | ExtOrNe0 of int list
+        | ExtAndEq0 of int list
+        | ExtAndOrNe0 of int list list
+        | ExtShared_Or_And_Keq0 of Spin.token SpinIr.expr list * int list
+            (* looks complicated *)
+        | ExtList of (Spin.token SpinIr.expr list * int list) list
 
-    | Ne0 i ->
-        TL_p (AndOr_Kne0 [[i]])
 
-    | ExtOrNe0 is ->
-        TL_p (AndOr_Kne0 [is])
+    let rec utl_tab_of_expr = function
+        | BinEx (EQ, _, _)
+        | BinEx (NE, _, _)
+        | BinEx (LT, _, _)
+        | BinEx (LE, _, _)
+        | BinEx (GT, _, _)
+        | BinEx (GE, _, _) as prop ->
+            (prop, [])
 
-    | ExtAndEq0 is ->
-        TL_p (And_Keq0 is)
+        | BinEx (OR, l, r) as exp ->
+            let (lp, lt) = utl_tab_of_expr l in
+            let (rp, rt) = utl_tab_of_expr r in
+            if lt <> [] || rt <> []
+            then raise (IllegalLtl_error
+                ("A disjunction of temporal subformulas is not allowed: "
+                    ^ (SpinIrImp.expr_s exp)))
+            else begin
+                match (lp, rp) with
+                | (Nop "", r) -> (r, [])
+                | (l, Nop "") -> (l, [])
+                | (l, r) -> (BinEx (OR, l, r), [])
+            end
 
-    | ExtAndOrNe0 ors ->
-        TL_p (AndOr_Kne0 ors)
+        | BinEx (AND, l, r) ->
+            let (lp, lt) = utl_tab_of_expr l in
+            let (rp, rt) = utl_tab_of_expr r in
+            begin
+                match (lp, rp) with
+                | (Nop "", r) -> (r, lt @ rt)
+                | (l, Nop "") -> (l, lt @ rt)
+                | (l, r) -> (BinEx (AND, l, r), lt @ rt)
+            end
 
-    | ExtShared_Or_And_Keq0 (shared_es, is) ->
-        TL_p (Shared_Or_And_Keq0 (list_to_binex OR shared_es, is))
+        | UnEx (EVENTUALLY, sub) ->
+            let (props, temps) = utl_tab_of_expr sub in
+            (Nop "", [Utl_F (props, temps)])
 
-    | ExtList lst ->
-        let each (es, is) =
-            TL_p (Shared_Or_And_Keq0 (list_to_binex OR es, is))
+        | UnEx (ALWAYS, sub) ->
+            let (props, temps) = utl_tab_of_expr sub in
+            (Nop "", [Utl_G (props, temps)])
+
+        | _ as exp ->
+            raise (IllegalLtl_error
+                ("Unexpected subformula: " ^ (SpinIrImp.expr_s exp)))
+
+
+    let atomic_ext_to_utl = function
+        | Eq0 i ->
+            TL_p (And_Keq0 [i])
+
+        | Ne0 i ->
+            TL_p (AndOr_Kne0 [[i]])
+
+        | ExtOrNe0 is ->
+            TL_p (AndOr_Kne0 [is])
+
+        | ExtAndEq0 is ->
+            TL_p (And_Keq0 is)
+
+        | ExtAndOrNe0 ors ->
+            TL_p (AndOr_Kne0 ors)
+
+        | ExtShared_Or_And_Keq0 (shared_es, is) ->
+            TL_p (Shared_Or_And_Keq0 (list_to_binex OR shared_es, is))
+
+        | ExtList lst ->
+            let each (es, is) =
+                TL_p (Shared_Or_And_Keq0 (list_to_binex OR es, is))
+            in
+            TL_and (List.map each lst)
+
+
+    let merge_or = function
+        | (Ne0 i, Ne0 j) ->
+            ExtOrNe0 [i; j]
+
+        | (ExtOrNe0 is, Ne0 j) ->
+            ExtOrNe0 (j :: is)
+
+        | (Ne0 i, ExtOrNe0 js) ->
+            ExtOrNe0 (i :: js)
+
+        | (ExtOrNe0 is, ExtOrNe0 js) ->
+            ExtOrNe0 (is @ js)
+
+        | (ExtShared_Or_And_Keq0 (es1, is1),
+           ExtShared_Or_And_Keq0 (es2, is2)) ->
+            ExtShared_Or_And_Keq0 (es1 @ es2, is1 @ is2)
+
+        | (ExtShared_Or_And_Keq0 (es, is), ExtAndEq0 js) ->
+            ExtShared_Or_And_Keq0 (es, is @ js)
+
+        | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
+            ExtShared_Or_And_Keq0 (es, js @ is)
+
+        | (ExtShared_Or_And_Keq0 (es, is), Eq0 j) ->
+            ExtShared_Or_And_Keq0 (es, j :: is)
+
+        | (Eq0 j, ExtShared_Or_And_Keq0 (es, is)) ->
+            ExtShared_Or_And_Keq0 (es, j :: is)
+
+        | _ ->
+            raise Unexpected_err
+
+
+    (* lots of rewriting rules *)
+    let merge_and = function
+        | (Eq0 i, Eq0 j) ->
+            ExtAndEq0 [i; j]
+
+        | (ExtAndEq0 is, Eq0 j) ->
+            ExtAndEq0 (j :: is)
+
+        | (Eq0 j, ExtAndEq0 is) ->
+            ExtAndEq0 (j :: is)
+
+        | (ExtAndEq0 is, ExtAndEq0 js) ->
+            ExtAndEq0 (is @ js)
+
+        | (ExtOrNe0 is, ExtOrNe0 js) ->
+            ExtAndOrNe0 [is; js]
+
+        | (ExtAndOrNe0 ors, ExtAndOrNe0 ors2) ->
+            ExtAndOrNe0 (ors @ ors2)
+
+        | (ExtAndOrNe0 ors, ExtOrNe0 js) ->
+            ExtAndOrNe0 (js :: ors)
+
+        | (ExtOrNe0 js, ExtAndOrNe0 ors) ->
+            ExtAndOrNe0 (js :: ors)
+
+        | (Ne0 j, ExtOrNe0 is) ->
+            ExtAndOrNe0 [[j]; is]
+
+        | (ExtOrNe0 is, Ne0 j) ->
+            ExtAndOrNe0 [[j]; is]
+
+        | (Ne0 j, ExtAndOrNe0 ors) ->
+            ExtAndOrNe0 ([j] :: ors)
+
+        | (ExtAndOrNe0 ors, Ne0 j) ->
+            ExtAndOrNe0 ([j] :: ors)
+
+        | (ExtShared_Or_And_Keq0 (es1, is1),
+           ExtShared_Or_And_Keq0 (es2, is2)) ->
+                ExtList [(es1, is1); (es2, is2)]
+
+        | (ExtList lst, ExtShared_Or_And_Keq0 (es, is)) ->
+                ExtList ((es, is) :: lst)
+
+        | (ExtShared_Or_And_Keq0 (es, is), ExtList lst) ->
+                ExtList ((es, is) :: lst)
+
+        | (ExtList lst1, ExtList lst2) ->
+                ExtList (lst1 @ lst2)
+
+        | _ ->
+            raise Unexpected_err
+
+
+    let extract_utl sk form_exp =
+        let var_to_int i v map = IntMap.add v#id i map in
+        let rev_map = IntMap.fold var_to_int sk.Sk.loc_vars IntMap.empty
         in
-        TL_and (List.map each lst)
+        let rec parse_props = function
+            | BinEx (NE, Var v, IntConst 0) ->
+                Ne0 (IntMap.find v#id rev_map)
 
+            | BinEx (EQ, Var v, IntConst 0) ->
+                Eq0 (IntMap.find v#id rev_map)
 
-exception TemporalOp_found
-exception Unexpected_err    
-
-let merge_or = function
-    | (Ne0 i, Ne0 j) ->
-        ExtOrNe0 [i; j]
-
-    | (ExtOrNe0 is, Ne0 j) ->
-        ExtOrNe0 (j :: is)
-
-    | (Ne0 i, ExtOrNe0 js) ->
-        ExtOrNe0 (i :: js)
-
-    | (ExtOrNe0 is, ExtOrNe0 js) ->
-        ExtOrNe0 (is @ js)
-
-    | (ExtShared_Or_And_Keq0 (es1, is1),
-       ExtShared_Or_And_Keq0 (es2, is2)) ->
-        ExtShared_Or_And_Keq0 (es1 @ es2, is1 @ is2)
-
-    | (ExtShared_Or_And_Keq0 (es, is), ExtAndEq0 js) ->
-        ExtShared_Or_And_Keq0 (es, is @ js)
-
-    | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
-        ExtShared_Or_And_Keq0 (es, js @ is)
-
-    | (ExtShared_Or_And_Keq0 (es, is), Eq0 j) ->
-        ExtShared_Or_And_Keq0 (es, j :: is)
-
-    | (Eq0 j, ExtShared_Or_And_Keq0 (es, is)) ->
-        ExtShared_Or_And_Keq0 (es, j :: is)
-
-    | _ ->
-        raise Unexpected_err
-
-
-(* lots of rewriting rules *)
-let merge_and = function
-    | (Eq0 i, Eq0 j) ->
-        ExtAndEq0 [i; j]
-
-    | (ExtAndEq0 is, Eq0 j) ->
-        ExtAndEq0 (j :: is)
-
-    | (Eq0 j, ExtAndEq0 is) ->
-        ExtAndEq0 (j :: is)
-
-    | (ExtAndEq0 is, ExtAndEq0 js) ->
-        ExtAndEq0 (is @ js)
-
-    | (ExtOrNe0 is, ExtOrNe0 js) ->
-        ExtAndOrNe0 [is; js]
-
-    | (ExtAndOrNe0 ors, ExtAndOrNe0 ors2) ->
-        ExtAndOrNe0 (ors @ ors2)
-
-    | (ExtAndOrNe0 ors, ExtOrNe0 js) ->
-        ExtAndOrNe0 (js :: ors)
-
-    | (ExtOrNe0 js, ExtAndOrNe0 ors) ->
-        ExtAndOrNe0 (js :: ors)
-
-    | (Ne0 j, ExtOrNe0 is) ->
-        ExtAndOrNe0 [[j]; is]
-
-    | (ExtOrNe0 is, Ne0 j) ->
-        ExtAndOrNe0 [[j]; is]
-
-    | (Ne0 j, ExtAndOrNe0 ors) ->
-        ExtAndOrNe0 ([j] :: ors)
-
-    | (ExtAndOrNe0 ors, Ne0 j) ->
-        ExtAndOrNe0 ([j] :: ors)
-
-    | (ExtShared_Or_And_Keq0 (es1, is1),
-       ExtShared_Or_And_Keq0 (es2, is2)) ->
-            ExtList [(es1, is1); (es2, is2)]
-
-    | (ExtList lst, ExtShared_Or_And_Keq0 (es, is)) ->
-            ExtList ((es, is) :: lst)
-
-    | (ExtShared_Or_And_Keq0 (es, is), ExtList lst) ->
-            ExtList ((es, is) :: lst)
-
-    | (ExtList lst1, ExtList lst2) ->
-            ExtList (lst1 @ lst2)
-
-    | _ ->
-        raise Unexpected_err
-
-
-
-let extract_utl sk exp =
-    let var_to_int i v map =
-        IntMap.add v#id i map
-    in
-    let rev_map = IntMap.fold var_to_int sk.Sk.loc_vars IntMap.empty in
-    let rec collect_prop = function
-        | BinEx (NE, Var v, IntConst 0) ->
-            Ne0 (IntMap.find v#id rev_map)
-
-        | BinEx (EQ, Var v, IntConst 0) ->
-            Eq0 (IntMap.find v#id rev_map)
-
-        | BinEx (GE, Var x, e)
-        | BinEx (LT, Var x, e)
-        | BinEx (GT, Var x, e)
-        | BinEx (LE, Var x, e) as cmp ->
-            if SpinIr.expr_exists SpinIr.not_symbolic e
-            then let m = sprintf "Unexpected %s in %s"
-                    (SpinIrImp.expr_s e) (SpinIrImp.expr_s cmp) in
-                raise (IllegalLtl_error m)
-            else ExtShared_Or_And_Keq0 ([cmp], [])
-
-        | BinEx (OR, l, r) as e ->
-            begin
-                try merge_or (collect_prop l, collect_prop r)
-                with Unexpected_err ->
-                    let m = sprintf "Unexpected %s in %s"
-                            (SpinIrImp.expr_s e) (SpinIrImp.expr_s exp) in
+            | BinEx (GE, Var x, e)
+            | BinEx (LT, Var x, e)
+            | BinEx (GT, Var x, e)
+            | BinEx (LE, Var x, e) as cmp ->
+                if SpinIr.expr_exists SpinIr.not_symbolic e
+                then let m = sprintf "Unexpected %s in %s"
+                        (SpinIrImp.expr_s e) (SpinIrImp.expr_s cmp) in
                     raise (IllegalLtl_error m)
-            end
+                else ExtShared_Or_And_Keq0 ([cmp], [])
 
-        | BinEx (AND, l, r) as e ->
-            begin
-                try merge_and (collect_prop l, collect_prop r)
-                with Unexpected_err ->
-                    let m = sprintf "Unexpected %s in %s"
-                            (SpinIrImp.expr_s e) (SpinIrImp.expr_s exp) in
-                    raise (IllegalLtl_error m)
-            end
+            | BinEx (OR, l, r) as expr ->
+                begin
+                    try merge_or (parse_props l, parse_props r)
+                    with Unexpected_err ->
+                        let m = sprintf "Unexpected %s in %s"
+                                (SpinIrImp.expr_s expr) (SpinIrImp.expr_s form_exp) in
+                        raise (IllegalLtl_error m)
+                end
+
+            | BinEx (AND, l, r) as expr ->
+                begin
+                    try merge_and (parse_props l, parse_props r)
+                    with Unexpected_err ->
+                        let m = sprintf "Unexpected %s in %s"
+                                (SpinIrImp.expr_s expr) (SpinIrImp.expr_s form_exp) in
+                        raise (IllegalLtl_error m)
+                end
         
-        | UnEx (ALWAYS, _) 
-        | UnEx (EVENTUALLY, _)
-        | UnEx (NEXT, _)
-        | UnEx (UNTIL, _)
-        | UnEx (RELEASE, _) ->
-            raise TemporalOp_found
+            | _ as e ->
+                raise (IllegalLtl_error
+                    (sprintf "Expected an and-or combinations of counter tests, found %s"
+                        (SpinIrImp.expr_s e)))
+        in
+        let parse_props_p props =
+            if props <> Nop ""
+            then atomic_ext_to_utl (parse_props props)
+            else TL_and []
+        in
+        let join = function
+            | (TL_and [], [f]) -> f
+            | (TL_p p, []) -> TL_p p
+            | (TL_and [TL_and ls], rs) -> TL_and (ls @ rs)
+            | (TL_and ls, rs) -> TL_and (ls @ rs)
+            | (l, r) -> TL_and (l :: r)
+        in
+        let rec parse_tl = function
+            | Utl_F (props, temps) ->
+                let ps = parse_props_p props in
+                let tls = List.map parse_tl temps in
+                TL_F (join (ps, tls))
 
-        | _ as e ->
-            raise (IllegalLtl_error
-                (sprintf "Expected an and-or combinations of counter tests, found %s"
-                    (SpinIrImp.expr_s e)))
-    in
-    let rec transform = function
-        | BinEx (OR, _, _) as f ->
-            begin
-                try atomic_ext_to_utl (collect_prop f)
-                with TemporalOp_found ->
-                    raise (IllegalLtl_error
-                        ("Unexpected OR with a temporal operator inside: "
-                            ^ (SpinIrImp.expr_s f)))
-            end
+            | Utl_G (props, temps) ->
+                let ps = parse_props_p props in
+                let tls = List.map parse_tl temps in
+                TL_G (join (ps, tls))
+        in
+        let (props, temps) = utl_tab_of_expr (Ltl.normalize_form form_exp) in
+        let ps = parse_props_p props in
+        let tls = List.map parse_tl temps in
+        join (ps, tls)
+end
 
-        | BinEx (EQ, Var _, IntConst 0) as f ->
-            atomic_ext_to_utl (collect_prop f)
-
-        | BinEx (NE, Var _, IntConst 0) as f ->
-            atomic_ext_to_utl (collect_prop f)
-
-        | UnEx (ALWAYS, e) ->
-            TL_G (transform e)
-
-        | UnEx (EVENTUALLY, e) ->
-            TL_F (transform e)
-
-        | BinEx (AND, l, r) as f ->
-            begin
-                try atomic_ext_to_utl (collect_prop f)
-                with TemporalOp_found ->
-                    TL_and [transform l; transform r]
-            end
-
-        | _ as e ->
-            raise (IllegalLtl_error
-                (sprintf "Unexpected LTL formula: %s" (SpinIrImp.expr_s e)))
-    in
-    transform (Ltl.normalize_form exp)
+let extract_utl = TL.extract_utl
 
 
 let extract_safety_or_utl type_tab sk = function
@@ -940,16 +987,16 @@ let extract_safety_or_utl type_tab sk = function
         if (Ltl.is_propositional type_tab lhs)
             && (Ltl.is_propositional type_tab rhs)
         then Safety (Ltl.normalize_form lhs, Ltl.normalize_form rhs)
-        else UTL (extract_utl sk f)
+        else UTL (TL.extract_utl sk f)
 
     (* !([] q) *)
     | UnEx (EVENTUALLY, sub) as f ->
         if (Ltl.is_propositional type_tab sub)
         then Safety (IntConst 1, Ltl.normalize_form sub)
-        else UTL (extract_utl sk f)
+        else UTL (TL.extract_utl sk f)
 
     | _ as f ->
-        UTL (extract_utl sk f)
+        UTL (TL.extract_utl sk f)
 
 
 let can_handle_spec type_tab sk form =
