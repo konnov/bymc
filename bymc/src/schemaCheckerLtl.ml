@@ -16,6 +16,7 @@ open Poset
 open SchemaSmt
 open Spin
 open SpinIr
+open SymbSkel
 
 exception IllegalLtl_error of string
 
@@ -247,9 +248,26 @@ let fail_first a b =
     else Lazy.force b
 
 
-let get_unlocked_rules sk deps uset lset =
+let get_unlocked_rules sk deps uset lset invs =
+    (* collect those locations
+       that are required to be always zero by the invariants *)
+    let collect_invs zerolocs = function
+        | And_Keq0 is ->
+            List.fold_left (flip IntSet.add) zerolocs is
+
+        | _ -> zerolocs
+    in
+    let zerolocs = List.fold_left collect_invs IntSet.empty invs in
+    let collect_enabled lst r no =
+        if not (IntSet.mem r.Sk.src zerolocs) && not (IntSet.mem r.Sk.dst zerolocs)
+        then no :: lst
+        else lst
+    in
+    let enabled_nos =
+        List.fold_left2 collect_enabled [] sk.Sk.rules (range 0 sk.Sk.nrules)
+    in
     let unlocked_rule_nos =
-        (range 0 sk.Sk.nrules)
+        enabled_nos
             |> List.filter (PorBounds.is_rule_unlocked deps uset lset)
             |> PorBounds.pack_rule_set
             
@@ -350,14 +368,19 @@ let check_one_order solver sk spec deps tac elem_order =
         printf " >%d" tac#top.F.no; flush stdout;
     in
     let check_steady_schema uset lset invs =
+        let not_and_keq0 = function
+            | And_Keq0 _ -> false
+            | _ -> true
+        in
+        let filtered_invs = List.filter not_and_keq0 invs in
         (* push all the unlocked rules *)
         let push_rule r =
             tac#push_rule deps sk r;
-            if invs <> [] then assert_propositions invs
+            (* the invariants And_Keq0 are treated in get_unlocked_rules *)
+            if invs <> [] then assert_propositions filtered_invs
         in
-        (* TODO: inefficient, filter out those rules that violate /\ k_i = 0 *)
         let push_schema _ =
-            List.iter push_rule (get_unlocked_rules sk deps uset lset)
+            List.iter push_rule (get_unlocked_rules sk deps uset lset invs)
         in
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
@@ -432,8 +455,11 @@ let check_one_order solver sk spec deps tac elem_order =
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
                 tac#enter_context;
                 (* fire a sequence of rules that should unlock the condition associated with id *)
-                (* XXX: just one rule must fire, otherwise an invariant can be violated! *)
-                (get_unlocked_rules sk deps uset lset) |> List.iter (tac#push_rule deps sk) ;
+                (* TODO: alternatively, we can enforce that only one rules fires
+                    and check the invariant once after the whole sequence has been
+                    executed *)
+                (get_unlocked_rules sk deps uset lset invs)
+                    |> List.iter (tac#push_rule deps sk) ;
                 (* assert that the condition is now unlocked (resp. locked) *)
                 tac#assert_top [cond_expr];
                 assert_propositions invs;   (* don't forget the invariants *)
