@@ -124,7 +124,10 @@ let keep_uncovered_ltl_props form =
         exp
 
     | UnEx (NEG, exp) ->
-        UnEx (NEG, keep exp)
+        let ke = keep exp in
+        if ke = deleted
+        then deleted
+        else UnEx (NEG, ke)
 
     | BinEx (AND, l, r) ->
         fuse AND (keep l) (keep r)
@@ -133,7 +136,7 @@ let keep_uncovered_ltl_props form =
         fuse OR (keep l) (keep r)
 
     | BinEx (IMPLIES, l, r) ->
-        fuse IMPLIES (keep l) (keep r)
+        fuse OR (keep (UnEx (NEG, l))) (keep r)
 
     | UnEx (EVENTUALLY, _)
     | UnEx (ALWAYS, _)
@@ -150,7 +153,7 @@ let keep_uncovered_ltl_props form =
     let res = keep form in
     if res = deleted
     then IntConst 1 (* just true *)
-    else res
+    else Ltl.normalize_form res
 
 
 let find_temporal_subformulas form =
@@ -752,7 +755,6 @@ let atomic_ext_to_utl = function
 
 
 exception TemporalOp_found
-exception Unmergeable
 exception Unexpected_err    
 
 let merge_or = function
@@ -922,8 +924,6 @@ let extract_utl sk exp =
             begin
                 try atomic_ext_to_utl (collect_prop f)
                 with TemporalOp_found ->
-                    TL_and [transform l; transform r]
-                | Unmergeable ->
                     TL_and [transform l; transform r]
             end
 
