@@ -56,6 +56,7 @@ class slps_checker_plugin_t (plugin_name: string) =
                 ~keep_selfloops:(self#is_ltl tech)
                     (* reachability is blind to self-loops *)
             in
+            self#set_options rt;
             if "bounds" <> rt#caches#options.Options.spec
             then self#check tech rt sprog sk
             else begin (* compute the bounds using the summary *)
@@ -124,7 +125,8 @@ class slps_checker_plugin_t (plugin_name: string) =
 
 
         method check_ltl rt sprog sk tt =
-            let deps = PorBounds.compute_deps ~against_only:false rt#solver sk in
+            let flow_opt = SchemaOpt.is_flow_opt_enabled in
+            let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
 
             let check name form =
@@ -163,5 +165,21 @@ class slps_checker_plugin_t (plugin_name: string) =
 
         method update_runtime rt =
             ()
+
+        method set_options rt =
+            let opts = rt#caches#options in
+            let no_flow_opt = Options.get_plugin_opt opts "schema.noflowopt" in
+            let no_reach_opt = Options.get_plugin_opt opts "schema.noreachopt" in
+            if no_flow_opt = Some "1"
+            then SchemaOpt.set_flow_opt false;
+            Debug.logtm INFO
+                (sprintf "  The control flow optimization is %s\n"
+                    (if no_flow_opt = Some "1" then "disabled" else "enabled"));
+
+            if no_reach_opt = Some "1"
+            then SchemaOpt.set_reach_opt false;
+            Debug.logtm INFO
+                (sprintf "  The reachability optimization is %s\n"
+                    (if no_reach_opt = Some "1" then "disabled" else "enabled"))
     end
 
