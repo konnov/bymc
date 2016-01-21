@@ -12,11 +12,25 @@ exception IllegalLtl_error of string
 
 
 (**
+ The statistics collected during the execution.
+ *)
+type stat_t = {
+    m_nschemas: int;  (** the number of inspected schemas *)
+    m_min_schema_len: int;  (** the minimal schema length encountered *)
+    m_max_schema_len: int;  (** the maximal schema length encountered *)
+    m_sum_schema_len: int;  (** the sum of all schema lengths (for the average) *)
+    m_min_schema_time_sec: float;  (** the minimal time to check a schema *)
+    m_max_schema_time_sec: float;  (** the maximum time to check a schema *)
+    m_sum_schema_time_sec: float;  (** the sum of all schema times (for the average) *)
+}
+
+(**
  The record type of a result returned by check_schema_tree_on_the_fly.
  *)
 type result_t = {
     m_is_err_found: bool;
     m_counterexample_filename: string;
+    m_stat: stat_t;
 }
 
 (**
@@ -47,6 +61,13 @@ type spec_t =
     | UTL of Spin.token SpinIr.expr * utl_k_spec_t
         (* an unrestricted propositional formula for the initial states
            and a UTL formula *)
+
+
+(** Create the initial statistics *)
+val mk_stat: unit -> stat_t
+
+(** Get the statistics as a string*)
+val stat_s: stat_t -> string
 
 
 (** Convert an atomic formula to a string *)

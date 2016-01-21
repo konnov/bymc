@@ -17,6 +17,8 @@ open PorBounds
 open Spin
 open SpinIr
 
+module L = SchemaCheckerLtl
+
 let is_safety_spec tt s =
     match Ltl.classify_spec tt s with
     | Ltl.CondSafety (_, _) -> true
@@ -130,22 +132,23 @@ class slps_checker_plugin_t (plugin_name: string) =
             PorBounds.D.to_dot "flow.dot" sk deps;
 
             let check name form =
-                SchemaCheckerLtl.find_error rt tt sk name form deps
+                L.find_error rt tt sk name form deps
             in
-            log INFO "  > Running SchemaCheckerLtl (on the fly)...";
+            log INFO "  > Running L (on the fly)...";
             let each_form name form =
                 logtm INFO (sprintf "      > Checking %s..." name);
                 let result = check name form in
                 let msg =
-                    if result.SchemaCheckerLtl.m_is_err_found
+                    if result.L.m_is_err_found
                     then sprintf "    > SLPS: counterexample for %s found" name
                     else sprintf "      > Spec %s holds" name
                 in
-                log INFO msg
+                log INFO msg;
+                printf "%s\n" (L.stat_s result.L.m_stat)
             in
             let can_handle f =
                 let negated = Ltl.normalize_form (UnEx (NEG, f)) in
-                SchemaCheckerLtl.can_handle_spec tt sk negated
+                L.can_handle_spec tt sk negated
             in
             let fprog = Ltl.embed_fairness sprog in
             let specs =
