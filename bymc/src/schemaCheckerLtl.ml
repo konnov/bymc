@@ -27,12 +27,41 @@ let po_init = 1
 let po_loop = 0
 
 (**
+ The statistics collected during the execution.
+ *)
+type stat_t = {
+    m_nschemas: int;  (** the number of inspected schemas *)
+    m_min_schema_len: int;  (** the minimal schema length encountered *)
+    m_max_schema_len: int;  (** the maximal schema length encountered *)
+    m_sum_schema_len: int;  (** the sum of all schema lengths (for the average) *)
+    m_min_schema_time_sec: float;  (** the minimal time to check a schema *)
+    m_max_schema_time_sec: float;  (** the maximum time to check a schema *)
+    m_sum_schema_time_sec: float;  (** the sum of all schema times (for the average) *)
+}
+
+(**
  The record type of a result returned by check_schema_tree_on_the_fly.
  *)
 type result_t = {
     m_is_err_found: bool;
     m_counterexample_filename: string;
+    m_stat: stat_t;
 }
+
+(** Create the initial statistics *)
+let mk_stat () = {
+    m_nschemas = 0; m_min_schema_len = max_int; m_max_schema_len = 0;
+    m_sum_schema_len = 0; m_min_schema_time_sec = max_float;
+    m_max_schema_time_sec = 0.0; m_sum_schema_time_sec = 0.0;
+}
+
+(** Get the statistics as a string*)
+let stat_s st =
+    sprintf ("npaths = %d, min length = %d, max length = %d, avg length = %d\nmin time = %f, max time = %f, avg time = %f")
+        st.m_nschemas st.m_min_schema_len st.m_max_schema_len
+        (st.m_sum_schema_len / st.m_nschemas)
+        st.m_min_schema_time_sec st.m_max_schema_time_sec
+        (st.m_sum_schema_time_sec /. (float_of_int st.m_nschemas))
 
 
 (**
@@ -259,13 +288,6 @@ let rec utl_spec_s = function
         sprintf "(%s)" (str_join " /\\ " (List.map utl_spec_s forms))
 
 
-(* run the first function and if it does not fail, run the second one *)
-let fail_first a b =
-    let res = Lazy.force a in
-    if res.m_is_err_found
-    then res
-    else Lazy.force b
-
 
 let get_unlocked_rules sk deps uset lset invs =
     (* collect those locations
@@ -366,6 +388,17 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     printf "    > Saved counterexample to %s\n" fname
 
 
+(* an internal result structure *)
+type internal_result_t = { m_is_err: bool; m_schema_len: int; }
+
+(* run the first function and if it does not fail, run the second one *)
+let fail_first a b =
+    let res = Lazy.force a in
+    if res.m_is_err
+    then res
+    else Lazy.force b
+
+
 let check_one_order solver sk spec deps tac elem_order =
     let is_safety, init_form, safety_bad =
         (* we have to treat safety differently from the general case *)
@@ -410,11 +443,9 @@ let check_one_order solver sk spec deps tac elem_order =
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
-        if is_safety
-        then if tac#check_property safety_bad on_error
-            then { m_is_err_found = true; m_counterexample_filename = "fixme" }
-            else { m_is_err_found = false; m_counterexample_filename = "" }
-        else { m_is_err_found = false; m_counterexample_filename = "" }
+        if is_safety && tac#check_property safety_bad on_error
+        then { m_is_err = true; m_schema_len = tac#top.F.no }
+        else { m_is_err = false; m_schema_len = tac#top.F.no }
     in
     let at_least_one_step_made loop_start_frame =
         (* make sure that at least one rule had a non-zero factor *)
@@ -430,7 +461,7 @@ let check_one_order solver sk spec deps tac elem_order =
             if is_safety
                 (* no errors: we have already checked the prefix *)
             then begin
-                { m_is_err_found = false; m_counterexample_filename = "" }
+                { m_is_err = false; m_schema_len = tac#top.F.no }
             end else begin
                 (* close the loop *)
                 let lf = get_some prefix_last_frame in
@@ -445,8 +476,8 @@ let check_one_order solver sk spec deps tac elem_order =
                     dump_counterex_to_file solver sk "fixme" prefix loop
                 in
                 if tac#check_property (IntConst 1) on_error
-                then { m_is_err_found = true; m_counterexample_filename = "fixme" }
-                else { m_is_err_found = false; m_counterexample_filename = "" }
+                then { m_is_err = true; m_schema_len = tac#top.F.no }
+                else { m_is_err = false; m_schema_len = tac#top.F.no }
             end
 
         | (PO_init utl_form) :: tl ->
@@ -552,7 +583,7 @@ let check_one_order solver sk spec deps tac elem_order =
             tac#leave_node node_type;
             res
         end else (* the current frame is unreachable *)
-            { m_is_err_found = false; m_counterexample_filename = "" }
+            { m_is_err = false; m_schema_len = tac#top.F.no }
     in
     (* evaluate the order *)
     let result = search None PSet.empty PSet.empty [] elem_order in
@@ -702,6 +733,30 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
     !result
 
 
+(** accumulate the statistics *)
+let accum_stat r_st watch no schema_len =
+    let nschemas = !r_st.m_nschemas in
+    let elapsed, one_lap = watch#next_event "" in
+    let eta =
+        if no < nschemas
+        then elapsed *. (float_of_int (nschemas - no))
+            /. (float_of_int no)
+        else 0.0
+    in
+    let percentage = 100 * no / nschemas in
+    printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s\n"
+        percentage (human_readable_duration one_lap)
+        (human_readable_duration elapsed) (human_readable_duration eta);
+    r_st := { !r_st with
+        m_min_schema_len = min !r_st.m_min_schema_len schema_len;
+        m_max_schema_len = max !r_st.m_max_schema_len schema_len;
+        m_min_schema_time_sec = min !r_st.m_min_schema_time_sec one_lap;
+        m_max_schema_time_sec = max !r_st.m_max_schema_time_sec one_lap;
+        m_sum_schema_len = !r_st.m_sum_schema_len + schema_len;
+        m_sum_schema_time_sec = !r_st.m_sum_schema_time_sec +. one_lap;
+    }
+
+
 (**
   Construct the schema tree and check it on-the-fly.
 
@@ -744,13 +799,16 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
     logtm INFO (sprintf "The partial order is:\n    %s\n\n"
         (str_join ", " (List.map pord order)));
 
+    (* count the linear extensions *)
     logtm INFO (sprintf "Counting linear extensions...\n");
     let total_count = ref 0 in
     enum_orders get_elem (fun _ -> total_count := 1 + !total_count)
         (fun _ -> false) (ref ()) (linord_iter_first size order);
     logtm INFO (sprintf "%d linear extensions to enumerate\n\n" !total_count);
 
+    (* and check the properties for each of them *)
     let current = ref 0 in
+    let r_stat = ref ({ (mk_stat ()) with m_nschemas = !total_count }) in
     let watch = new Accums.stop_watch ~is_wall:false ~with_children:true in
     watch#start "";
     let each_order eorder = 
@@ -758,24 +816,16 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         printf "  -> %s...\n" (str_join "  " (List.map pp eorder));
         current := 1 + !current;
         let res = check_one_order solver sk spec deps tac eorder in
-        let elapsed, one_lap = watch#next_event "" in
-        let eta =
-            if !current < !total_count
-            then elapsed *. (float_of_int (!total_count - !current))
-                /. (float_of_int !current)
-            else 0.0
-        in
-        let percentage = 100 * !current / !total_count in
-        printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s\n"
-            percentage (human_readable_duration one_lap)
-            (human_readable_duration elapsed) (human_readable_duration eta);
-        res
+        accum_stat r_stat watch !current res.m_schema_len;
+        res.m_is_err
     in
     (* enumerate all the linear extensions *)
-    let result =
-        ref { m_is_err_found = false; m_counterexample_filename = "" } in
-    enum_orders get_elem each_order
-        (fun r -> r.m_is_err_found) result (linord_iter_first size order)
+    let is_err_found =
+        enum_orders get_elem each_order
+            (fun r -> r) (ref false) (linord_iter_first size order)
+    in
+    { m_is_err_found = is_err_found;
+        m_counterexample_filename = "fixme"; m_stat = !r_stat}
 
 
 (**
