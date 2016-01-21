@@ -209,6 +209,22 @@ let utl_k_to_expr sk form =
     trans form
 
 
+let utl_k_s sk form =
+    SpinIrImp.expr_s (utl_k_to_expr sk form)
+
+
+(** print only temporal operators *)
+let rec utl_k_temporal_s = function
+    | TL_p _ ->
+            "(..)"
+    | TL_F f ->
+            "F (" ^ (utl_k_temporal_s f) ^ ")"
+    | TL_G f ->
+            "G (" ^ (utl_k_temporal_s f) ^ ")"
+    | TL_and fs ->
+            "(" ^ (str_join " /\\ " (List.map utl_k_temporal_s fs)) ^ ")"
+
+
 (** Convert an atomic formula to a string *)
 let rec atomic_spec_s = function
     | And_Keq0 indices ->
@@ -285,15 +301,16 @@ type po_elem_t =
     | PO_init of utl_k_spec_t (** the initial state and the associated formulas *)
     | PO_loop_start         (** the loop start point *)
     | PO_guard of PSet.elt  (** an unlocking/locking guard *)
-    | PO_tl of utl_k_spec_t   (** an extremal appearance of a temporal-logic formula *)
+    | PO_tl of int (* id *) * utl_k_spec_t
+        (** an extremal appearance of a temporal-logic formula *)
 
 
 let po_elem_s sk = function
     | PO_guard e ->
         sprintf "C%s" (PSet.elem_str e)
 
-    | PO_tl form ->
-        sprintf "TL(%s)" (SpinIrImp.expr_s (utl_k_to_expr sk form))
+    | PO_tl (id, form) ->
+        sprintf "F%d(%s)" id (SpinIrImp.expr_s (utl_k_to_expr sk form))
 
     | PO_loop_start ->
         "LOOP"
@@ -303,23 +320,18 @@ let po_elem_s sk = function
 
 
 let po_elem_short_s sk elem =
-    let trim s =
-        if 10 < (String.length s)
-        then (String.sub s 0 10) ^ "..."
-        else s
-    in
     match elem with
     | PO_guard e ->
-        sprintf "G%s" (PSet.elem_str e)
+        sprintf "C%s" (PSet.elem_str e)
 
-    | PO_tl form ->
-        sprintf "TL(%s)" (trim (SpinIrImp.expr_s (utl_k_to_expr sk form)))
+    | PO_tl (id, form) ->
+        sprintf "F%d" id
 
     | PO_loop_start ->
         "LOOP"
 
     | PO_init form ->
-        sprintf "INIT(%s)" (trim (SpinIrImp.expr_s (utl_k_to_expr sk form)))
+        sprintf "INIT"
 
 
 let find_schema_multiplier invs =
@@ -459,12 +471,12 @@ let check_one_order solver sk spec deps tac elem_order =
              *)
             if prefix_last_frame = None
             then begin
-                let is_unlocking = PSet.mem id deps.D.umask in
+                let is_locking = PSet.mem id deps.D.lmask in
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
-                let cond_expr = if is_unlocking then cond_expr else UnEx (NEG, cond_expr) in
                 tac#enter_context;
                 (* assert that the condition is locked (resp. unlocked) *)
-                tac#assert_top [UnEx (NEG, cond_expr)];
+                if is_locking
+                then tac#assert_top [cond_expr];
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
                     tac#push_rule deps sk r;
@@ -476,12 +488,14 @@ let check_one_order solver sk spec deps tac elem_order =
                 (* only one transition must fire *)
                 tac#assert_top [sum_accel_one frames];
                 (* assert that the condition is now unlocked (resp. locked) *)
-                tac#assert_top [cond_expr];
+                if is_locking
+                then tac#assert_top [UnEx (NEG, cond_expr)]
+                else tac#assert_top [cond_expr];
                 assert_propositions invs;   (* don't forget the invariants *)
                 let new_uset, new_lset =
-                    if is_unlocking
-                    then (PSet.add id uset), lset
-                    else uset, (PSet.add id lset)
+                    if is_locking
+                    then uset, (PSet.add id lset)
+                    else (PSet.add id uset), lset
                 in
                 let result =
                     prune_or_continue prefix_last_frame new_uset new_lset invs (node_type tl) tl in
@@ -508,7 +522,7 @@ let check_one_order solver sk spec deps tac elem_order =
             in
             prune_or_continue prefix_last_frame uset lset invs LoopStart tl
 
-        | (PO_tl (TL_and fs)) :: tl ->
+        | (PO_tl (_, (TL_and fs))) :: tl ->
             (* an extreme appearance of F *)
             let props = find_uncovered_utl_props (TL_and fs) in
             tac#enter_context;
@@ -590,45 +604,52 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
 let poset_make_utl form =
     (* positions 1 and 0 correspond to the initial state
        and the start of the loop respectively *)
+    let last_pos = ref po_init in
+    let mk_pos _ =
+        last_pos := !last_pos + 1; !last_pos
+    in
     let add_empty pos map =
         IntMap.add pos [] map
     in
     let add_form pos form map =
         IntMap.add pos (form :: (IntMap.find pos map)) map
     in
-    let rec make in_loop (pos, orders, map) = function
+    let rec make in_loop pos (orders, map) = function
     | TL_p _ as e ->
-        pos, orders, (add_form pos e map)
+        orders, (add_form pos e map)
 
     | TL_and fs ->
-        List.fold_left (make in_loop) (pos, orders, map) fs
+        List.fold_left (make in_loop pos) (orders, map) fs
 
     | TL_G psi ->
         let props = List.map (fun ae -> TL_p ae) (find_uncovered_utl_props psi) in
         let nm = add_form pos (TL_G (TL_and props)) map in
         (* all subformulas should be also true in the loop part *)
-        make true (pos, orders, nm) psi
+        make true pos (orders, nm) psi
 
     | TL_F psi ->
+        let new_pos = mk_pos () in
         let new_orders =
             if in_loop
             (* pos + 1 must be in the loop *)
-            then (po_loop, pos + 1) :: (pos, pos + 1) :: orders
+            then (po_loop, new_pos) :: (pos, new_pos) :: orders
             (* pos + 1 comes after pos *)
-            else (pos, pos + 1) :: orders
+            else (pos, new_pos) :: orders
         in
-        make in_loop (pos + 1, new_orders, (add_empty (pos + 1) map)) psi
+        printf "  %s\n"
+            (str_join ", " (List.map (fun (a, b) -> sprintf "(%d, %d)" a b) new_orders));
+        make in_loop new_pos (new_orders, (add_empty new_pos map)) psi
     in
     (* find the subformulas and compute the dependencies *)
-    let n, orders, map =
-        make false (po_init, [], (IntMap.singleton po_init [])) form
-    in
+    let init_map = IntMap.singleton po_init [] in
+    let orders, map = make false po_init ([], init_map) form in
     let remap i fs =
         if i = po_init
         then PO_init (TL_and fs)
-        else PO_tl (TL_and fs)
+        else PO_tl (i, TL_and fs)
     in
-    n, orders, (IntMap.mapi remap map)
+    printf "Formula structure: %s\n" (utl_k_temporal_s form);
+    !last_pos, orders, (IntMap.mapi remap map)
 
 
 (**
@@ -692,6 +713,9 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         | UTL (_, utl_form) ->
             (* add all the F-formulas to the poset *)
             let n, o, m = poset_make_utl utl_form in
+            Debug.ltrace Trc.scl
+                (lazy (IntMap.iter
+                    (fun _ e -> printf "%s\n" (po_elem_s sk e)) m; ""));
             1 + n, ((po_init, po_loop) :: o), (IntMap.add po_loop PO_loop_start m)
 
         | Safety (_, _) ->
@@ -727,7 +751,7 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
     logtm INFO (sprintf "%d linear extensions to enumerate\n\n" !total_count);
 
     let current = ref 0 in
-    let watch = new Accums.stop_watch (false) in
+    let watch = new Accums.stop_watch ~is_wall:false ~with_children:true in
     watch#start "";
     let each_order eorder = 
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
