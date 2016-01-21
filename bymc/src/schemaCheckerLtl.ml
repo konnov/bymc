@@ -461,6 +461,7 @@ let check_one_order solver sk spec deps tac elem_order =
             then begin
                 let is_unlocking = PSet.mem id deps.D.umask in
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
+                let cond_expr = if is_unlocking then cond_expr else UnEx (NEG, cond_expr) in
                 tac#enter_context;
                 (* assert that the condition is locked (resp. unlocked) *)
                 tac#assert_top [UnEx (NEG, cond_expr)];
@@ -563,10 +564,7 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
         with Not_found ->
             raise (Failure "Not_found in poset_mixin_guards")
     in
-    let add_elem k v m =
-        printf "++++ % 2d -> %s\n" v (PSet.elem_str k);
-        IntMap.add v (PO_guard k) m
-    in
+    let add_elem k v m = IntMap.add v (PO_guard k) m in
     let new_rev_map = PSetEltMap.fold add_elem enum_map rev_map
     in
     (* construct the partial order *)
