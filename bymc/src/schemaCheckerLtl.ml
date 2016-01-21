@@ -370,6 +370,11 @@ let check_one_order solver sk spec deps tac elem_order =
     let print_top_frame _ =
         printf " >%d" tac#top.F.no; flush stdout;
     in
+    let sum_accel_one frames =
+        let expr =
+            list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
+        if expr <> Nop "" then BinEx (EQ, IntConst 1, expr) else IntConst 1
+    in
     let check_steady_schema uset lset invs =
         let not_and_keq0 = function
             | And_Keq0 _ -> false
@@ -457,12 +462,18 @@ let check_one_order solver sk spec deps tac elem_order =
                 let is_unlocking = PSet.mem id deps.D.umask in
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
                 tac#enter_context;
+                (* assert that the condition is locked (resp. unlocked) *)
+                tac#assert_top [UnEx (NEG, cond_expr)];
                 (* fire a sequence of rules that should unlock the condition associated with id *)
-                (* TODO: alternatively, we can enforce that only one rules fires
-                    and check the invariant once after the whole sequence has been
-                    executed *)
-                (get_unlocked_rules sk deps uset lset invs)
-                    |> List.iter (tac#push_rule deps sk) ;
+                let push_rule lst r =
+                    tac#push_rule deps sk r;
+                    tac#top :: lst
+                in
+                let frames = List.fold_left push_rule []
+                    (get_unlocked_rules sk deps uset lset invs)
+                in
+                (* only one transition must fire *)
+                tac#assert_top [sum_accel_one frames];
                 (* assert that the condition is now unlocked (resp. locked) *)
                 tac#assert_top [cond_expr];
                 assert_propositions invs;   (* don't forget the invariants *)
@@ -480,7 +491,14 @@ let check_one_order solver sk spec deps tac elem_order =
 
         | PO_loop_start :: tl ->
             assert (not is_safety);
-            (* TODO: check that no other guards were activated *)
+            (* check that no other guards were activated *)
+            let assert_not_active set (_, cond_id, expr, lt) =
+                if PSet.mem cond_id set
+                then tac#assert_top [if lt = Lock then expr else UnEx (NEG, expr)]
+            in
+            List.iter (assert_not_active (PSet.diff deps.D.umask uset)) deps.D.uconds;
+            List.iter (assert_not_active (PSet.diff deps.D.lmask lset)) deps.D.lconds;
+            (* try to close the loop *)
             let prefix_last_frame =
                 try Some tac#top
                 with Failure m ->
@@ -534,16 +552,23 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
     let uconds = deps.D.uconds and lconds = deps.D.lconds in
     let all_ids = List.map (fun (_, id, _, _) -> id) (uconds @ lconds) in
     (* rename the condition ids to the range 0 .. nconds - 1 *)
-    let assign_num (n, map) id = (n + 1, PSetEltMap.add id n map) in
+    let assign_num (n, map) id =
+        if PSetEltMap.mem id map
+        then (n, map) (* a guard can be both unlocking and locking, do not add it twice *)
+        else (n + 1, PSetEltMap.add id n map)
+    in
     let end_pos, enum_map = List.fold_left assign_num (start_pos, PSetEltMap.empty) all_ids in
     let get_num id =
         try PSetEltMap.find id enum_map
         with Not_found ->
             raise (Failure "Not_found in poset_mixin_guards")
     in
-    let new_rev_map =
-        PSetEltMap.fold (fun k v m -> IntMap.add v (PO_guard k) m) enum_map rev_map in
-
+    let add_elem k v m =
+        printf "++++ % 2d -> %s\n" v (PSet.elem_str k);
+        IntMap.add v (PO_guard k) m
+    in
+    let new_rev_map = PSetEltMap.fold add_elem enum_map rev_map
+    in
     (* construct the partial order *)
     let add_implications a_id implications lst =
         (* b should come before a, as a implies b *)
@@ -664,7 +689,7 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
 let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
-    let nelems, order, rev_map =
+    let nelems, order, rmap =
         match spec with
         | UTL (_, utl_form) ->
             (* add all the F-formulas to the poset *)
@@ -680,35 +705,49 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
                 (IntMap.add po_loop PO_loop_start (IntMap.singleton po_init inite))
     in
     (* add the guards *)
-    let size, order, rev_map = poset_mixin_guards deps nelems order rev_map in
+    let size, order, rev_map = poset_mixin_guards deps nelems order rmap in
     let get_elem num =
         try IntMap.find num rev_map
         with Not_found ->
             raise (Failure 
                 (sprintf "Not_found (key=%d) in gen_and_check_schemas_on_the_fly" num))
     in
+    let ppord (a, b) = sprintf "%d < %d" a b in
+    Debug.ltrace Trc.scl
+        (lazy (sprintf "The partial order is:\n    %s\n\n"
+            (str_join ", " (List.map ppord order))));
     let pord (a, b) =
         sprintf "%s < %s" (po_elem_short_s sk (get_elem a)) (po_elem_short_s sk (get_elem b))
     in
     logtm INFO (sprintf "The partial order is:\n    %s\n\n"
         (str_join ", " (List.map pord order)));
-    let ppord (a, b) = sprintf "%d < %d" a b in
-    Debug.ltrace Trc.scl
-        (lazy (sprintf "The partial order is:\n    %s\n\n"
-            (str_join ", " (List.map ppord order))));
 
+    logtm INFO (sprintf "Counting linear extensions...\n");
     let total_count = ref 0 in
     enum_orders get_elem (fun _ -> total_count := 1 + !total_count)
         (fun _ -> false) (ref ()) (linord_iter_first size order);
-    logtm INFO (sprintf "%d orders to enumerate\n\n" !total_count);
+    logtm INFO (sprintf "%d linear extensions to enumerate\n\n" !total_count);
 
     let current = ref 0 in
+    let watch = new Accums.stop_watch (false) in
+    watch#start "";
     let each_order eorder = 
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
-        let percentage = 100 * !current / !total_count in
-        printf "%3d%% -> %s...\n" percentage (str_join "  " (List.map pp eorder));
+        printf "  -> %s...\n" (str_join "  " (List.map pp eorder));
         current := 1 + !current;
-        check_one_order solver sk spec deps tac eorder
+        let res = check_one_order solver sk spec deps tac eorder in
+        let elapsed, one_lap = watch#next_event "" in
+        let eta =
+            if !current < !total_count
+            then elapsed *. (float_of_int (!total_count - !current))
+                /. (float_of_int !current)
+            else 0.0
+        in
+        let percentage = 100 * !current / !total_count in
+        printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s\n"
+            percentage (human_readable_duration one_lap)
+            (human_readable_duration elapsed) (human_readable_duration eta);
+        res
     in
     (* enumerate all the linear extensions *)
     let result =
@@ -1022,7 +1061,10 @@ let find_error rt tt sk form_name ltl_form deps =
         then raise (Failure
             (sprintf "%s: initial condition is trivially false" form_name));
 
-    | _ -> ()
+    | UTL (init_form, _) ->
+        if SpinIr.is_c_false init_form
+        then raise (Failure
+            (sprintf "%s: initial condition is trivially false" form_name));
     in
     let neg_form = Ltl.normalize_form (UnEx (NEG, ltl_form)) in
     Debug.ltrace Trc.scl
