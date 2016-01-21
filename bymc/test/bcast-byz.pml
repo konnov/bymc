@@ -366,5 +366,25 @@ $bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' 
 #EXPECT test ${texitcode} 1
 #EXPECT grep "counterexample for unforg found" ${testlog}
 #END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1
+#EXPECT grep "counterexample for relay found" ${testlog}
+#END-TEST
 */
 
