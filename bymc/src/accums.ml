@@ -371,7 +371,7 @@ let fold_file line_fun a filename =
     read a
 
 (* stop watch class to measure time *)
-class stop_watch(is_wall: bool) =
+class stop_watch ~(is_wall: bool) ~(with_children: bool) =
     object(self)
         val mutable start_time = 0.0
         val mutable last_time = 0.0
@@ -400,7 +400,13 @@ class stop_watch(is_wall: bool) =
             last_event <- event_name
 
         method private get_time () =
-            if is_wall then Unix.time() else Sys.time()
+            if is_wall
+            then Unix.time()
+            else if with_children
+                then let t = Unix.times () in
+                    (t.Unix.tms_utime +. t.Unix.tms_stime
+                        +. t.Unix.tms_cutime +. t.Unix.tms_cstime)
+                else Sys.time()
     end
 
 
