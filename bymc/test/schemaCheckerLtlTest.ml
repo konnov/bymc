@@ -407,6 +407,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(enter_context)";
         "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";    (* enables g1 *)
+        "(assert_top (1 == (F4_warp + F3_warp)) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
@@ -419,6 +420,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         "(push_rule _ _ 5)";    (* enables g2 *)
+        "(assert_top (1 == (((F12_warp + F11_warp) + F10_warp) + F9_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)";
@@ -470,12 +472,18 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g1 *)
+        "(assert_top (1 == F2_warp) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 1)"; "(push_rule _ _ 0)"; "(push_rule _ _ 3)";
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 3)";
         check_prop;
         "(enter_context)";
-        "(push_rule _ _ 1)"; "(push_rule _ _ 0)"; "(push_rule _ _ 3)"; (* enables g2 *)
+        "(push_rule _ _ 1)";
+        "(push_rule _ _ 0)";
+        "(push_rule _ _ 3)"; (* enables g2 *)
+        "(assert_top (1 == ((F8_warp + F7_warp) + F6_warp)) _)";
         "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
@@ -484,6 +492,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(enter_context)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
+        "(assert_top (1 == ((((F18_warp + F17_warp) + F16_warp) + F15_warp) + F14_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
@@ -505,12 +514,14 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g2 *)
+        "(assert_top (1 == F26_warp) _)";
         "(assert_top (y >= ((t + 1) - f)) _)"; (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g3 *)
+        "(assert_top (1 == ((F32_warp + F31_warp) + F30_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
@@ -519,6 +530,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 5)"; (* enables g1 *)
+        "(assert_top (1 == (((F40_warp + F39_warp) + F38_warp) + F37_warp)) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)";  (* g1 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
@@ -540,12 +552,14 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 0)"; (* enables g2 *)
+        "(assert_top (1 == F48_warp) _)";
         "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g1 *)
+        "(assert_top (1 == ((F54_warp + F53_warp) + F52_warp)) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
@@ -554,6 +568,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(enter_context)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
+        "(assert_top (1 == ((((F64_warp + F63_warp) + F62_warp) + F61_warp) + F60_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
@@ -596,6 +611,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_node Intermediate)";
         "(push_rule _ _ 4)";             (* a self-loop *)
         "(push_rule _ _ 0)";
+        "(assert_top ( ! (x >= ((1 + t) - f))) _)";
+        "(assert_top ( ! (x >= ((n - t) - f))) _)";
         "(enter_node LoopStart)";        (* entering the loop *)
         "(push_rule _ _ 4)";             (* a self-loop *)
         "(push_rule _ _ 0)";
@@ -617,6 +634,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_context)";
         "(push_rule _ _ 4)"; (* enables g1 *)
         "(push_rule _ _ 0)"; (* enables g1 *)
+        "(assert_top (1 == (F8_warp + F7_warp)) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
@@ -629,6 +647,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         "(push_rule _ _ 5)"; (* enables g2 *)
+        "(assert_top (1 == (((F16_warp + F15_warp) + F14_warp) + F13_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
@@ -664,6 +683,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_context)";
         "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";            (* enables g1 *)
+        "(assert_top (1 == (F28_warp + F27_warp)) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
@@ -671,6 +691,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         "(push_rule _ _ 5)";
+        "(assert_top ( ! (x >= ((n - t) - f))) _)";
         "(enter_node LoopStart)";                      (* entering the loop *)
         "(push_rule _ _ 1)";
         "(push_rule _ _ 4)";
