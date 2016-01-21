@@ -373,16 +373,34 @@ let fold_file line_fun a filename =
 (* stop watch class to measure time *)
 class stop_watch(is_wall: bool) =
     object(self)
+        val mutable start_time = 0.0
         val mutable last_time = 0.0
         val mutable last_event = ""
 
+        method start event_name =
+            start_time <- self#get_time ();
+            last_time <- self#get_time ();
+            last_event <- "";
+            ignore (self#next_event event_name)
+
         method next_event event_name =
-            let current_time = if is_wall then Unix.time() else Sys.time() in
+            let current_time = self#get_time () in
+            let since_start = current_time -. start_time in
+            let lap = current_time -. last_time in
+            last_time <- current_time;
+            last_event <- event_name;
+            (since_start, lap)
+
+        method next_event_and_print event_name =
+            let current_time = self#get_time () in
             if last_event <> ""
             then Printf.printf "  %s: %f sec\n"
                 last_event (current_time -. last_time);
             last_time <- current_time;
             last_event <- event_name
+
+        method private get_time () =
+            if is_wall then Unix.time() else Sys.time()
     end
 
 
@@ -415,4 +433,26 @@ let short_time time =
 
 
 let short_time_now () = short_time (Unix.time ())
+
+
+let human_readable_duration duration =
+    let plural s num =
+        if num mod 10 = 1 then s else s ^ "s"
+    in
+    let secs = (int_of_float duration) mod 60 in
+    let mins = ((int_of_float duration) / 60) mod 60 in
+    let hours = ((int_of_float duration) / 3600) mod 24 in
+    let days = (int_of_float duration) / (24 * 3600) in
+    if duration < 1.0
+    then sprintf "% 1.6f s." duration
+    else if duration < 10.0
+    then sprintf "% 1.3f s." duration
+    else if duration < 60.0
+    then sprintf "% 2d s." secs
+    else if duration < 3600.0
+    then sprintf "% 2d min % 2d s" mins secs
+    else if duration < 24. *. 3600.0
+    then sprintf "% 2d %s % 2d min" hours (plural "hour" hours) mins
+    else sprintf "% 3d %s % 2d %s % 2d min"
+        hours (plural "day" days) hours (plural "hour" hours) mins
 
