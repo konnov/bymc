@@ -22,6 +22,14 @@ type stat_t = {
     m_min_schema_time_sec: float;  (** the minimal time to check a schema *)
     m_max_schema_time_sec: float;  (** the maximum time to check a schema *)
     m_sum_schema_time_sec: float;  (** the sum of all schema times (for the average) *)
+
+    (* internal stats *)
+    m_reachopt_sec: float;   (* the time spent with the reachability optimization on *)
+    m_noreachopt_sec: float; (* the time spent with the reachability optimization off *)
+    m_reachopt_rounds: int;    (* rounds spent with the reachability optimization on *)
+    m_noreachopt_rounds: int;  (* rounds spent with the reachability optimization off *)
+    m_nrounds_to_switch: int; (* the number of rounds left before trying to adapt   *)
+    m_reachability_on: bool;  (* is the reachability optimization on *)
 }
 
 (**

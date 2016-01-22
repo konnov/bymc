@@ -37,6 +37,14 @@ type stat_t = {
     m_min_schema_time_sec: float;  (** the minimal time to check a schema *)
     m_max_schema_time_sec: float;  (** the maximum time to check a schema *)
     m_sum_schema_time_sec: float;  (** the sum of all schema times (for the average) *)
+
+    (* internal stats *)
+    m_reachopt_sec: float;    (* the time spent with the reachability optimization on *)
+    m_noreachopt_sec: float;  (* the time spent with the reachability optimization off *)
+    m_reachopt_rounds: int;    (* rounds spent with the reachability optimization on *)
+    m_noreachopt_rounds: int;  (* rounds spent with the reachability optimization off *)
+    m_nrounds_to_switch: int; (* the number of rounds left before trying to adapt   *)
+    m_reachability_on: bool;  (* is the reachability optimization on *)
 }
 
 (**
@@ -49,19 +57,34 @@ type result_t = {
 }
 
 (** Create the initial statistics *)
-let mk_stat () = {
-    m_nschemas = 0; m_min_schema_len = max_int; m_max_schema_len = 0;
-    m_sum_schema_len = 0; m_min_schema_time_sec = max_float;
-    m_max_schema_time_sec = 0.0; m_sum_schema_time_sec = 0.0;
-}
+let mk_stat () =
+    let adapt_after =
+        if SchemaOpt.is_adaptive_reach_opt_enabled ()
+        then SchemaOpt.get_ada_reach_adapt_after ()
+        else -1
+    in
+    {
+        m_nschemas = 0; m_min_schema_len = max_int; m_max_schema_len = 0;
+        m_sum_schema_len = 0; m_min_schema_time_sec = max_float;
+        m_max_schema_time_sec = 0.0; m_sum_schema_time_sec = 0.0;
+        m_reachopt_sec = 0.0; m_noreachopt_sec = 0.0;
+        m_reachopt_rounds = 1; m_noreachopt_rounds = 1;
+        m_nrounds_to_switch = adapt_after;
+        m_reachability_on = SchemaOpt.is_reach_opt_enabled ();
+    }
 
 (** Get the statistics as a string*)
 let stat_s st =
-    sprintf ("npaths = %d, min length = %d, max length = %d, avg length = %d\nmin time = %f, max time = %f, avg time = %f")
-        st.m_nschemas st.m_min_schema_len st.m_max_schema_len
-        (st.m_sum_schema_len / st.m_nschemas)
-        st.m_min_schema_time_sec st.m_max_schema_time_sec
-        (st.m_sum_schema_time_sec /. (float_of_int st.m_nschemas))
+    let buf = BatBuffer.create 100 in
+    BatBuffer.add_string buf
+        (sprintf ("nschemas = %d, min length = %d, max length = %d, avg length = %d\n")
+            st.m_nschemas st.m_min_schema_len st.m_max_schema_len
+            (st.m_sum_schema_len / st.m_nschemas));
+    BatBuffer.add_string buf
+        (sprintf "min time = %f, max time = %f, avg time = %f"
+            st.m_min_schema_time_sec st.m_max_schema_time_sec
+            (st.m_sum_schema_time_sec /. (float_of_int st.m_nschemas)));
+    BatBuffer.contents buf
 
 
 (**
@@ -399,7 +422,7 @@ let fail_first a b =
     else Lazy.force b
 
 
-let check_one_order solver sk spec deps tac elem_order =
+let check_one_order solver sk spec deps tac ~reach_opt elem_order =
     let is_safety, init_form, safety_bad =
         (* we have to treat safety differently from the general case *)
         match spec with
@@ -571,7 +594,7 @@ let check_one_order solver sk spec deps tac elem_order =
 
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
-        if not (SchemaOpt.is_reach_opt_enabled ()) || solver#check
+        if (not reach_opt) || solver#check
         then begin
             (* try to find an execution
                 that does not enable new conditions and reaches a bad state *)
@@ -733,7 +756,7 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
     !result
 
 
-(** accumulate the statistics *)
+(** accumulate the statistics and adaptively change the options *)
 let accum_stat r_st watch no schema_len =
     let nschemas = !r_st.m_nschemas in
     let elapsed, one_lap = watch#next_event "" in
@@ -747,6 +770,36 @@ let accum_stat r_st watch no schema_len =
     printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s\n"
         percentage (human_readable_duration one_lap)
         (human_readable_duration elapsed) (human_readable_duration eta);
+
+    (* update the running time with the reachability optimization on/off *)
+    let fadd_if is_true a b = if is_true then a +. b else a in
+    let add_if is_true a b = if is_true then a + b else a in
+    let reach_on = !r_st.m_reachability_on in
+    r_st := { !r_st with
+        m_reachopt_sec = fadd_if reach_on !r_st.m_reachopt_sec one_lap;
+        m_noreachopt_sec = fadd_if (not reach_on) !r_st.m_noreachopt_sec one_lap;
+        m_reachopt_rounds = add_if reach_on !r_st.m_reachopt_rounds 1;
+        m_noreachopt_rounds = add_if (not reach_on) !r_st.m_noreachopt_rounds 1;
+    };
+
+    let ron_avg = (!r_st.m_reachopt_sec) /. (float_of_int !r_st.m_reachopt_rounds) in
+    let roff_avg = (!r_st.m_noreachopt_sec) /. (float_of_int !r_st.m_noreachopt_rounds) in
+    let shall_switch =
+        ((reach_on && ron_avg > 1.2 *. roff_avg)
+            || (not reach_on && roff_avg > 1.2 *. ron_avg))
+        && SchemaOpt.is_adaptive_reach_opt_enabled ()
+        && SchemaOpt.is_reach_opt_enabled ()
+    in
+    if !r_st.m_nrounds_to_switch = 0 && shall_switch
+    then begin
+        r_st := { !r_st with
+            m_nrounds_to_switch = SchemaOpt.get_ada_reach_adapt_after ();
+            m_reachability_on = not !r_st.m_reachability_on
+        };
+        printf "Adapting... the reachability optimization is now %s\n"
+            (if !r_st.m_reachability_on then "on" else "off");
+    end;
+
     r_st := { !r_st with
         m_min_schema_len = min !r_st.m_min_schema_len schema_len;
         m_max_schema_len = max !r_st.m_max_schema_len schema_len;
@@ -754,6 +807,8 @@ let accum_stat r_st watch no schema_len =
         m_max_schema_time_sec = max !r_st.m_max_schema_time_sec one_lap;
         m_sum_schema_len = !r_st.m_sum_schema_len + schema_len;
         m_sum_schema_time_sec = !r_st.m_sum_schema_time_sec +. one_lap;
+        m_nrounds_to_switch =
+            add_if (!r_st.m_nrounds_to_switch > 0) !r_st.m_nrounds_to_switch (-1);
     }
 
 
@@ -809,13 +864,16 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
     (* and check the properties for each of them *)
     let current = ref 0 in
     let r_stat = ref ({ (mk_stat ()) with m_nschemas = !total_count }) in
-    let watch = new Accums.stop_watch ~is_wall:false ~with_children:true in
+    (* we need the watch for user experience,
+        the precise timing is given at the end *)
+    let watch = new Accums.stop_watch ~is_wall:true ~with_children:true in
     watch#start "";
     let each_order eorder = 
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
         printf "  -> %s...\n" (str_join "  " (List.map pp eorder));
         current := 1 + !current;
-        let res = check_one_order solver sk spec deps tac eorder in
+        let ropt = !r_stat.m_reachability_on in
+        let res = check_one_order solver sk spec deps tac ~reach_opt:ropt eorder in
         accum_stat r_stat watch !current res.m_schema_len;
         res.m_is_err
     in
