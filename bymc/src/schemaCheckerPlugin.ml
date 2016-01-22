@@ -88,7 +88,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             let print_stat () =
                 if !npaths = 0
                 then npaths := 1;
-                log INFO (sprintf "  > npaths = %d, min length = %d, max length = %d, avg length = %d"
+                log INFO (sprintf "  > nschemas = %d, min length = %d, max length = %d, avg length = %d"
                     !npaths !minlen !maxlen (!totallen / !npaths));
             in
 
@@ -173,16 +173,24 @@ class slps_checker_plugin_t (plugin_name: string) =
             let opts = rt#caches#options in
             let no_flow_opt = Options.get_plugin_opt opts "schema.noflowopt" in
             let no_reach_opt = Options.get_plugin_opt opts "schema.noreachopt" in
+            let no_adaptive_reach_opt =
+                Options.get_plugin_opt opts "schema.noadaptive" in
             if no_flow_opt = Some "1"
             then SchemaOpt.set_flow_opt false;
             Debug.logtm INFO
-                (sprintf "  The control flow optimization is %s\n"
+                (sprintf "  The control flow optimization is %s"
                     (if no_flow_opt = Some "1" then "disabled" else "enabled"));
 
             if no_reach_opt = Some "1"
             then SchemaOpt.set_reach_opt false;
             Debug.logtm INFO
-                (sprintf "  The reachability optimization is %s\n"
+                (sprintf "  The reachability optimization is %s"
+                    (if no_reach_opt = Some "1" then "disabled" else "enabled"));
+
+            if no_adaptive_reach_opt = Some "1"
+            then SchemaOpt.set_adaptive_reach_opt false;
+            Debug.logtm INFO
+                (sprintf "  The adaptive reachability optimization is %s"
                     (if no_reach_opt = Some "1" then "disabled" else "enabled"))
     end
 
