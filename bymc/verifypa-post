@@ -31,6 +31,9 @@ function help_and_quit() {
     echo "                          may lead to a combinatorial explosion of guards)"
     echo "  -O schema.noreachopt=1 (disable the reachability optimization,"
     echo "                          i.e., reachability is not checked on-the-fly)"
+    echo "  -O schema.noadaptive=1 (disable the adaptive reachability optimization,"
+    echo "                          i.e., the tool will not try to choose between
+                                    enabling/disabling the reachability optimization)"
 
     exit 1
 }
