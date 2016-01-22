@@ -54,8 +54,11 @@ while (<>) {
     if (/.*found (\d+) locations.*/) { $nlocs = $1; }
     if (/.*found (\d+) rules*/) { $nrules = $1; }
     if (/.*?(\d+) schemas to inspect*/) { $nschemas = $1; }
-    if (/npaths = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) {
-        $npaths = $1; $minlen = $2; $maxlen = $3; $avglen = $4;
+    if (/nschemas = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) {
+        $nschemas = $1; $minlen = $2; $maxlen = $3; $avglen = $4;
+    }
+    if (/min time = ([\d\.]+), max time = ([\d\.]+), avg time = ([\d\.]+)/) {
+        $mintime = $1; $maxtime = $2; $avgtime = $3;
     }
     if (/found (\d+) non-trivial SCCs/) { $nsccs = $1; }
 }
@@ -69,7 +72,9 @@ print "40:post-usersec=${b_user}|41:post-syssec=${b_sys}\
 |52:post-mild-bound=${mbound}|52:post-nschemas=${nschemas}\
 |53:post-minlen=${minlen}|54:post-maxlen=${maxlen}\
 |55:post-avglen=${avglen}|56:post-nsccs=${nsccs}\
-|59:post-domsize=${dom_size}\n"
+|59:post-domsize=${dom_size}\
+|60:post-mintime=${mintime}|61:post-maxtime=${maxtime}\
+|62:post-avgtime=${avgtime}\n"
 '`
 
     echo "10:Result=$res|$stat"
