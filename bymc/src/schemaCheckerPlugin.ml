@@ -134,7 +134,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             let check name form =
                 L.find_error rt tt sk name form deps
             in
-            log INFO "  > Running L (on the fly)...";
+            log INFO "  > Running SchemaCheckerLtl (on the fly)...";
             let each_form name form =
                 logtm INFO (sprintf "      > Checking %s..." name);
                 let result = check name form in
