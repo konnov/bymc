@@ -189,6 +189,15 @@ let make_strb_fairness sk =
         UnEx (EVENTUALLY, expr))
 
 
+let make_strb_fairness_eq sk =
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    let e4 = BinEx (EQ, Var nsnt, BinEx (PLUS, Var t, IntConst 1)) in
+    UnEx (ALWAYS,
+        UnEx (EVENTUALLY, e4))
+
+
 
 (*
   Create a symbolic skeleton. This is in fact the example that appeared in our CAV'15 paper.
@@ -770,6 +779,37 @@ let extract_utl_fairness _ =
             expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
 
 
+let extract_utl_fairness_eq _ =
+    let sk, tt = prepare_strb () in
+    let ltl_form = make_strb_fairness_eq sk in
+    let expected_utl_s =
+        "G (F (((x == (t + 1))) \\/ ()))" (* well, no counter comparisons *)
+    in
+    let expected_init_ltl_s = "1" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let result_utl_s = utl_spec_s result_utl in
+    assert_equal expected_utl_s result_utl_s
+        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s);
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
+
+
+let extract_utl_fairness_loc_cmp _ =
+    let sk, tt = prepare_strb () in
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    let e4 = BinEx (EQ, get_loc 1, BinEx (PLUS, Var t, IntConst 1)) in
+    let ltl_form = UnEx (ALWAYS, UnEx (EVENTUALLY, e4)) in
+    try
+        ignore (SchemaCheckerLtl.extract_utl sk ltl_form);
+        assert_failure "Expected IllegalLtl_error _"
+    with IllegalLtl_error _ ->
+        ()
+
+
 let can_handle_corr _ =
     let sk, tt = prepare_strb () in
     let ltl_form = make_strb_corr sk in
@@ -817,6 +857,11 @@ let suite = "schemaCheckerLtl-suite" >:::
             >::(bracket SmtTest.setup_smt2 extract_utl_fairness SmtTest.shutdown_smt2);
         "extract_utl_condbased"
             >::(bracket SmtTest.setup_smt2 extract_utl_condbased SmtTest.shutdown_smt2);
+        "extract_utl_fairness_eq"
+            >::(bracket SmtTest.setup_smt2 extract_utl_fairness_eq SmtTest.shutdown_smt2);
+        "extract_utl_fairness_loc_cmp"
+            >::(bracket SmtTest.setup_smt2
+                extract_utl_fairness_loc_cmp SmtTest.shutdown_smt2);
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2

@@ -1078,13 +1078,23 @@ module TL = struct
         let var_to_int i v map = IntMap.add v#id i map in
         let rev_map = IntMap.fold var_to_int sk.Sk.loc_vars IntMap.empty
         in
+        let find_loc v =
+            try IntMap.find v#id rev_map
+            with Not_found ->
+                let m = sprintf "The location for the variable %s (id=%d) is not found"
+                    v#get_name v#id
+                in
+                raise (Failure m)
+        in
         let rec parse_props = function
             | BinEx (NE, Var v, IntConst 0) ->
-                Ne0 (IntMap.find v#id rev_map)
+                Ne0 (find_loc v)
 
             | BinEx (EQ, Var v, IntConst 0) ->
-                Eq0 (IntMap.find v#id rev_map)
+                Eq0 (find_loc v)
 
+            | BinEx (NE, Var x, e)
+            | BinEx (EQ, Var x, e)
             | BinEx (GE, Var x, e)
             | BinEx (LT, Var x, e)
             | BinEx (GT, Var x, e)
@@ -1093,7 +1103,12 @@ module TL = struct
                 then let m = sprintf "Unexpected %s in %s"
                         (SpinIrImp.expr_s e) (SpinIrImp.expr_s cmp) in
                     raise (IllegalLtl_error m)
-                else ExtShared_Or_And_Keq0 ([cmp], [])
+                else if List.exists (fun v -> x#id = v#id) sk.Sk.shared
+                    then ExtShared_Or_And_Keq0 ([cmp], [])
+                    else let m =
+                        sprintf "Unexpected comparison to a location: %s"
+                            (SpinIrImp.expr_s cmp) in
+                        raise (IllegalLtl_error m)
 
             | BinEx (OR, l, r) as expr ->
                 begin
@@ -1115,7 +1130,7 @@ module TL = struct
         
             | _ as e ->
                 raise (IllegalLtl_error
-                    (sprintf "Expected an and-or combinations of counter tests, found %s"
+                    (sprintf "Expected an and-or combination of counter tests, found %s"
                         (SpinIrImp.expr_s e)))
         in
         let parse_props_p props =
