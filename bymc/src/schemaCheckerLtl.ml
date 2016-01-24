@@ -1087,11 +1087,19 @@ module TL = struct
                 raise (Failure m)
         in
         let rec parse_props = function
-            | BinEx (NE, Var v, IntConst 0) ->
-                Ne0 (find_loc v)
-
-            | BinEx (EQ, Var v, IntConst 0) ->
-                Eq0 (find_loc v)
+            | BinEx (EQ as op, IntConst 0, Var x)
+            | BinEx (NE as op, IntConst 0, Var x)
+            | BinEx (EQ as op, Var x, IntConst 0)
+            | BinEx (NE as op, Var x, IntConst 0) as cmp ->
+                if IntMap.mem x#id rev_map
+                then if op = EQ
+                    then Eq0 (find_loc x)
+                    else Ne0 (find_loc x)
+                else if List.exists (fun v -> x#get_name = v#get_name) sk.Sk.shared
+                    then ExtShared_Or_And_Keq0 ([cmp], [])
+                    else let m =
+                        sprintf "Unexpected formula: %s" (SpinIrImp.expr_s cmp) in
+                        raise (IllegalLtl_error m)
 
             | BinEx (NE, Var x, e)
             | BinEx (EQ, Var x, e)
