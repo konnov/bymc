@@ -200,7 +200,9 @@ let embed_fairness prog =
             StringMap.add name form map
 
         | _ ->
-            StringMap.add name (BinEx (IMPLIES, fairness, form)) map
+            if SpinIr.not_nop fairness
+            then StringMap.add name (BinEx (IMPLIES, fairness, form)) map
+            else StringMap.add name form map
     in
     let other_fs = List.filter
         (fun (n, _) -> not (is_fairness_form n)) (hashtbl_as_list ltl_forms) in
