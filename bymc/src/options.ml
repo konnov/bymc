@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [1; 1; 54]
-let version_full = "ByMC-1.1.54-liveness"
+let version = [1; 1; 60]
+let version_full = "ByMC-1.1.60-liveness"
 
 let macro_prefix = "macro."
 
@@ -36,15 +36,18 @@ type options_t =
         plugin_dir: string;
     }
 
-let empty = {
-    action = OptNone; trail_name = ""; filename = ""; spec = "";
-    chain = "piaDataCtr";
-    param_assignments = StrMap.empty;
-    mc_tool = ToolSpin; bdd_pass = false; verbose = false;
-    smt = SmtYices;
-    plugin_opts = StrMap.empty;
-    plugin_dir = ""
-}
+let empty =
+    (* z3 is our default solver *)
+    let smt = SmtLib2 [|"z3"; "-smt2"; "-in"|] in
+    {
+        action = OptNone; trail_name = ""; filename = ""; spec = "";
+        chain = "piaDataCtr";
+        param_assignments = StrMap.empty;
+        mc_tool = ToolSpin; bdd_pass = false; verbose = false;
+        smt; 
+        plugin_opts = StrMap.empty;
+        plugin_dir = ""
+    }
 
 
 let get_plugin_opt opts name =

@@ -12,6 +12,11 @@ function help_and_quit() {
     echo "  --limit-time: limit (in seconds) Spin's cpu time"
     echo "  --limit-mem: limit (in MB) Spin's virtual memory"
     echo "  -h|--help: show this help message"
+    echo ""
+    echo " bymc_options are as follows:"
+    echo "  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)"
+    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)"
+    echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
     exit 1
 }
 
