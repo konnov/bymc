@@ -17,6 +17,9 @@ if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 function help_and_quit() {
     echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where the switches are"
+    echo "  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)"
+    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)"
+    echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
     echo "  -w|--nusmv-verbose <level>: set the verbosity level"
     echo "  --rel-reach: compute reachable states first (in NuSMV)"
     echo "  --rel-mono: monolithic transition relation (in NuSMV)"
