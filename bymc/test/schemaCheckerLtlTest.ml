@@ -810,6 +810,29 @@ let extract_utl_fairness_loc_cmp _ =
         ()
 
 
+let extract_utl_fairness_shared_and_loc _ =
+    let sk, tt = prepare_strb () in
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    let loc_eq0 = BinEx (EQ, get_loc 1, IntConst 0) in
+    let nsnt_eq0 = BinEx (EQ, Var nsnt, IntConst 0) in
+    let and_cmp = BinEx (AND, loc_eq0, nsnt_eq0) in
+    let ltl_form = UnEx (ALWAYS, UnEx (EVENTUALLY, and_cmp)) in
+    let expected_utl_s =
+        "G (F (((x == (t + 1))) /\\ (loc1 == 0)))"
+    in
+    let expected_init_ltl_s = "1" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let result_utl_s = utl_spec_s result_utl in
+    assert_equal expected_utl_s result_utl_s
+        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s);
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
+
+
 let can_handle_corr _ =
     let sk, tt = prepare_strb () in
     let ltl_form = make_strb_corr sk in
@@ -862,6 +885,12 @@ let suite = "schemaCheckerLtl-suite" >:::
         "extract_utl_fairness_loc_cmp"
             >::(bracket SmtTest.setup_smt2
                 extract_utl_fairness_loc_cmp SmtTest.shutdown_smt2);
+
+        (* TODO: implement a feature to support this *)
+        (*"extract_utl_fairness_shared_and_loc"
+            >::(bracket SmtTest.setup_smt2
+                extract_utl_fairness_shared_and_loc SmtTest.shutdown_smt2);
+                *)
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
