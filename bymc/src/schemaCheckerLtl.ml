@@ -344,7 +344,7 @@ let get_unlocked_rules sk deps uset lset invs =
  *)
 type po_elem_t =
     | PO_init of utl_k_spec_t (** the initial state and the associated formulas *)
-    | PO_loop_start         (** the loop start point *)
+    | PO_loop_start of utl_k_spec_t (** the loop start point (with the invariants) *)
     | PO_guard of PSet.elt  (** an unlocking/locking guard *)
     | PO_tl of int (* id *) * utl_k_spec_t
         (** an extremal appearance of a temporal-logic formula *)
@@ -357,25 +357,25 @@ let po_elem_s sk = function
     | PO_tl (id, form) ->
         sprintf "F%d(%s)" id (SpinIrImp.expr_s (utl_k_to_expr sk form))
 
-    | PO_loop_start ->
-        "LOOP"
+    | PO_loop_start form ->
+        sprintf "LOOP(%s)" (SpinIrImp.expr_s (utl_k_to_expr sk form))
+
 
     | PO_init form ->
         sprintf "INIT(%s)" (SpinIrImp.expr_s (utl_k_to_expr sk form))
 
 
-let po_elem_short_s sk elem =
-    match elem with
+let po_elem_short_s sk = function
     | PO_guard e ->
         sprintf "C%s" (PSet.elem_str e)
 
-    | PO_tl (id, form) ->
+    | PO_tl (id, _) ->
         sprintf "F%d" id
 
-    | PO_loop_start ->
+    | PO_loop_start _->
         "LOOP"
 
-    | PO_init form ->
+    | PO_init _ ->
         sprintf "INIT"
 
 
@@ -409,6 +409,25 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;
     printf "    > Saved counterexample to %s\n" fname
+
+
+(** append the invariant lists while filtering out the duplicates *)
+let append_invs invs new_invs =
+    let tab = Hashtbl.create ((List.length invs) + (List.length new_invs)) in
+    let add spec =
+        Hashtbl.replace tab spec 1
+    in
+    List.iter add invs;
+    let add_if lst spec =
+        if not (Hashtbl.mem tab spec)
+        then begin
+            Hashtbl.replace tab spec 1;
+            spec :: lst
+        end
+        else lst
+    in
+    List.fold_left add_if invs new_invs
+
 
 
 (* an internal result structure *)
@@ -514,7 +533,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             let new_invs = find_G_props utl_form in
             assert_propositions new_invs;
             let result =
-                prune_or_continue prefix_last_frame uset lset (new_invs @ invs) (node_type tl) tl in
+                prune_or_continue prefix_last_frame uset lset
+                    (append_invs invs new_invs) (node_type tl) tl in
             tac#leave_context;
             result
 
@@ -558,7 +578,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             end else
                 search prefix_last_frame uset lset invs tl
 
-        | PO_loop_start :: tl ->
+        | (PO_loop_start (TL_and fs)) :: tl ->
             assert (not is_safety);
             (* check that no other guards were activated *)
             let assert_not_active set (_, cond_id, expr, lt) =
@@ -567,6 +587,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             in
             List.iter (assert_not_active (PSet.diff deps.D.umask uset)) deps.D.uconds;
             List.iter (assert_not_active (PSet.diff deps.D.lmask lset)) deps.D.lconds;
+            let new_invs = find_G_props (TL_and fs) in
             (* try to close the loop *)
             let prefix_last_frame =
                 try Some tac#top
@@ -574,7 +595,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                     printf "PO_loop_start: %s\n" m;
                     raise (Failure m)
             in
-            prune_or_continue prefix_last_frame uset lset invs LoopStart tl
+            prune_or_continue prefix_last_frame uset lset
+                (append_invs invs new_invs) LoopStart tl
 
         | (PO_tl (_, (TL_and fs))) :: tl ->
             (* an extreme appearance of F *)
@@ -582,15 +604,17 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             tac#enter_context;
             (* the propositional subformulas should be satisfied right now *)
             tac#assert_top (List.map (atomic_to_expr sk) props);
-            let new_invs = find_G_props (TL_and fs) in
+            let new_invs =
+                if prefix_last_frame = None then [] else find_G_props (TL_and fs) in
             let result =
-                prune_or_continue prefix_last_frame uset lset (new_invs @ invs) (node_type tl) tl
+                prune_or_continue prefix_last_frame uset lset
+                    (append_invs invs new_invs) (node_type tl) tl
             in
             tac#leave_context;
             result
 
         | _ ->
-            raise (Failure "Not implemented yet")
+            raise (Failure "Unexpected po_elem_t")
 
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
@@ -677,7 +701,10 @@ let poset_make_utl form =
 
     | TL_G psi ->
         let props = List.map (fun ae -> TL_p ae) (find_uncovered_utl_props psi) in
-        let nm = add_form pos (TL_G (TL_and props)) map in
+        let gp = TL_G (TL_and props) in
+        (* add G formulas starting with the current position,
+           as well as to the loop start *)
+        let nm = add_form pos gp (add_form po_loop gp map) in
         (* all subformulas should be also true in the loop part *)
         make true pos (orders, nm) psi
 
@@ -695,12 +722,14 @@ let poset_make_utl form =
         make in_loop new_pos (new_orders, (add_empty new_pos map)) psi
     in
     (* find the subformulas and compute the dependencies *)
-    let init_map = IntMap.singleton po_init [] in
+    let init_map = add_empty po_loop (IntMap.singleton po_init []) in
     let orders, map = make false po_init ([], init_map) form in
     let remap i fs =
-        if i = po_init
-        then PO_init (TL_and fs)
-        else PO_tl (i, TL_and fs)
+        if i = po_loop
+        then PO_loop_start (TL_and fs)
+        else if i = po_init
+            then PO_init (TL_and fs)
+            else PO_tl (i, TL_and fs)
     in
     printf "Formula structure: %s\n" (utl_k_temporal_s form);
     !last_pos, orders, (IntMap.mapi remap map)
@@ -826,7 +855,7 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
             Debug.ltrace Trc.scl
                 (lazy (IntMap.iter
                     (fun _ e -> printf "%s\n" (po_elem_s sk e)) m; ""));
-            1 + n, ((po_init, po_loop) :: o), (IntMap.add po_loop PO_loop_start m)
+            1 + n, ((po_init, po_loop) :: o), m
 
         | Safety (_, _) ->
             (* add the initial state and the loop (the loop will be ignored) *)
@@ -834,7 +863,8 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
             (* hack: place po_loop BEFORE po_init, so the loop start does not explode
                the number of combinations *)
             2, [(po_loop, po_init)],
-                (IntMap.add po_loop PO_loop_start (IntMap.singleton po_init inite))
+                (IntMap.add po_loop (PO_loop_start (TL_and []))
+                    (IntMap.singleton po_init inite))
     in
     (* add the guards *)
     let size, order, rev_map = poset_mixin_guards deps nelems order rmap in
