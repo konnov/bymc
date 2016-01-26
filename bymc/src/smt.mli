@@ -68,6 +68,12 @@ class virtual smt_solver:
         (** check, whether the solver is going to construct a sat model *)
         method virtual get_need_model: bool
 
+        (** ask the solver to provide an unsat core *)
+        method virtual set_need_unsat_cores: bool -> unit
+
+        (** check, whether the solver is going to produce an unsat core *)
+        method virtual get_need_unsat_cores: bool
+
         method virtual get_model_query: Q.query_t
 
         method virtual submit_query: Q.query_t -> Q.query_t
@@ -147,6 +153,12 @@ class yices_smt: string ->
 
         (** check, whether the solver is going to construct a sat model *)
         method get_need_model: bool
+
+        (** ask the solver to provide an unsat core *)
+        method set_need_unsat_cores: bool -> unit
+
+        (** check, whether the solver is going to produce an unsat core *)
+        method get_need_unsat_cores: bool
 
         method get_model_query: Q.query_t
 
@@ -230,6 +242,12 @@ class lib2_smt: string -> string array ->
         (** check, whether the solver is going to construct a sat model *)
         method get_need_model: bool
 
+        (** ask the solver to provide an unsat core *)
+        method set_need_unsat_cores: bool -> unit
+
+        (** check, whether the solver is going to produce an unsat core *)
+        method get_need_unsat_cores: bool
+
         method get_model_query: Q.query_t
 
         method submit_query: Q.query_t -> Q.query_t
@@ -310,6 +328,12 @@ class mathsat5_smt:
 
         (** check, whether the solver is going to construct a sat model *)
         method get_need_model: bool
+
+        (** ask the solver to provide an unsat core *)
+        method set_need_unsat_cores: bool -> unit
+
+        (** check, whether the solver is going to produce an unsat core *)
+        method get_need_unsat_cores: bool
 
         method get_model_query: Q.query_t
 

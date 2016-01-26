@@ -1,4 +1,8 @@
-(* utility functions to integrate with Yices *)
+(**
+    Classes to integrate with SMT solvers: SMTLIB2, Yices 1.x, Mathsat.
+
+    @author Igor Konnov, 2012-2016
+ *)
 
 open Printf
 open Str
@@ -74,7 +78,7 @@ module Q = struct
 end
 
 
-(* An abstract interface to an SMT solver *)
+(** An abstract interface to an SMT solver *)
 class virtual smt_solver =
     object
         (** fork a new process that executes 'yices' *)
@@ -116,6 +120,12 @@ class virtual smt_solver =
 
         (** check, whether the solver is going to construct a sat model *)
         method virtual get_need_model: bool
+
+        (** ask the solver to provide an unsat core *)
+        method virtual set_need_unsat_cores: bool -> unit
+
+        (** check, whether the solver is going to produce an unsat core *)
+        method virtual get_need_unsat_cores: bool
 
         method virtual get_model_query: Q.query_t
 
@@ -361,7 +371,7 @@ let parse_smt_model_q query lines =
     { new_query with Q.frozen = true }
 
 
-(* The interface to the SMT solver (yices).
+(** The interface to the SMT solver (yices).
    We are using the text interface, as it is way easier to debug. *)
 class yices_smt (solver_cmd: string) =
     object(self)
@@ -376,6 +386,7 @@ class yices_smt (solver_cmd: string) =
         val mutable m_pipe_cmd = PipeCmd.null ()
         val mutable debug = false
         val mutable m_enable_log = false
+        val mutable m_need_unsat_cores = false
         val mutable m_need_evidence = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
@@ -491,6 +502,12 @@ class yices_smt (solver_cmd: string) =
             else self#append "(set-evidence! false)"
 
         method get_need_model = m_need_evidence
+
+        method set_need_unsat_cores b =
+            (* nothing to do in yices *)
+            m_need_unsat_cores <- b
+
+        method get_need_unsat_cores = m_need_unsat_cores
             
         method get_model_query = Q.new_query expr_to_smt
 
@@ -588,12 +605,12 @@ class yices_smt (solver_cmd: string) =
     end
 
 
-(*
+(**
     An interface to a solver supporting SMTLIB2. This class invokes a solver
     and communicates with it via pipes.
 
     Logging to a file is disabled by default. If you want to enable it,
-    pass the argument -O smt.log=1
+    pass the argument -O smt.log=1.
 *)
 class lib2_smt solver_cmd solver_args =
     object(self)
@@ -610,6 +627,7 @@ class lib2_smt solver_cmd solver_args =
         val mutable m_enable_log = false
         val mutable m_enable_lockstep = false
         val mutable m_need_evidence = false
+        val mutable m_need_unsat_cores = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
         (** the number of stack pushes executed within consistent context *)
@@ -632,10 +650,20 @@ class lib2_smt solver_cmd solver_args =
             then self#append_and_sync "(set-option :print-success true)\n"
             else self#append_and_sync "(set-option :print-success false)\n";
 
-            self#append_and_sync "(set-option :produce-unsat-cores true)\n";
+            (*self#append_and_sync "(set-logic QF_UFLIA)\n";*)
+
+            (*self#append_and_sync "(set-option :produce-unsat-cores true)\n";*)
+
             self#append_and_sync "(set-option :produce-models true)";
-            (* pop removes the declarations *)
-            self#append_and_sync "(set-option :global-decls false)\n";
+            (* z3 scoping is incompatible by default with the one of smtlib2:
+                http://stackoverflow.com/questions/13473787/z3-with-smtlib2-input
+              *)
+            if BatString.exists solver_cmd "z3"
+            then begin
+                self#comment "a Z3 hack follows\n";
+                self#append_and_sync "(set-option :global-decls false)\n";
+            end;
+
             self#push_ctx (* a backup context to reset *)
         
         method stop =
@@ -715,8 +743,16 @@ class lib2_smt solver_cmd solver_args =
                the options before doing anything *)
 
         method get_need_model = m_need_evidence
+
+        method set_need_unsat_cores b =
+            m_need_unsat_cores <- b;
+            if b then self#append_and_sync "(set-option :produce-unsat-cores true)\n"
+
+        method get_need_unsat_cores = m_need_unsat_cores
             
         method get_model_query = Q.new_query expr_to_smt2
+
+
 
         method submit_query (query: Q.query_t) =
             let str = Hashtbl.fold (fun e_s _ s -> s ^ " " ^ e_s) query.Q.tab "" in
@@ -863,9 +899,9 @@ class lib2_smt solver_cmd solver_args =
     end
 
 
-(*
+(**
     An interface to Mathsat5 via Mathsat's library.
-    It requires plugin mathsat4ml compiled in plugins/mathsat4ml
+    This class requires the mathsat4ml plugin compiled in plugins/mathsat4ml
 
     Logging to a file is disabled by default. If you want to enable it,
     pass the option -O smt.log=1
@@ -878,6 +914,7 @@ class mathsat5_smt =
 
         val mutable clog = stdout
         val mutable m_enable_log = false
+        val mutable m_need_unsat_cores = false
         (** the number of stack pushes executed within consistent context *)
         val mutable m_pushes = 0
 
@@ -989,6 +1026,12 @@ class mathsat5_smt =
         method set_need_model _ = ()
 
         method get_need_model = true
+
+        method set_need_unsat_cores b =
+            (* nothing to do *)
+            m_need_unsat_cores <- b
+
+        method get_need_unsat_cores = m_need_unsat_cores
             
         method get_model_query = Q.new_query expr_to_smt2
 
