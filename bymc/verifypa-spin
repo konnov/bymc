@@ -15,7 +15,7 @@ function help_and_quit() {
     echo ""
     echo " bymc_options are as follows:"
     echo "  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)"
-    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)"
+    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3' (use an SMT2 solver, unsat cores are required)"
     echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
     exit 1
 }
@@ -43,7 +43,7 @@ fi
 PROG=$1
 SPEC=$2
 shift 2
-export BYMC_FLAGS="$@ $BYMC_FLAGS"
+export BYMC_FLAGS="$@ $BYMC_FLAGS -O smt.unsat.cores=1"
 
 TARGET_MC=spin PAN_FLAGS="$PAN_FLAGS" PANCC_FLAGS="$PANCC_FLAGS"\
     `dirname $0`/script/refinement-loop.sh "$PROG" "$SPEC"
