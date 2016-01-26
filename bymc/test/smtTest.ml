@@ -34,6 +34,7 @@ let setup_smt2 _ =
     then begin
         solver := new lib2_smt "z3" [| "-smt2"; "-in"|];
         (!solver)#set_enable_log true;
+        (!solver)#set_need_unsat_cores true;
         (!solver)#start;
         is_started := true;
     end

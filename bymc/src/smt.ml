@@ -652,7 +652,8 @@ class lib2_smt solver_cmd solver_args =
 
             (*self#append_and_sync "(set-logic QF_UFLIA)\n";*)
 
-            (*self#append_and_sync "(set-option :produce-unsat-cores true)\n";*)
+            if m_need_unsat_cores
+            then self#append_and_sync "(set-option :produce-unsat-cores true)\n";
 
             self#append_and_sync "(set-option :produce-models true)";
             (* z3 scoping is incompatible by default with the one of smtlib2:
@@ -745,8 +746,9 @@ class lib2_smt solver_cmd solver_args =
         method get_need_model = m_need_evidence
 
         method set_need_unsat_cores b =
-            m_need_unsat_cores <- b;
-            if b then self#append_and_sync "(set-option :produce-unsat-cores true)\n"
+            (* the option is set in #start, as many solvers require us to set
+               the options before doing anything *)
+            m_need_unsat_cores <- b
 
         method get_need_unsat_cores = m_need_unsat_cores
             
