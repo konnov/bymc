@@ -7,7 +7,7 @@ let reach_opt_enabled = ref true
 let ada_reach_opt_enabled = ref true
 (** how often to try to switch between the reachability
     and non-reachability optimizations (in the adaptive mode) *)
-let ada_reach_adapt_after = ref 10
+let ada_reach_adapt_after = ref 3
 
 let is_flow_opt_enabled _ = !flow_opt_enabled
 let set_flow_opt enabled = flow_opt_enabled := enabled
