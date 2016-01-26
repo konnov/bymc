@@ -45,6 +45,8 @@ let run_solver opts =
     then solver#set_enable_log true;
     if Some "1" = (Options.get_plugin_opt opts "smt.lockstep")
     then solver#set_enable_lockstep true;
+    if Some "1" = (Options.get_plugin_opt opts "smt.unsat.cores")
+    then solver#set_need_unsat_cores true;
     solver
 
 

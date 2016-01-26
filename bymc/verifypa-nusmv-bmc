@@ -28,7 +28,7 @@ function help_and_quit() {
     echo "use $0 <switches> prog spec <bymc_switches>"
     echo " where the switches are"
     echo "  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)"
-    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)"
+    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver, unsat cores are required)"
     echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
     echo "  -k|--length k: limit the BMC search with length k"
     echo "  -K K: limit the custom solver with length K"
@@ -95,7 +95,7 @@ ulimit -s $STACK_LIMIT
 PROG=$1
 SPEC=$2
 shift 2
-export BYMC_FLAGS="$@ $BYMC_FLAGS"
+export BYMC_FLAGS="$@ $BYMC_FLAGS -O smt.unsat.cores=1"
 
 # run the tool
 export TARGET_MC=nusmv-bmc
