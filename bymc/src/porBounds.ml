@@ -645,7 +645,10 @@ let compute_deps ?(against_only=true) solver sk =
     in
     logtm INFO (sprintf "> constructing strongly-connected components...");
     let print_scc scc =
-        log INFO (sprintf "    > SCC of size %d" (List.length scc))
+        log INFO (sprintf "    > SCC of size %d: %s"
+            (List.length scc) (str_join ", " (List.map string_of_int scc)));
+        if (List.length scc) > 2
+        then log WARN "This implementation gives complete results on of SCC of size not larger than two"
     in
     let sccs =
         List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list rule_flow) in
