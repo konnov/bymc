@@ -32,13 +32,13 @@ function mc_refine {
 }
 
 function mc_collect_stat {
-    if grep -q "Out of memory" ${MC_OUT}; then
+    if grep -q "Out of memory" ${POST_OUT}; then
         res="OOM"
-    elif grep -q "terminated by signal 9" ${MC_OUT}; then
+    elif grep -q "terminated by signal 9" ${POST_OUT}; then
         res="TIMEOUT"
-    elif grep -q "terminated by signal" ${MC_OUT}; then
+    elif grep -q "terminated by signal" ${POST_OUT}; then
         res="ERR"
-    elif grep -q "unknown result" ${MC_OUT}; then
+    elif grep -q "unknown result" ${POST_OUT}; then
         res="ERR"
     elif egrep -q "counterexample for .* found" ${POST_OUT}; then
         res="UNSAT"
