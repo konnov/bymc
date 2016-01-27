@@ -32,7 +32,15 @@ function mc_refine {
 }
 
 function mc_collect_stat {
-    if egrep -q "counterexample for .* found" ${POST_OUT}; then
+    if grep -q "Out of memory" ${MC_OUT}; then
+        res="OOM"
+    elif grep -q "terminated by signal 9" ${MC_OUT}; then
+        res="TIMEOUT"
+    elif grep -q "terminated by signal" ${MC_OUT}; then
+        res="ERR"
+    elif grep -q "unknown result" ${MC_OUT}; then
+        res="ERR"
+    elif egrep -q "counterexample for .* found" ${POST_OUT}; then
         res="UNSAT"
     else
         res="SAT"
