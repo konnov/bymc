@@ -579,8 +579,16 @@ let compute_cond_implications solver shared uconds lconds =
         let locks = if lockt = Lock then lconds else uconds in
         let implications =
             List.filter (does_cond_imply (name, id, exp, lockt)) locks in
+        (* this breaks only the loops of size 2: A <-> B.
+           TODO: what about A -> B -> C -> A? *)
+        let no_loop (_, oid, _, _) =
+            if PSetEltMap.mem oid map
+            then not (PSet.mem id (PSetEltMap.find oid map))
+            else true
+        in
+        let impl_no_loops = List.filter no_loop implications in
         let add s (_, id, _, _) = PSet.add id s in
-        let set = List.fold_left add PSet.empty implications in
+        let set = List.fold_left add PSet.empty impl_no_loops in
         PSetEltMap.add id set map
     in
     (* run the solver *)
