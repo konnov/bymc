@@ -311,6 +311,15 @@ let make_rule_flow sk =
     flowg
 
 
+let make_ta_graph sk =
+    let g = MGraph.make sk.Sk.nlocs in
+    let addi i = MGraph.add_vertex g i in
+    List.iter addi (range 0 sk.Sk.nlocs);
+    let add_rule r = MGraph.add_edge g r.Sk.src r.Sk.dst in
+    List.iter add_rule sk.Sk.rules;
+    g (* the graph *)
+
+
 let make_loc_reach sk =
     let add g r =
         MGraph.add_edge g r.Sk.src r.Sk.dst
@@ -659,7 +668,7 @@ let compute_deps ?(against_only=true) solver sk =
         then log WARN "This implementation gives complete results on of SCC of size not larger than two"
     in
     let sccs =
-        List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list rule_flow) in
+        List.filter (fun l -> (List.length l) > 1) (MGSCC.scc_list (make_ta_graph sk)) in
     log INFO (sprintf "    > found %d non-trivial SCCs..." (List.length sccs));
     List.iter print_scc sccs;
     let add m (_, id, _, _) = PSet.add id m in
