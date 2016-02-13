@@ -380,6 +380,7 @@ let po_elem_short_s sk = function
 
 
 let find_schema_multiplier invs =
+    (*
     let count_disjs n = function
         (* as it follows from the analysis, we need 3 * |Disjs| + 1 *)
     | AndOr_Kne0 disjs -> n + (List.length disjs)
@@ -388,7 +389,18 @@ let find_schema_multiplier invs =
         (* similar *)
     | Shared_Or_And_Keq0 _ -> n
     in
+    *)
+    (* the new proof by Marijana gives us better bounds *)
+    let count n = function
+    | AndOr_Kne0 disjs -> max n 5
+    | Shared_Or_And_Keq0 _ -> max n 3
+        (* this conjunction requires less rules, not more *)
+    | And_Keq0 _ -> n
+    in
+    (*
     1 + 3 * (List.fold_left count_disjs 0 invs)
+    *)
+    1 + List.fold_left count 0 invs
 
 
 let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
@@ -429,6 +441,27 @@ let append_invs invs new_invs =
     List.fold_left add_if invs new_invs
 
 
+(** Check whether a rule can update shared variable *)
+let is_rule_non_updating sk rule_no =
+    let is_redundant = function
+        | BinEx (Spin.EQ, UnEx (Spin.NEXT, Var l), Var r) ->
+                l#get_name = r#get_name
+
+        | BinEx (Spin.EQ, Var l, UnEx (Spin.NEXT, Var r)) ->
+                l#get_name = r#get_name
+
+        | _ -> false
+    in
+    let rule = List.nth sk.Sk.rules rule_no in
+    List.for_all is_redundant rule.Sk.act
+
+
+(** Check whether a rule changes its local state *)
+let is_rule_non_self_loop sk rule_no =
+    let rule = List.nth sk.Sk.rules rule_no in
+    rule.Sk.src <> rule.Sk.dst
+
+
 
 (* an internal result structure *)
 type internal_result_t = { m_is_err: bool; m_schema_len: int; }
@@ -462,7 +495,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
         if expr <> Nop "" then BinEx (EQ, IntConst 1, expr) else IntConst 1
     in
-    let check_steady_schema uset lset invs =
+    let check_steady_schema in_loop uset lset invs =
         let not_and_keq0 = function
             | And_Keq0 _ -> false
             | _ -> true
@@ -475,7 +508,13 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             if invs <> [] then assert_propositions filtered_invs
         in
         let push_schema _ =
-            List.iter push_rule (get_unlocked_rules sk deps uset lset invs)
+            let rule_nos = get_unlocked_rules sk deps uset lset invs in
+            let filt r =
+                if in_loop
+                then is_rule_non_updating sk r
+                else is_rule_non_self_loop sk r
+            in
+            List.iter push_rule (List.filter filt rule_nos)
         in
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
@@ -604,6 +643,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             tac#enter_context;
             (* the propositional subformulas should be satisfied right now *)
             tac#assert_top (List.map (atomic_to_expr sk) props);
+            (* XXX: I do not understand why we do not introduce the invariants outside the loop *)
             let new_invs =
                 if prefix_last_frame = None then [] else find_G_props (TL_and fs) in
             let result =
@@ -623,8 +663,9 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             (* try to find an execution
                 that does not enable new conditions and reaches a bad state *)
             tac#enter_node node_type;
+            let in_loop = (prefix_last_frame <> None) in
             let res = fail_first
-                (lazy (check_steady_schema uset lset invs))
+                (lazy (check_steady_schema in_loop uset lset invs))
                 (lazy (search prefix_last_frame uset lset invs seq))
             in
             tac#leave_node node_type;
