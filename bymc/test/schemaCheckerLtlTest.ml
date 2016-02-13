@@ -410,35 +410,26 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
         "(enter_node Intermediate)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         check_prop;
         "(enter_context)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";    (* enables g1 *)
-        "(assert_top (1 == (F4_warp + F3_warp)) _)";
+        "(assert_top (1 == F2_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";
         check_prop;
         "(enter_context)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";    (* enables g2 *)
-        "(assert_top (1 == (((F12_warp + F11_warp) + F10_warp) + F9_warp)) _)";
+        "(assert_top (1 == (F6_warp + F5_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 2)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";
         "(push_rule _ _ 3)";
-        "(push_rule _ _ 6)";
         check_prop;
         "(leave_node Leaf)";
         "(leave_context)";
@@ -618,15 +609,13 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 4)";             (* a self-loop *)
         "(push_rule _ _ 0)";
         "(assert_top ( ! (x >= ((1 + t) - f))) _)";
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
         "(enter_node LoopStart)";        (* entering the loop *)
         "(push_rule _ _ 4)";             (* a self-loop *)
-        "(push_rule _ _ 0)";
-        "(assert_frame_eq _ 2)";    (* the reached frame equals to the loop start *)
-        "(assert_top ((F3_warp > 0) || (F4_warp > 0)) _)"; (* at least one step was made *)
+        "(assert_frame_eq _ 1)";    (* the reached frame equals to the loop start *)
+        "(assert_top (F2_warp > 0) _)"; (* at least one step was made *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
@@ -638,39 +627,29 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         "(enter_context)";
-        "(push_rule _ _ 4)"; (* enables g1 *)
         "(push_rule _ _ 0)"; (* enables g1 *)
-        "(assert_top (1 == (F8_warp + F7_warp)) _)";
+        "(assert_top (1 == F4_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";
         "(enter_context)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)"; (* enables g2 *)
-        "(assert_top (1 == (((F16_warp + F15_warp) + F14_warp) + F13_warp)) _)";
+        "(assert_top (1 == (F8_warp + F7_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";
         "(enter_node LoopStart)";                      (* entering the loop *)
-        "(push_rule _ _ 1)";
         "(push_rule _ _ 4)";
-        "(push_rule _ _ 0)";
         "(push_rule _ _ 5)";
-        "(assert_frame_eq _ 20)";         (* the loop is closed *)
-        "(assert_top ((((F21_warp > 0) || (F22_warp > 0)) || (F23_warp > 0)) || (F24_warp > 0)) _)";
+        "(assert_frame_eq _ 10)";         (* the loop is closed *)
+        "(assert_top ((F11_warp > 0) || (F12_warp > 0)) _)";
             (* at least one step was made *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
@@ -687,27 +666,21 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
         "(enter_node Intermediate)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
         "(enter_context)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";            (* enables g1 *)
-        "(assert_top (1 == (F28_warp + F27_warp)) _)";
+        "(assert_top (1 == F14_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
-        "(push_rule _ _ 4)";
         "(push_rule _ _ 0)";
-        "(push_rule _ _ 5)";
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
         "(enter_node LoopStart)";                      (* entering the loop *)
-        "(push_rule _ _ 1)";
         "(push_rule _ _ 4)";
-        "(push_rule _ _ 0)";
         "(push_rule _ _ 5)";
-        "(assert_frame_eq _ 32)";         (* the loop is closed *)
-        "(assert_top ((((F33_warp > 0) || (F34_warp > 0)) || (F35_warp > 0)) || (F36_warp > 0)) _)";
+        "(assert_frame_eq _ 16)";         (* the loop is closed *)
+        "(assert_top ((F17_warp > 0) || (F18_warp > 0)) _)";
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";

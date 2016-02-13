@@ -495,6 +495,19 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
         if expr <> Nop "" then BinEx (EQ, IntConst 1, expr) else IntConst 1
     in
+    (* find the unlocked rules excluding the rules as follows:
+        when outside the loop, exclude self-loops;
+        when inside the loop, exclude the rules that might change shared variables
+     *)
+    let find_segment_rules in_loop uset lset invs =
+        let filt =
+            if in_loop
+            then is_rule_non_updating sk
+            else is_rule_non_self_loop sk
+        in
+        get_unlocked_rules sk deps uset lset invs
+            |> List.filter filt
+    in
     let check_steady_schema in_loop uset lset invs =
         let not_and_keq0 = function
             | And_Keq0 _ -> false
@@ -508,13 +521,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             if invs <> [] then assert_propositions filtered_invs
         in
         let push_schema _ =
-            let rule_nos = get_unlocked_rules sk deps uset lset invs in
-            let filt r =
-                if in_loop
-                then is_rule_non_updating sk r
-                else is_rule_non_self_loop sk r
-            in
-            List.iter push_rule (List.filter filt rule_nos)
+            find_segment_rules in_loop uset lset invs
+                |> List.iter push_rule
         in
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
@@ -595,9 +603,9 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                     tac#push_rule deps sk r;
                     tac#top :: lst
                 in
-                let frames = List.fold_left push_rule []
-                    (get_unlocked_rules sk deps uset lset invs)
-                in
+                let in_loop = (prefix_last_frame <> None) in
+                let frames = find_segment_rules in_loop uset lset invs
+                    |> List.fold_left push_rule [] in
                 (* only one transition must fire *)
                 tac#assert_top [sum_accel_one frames];
                 (* assert that the condition is now unlocked (resp. locked) *)
