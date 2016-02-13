@@ -135,7 +135,7 @@ module D = struct
         (* map a rule number to a set of conditions required to enable it *)
         rule_pre: PSet.t IntMap.t;
 
-        (* map a rule number to a set of actions the capture its postcondition *)
+        (* map a rule number to a set of actions that capture its postcondition *)
         rule_post: PSet.t IntMap.t;
 
         (* the mask of unlocking milestone candidates *)
