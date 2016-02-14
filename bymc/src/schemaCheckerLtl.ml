@@ -490,10 +490,10 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
     let print_top_frame _ =
         printf " >%d" tac#top.F.no; flush stdout;
     in
-    let sum_accel_one frames =
+    let sum_accel_at_most_one frames =
         let expr =
             list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
-        if expr <> Nop "" then BinEx (EQ, IntConst 1, expr) else IntConst 1
+        if expr <> Nop "" then BinEx (GE, IntConst 1, expr) else IntConst 1
     in
     (* find the unlocked rules excluding the rules as follows:
         when outside the loop, exclude self-loops;
@@ -598,6 +598,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 (* assert that the condition is locked (resp. unlocked) *)
                 if is_locking
                 then tac#assert_top [cond_expr];
+                (* else: the condition might have been unlocked in an state *)
+
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
                     tac#push_rule deps sk r;
@@ -606,8 +608,17 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 let in_loop = (prefix_last_frame <> None) in
                 let frames = find_segment_rules in_loop uset lset invs
                     |> List.fold_left push_rule [] in
-                (* only one transition must fire *)
-                tac#assert_top [sum_accel_one frames];
+                (*
+                 In the following constraint, we say that at most one rule is executed
+                 (by at most one process). Otherwise, a sequence of rules might violate
+                 an LTL property, or move too many processes and violate a locking guard,
+                 e.g., moving from y = 1 to y = 1000 will violate y < 100. 
+                 On the other hand, if we fired exactly one transition, this would block
+                 an execution with some guards initially unlocked. E.g., if x >= f and
+                 f >= 0, then x >= f can be initially unlocked. We simulate this by
+                 executing a prefix with zero acceleration factors.
+                 *)
+                tac#assert_top [sum_accel_at_most_one frames];
                 (* assert that the condition is now unlocked (resp. locked) *)
                 if is_locking
                 then tac#assert_top [UnEx (NEG, cond_expr)]
