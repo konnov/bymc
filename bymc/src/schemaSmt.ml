@@ -15,6 +15,7 @@ open SymbSkel
 type node_kind_t = Leaf | Intermediate | LoopStart
 
 
+
 (** A single SMT frame that corresponds to a state in a path *)
 module F = struct
     (**
@@ -113,11 +114,18 @@ module F = struct
         List.iter add_var frame.new_vars
 
     (**
+     Convert an expression to a frame-specific expression.
+     *)
+    let to_frame_expr frame next_frame exp =
+        map_frame_vars frame next_frame exp
+
+    (**
      Push assertions into SMT.
      *)
     let assert_frame solver tt frame next_frame assertions =
         let add_expr e =
-            ignore (solver#append_expr (map_frame_vars frame next_frame e)) in
+            ignore (solver#append_expr (map_frame_vars frame next_frame e))
+        in
         List.iter add_expr assertions
 
 
