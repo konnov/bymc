@@ -56,6 +56,12 @@ module F: sig
      *)
     val assert_frame_eq: Smt.smt_solver -> SpinIr.data_type_tab
         -> SpinIr.var list -> frame_t -> frame_t -> unit
+
+    (**
+     Convert an expression to a frame-specific expression.
+     *)
+    val to_frame_expr: frame_t -> frame_t
+        -> Spin.token SpinIr.expr -> Spin.token SpinIr.expr
 end 
 
 

@@ -174,6 +174,73 @@ let dump_counterex_to_file solver sk form_name frame_hist =
     printf "    > Saved counterexample to %s\n" fname;
     fname
 
+
+(*******************************************************************)
+
+(**
+ A preprocessor that introduces a boolean predicate for each expression (x = 0).
+ Let's see if this preprocessing makes the encoding more efficient.
+ *)
+module P = struct
+    type context_t = {
+        solver: Smt.smt_solver;
+            (** the smt solver *)
+        hashtbl: (int, SpinIr.var * int) Hashtbl.t;
+            (** map the id of a variable x to a pair:
+                a predicate variable for (x = 0);
+                a frame number where the predicate variable was introduced
+             *)
+    }
+
+
+    let mk_context solver =
+        { solver; hashtbl = Hashtbl.create 10 }
+
+
+    let find_or_mk_pred ctx frameno v =
+        try
+            let pred, _ = Hashtbl.find ctx.hashtbl v#id in
+            pred
+        with Not_found ->
+            let pred = SpinIr.new_var (v#get_name ^ "_eq0") in
+            (** XXX: this definition might be popped up when introduced late *)
+            ctx.solver#append_var_def pred (new SpinIr.data_type SpinTypes.TBIT);
+            let eq = BinEx (Spin.EQ, Var v, IntConst 0) in
+            ignore (ctx.solver#append_expr (BinEx (Spin.EQUIV, Var pred, eq)));
+            Hashtbl.add ctx.hashtbl v#id (pred, frameno);
+            pred
+
+
+    let rec replace_with_predicates ctx frameno = function
+        | BinEx (Spin.EQ, IntConst 0, Var x)
+        | BinEx (Spin.EQ, Var x, IntConst 0) ->
+            let pred = find_or_mk_pred ctx frameno x in
+            Var pred
+
+        | BinEx (Spin.NE, IntConst 0, Var x)
+        | BinEx (Spin.NE, Var x, IntConst 0)
+        | BinEx (Spin.GT, IntConst 0, Var x)
+        | BinEx (Spin.GT, Var x, IntConst 0) ->
+            let pred = find_or_mk_pred ctx frameno x in
+            UnEx (Spin.NEG, Var pred)
+
+        | BinEx (tok, l, r) ->
+            BinEx (tok,
+                replace_with_predicates ctx frameno l,
+                replace_with_predicates ctx frameno r)
+
+        | UnEx (tok, e) ->
+            UnEx (tok, replace_with_predicates ctx frameno e)
+
+        | _ as e -> e
+
+
+    (** clean the predicates introduced for a later frame *)
+    let clean_late_predicates ctx frameno =
+        let is_before (_, fno) = fno <= frameno in
+        Hashtbl.filter_inplace is_before ctx.hashtbl
+end
+
 (*******************************************************************)
 
 type frame_stack_elem_t =
@@ -191,6 +258,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
 
         val mutable m_frames = []
         val mutable m_depth  = 0
+        val m_pred_ctx = P.mk_context rt#solver
         
         method top =
             let rec find = function
@@ -224,11 +292,15 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
 
         method assert_top assertions =
             let frame = self#top in
-            F.assert_frame rt#solver tt frame frame assertions
+            List.map (F.to_frame_expr frame frame) assertions
+                |> List.map (P.replace_with_predicates m_pred_ctx m_depth)
+                |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_top2 assertions =
             let top, prev = self#top2 in
-            F.assert_frame rt#solver tt prev top assertions
+            List.map (F.to_frame_expr prev top) assertions
+                |> List.map (P.replace_with_predicates m_pred_ctx m_depth)
+                |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_frame_eq sk loop_frame =
             rt#solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);
@@ -279,6 +351,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             let frame_no, old_frames = unroll m_frames in
             m_frames <- old_frames;
             assert (frame_no = self#top.F.no);
+            P.clean_late_predicates m_pred_ctx m_depth;
             slv#comment
                 (sprintf "pop@%d: leave_node[%s] at frame %d"
                     m_depth k_s self#top.F.no);
@@ -289,6 +362,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             let slv = rt#solver in
             slv#push_ctx;
             let frame_no = self#top.F.no in
+            m_depth <- m_depth + 1;
             slv#comment
                 (sprintf "push@%d: enter_context: potential milestones at frame %d"
                         m_depth frame_no);
@@ -304,10 +378,13 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             m_frames <- old_frames;
             let old_no = self#top.F.no in
             assert (frame_no = old_no);
+            m_depth <- m_depth - 1;
+            P.clean_late_predicates m_pred_ctx m_depth;
             let slv = rt#solver in
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
             slv#pop_ctx
+
 
 
         method push_rule deps sk rule_no =
