@@ -115,6 +115,12 @@ class virtual smt_solver =
          *)
         method virtual check: bool
 
+        (** Set incremental mode. Not supported, always on. *)
+        method virtual set_incremental_mode: bool -> unit
+
+        (** Is the incremental mode on? In this implementation always on.*)
+        method virtual get_incremental_mode: bool
+
         (** ask the solver to provide a model of sat *)
         method virtual set_need_model: bool -> unit
 
@@ -495,6 +501,12 @@ class yices_smt (solver_cmd: string) =
                 res
             end
 
+        (** set incremental mode *)
+        method set_incremental_mode (_: bool) = ()
+
+        (** is the incremental mode on? *)
+        method get_incremental_mode = true
+
         method set_need_model b =
             m_need_evidence <- b;
             if b
@@ -628,6 +640,7 @@ class lib2_smt solver_cmd solver_args =
         val mutable m_enable_lockstep = false
         val mutable m_need_evidence = false
         val mutable m_need_unsat_cores = false
+        val mutable m_incremental = false
         val mutable collect_asserts = false
         val mutable poll_tm_sec = 10.0
         (** the number of stack pushes executed within consistent context *)
@@ -715,6 +728,7 @@ class lib2_smt solver_cmd solver_args =
 
         method push_ctx =
             assert(not (PipeCmd.is_null m_pipe_cmd));
+            m_incremental <- true;
             m_pushes <- m_pushes + 1;
             self#append "(push 1)";
             self#sync
@@ -834,6 +848,14 @@ class lib2_smt solver_cmd solver_args =
         method set_enable_log b = m_enable_log <- b
 
         method get_enable_log = m_enable_log
+
+        method set_incremental_mode b =
+            m_incremental <- b;
+            let v = if b then "true" else "false" in
+            self#append_and_sync (sprintf "(set-option :global-decls %s)\n" v);
+
+
+        method get_incremental_mode = m_incremental
 
         method private is_out_sat ~ignore_errors =
             let l = self#read_line in
@@ -1077,5 +1099,9 @@ class mathsat5_smt =
         method set_enable_log b = m_enable_log <- b
 
         method get_enable_log = m_enable_log
+
+        method set_incremental_mode (_: bool) = ()
+
+        method get_incremental_mode = true
     end
 
