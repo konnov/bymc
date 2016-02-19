@@ -326,6 +326,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             if SpinIr.is_c_false form
             then false  (* it never holds *)
             else begin
+                m_depth <- m_depth + 1;
                 slv#push_ctx;
                 slv#comment "is segment bad?";
                 if not (is_c_true form)
@@ -336,6 +337,8 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 slv#comment "pop: check_property";
                 slv#pop_ctx;
                 assert (stack_level = slv#get_stack_level);
+                m_depth <- m_depth - 1;
+                P.clean_late_predicates m_pred_ctx m_depth;
                 err
             end
 
@@ -368,6 +371,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                         m_depth frame_no);
             m_frames <- (Context frame_no) :: m_frames
 
+
         method leave_context =
             let rec unroll = function
                 | (Context n) :: l -> (n, l)
@@ -384,7 +388,6 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
             slv#pop_ctx
-
 
 
         method push_rule deps sk rule_no =
