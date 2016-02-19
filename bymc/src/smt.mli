@@ -78,6 +78,12 @@ class virtual smt_solver:
 
         method virtual submit_query: Q.query_t -> Q.query_t
 
+        (** set incremental mode *)
+        method virtual set_incremental_mode: bool -> unit
+
+        (** is the incremental mode on? *)
+        method virtual get_incremental_mode: bool
+
         (** track the assertions, in order to collect unsat cores *)
         method virtual set_collect_asserts: bool -> unit
 
@@ -147,6 +153,12 @@ class yices_smt: string ->
             @return true if sat
          *)
         method check: bool
+
+        (** set incremental mode *)
+        method set_incremental_mode: bool -> unit
+
+        (** is the incremental mode on? *)
+        method get_incremental_mode: bool
 
         (** ask the solver to provide a model of sat *)
         method set_need_model: bool -> unit
@@ -236,6 +248,12 @@ class lib2_smt: string -> string array ->
          *)
         method check: bool
 
+        (** set incremental mode *)
+        method set_incremental_mode: bool -> unit
+
+        (** is the incremental mode on? *)
+        method get_incremental_mode: bool
+
         (** ask the solver to provide a model of sat *)
         method set_need_model: bool -> unit
 
@@ -322,6 +340,12 @@ class mathsat5_smt:
             @return true if sat
          *)
         method check: bool
+
+        (** Set incremental mode. Not supported, always on. *)
+        method set_incremental_mode: bool -> unit
+
+        (** Is the incremental mode on? In this implementation always on.*)
+        method get_incremental_mode: bool
 
         (** ask the solver to provide a model of sat *)
         method set_need_model: bool -> unit
