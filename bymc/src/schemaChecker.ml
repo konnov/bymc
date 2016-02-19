@@ -178,16 +178,17 @@ let dump_counterex_to_file solver sk form_name frame_hist =
 (*******************************************************************)
 
 (**
- A preprocessor that introduces a boolean predicate for each expression (x = 0).
- Let's see if this preprocessing makes the encoding more efficient.
+ A preprocessor that introduces boolean predicate for expression (x = 0) and (x != 0).
+ This preprocessing allows us to solve more problems, possibly at expense of using
+ more memory.
  *)
 module P = struct
     type context_t = {
         solver: Smt.smt_solver;
             (** the smt solver *)
-        hashtbl: (int, SpinIr.var * int) Hashtbl.t;
-            (** map the id of a variable x to a pair:
-                a predicate variable for (x = 0);
+        hashtbl: (int * bool, SpinIr.var * int) Hashtbl.t;
+            (** map the id of a variable x and a positivity flag to a pair:
+                a predicate variable for (x = 0) (negated, if flag = false);
                 a frame number where the predicate variable was introduced
              *)
     }
@@ -197,32 +198,31 @@ module P = struct
         { solver; hashtbl = Hashtbl.create 10 }
 
 
-    let find_or_mk_pred ctx frameno v =
+    let find_or_mk_pred ctx frameno positive v =
         try
-            let pred, _ = Hashtbl.find ctx.hashtbl v#id in
+            let pred, _ = Hashtbl.find ctx.hashtbl (v#id, positive) in
             pred
         with Not_found ->
-            let pred = SpinIr.new_var (v#get_name ^ "_eq0") in
-            (** XXX: this definition might be popped up when introduced late *)
+            let suffix = if positive then "_eq0" else "_ne0" in
+            let pred = SpinIr.new_var (v#get_name ^ suffix) in
             ctx.solver#append_var_def pred (new SpinIr.data_type SpinTypes.TBIT);
-            let eq = BinEx (Spin.EQ, Var v, IntConst 0) in
-            ignore (ctx.solver#append_expr (BinEx (Spin.EQUIV, Var pred, eq)));
-            Hashtbl.add ctx.hashtbl v#id (pred, frameno);
+            let op = if positive then Spin.EQ else Spin.NE in
+            let cmp = BinEx (op, Var v, IntConst 0) in
+            ignore (ctx.solver#append_expr (BinEx (Spin.EQUIV, Var pred, cmp)));
+            Hashtbl.add ctx.hashtbl (v#id, positive) (pred, frameno);
             pred
 
 
     let rec replace_with_predicates ctx frameno = function
         | BinEx (Spin.EQ, IntConst 0, Var x)
         | BinEx (Spin.EQ, Var x, IntConst 0) ->
-            let pred = find_or_mk_pred ctx frameno x in
-            Var pred
+            Var (find_or_mk_pred ctx frameno true x)
 
         | BinEx (Spin.NE, IntConst 0, Var x)
         | BinEx (Spin.NE, Var x, IntConst 0)
         | BinEx (Spin.GT, IntConst 0, Var x)
         | BinEx (Spin.GT, Var x, IntConst 0) ->
-            let pred = find_or_mk_pred ctx frameno x in
-            UnEx (Spin.NEG, Var pred)
+            Var (find_or_mk_pred ctx frameno false x)
 
         | BinEx (tok, l, r) ->
             BinEx (tok,

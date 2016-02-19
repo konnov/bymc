@@ -311,7 +311,58 @@ let rec utl_spec_s = function
         sprintf "(%s)" (str_join " /\\ " (List.map utl_spec_s forms))
 
 
+(** evaluation result *)
+type eval_res_t = RTrue | RFalse | RUnknown
 
+
+(**
+ Given the unlocked and locked conditions, propagate the known constants
+ within an expression.
+ *)
+let propagate_conditions sk deps uset lset root =
+    let find_value exp =
+        let eval_cond res (_, id, cond, lt) =
+            if res <> RUnknown
+            then res
+            else let set = (if lt = Lock then uset else lset) in
+                let inv r = (if lt = Unlock then r else not r) in
+                if exp = cond
+                then if inv (PSet.mem id set) then RTrue else RFalse
+                else RUnknown
+        in
+        List.fold_left eval_cond RUnknown deps.D.uconds
+            |> flip (List.fold_left eval_cond) deps.D.lconds
+    in
+    let of_eval_res e = function
+        | RTrue -> IntConst 1
+        | RFalse -> IntConst 0
+        | RUnknown -> e
+    in
+    let rec prop = function
+    | BinEx (GT, _, _)
+    | BinEx (LE, _, _) as e ->
+        of_eval_res e (find_value e)
+
+    | BinEx (LT, l, r) as e ->
+        of_eval_res e (find_value (BinEx (GT, r, l)))
+
+    | BinEx (GE, l, r) as e ->
+        of_eval_res e (find_value (BinEx (LE, r, l)))
+
+    | BinEx (tok, l, r) ->
+        BinEx (tok, prop l, prop r)
+
+    | UnEx (tok, e) ->
+        UnEx (tok, prop e)
+
+    | _ as e -> e
+    in
+    prop root
+
+
+(**
+ Get the rules that are unlocked with respect the unlocked/locked conditions.
+ *)
 let get_unlocked_rules sk deps uset lset invs =
     (* collect those locations
        that are required to be always zero by the invariants *)
@@ -484,8 +535,10 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
     let node_type tl =
         if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
     in
-    let assert_propositions invs =
-        tac#assert_top (List.map (atomic_to_expr sk) invs)
+    let assert_propositions uset lset props =
+        let propagate = propagate_conditions sk deps uset lset in
+        if props <> []
+        then tac#assert_top (List.map propagate (List.map (atomic_to_expr sk) props))
     in
     let print_top_frame _ =
         printf " >%d" tac#top.F.no; flush stdout;
@@ -516,13 +569,21 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         let filtered_invs = List.filter not_and_keq0 invs in
         (* push all the unlocked rules *)
         let push_rule r =
+            let rule = List.nth sk.Sk.rules r in
             tac#push_rule deps sk r;
             (* the invariants And_Keq0 are treated in get_unlocked_rules *)
-            if invs <> [] then assert_propositions filtered_invs
+            if rule.Sk.src <> rule.Sk.dst
+            (* if the state is changed, change the invariants again *)
+            then assert_propositions uset lset filtered_invs
         in
         let push_schema _ =
-            find_segment_rules in_loop uset lset invs
-                |> List.iter push_rule
+            let rules = find_segment_rules in_loop uset lset invs in
+            if rules <> [] then begin
+                (* push the first rule together with the invariants *)
+                tac#push_rule deps sk (List.hd rules);
+                assert_propositions uset lset filtered_invs
+            end;
+            List.iter push_rule (List.tl rules)
         in
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
@@ -573,12 +634,12 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             (* treat the initial state *)
             tac#enter_context;
             if not is_safety
-            then assert_propositions (find_uncovered_utl_props utl_form);
+            then assert_propositions uset lset (find_uncovered_utl_props utl_form);
             if not (SpinIr.is_c_true init_form)
             then tac#assert_top [init_form];
                 
             let new_invs = find_G_props utl_form in
-            assert_propositions new_invs;
+            assert_propositions uset lset new_invs;
             let result =
                 prune_or_continue prefix_last_frame uset lset
                     (append_invs invs new_invs) (node_type tl) tl in
@@ -623,7 +684,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 if is_locking
                 then tac#assert_top [UnEx (NEG, cond_expr)]
                 else tac#assert_top [cond_expr];
-                assert_propositions invs;   (* don't forget the invariants *)
+                assert_propositions uset lset invs;   (* don't forget the invariants *)
                 let new_uset, new_lset =
                     if is_locking
                     then uset, (PSet.add id lset)
@@ -661,7 +722,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             let props = find_uncovered_utl_props (TL_and fs) in
             tac#enter_context;
             (* the propositional subformulas should be satisfied right now *)
-            tac#assert_top (List.map (atomic_to_expr sk) props);
+            assert_propositions uset lset props;
             (* XXX: I do not understand why we do not introduce the invariants outside the loop *)
             let new_invs =
                 if prefix_last_frame = None then [] else find_G_props (TL_and fs) in
@@ -856,9 +917,9 @@ let accum_stat r_st watch no schema_len =
         else 0.0
     in
     let percentage = 100 * no / nschemas in
-    printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s\n"
+    printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, nr: %d\n"
         percentage (human_readable_duration one_lap)
-        (human_readable_duration elapsed) (human_readable_duration eta);
+        (human_readable_duration elapsed) (human_readable_duration eta) no;
 
     (* update the running time with the reachability optimization on/off *)
     let fadd_if is_true a b = if is_true then a +. b else a in
