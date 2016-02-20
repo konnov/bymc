@@ -301,14 +301,24 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
 
         method assert_top assertions =
             let frame = self#top in
+            let replace es =
+                if SchemaOpt.is_incremental ()
+                then List.map (P.replace_with_predicates m_pred_ctx m_depth) es
+                else es (* TODO: make predicates work in the non-incremental mode *)
+            in
             List.map (F.to_frame_expr frame frame) assertions
-                (*|> List.map (P.replace_with_predicates m_pred_ctx m_depth)*)
+                |> replace
                 |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_top2 assertions =
             let top, prev = self#top2 in
+            let replace es =
+                if SchemaOpt.is_incremental ()
+                then List.map (P.replace_with_predicates m_pred_ctx m_depth) es
+                else es (* TODO: make predicates work in the non-incremental mode *)
+            in
             List.map (F.to_frame_expr prev top) assertions
-                (*|> List.map (P.replace_with_predicates m_pred_ctx m_depth)*)
+                |> replace
                 |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_frame_eq sk loop_frame =
