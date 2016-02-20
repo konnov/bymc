@@ -649,11 +649,20 @@ class lib2_smt solver_cmd solver_args =
         val mutable m_inconsistent_pushes = 0
         (** the last id used in the assertions *)
         val mutable m_last_id = 1
+        (** the number of times the solver has been started *)
+        val mutable m_nstarts = 0
 
         method start =
+            let args_s = BatArray.fold_left (fun a s -> a ^ " " ^ s) "" solver_args in
+            Debug.logtm Debug.INFO
+                (sprintf "Starting the SMT solver: %s%s" solver_cmd args_s);
             assert(PipeCmd.is_null m_pipe_cmd);
-            m_pipe_cmd <- PipeCmd.create solver_cmd solver_args "smt2.err";
-            clog <- open_out "smt2.log";
+            let errname =
+                if m_nstarts = 0 then "smt2.err" else (sprintf "smt2.%d.err" m_nstarts) in
+            m_pipe_cmd <- PipeCmd.create solver_cmd solver_args errname;
+            let outname =
+                if m_nstarts = 0 then "smt2.log" else (sprintf "smt2.%d.log" m_nstarts) in
+            clog <- open_out outname;
             if not m_enable_log
             then begin
                 fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
@@ -677,10 +686,14 @@ class lib2_smt solver_cmd solver_args =
                 self#comment "a Z3 hack follows\n";
                 self#append_and_sync "(set-option :global-decls false)\n";
             end;
+            if m_incremental
+            then self#push_ctx (* a backup context to reset *)
+            else self#append_and_sync "(set-option :interactive-mode false)\n";
+            m_nstarts <- m_nstarts + 1
 
-            self#push_ctx (* a backup context to reset *)
         
         method stop =
+            Debug.logtm Debug.INFO ("Stopping the SMT solver...");
             assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append "(exit)\n";
             self#sync;
@@ -689,12 +702,16 @@ class lib2_smt solver_cmd solver_args =
             m_pipe_cmd <- PipeCmd.null ()
 
         method reset =
-            self#pop_n m_pushes;
+            self#comment "***************** RESET *****************\n";
+            if m_incremental
+            then self#pop_n m_pushes
+            else self#append_and_sync "(reset)\n";
             m_need_evidence <- false;
             collect_asserts <- false;
             m_pushes <- 0;
             m_inconsistent_pushes <- 0;
-            self#push_ctx
+            if m_incremental
+            then self#push_ctx
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -767,8 +784,6 @@ class lib2_smt solver_cmd solver_args =
         method get_need_unsat_cores = m_need_unsat_cores
             
         method get_model_query = Q.new_query expr_to_smt2
-
-
 
         method submit_query (query: Q.query_t) =
             let str = Hashtbl.fold (fun e_s _ s -> s ^ " " ^ e_s) query.Q.tab "" in
@@ -850,9 +865,12 @@ class lib2_smt solver_cmd solver_args =
         method get_enable_log = m_enable_log
 
         method set_incremental_mode b =
-            m_incremental <- b;
-            let v = if b then "true" else "false" in
-            self#append_and_sync (sprintf "(set-option :global-decls %s)\n" v);
+            if not (PipeCmd.is_null m_pipe_cmd) && b <> m_incremental
+            then begin
+                let v = (if b then "true" else "false") in
+                self#append_and_sync (sprintf "(set-option :interactive-mode %s)\n" v);
+            end;
+            m_incremental <- b
 
 
         method get_incremental_mode = m_incremental

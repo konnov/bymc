@@ -36,7 +36,15 @@ val write_counterex:
     -> F.frame_t list -> int
 
 (**
- A simple implementation of tac_t with SMT.
+ An SMT implementation of tac_t.
+
+ By default, the tactic is working in the incremental mode, i.e., a new node
+ and a context introduces a new SMT context.  The incremental mode can be used
+ to check schemas that share a common prefix.
+
+ In the non-incremental mode, no new SMT context is ever introduced.
+ This mode can be used to check individual schemas one-by-one.
+ Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
  *)
 class tree_tac_t: Runtime.runtime_t -> SpinIr.data_type_tab ->
     object
@@ -70,5 +78,8 @@ class tree_tac_t: Runtime.runtime_t -> SpinIr.data_type_tab ->
 
         method push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
 
+        method set_incremental: bool -> unit
+
+        method get_incremental: bool
     end
 
