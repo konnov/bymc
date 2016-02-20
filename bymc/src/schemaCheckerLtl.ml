@@ -1399,7 +1399,11 @@ let find_error rt tt sk form_name ltl_form deps =
     let reset_fun _ =
         if not (SchemaOpt.is_incremental ())
         then begin
-            rt#solver#reset;
+            (* reset does not work in cvc4 *)
+            rt#solver#stop;
+            rt#solver#set_incremental_mode false;
+            rt#solver#start;
+            (*rt#solver#reset;*)
             rt#solver#comment "top-level declarations";
             let append_var v = rt#solver#append_var_def v (tt#get_type v) in
             List.iter append_var sk.Sk.params;
@@ -1417,9 +1421,6 @@ let find_error rt tt sk form_name ltl_form deps =
     then begin
         Debug.logtm Debug.WARN
             "Restarting the solver in the non-incremental mode...";
-        rt#solver#stop;
-        rt#solver#set_incremental_mode false;
-        rt#solver#start;
         tac#set_incremental false;
         reset_fun ()
     end else begin
