@@ -4,6 +4,11 @@
  Igor Konnov, 2016
  *)
 
+(** is the solver working in the incremental mode? *)
+val is_incremental: unit -> bool
+(** set the solver to the incremental mode *)
+val set_incremental: bool -> unit
+
 (** is the control flow optimization enabled? *)
 val is_flow_opt_enabled: unit -> bool
 (** is the reachability optimization enabled *)

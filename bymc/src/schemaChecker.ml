@@ -250,7 +250,15 @@ type frame_stack_elem_t =
 
 
 (**
- A simple implementation of tac_t with SMT.
+ An SMT implementation of tac_t.
+
+ By default, the tactic is working in the incremental mode, i.e., a new node
+ and a context introduces a new SMT context.  The incremental mode can be used
+ to check schemas that share a common prefix.
+
+ In the non-incremental mode, no new SMT context is ever introduced.
+ This mode can be used to check individual schemas one-by-one.
+ Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
  *)
 class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
     object(self)
@@ -258,6 +266,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
 
         val mutable m_frames = []
         val mutable m_depth  = 0
+        val mutable m_incremental = true (** is mode incremental *)
         val m_pred_ctx = P.mk_context rt#solver
         
         method top =
@@ -293,13 +302,13 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
         method assert_top assertions =
             let frame = self#top in
             List.map (F.to_frame_expr frame frame) assertions
-                |> List.map (P.replace_with_predicates m_pred_ctx m_depth)
+                (*|> List.map (P.replace_with_predicates m_pred_ctx m_depth)*)
                 |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_top2 assertions =
             let top, prev = self#top2 in
             List.map (F.to_frame_expr prev top) assertions
-                |> List.map (P.replace_with_predicates m_pred_ctx m_depth)
+                (*|> List.map (P.replace_with_predicates m_pred_ctx m_depth)*)
                 |> List.iter (fun e -> ignore (rt#solver#append_expr e))
 
         method assert_frame_eq sk loop_frame =
@@ -314,7 +323,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             let frame_no = self#top.F.no in
             slv#comment (sprintf "push@%d: enter_node[%s] at frame %d"
                 m_depth k_s frame_no);
-            slv#push_ctx;
+            if m_incremental then slv#push_ctx;
             m_frames <- (Node frame_no) :: m_frames;
             m_depth <- m_depth + 1
 
@@ -327,15 +336,20 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             then false  (* it never holds *)
             else begin
                 m_depth <- m_depth + 1;
-                slv#push_ctx;
+                if m_incremental then slv#push_ctx;
                 slv#comment "is segment bad?";
                 if not (is_c_true form)
-                then self#assert_top [form];
+                then begin
+                    if not m_incremental
+                    then raise (Failure
+                        "check_property is not supported in the non-incremental mode");
+                    self#assert_top [form];
+                end;
                 let err = slv#check in
                 if err
                 then error_fun self#frame_hist;
                 slv#comment "pop: check_property";
-                slv#pop_ctx;
+                if m_incremental then slv#pop_ctx;
                 assert (stack_level = slv#get_stack_level);
                 m_depth <- m_depth - 1;
                 P.clean_late_predicates m_pred_ctx m_depth;
@@ -358,12 +372,12 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             slv#comment
                 (sprintf "pop@%d: leave_node[%s] at frame %d"
                     m_depth k_s self#top.F.no);
-            slv#pop_ctx
+            if m_incremental then slv#pop_ctx
 
 
         method enter_context =
             let slv = rt#solver in
-            slv#push_ctx;
+            if m_incremental then slv#push_ctx;
             let frame_no = self#top.F.no in
             m_depth <- m_depth + 1;
             slv#comment
@@ -387,7 +401,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             let slv = rt#solver in
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
-            slv#pop_ctx
+            if m_incremental then slv#pop_ctx
 
 
         method push_rule deps sk rule_no =
@@ -442,6 +456,12 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 List.map (B.accelerate_expr new_frame.F.accel_v) actions in
             self#assert_top2 accelerated
 
+
+        method set_incremental b =
+            assert (m_depth = 0);
+            m_incremental <- b
+
+        method get_incremental = m_incremental
     end
 
 

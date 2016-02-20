@@ -171,26 +171,61 @@ class slps_checker_plugin_t (plugin_name: string) =
 
         method set_options rt =
             let opts = rt#caches#options in
-            let no_flow_opt = Options.get_plugin_opt opts "schema.noflowopt" in
-            let no_reach_opt = Options.get_plugin_opt opts "schema.noreachopt" in
-            let no_adaptive_reach_opt =
-                Options.get_plugin_opt opts "schema.noadaptive" in
-            if no_flow_opt = Some "1"
-            then SchemaOpt.set_flow_opt false;
-            Debug.logtm INFO
-                (sprintf "  The control flow optimization is %s"
-                    (if no_flow_opt = Some "1" then "disabled" else "enabled"));
+            let getopt s = Options.get_plugin_opt opts s in
+            let is_enabled opt = 
+                opt = Some "1" || opt = Some "true" in
+            let is_disabled no_opt = 
+                no_opt = Some "1" || no_opt = Some "true" in
+            let no_flow_opt = getopt "schema.noflowopt" in
+            let no_reach_opt = getopt "schema.noreachopt" in
+            let no_adaptive_reach_opt = getopt "schema.noadaptive" in
+            let incremental = getopt "schema.incremental" in
 
-            if no_reach_opt = Some "1"
-            then SchemaOpt.set_reach_opt false;
-            Debug.logtm INFO
-                (sprintf "  The reachability optimization is %s"
-                    (if no_reach_opt = Some "1" then "disabled" else "enabled"));
+            let reach_on =
+                if no_reach_opt <> None
+                (* a manually set option overrides everything *)
+                then not (is_disabled no_reach_opt)
+                else if is_enabled incremental
+                    then begin
+                        Debug.log INFO "  # schema.incremental=1 sets schema.noreachopt=1";
+                        true  (* enable in the incremental mode *)
+                    end else begin
+                        Debug.log INFO "  # schema.incremental=0 sets schema.noreachopt=0";
+                        false (* disable in the non-incremental mode *)
+                    end
+            in
+            let adaptive_on =
+                if no_adaptive_reach_opt <> None
+                (* a manually set option overrides everything *)
+                then not (is_disabled no_adaptive_reach_opt)
+                else if is_enabled incremental
+                    then begin
+                        Debug.log INFO "  # schema.incremental=1 sets schema.noadaptive=1";
+                        true (* enable in the incremental mode *)
+                    end else begin
+                        Debug.log INFO "  # schema.incremental=0 sets schema.noadaptive=0";
+                        false  (* disable in the non-incremental mode *)
+                    end
+            in
 
-            if no_adaptive_reach_opt = Some "1"
-            then SchemaOpt.set_adaptive_reach_opt false;
-            Debug.logtm INFO
-                (sprintf "  The adaptive reachability optimization is %s"
-                    (if no_reach_opt = Some "1" then "disabled" else "enabled"))
+            SchemaOpt.set_incremental (is_enabled incremental);
+            Debug.log INFO
+                (sprintf "  # The incremental mode is %s"
+                    (if is_enabled incremental then "enabled" else "disabled"));
+
+            SchemaOpt.set_flow_opt (not (is_disabled no_flow_opt));
+            Debug.log INFO
+                (sprintf "  # The control flow optimization is %s"
+                    (if is_disabled no_flow_opt then "disabled" else "enabled"));
+
+            SchemaOpt.set_reach_opt reach_on;
+            Debug.log INFO
+                (sprintf "  # The reachability optimization is %s"
+                    (if reach_on then "enabled" else "disabled"));
+
+            SchemaOpt.set_adaptive_reach_opt adaptive_on;
+            Debug.log INFO
+                (sprintf "  # The adaptive reachability optimization is %s"
+                    (if adaptive_on then "enabled" else "disabled"));
     end
 

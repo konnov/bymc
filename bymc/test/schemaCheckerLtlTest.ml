@@ -399,7 +399,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) in
+            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
@@ -457,7 +457,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) in
+            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
@@ -597,7 +597,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) in
+            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 

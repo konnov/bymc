@@ -13,7 +13,11 @@ TIME_LIMIT="unlimited"
 
 function help_and_quit() {
     echo "use $0 [switches] prog spec bymc_options"
-    echo " where spec is one of those: all"
+    echo " where spec is one of those:"
+    echo "   * <spec> -- check only the specification with the name <spec>"
+    echo "   * all -- check all the available specifications"
+    echo "   * bounds -- compute the diameter bounds (as in the CONCUR'14 paper)"
+    echo ""
     echo " and the switches are"
     echo "  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)"
     echo "  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)"
@@ -27,13 +31,15 @@ function help_and_quit() {
     echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
     echo ""
     echo " Fine tuning of schema.tech=ltl:"
-    echo "  -O schema.noflowopt=1  (disable the control flow optimizations,"
+    echo "  -O schema.incremental=1 (enable the incremental solver, default: 0)"
+    echo ""
+    echo "  -O schema.noflowopt=1  (disable the control flow optimizations, default: 0"
     echo "                          may lead to a combinatorial explosion of guards)"
-    echo "  -O schema.noreachopt=1 (disable the reachability optimization,"
+    echo "  -O schema.noreachopt=1 (disable the reachability optimization, default: 0"
     echo "                          i.e., reachability is not checked on-the-fly)"
-    echo "  -O schema.noadaptive=1 (disable the adaptive reachability optimization,"
-    echo "                          i.e., the tool will not try to choose between
-                                    enabling/disabling the reachability optimization)"
+    echo "  -O schema.noadaptive=1 (disable the adaptive reachability optimization, default: 0"
+    echo "                          i.e., the tool will not try to choose between"
+    echo "                          enabling/disabling the reachability optimization)"
 
     exit 1
 }

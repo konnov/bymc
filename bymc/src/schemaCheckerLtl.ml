@@ -39,12 +39,12 @@ type stat_t = {
     m_sum_schema_time_sec: float;  (** the sum of all schema times (for the average) *)
 
     (* internal stats *)
-    m_reachopt_sec: float;    (* the time spent with the reachability optimization on *)
-    m_noreachopt_sec: float;  (* the time spent with the reachability optimization off *)
-    m_reachopt_rounds: int;    (* rounds spent with the reachability optimization on *)
-    m_noreachopt_rounds: int;  (* rounds spent with the reachability optimization off *)
-    m_nrounds_to_switch: int; (* the number of rounds left before trying to adapt   *)
-    m_reachability_on: bool;  (* is the reachability optimization on *)
+    m_reachopt_sec: float;    (** the time spent with the reachability optimization on *)
+    m_noreachopt_sec: float;  (** the time spent with the reachability optimization off *)
+    m_reachopt_rounds: int;    (** rounds spent with the reachability optimization on *)
+    m_noreachopt_rounds: int;  (** rounds spent with the reachability optimization off *)
+    m_nrounds_to_switch: int; (** the number of rounds left before trying to adapt   *)
+    m_reachability_on: bool;  (** is the reachability optimization on *)
 }
 
 (**
@@ -526,10 +526,15 @@ let fail_first a b =
 
 
 let check_one_order solver sk spec deps tac ~reach_opt elem_order =
-    let is_safety, init_form, safety_bad =
-        (* we have to treat safety differently from the general case *)
+    let is_incr_safety, init_form, safety_bad =
+        (* In the incremental mode, we distinguish between safety and the general LTL.
+           Thus, for safety we do not enumerate possible orderings of F, but
+           check on-the-fly, whether a bad state has been reached. Obviously,
+           this requires push and pop, which only exist in the incremental mode.
+          *)
         match spec with
         | Safety (init, bad) -> true, init, bad
+
         | UTL (init, _) -> false, init, IntConst 0 
     in
     let node_type tl =
@@ -593,7 +598,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
-        if is_safety && tac#check_property safety_bad on_error
+        if is_incr_safety && tac#check_property safety_bad on_error
         then { m_is_err = true; m_schema_len = tac#top.F.no }
         else { m_is_err = false; m_schema_len = tac#top.F.no }
     in
@@ -608,7 +613,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
     in
     let rec search prefix_last_frame uset lset invs = function
         | [] ->
-            if is_safety
+            if is_incr_safety
                 (* no errors: we have already checked the prefix *)
             then begin
                 { m_is_err = false; m_schema_len = tac#top.F.no }
@@ -633,7 +638,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         | (PO_init utl_form) :: tl ->
             (* treat the initial state *)
             tac#enter_context;
-            if not is_safety
+            if not is_incr_safety
             then assert_propositions uset lset (find_uncovered_utl_props utl_form);
             if not (SpinIr.is_c_true init_form)
             then tac#assert_top [init_form];
@@ -698,7 +703,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 search prefix_last_frame uset lset invs tl
 
         | (PO_loop_start (TL_and fs)) :: tl ->
-            assert (not is_safety);
+            assert (not is_incr_safety);
             (* check that no other guards were activated *)
             let assert_not_active set (_, cond_id, expr, lt) =
                 if PSet.mem cond_id set
@@ -740,8 +745,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         (* the following reachability check does not always improve the situation *)
         if (not reach_opt) || solver#check
         then begin
-            (* try to find an execution
-                that does not enable new conditions and reaches a bad state *)
+            (* first, extend an execution with a suffix
+                that does not enable new conditions *)
             tac#enter_node node_type;
             let in_loop = (prefix_last_frame <> None) in
             let res = fail_first
@@ -860,6 +865,7 @@ let poset_make_utl form =
   Given an element order (the elements come from a small set 0..n),
   we compute the unique fingerprint of the order.
   For the moment, we use just a simple string representation.
+  XXX: storing fingerprints slowly becomes a bottleneck in this technique.
   *)
 let compute_fingerprint order =
     let buf = BatBuffer.create (3 * (List.length order)) in
@@ -884,10 +890,10 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
     in
     let filter_guards_after_loop order =
         if po_loop = (List.hd order)
-        then List.tl order (* safety *)
+        then List.tl order (* incremental safety *)
         else let prefix, loop = BatList.span not_loop order in
             let floop = List.filter not_guard loop in
-            prefix @ floop (* liveness *)
+            prefix @ floop (* liveness or non-incremental safety *)
     in
     while not (linord_iter_is_end iter) && not (is_end_fun !result) do
         let order = BatArray.to_list (linord_iter_get iter) in
@@ -967,7 +973,7 @@ let accum_stat r_st watch no schema_len =
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
-let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
+let gen_and_check_schemas_on_the_fly solver sk spec deps tac reset_fun =
     let nelems, order, rmap =
         match spec with
         | UTL (_, utl_form) ->
@@ -1026,6 +1032,7 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac =
         let ropt = !r_stat.m_reachability_on in
         let res = check_one_order solver sk spec deps tac ~reach_opt:ropt eorder in
         accum_stat r_stat watch !current res.m_schema_len;
+        reset_fun ();
         res.m_is_err
     in
     (* enumerate all the linear extensions *)
@@ -1373,21 +1380,58 @@ let find_error rt tt sk form_name ltl_form deps =
     let neg_form = Ltl.normalize_form (UnEx (NEG, ltl_form)) in
     Debug.ltrace Trc.scl
         (lazy (sprintf "neg_form = %s\n" (SpinIrImp.expr_s neg_form)));
-    let spec = extract_safety_or_utl tt sk neg_form in
+    let spec =
+        if SchemaOpt.is_incremental ()
+        (* safety is treated specially in the incremental mode *)
+        then extract_safety_or_utl tt sk neg_form
+        else let ltl, utl = TL.extract_utl sk neg_form in
+            UTL (ltl, utl)
+    in
     check_trivial spec;
 
-    rt#solver#push_ctx;
+    if SchemaOpt.is_incremental ()
+    then rt#solver#push_ctx;
     rt#solver#set_need_model true;
 
     let ntt = tt#copy in
     let tac = new SchemaChecker.tree_tac_t rt ntt in
     let initf = F.init_frame ntt sk in
-    tac#push_frame initf;
-    rt#solver#comment "initial constraints from the spec";
-    tac#assert_top sk.Sk.inits;
+    let reset_fun _ =
+        if not (SchemaOpt.is_incremental ())
+        then begin
+            rt#solver#reset;
+            rt#solver#comment "top-level declarations";
+            let append_var v = rt#solver#append_var_def v (tt#get_type v) in
+            List.iter append_var sk.Sk.params;
+            let append_expr e = ignore (rt#solver#append_expr e) in
+            List.iter append_expr sk.Sk.assumes;
+            tac#push_frame initf;
+            rt#solver#comment "initial constraints from the spec";
+            (* push the initial node, so the predicate optimization works *)
+            tac#assert_top sk.Sk.inits;
+        end
+    in
 
-    let result = gen_and_check_schemas_on_the_fly rt#solver sk spec deps tac in
+    (* WARNING: here we restart the solver *)
+    if not (SchemaOpt.is_incremental ())
+    then begin
+        Debug.logtm Debug.WARN
+            "Restarting the solver in the non-incremental mode...";
+        rt#solver#stop;
+        rt#solver#set_incremental_mode false;
+        rt#solver#start;
+        tac#set_incremental false;
+        reset_fun ()
+    end else begin
+        tac#push_frame initf;
+        rt#solver#comment "initial constraints from the spec";
+        tac#assert_top sk.Sk.inits;
+    end;
+    let result =
+        gen_and_check_schemas_on_the_fly rt#solver sk spec deps tac reset_fun
+    in
     rt#solver#set_need_model false;
-    rt#solver#pop_ctx;
+    if SchemaOpt.is_incremental ()
+    then rt#solver#pop_ctx;
     result
 
