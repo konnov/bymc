@@ -356,34 +356,86 @@ $bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' 
 #EXPECT grep "counterexample for unforg found" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-correct-post-ltl-unforg
-$bymc_dir/verifypa-post ${testsource} unforg --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#BEGIN-TEST z3-correct-post-ltl-incremental-unforg
+$bymc_dir/verifypa-post ${testsource} unforg --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-f_LE_t_P_1-post-ltl-unforg
-$bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#BEGIN-TEST z3-f_LE_t_P_1-post-ltl-incremental-unforg
+$bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=1
 #EXPECT test ${texitcode} 1
 #EXPECT grep "counterexample for unforg found" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-correct-post-ltl-corr
-$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#BEGIN-TEST z3-correct-post-ltl-incremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-correct-post-ltl-relay
-$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl
+#BEGIN-TEST z3-correct-post-ltl-incremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-n_GE_3t-post-ltl-corr
-$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1
+#BEGIN-TEST z3-n_GE_3t-post-ltl-incremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=1
 #EXPECT grep "verified in 0 refinement" ${testlog}
 #END-TEST
 
-#BEGIN-TEST z3-n_GE_3t-post-ltl-relay
-$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1
+#BEGIN-TEST z3-n_GE_3t-post-ltl-incremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=1
+#EXPECT grep "counterexample for relay found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-post-ltl-nonincremental-unforg
+$bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0
+#EXPECT test ${texitcode} 1
+#EXPECT grep "counterexample for unforg found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-nonincremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-nonincremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-nonincremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=0
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-nonincremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=0
+#EXPECT grep "counterexample for relay found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-f_LE_t_P_1-post-ltl-noreachopt-nonincremental-unforg
+$bymc_dir/verifypa-post ${testsource} unforg -D BUG=1 --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0 -O schema.noreachopt=1
+#EXPECT test ${texitcode} 1
+#EXPECT grep "counterexample for unforg found" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-noreachopt-nonincremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0 -O schema.noreachopt=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-correct-post-ltl-noreachopt-nonincremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -O schema.incremental=0 -O schema.noreachopt=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-noreachopt-nonincremental-corr
+$bymc_dir/verifypa-post ${testsource} corr --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=0 -O schema.noreachopt=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST z3-n_GE_3t-post-ltl-noreachopt-nonincremental-relay
+$bymc_dir/verifypa-post ${testsource} relay --smt 'lib2|z3|-smt2|-in' -O smt.log=1 -O schema.tech=ltl -D NGE3T=1 -O schema.incremental=0 -O schema.noreachopt=1
 #EXPECT grep "counterexample for relay found" ${testlog}
 #END-TEST
 */
