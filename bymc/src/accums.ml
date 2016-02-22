@@ -460,5 +460,5 @@ let human_readable_duration duration =
     else if duration < 24. *. 3600.0
     then sprintf "% 2d %s % 2d min" hours (plural "hour" hours) mins
     else sprintf "% 3d %s % 2d %s % 2d min"
-        hours (plural "day" days) hours (plural "hour" hours) mins
+        days (plural "day" days) hours (plural "hour" hours) mins
 
