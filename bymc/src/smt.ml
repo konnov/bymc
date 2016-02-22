@@ -685,11 +685,11 @@ class lib2_smt solver_cmd solver_args =
             then begin
                 self#comment "a Z3 hack follows\n";
                 self#append_and_sync "(set-option :global-decls false)\n";
+                if not m_incremental
+                then self#append_and_sync "(set-option :interactive-mode false)\n"
             end;
             if m_incremental
             then self#push_ctx; (* a backup context to reset *)
-            (* mathsat does not support this option *)
-            (*else self#append_and_sync "(set-option :interactive-mode false)\n";*)
             m_nstarts <- m_nstarts + 1
 
         
