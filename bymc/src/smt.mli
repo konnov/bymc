@@ -44,6 +44,13 @@ class virtual smt_solver:
         *)
         method virtual clone_not_started: string -> smt_solver
 
+        (**
+         Set a theory.
+
+         @param theory name as in the SMTLIB2 standard.
+         *)
+        method virtual set_logic: string -> unit
+
         (** add a comment (free of side effects) *)
         method virtual comment: string -> unit
 
@@ -138,6 +145,13 @@ class yices_smt: string -> string ->
 
         (** make a copy of the solver object without starting the new copy *)
         method clone_not_started: string -> smt_solver
+
+        (**
+         Set a theory. In this implementation, the method is doing nothing.
+
+         @param theory name as in the SMTLIB2 standard.
+         *)
+        method set_logic: string -> unit
 
         (** add a comment (free of side effects) *)
         method comment: string -> unit
@@ -240,6 +254,13 @@ class lib2_smt: string-> string -> string array ->
         (** make a copy of the solver object without starting the new copy *)
         method clone_not_started: string -> smt_solver
 
+        (**
+         Set a theory.
+
+         @param theory name as in the SMTLIB2 standard.
+         *)
+        method set_logic: string -> unit
+
         (** add a comment (free of side effects) *)
         method comment: string -> unit
 
@@ -335,6 +356,13 @@ class mathsat5_smt: string ->
 
         (** make a copy of the solver object without starting the new copy *)
         method clone_not_started: string -> smt_solver
+
+        (**
+         Set a theory. In this implementation, the method is doing nothing.
+
+         @param theory name as in the SMTLIB2 standard.
+         *)
+        method set_logic: string -> unit
 
         (** add a comment (free of side effects) *)
         method comment: string -> unit

@@ -93,6 +93,13 @@ class virtual smt_solver =
         (** make a copy of the solver object without starting the new copy *)
         method virtual clone_not_started: string -> smt_solver
 
+        (**
+         Set a theory.
+
+         @param theory name as in the SMTLIB2 standard.
+         *)
+        method virtual set_logic: string -> unit
+
         (** add a comment (free of side effects) *)
         method virtual comment: string -> unit
 
@@ -435,6 +442,9 @@ class yices_smt (name: string) (solver_cmd: string) =
             copy#set_debug debug;
             (copy :> smt_solver)
 
+        method set_logic (theory: string): unit =
+            ()
+
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -735,6 +745,9 @@ class lib2_smt name solver_cmd solver_args =
             copy#set_debug debug;
             (copy :> smt_solver)
 
+        method set_logic (theory: string): unit =
+            self#append_and_sync (sprintf "(set-logic %s)" theory)
+
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
             let exprs = var_to_smtlib2 v tp in
@@ -1015,6 +1028,9 @@ class mathsat5_smt name =
             copy#set_need_unsat_cores m_need_unsat_cores;
             copy#set_enable_log m_enable_log;
             (copy :> smt_solver)
+
+        method set_logic (theory: string): unit =
+            ()
 
         method append_var_def (v: var) (tp: data_type) =
             if m_enable_log
