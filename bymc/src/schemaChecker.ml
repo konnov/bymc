@@ -260,14 +260,14 @@ type frame_stack_elem_t =
  This mode can be used to check individual schemas one-by-one.
  Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
  *)
-class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
+class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
     object(self)
         inherit tac_t
 
         val mutable m_frames = []
         val mutable m_depth  = 0
         val mutable m_incremental = true (** is mode incremental *)
-        val m_pred_ctx = P.mk_context rt#solver
+        val m_pred_ctx = P.mk_context solver
         
         method top =
             let rec find = function
@@ -296,7 +296,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             top, prev
 
         method push_frame f =
-            F.declare_frame rt#solver tt f;
+            F.declare_frame solver tt f;
             m_frames <- (Frame f) :: m_frames
 
         method assert_top assertions =
@@ -308,7 +308,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             in
             List.map (F.to_frame_expr frame frame) assertions
                 |> replace
-                |> List.iter (fun e -> ignore (rt#solver#append_expr e))
+                |> List.iter (fun e -> ignore (solver#append_expr e))
 
         method assert_top2 assertions =
             let top, prev = self#top2 in
@@ -319,16 +319,16 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             in
             List.map (F.to_frame_expr prev top) assertions
                 |> replace
-                |> List.iter (fun e -> ignore (rt#solver#append_expr e))
+                |> List.iter (fun e -> ignore (solver#append_expr e))
 
         method assert_frame_eq sk loop_frame =
-            rt#solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);
+            solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);
             let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
-            F.assert_frame_eq rt#solver tt loc_vars loop_frame self#top;
-            F.assert_frame_eq rt#solver tt sk.Sk.shared loop_frame self#top
+            F.assert_frame_eq solver tt loc_vars loop_frame self#top;
+            F.assert_frame_eq solver tt sk.Sk.shared loop_frame self#top
 
         method enter_node kind =
-            let slv = rt#solver in
+            let slv = solver in
             let k_s = kind_s kind in
             let frame_no = self#top.F.no in
             slv#comment (sprintf "push@%d: enter_node[%s] at frame %d"
@@ -338,7 +338,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             m_depth <- m_depth + 1
 
         method check_property form error_fun =
-            let slv = rt#solver in
+            let slv = solver in
             slv#comment "push: check_property";
             let stack_level = slv#get_stack_level in
             
@@ -372,7 +372,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 | _ :: l -> unroll l
                 | [] -> (0, [])
             in
-            let slv = rt#solver in
+            let slv = solver in
             let k_s = kind_s kind in
             m_depth <- m_depth - 1;
             let frame_no, old_frames = unroll m_frames in
@@ -386,7 +386,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
 
 
         method enter_context =
-            let slv = rt#solver in
+            let slv = solver in
             if m_incremental then slv#push_ctx;
             let frame_no = self#top.F.no in
             m_depth <- m_depth + 1;
@@ -408,7 +408,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
             assert (frame_no = old_no);
             m_depth <- m_depth - 1;
             P.clean_late_predicates m_pred_ctx m_depth;
-            let slv = rt#solver in
+            let slv = solver in
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
             if m_incremental then slv#pop_ctx
@@ -442,7 +442,7 @@ class tree_tac_t (rt: Runtime.runtime_t) (tt: SpinIr.data_type_tab) =
                 self#assert_top2 [move rule.Sk.src Spin.MINUS];
                 self#assert_top2 [move rule.Sk.dst Spin.PLUS];
             end else begin
-                rt#solver#comment (sprintf "self-loop: %d -> %d" rule.Sk.src rule.Sk.dst)
+                solver#comment (sprintf "self-loop: %d -> %d" rule.Sk.src rule.Sk.dst)
             end;
 
             (* There must be enough tokens to fire the transition.
@@ -568,7 +568,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     rt#solver#set_need_model true;
 
     let ntt = tt#copy in
-    let tac = new tree_tac_t rt ntt in
+    let tac = new tree_tac_t rt#solver ntt in
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     tac#assert_top sk.Sk.inits;

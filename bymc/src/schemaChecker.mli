@@ -46,7 +46,7 @@ val write_counterex:
  This mode can be used to check individual schemas one-by-one.
  Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
  *)
-class tree_tac_t: Runtime.runtime_t -> SpinIr.data_type_tab ->
+class tree_tac_t: Smt.smt_solver -> SpinIr.data_type_tab ->
     object
         inherit tac_t
         

@@ -31,16 +31,16 @@ let run_solver opts =
     let mk_solver =
         match opts.smt with
         | SmtYices ->
-                new Smt.yices_smt "yices"
+                new Smt.yices_smt "main" "yices"
 
         | SmtLib2 args ->
                 let prog = args.(0) in
                 let args = Array.sub args 1 ((Array.length args) - 1) in
-                new Smt.lib2_smt prog args
+                new Smt.lib2_smt "main" prog args
 
         | SmtMathsat5 ->
                 MsatLoader.load_plugin_mathsat4ml opts.Options.plugin_dir;
-                new Smt.mathsat5_smt
+                new Smt.mathsat5_smt "main"
     in
     let solver = mk_solver in
     if Some "1" = (Options.get_plugin_opt opts "smt.log")

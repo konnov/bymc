@@ -1389,28 +1389,37 @@ let find_error rt tt sk form_name ltl_form deps =
     in
     check_trivial spec;
 
+    (* In the non-incremental mode, we have to reset the solver a lot,
+       so we just make our own copy of the solver, instead of corrupting
+       the global instance.
+     *)
+    let my_solver =
+        if SchemaOpt.is_incremental ()
+        then rt#solver
+        else rt#solver#clone_not_started "schemaLtl"
+    in
+
     if SchemaOpt.is_incremental ()
-    then rt#solver#push_ctx;
-    rt#solver#set_need_model true;
+    then my_solver#push_ctx;
+    my_solver#set_need_model true;
 
     let ntt = tt#copy in
-    let tac = new SchemaChecker.tree_tac_t rt ntt in
+    let tac = new SchemaChecker.tree_tac_t my_solver ntt in
     let initf = F.init_frame ntt sk in
     let reset_fun _ =
         if not (SchemaOpt.is_incremental ())
         then begin
             (* reset does not work in cvc4 *)
-            rt#solver#stop;
-            rt#solver#set_incremental_mode false;
-            rt#solver#start;
-            (*rt#solver#reset;*)
-            rt#solver#comment "top-level declarations";
-            let append_var v = rt#solver#append_var_def v (tt#get_type v) in
+            my_solver#stop;
+            my_solver#set_incremental_mode false;
+            my_solver#start;
+            my_solver#comment "top-level declarations";
+            let append_var v = my_solver#append_var_def v (tt#get_type v) in
             List.iter append_var sk.Sk.params;
-            let append_expr e = ignore (rt#solver#append_expr e) in
+            let append_expr e = ignore (my_solver#append_expr e) in
             List.iter append_expr sk.Sk.assumes;
             tac#push_frame initf;
-            rt#solver#comment "initial constraints from the spec";
+            my_solver#comment "initial constraints from the spec";
             (* push the initial node, so the predicate optimization works *)
             tac#assert_top sk.Sk.inits;
         end
@@ -1419,20 +1428,20 @@ let find_error rt tt sk form_name ltl_form deps =
     (* WARNING: here we restart the solver *)
     if not (SchemaOpt.is_incremental ())
     then begin
-        Debug.logtm Debug.WARN
-            "Restarting the solver in the non-incremental mode...";
         tac#set_incremental false;
+        my_solver#start;
         reset_fun ()
     end else begin
         tac#push_frame initf;
-        rt#solver#comment "initial constraints from the spec";
+        my_solver#comment "initial constraints from the spec";
         tac#assert_top sk.Sk.inits;
     end;
     let result =
-        gen_and_check_schemas_on_the_fly rt#solver sk spec deps tac reset_fun
+        gen_and_check_schemas_on_the_fly my_solver sk spec deps tac reset_fun
     in
-    rt#solver#set_need_model false;
+    my_solver#set_need_model false;
     if SchemaOpt.is_incremental ()
-    then rt#solver#pop_ctx;
+    then my_solver#pop_ctx
+    else my_solver#stop;
     result
 

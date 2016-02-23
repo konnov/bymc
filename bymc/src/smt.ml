@@ -90,6 +90,9 @@ class virtual smt_solver =
         (** reset the solver *)
         method virtual reset: unit
 
+        (** make a copy of the solver object without starting the new copy *)
+        method virtual clone_not_started: string -> smt_solver
+
         (** add a comment (free of side effects) *)
         method virtual comment: string -> unit
 
@@ -379,14 +382,10 @@ let parse_smt_model_q query lines =
 
 (** The interface to the SMT solver (yices).
    We are using the text interface, as it is way easier to debug. *)
-class yices_smt (solver_cmd: string) =
+class yices_smt (name: string) (solver_cmd: string) =
     object(self)
         inherit smt_solver
 
-        (* for how long we wait for output from yices if check is issued *)
-        val check_timeout_sec = 3600.0
-        (* for how long we wait for output from yices if another command is issued*)
-        val timeout_sec = 10.0
         val mutable pid = 0
         val mutable clog = stdout
         val mutable m_pipe_cmd = PipeCmd.null ()
@@ -395,7 +394,6 @@ class yices_smt (solver_cmd: string) =
         val mutable m_need_unsat_cores = false
         val mutable m_need_evidence = false
         val mutable collect_asserts = false
-        val mutable poll_tm_sec = 10.0
         (** the number of stack pushes executed within consistent context *)
         val mutable m_pushes = 0
         (** the number of stack pushes executed within inconsistent context *)
@@ -403,8 +401,9 @@ class yices_smt (solver_cmd: string) =
 
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
-            m_pipe_cmd <- PipeCmd.create solver_cmd [||] "yices.err";
-            clog <- open_out "yices.log";
+            m_pipe_cmd <-
+                PipeCmd.create solver_cmd [||] (sprintf "yices%s.err" name);
+            clog <- open_out (sprintf "yices%s.log" name);
             if not m_enable_log
             then begin
                 fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
@@ -426,6 +425,16 @@ class yices_smt (solver_cmd: string) =
             collect_asserts <- false;
             m_pushes <- 0;
             m_inconsistent_pushes <- 0
+
+        method clone_not_started new_name =
+            let copy = new yices_smt new_name solver_cmd in
+            copy#set_need_model m_need_evidence;
+            copy#set_need_unsat_cores m_need_unsat_cores;
+            copy#set_collect_asserts collect_asserts;
+            copy#set_enable_log m_enable_log;
+            copy#set_debug debug;
+            (copy :> smt_solver)
+
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -624,14 +633,10 @@ class yices_smt (solver_cmd: string) =
     Logging to a file is disabled by default. If you want to enable it,
     pass the argument -O smt.log=1.
 *)
-class lib2_smt solver_cmd solver_args =
+class lib2_smt name solver_cmd solver_args =
     object(self)
         inherit smt_solver
 
-        (* for how long we wait for output from yices if check is issued *)
-        val check_timeout_sec = 3600.0
-        (* for how long we wait for output from yices if another command is issued*)
-        val timeout_sec = 10.0
         val mutable pid = 0
         val mutable clog = stdout
         val mutable m_pipe_cmd = PipeCmd.null ()
@@ -640,9 +645,8 @@ class lib2_smt solver_cmd solver_args =
         val mutable m_enable_lockstep = false
         val mutable m_need_evidence = false
         val mutable m_need_unsat_cores = false
-        val mutable m_incremental = false
+        val mutable m_incremental = true
         val mutable collect_asserts = false
-        val mutable poll_tm_sec = 10.0
         (** the number of stack pushes executed within consistent context *)
         val mutable m_pushes = 0
         (** the number of stack pushes executed within inconsistent context *)
@@ -658,10 +662,16 @@ class lib2_smt solver_cmd solver_args =
                 (sprintf "Starting the SMT solver: %s%s" solver_cmd args_s);
             assert(PipeCmd.is_null m_pipe_cmd);
             let errname =
-                if m_nstarts = 0 then "smt2.err" else (sprintf "smt2.%d.err" m_nstarts) in
+                if m_nstarts = 0
+                then sprintf "smt2%s.err" name
+                else sprintf "smt2%s.%d.err" name m_nstarts
+            in
             m_pipe_cmd <- PipeCmd.create solver_cmd solver_args errname;
             let outname =
-                if m_nstarts = 0 then "smt2.log" else (sprintf "smt2.%d.log" m_nstarts) in
+                if m_nstarts = 0
+                then sprintf "smt2%s.log" name
+                else sprintf "smt2%s.%d.log" name m_nstarts
+            in
             clog <- open_out outname;
             if not m_enable_log
             then begin
@@ -683,8 +693,8 @@ class lib2_smt solver_cmd solver_args =
               *)
             if BatString.exists solver_cmd "z3"
             then begin
-                self#comment "a Z3 hack follows\n";
-                self#append_and_sync "(set-option :global-decls false)\n";
+                if m_incremental
+                then self#append_and_sync ";;a z3 hack\n(set-option :global-decls false)\n";
                 if not m_incremental
                 then self#append_and_sync "(set-option :interactive-mode false)\n"
             end;
@@ -713,6 +723,17 @@ class lib2_smt solver_cmd solver_args =
             m_inconsistent_pushes <- 0;
             if m_incremental
             then self#push_ctx
+
+        method clone_not_started new_name =
+            let copy = new lib2_smt new_name solver_cmd solver_args in
+            copy#set_incremental_mode m_incremental;
+            copy#set_need_model m_need_evidence;
+            copy#set_need_unsat_cores m_need_unsat_cores;
+            copy#set_collect_asserts collect_asserts;
+            copy#set_enable_log m_enable_log;
+            copy#set_enable_lockstep m_enable_lockstep;
+            copy#set_debug debug;
+            (copy :> smt_solver)
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -944,12 +965,17 @@ class lib2_smt solver_cmd solver_args =
 
 (**
     An interface to Mathsat5 via Mathsat's library.
-    This class requires the mathsat4ml plugin compiled in plugins/mathsat4ml
+    This class requires the mathsat4ml plugin compiled in plugins/mathsat4ml.
+
+    WARNING: This implementation has not been tested a lot.
+    Use lib2_smt, unless you believe that a direct linking can really boost
+    the performance. In our experiments the gain was about 10-20%, which does
+    not worth all the troubles with the binary interfaces.
 
     Logging to a file is disabled by default. If you want to enable it,
     pass the option -O smt.log=1
 *)
-class mathsat5_smt =
+class mathsat5_smt name =
     object(self)
         inherit smt_solver
 
@@ -963,7 +989,7 @@ class mathsat5_smt =
 
         method start =
             m_instance <- (!Msat.p_create) ();
-            clog <- open_out "smt2.log";
+            clog <- open_out (sprintf "smt2%s.log" name);
             if not m_enable_log
             then begin
                 fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
@@ -983,6 +1009,12 @@ class mathsat5_smt =
             self#pop_n m_pushes;
             m_pushes <- 0;
             self#push_ctx
+
+        method clone_not_started new_name =
+            let copy = new mathsat5_smt new_name in
+            copy#set_need_unsat_cores m_need_unsat_cores;
+            copy#set_enable_log m_enable_log;
+            (copy :> smt_solver)
 
         method append_var_def (v: var) (tp: data_type) =
             if m_enable_log
