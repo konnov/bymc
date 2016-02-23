@@ -37,6 +37,13 @@ class virtual smt_solver:
         (** reset the solver *)
         method virtual reset: unit
 
+        (**
+          make a copy of the solver object without starting the new copy
+
+          @param new_name the new name (used in the logs)
+        *)
+        method virtual clone_not_started: string -> smt_solver
+
         (** add a comment (free of side effects) *)
         method virtual comment: string -> unit
 
@@ -116,7 +123,7 @@ class virtual smt_solver:
 
     @author Igor Konnov
  *)
-class yices_smt: string ->
+class yices_smt: string -> string ->
     object
         inherit smt_solver
 
@@ -128,6 +135,9 @@ class yices_smt: string ->
 
         (** reset the solver *)
         method reset: unit
+
+        (** make a copy of the solver object without starting the new copy *)
+        method clone_not_started: string -> smt_solver
 
         (** add a comment (free of side effects) *)
         method comment: string -> unit
@@ -208,9 +218,13 @@ class yices_smt: string ->
     An interface to a solver supporting SMTLIB2. This class invoke a solver
     and communicates with it via pipes.
 
+    @param name the solver name used in the logging facilities
+    @param prog the program to execute
+    @param args the command-line arguments to pass to the program
+
     @author Igor Konnov
  *)
-class lib2_smt: string -> string array ->
+class lib2_smt: string-> string -> string array ->
     object
         inherit smt_solver
 
@@ -222,6 +236,9 @@ class lib2_smt: string -> string array ->
 
         (** reset the solver *)
         method reset: unit
+
+        (** make a copy of the solver object without starting the new copy *)
+        method clone_not_started: string -> smt_solver
 
         (** add a comment (free of side effects) *)
         method comment: string -> unit
@@ -303,7 +320,7 @@ class lib2_smt: string -> string array ->
 
     @author Igor Konnov
  *)
-class mathsat5_smt:
+class mathsat5_smt: string ->
     object
         inherit smt_solver
 
@@ -315,6 +332,9 @@ class mathsat5_smt:
 
         (** reset the solver *)
         method reset: unit
+
+        (** make a copy of the solver object without starting the new copy *)
+        method clone_not_started: string -> smt_solver
 
         (** add a comment (free of side effects) *)
         method comment: string -> unit
