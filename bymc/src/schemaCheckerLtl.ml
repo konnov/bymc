@@ -1413,6 +1413,7 @@ let find_error rt tt sk form_name ltl_form deps =
             my_solver#stop;
             my_solver#set_incremental_mode false;
             my_solver#start;
+            my_solver#set_logic "QF_LIA";
             my_solver#comment "top-level declarations";
             let append_var v = my_solver#append_var_def v (tt#get_type v) in
             List.iter append_var sk.Sk.params;
