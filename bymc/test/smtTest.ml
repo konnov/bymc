@@ -8,13 +8,13 @@ open Spin
 open SpinIr
 open SpinIrImp
 
-let solver = ref (new yices_smt "yices")
+let solver = ref (new yices_smt "main" "yices")
 let is_started = ref false
 
 let setup_yices _ =
     if not !is_started
     then begin
-        solver := new yices_smt "yices";
+        solver := new yices_smt "main" "yices";
         (!solver)#set_enable_log true;
         (!solver)#start;
         is_started := true;
@@ -32,7 +32,7 @@ let shutdown_yices _ =
 let setup_smt2 _ =
     if not !is_started
     then begin
-        solver := new lib2_smt "z3" [| "-smt2"; "-in"|];
+        solver := new lib2_smt "main" "z3" [| "-smt2"; "-in"|];
         (!solver)#set_enable_log true;
         (!solver)#set_need_unsat_cores true;
         (!solver)#start;
@@ -50,7 +50,7 @@ let shutdown_smt2 _ =
 
 let test_wrong_solver _ =
     let kaboom _ =
-        let solver = new yices_smt "solver-from-the-year-2020" in
+        let solver = new yices_smt "main" "solver-from-the-year-2020" in
         solver#start;
         ignore (solver#append_expr (IntConst 1))
     in

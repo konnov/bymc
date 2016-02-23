@@ -15,7 +15,7 @@ open Ssa
 open VarRole
 
 
-let solver = ref (new lib2_smt "z3" [| "-smt2"; "-in"|])
+let solver = ref (new lib2_smt "main" "z3" [| "-smt2"; "-in"|])
 let is_started = ref false
 
 let setup _ =
