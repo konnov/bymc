@@ -15,7 +15,7 @@ open Ssa
 open VarRole
 
 
-let solver = ref (new yices_smt "yices")
+let solver = ref (new yices_smt "main" "yices")
 let is_started = ref false
 
 let setup _ =

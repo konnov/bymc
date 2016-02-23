@@ -28,7 +28,7 @@ let mk_rule src dst guard act = { Sk.src; Sk.dst; Sk.guard; Sk.act }
 let str_of_ints is = List.map string_of_int is |> str_join ", "
 
 
-let solver = ref (new lib2_smt "z3" [| "-smt2"; "-in"|])
+let solver = ref (new lib2_smt "main" "z3" [| "-smt2"; "-in"|])
 let is_started = ref false
 
 let setup _ =

@@ -9,7 +9,7 @@ open SpinIrImp
 
 open PiaCtrRefinement
 
-let yices = ref (new yices_smt "yices")
+let yices = ref (new yices_smt "main" "yices")
 let is_started = ref false
 
 let setup _ =
