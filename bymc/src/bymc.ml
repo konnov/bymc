@@ -80,6 +80,12 @@ let main () =
 
 
 let print_backtrace _ =
+    fprintf stderr " -----------------------------------------------\n";
+    Printexc.print_backtrace stderr;
+(*
+    The following code is now but incompatible with the outdated installation
+    at our benchmarking server. Uncomment as soon as the benchmarking server
+    is up-to-date.
     let print_prev_slot prev cnt =
         if prev <> ""
         then if cnt = 1
@@ -87,7 +93,7 @@ let print_backtrace _ =
             else fprintf stderr "%s\n  (repeats %d times)\n" prev cnt
     in
     let bt = Printexc.get_raw_backtrace () in
-    fprintf stderr " -----------------------------------------------\n";
+
     let p _ =
         match Printexc.backtrace_slots bt with
         | None -> fprintf stderr "No backtrace information available\n"
@@ -108,6 +114,7 @@ let print_backtrace _ =
             print_prev_slot prev cnt
     in
     p ();
+*)
     fprintf stderr " -----------------------------------------------\n"
 
         
