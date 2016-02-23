@@ -1,8 +1,9 @@
-(* Like batteries, but our own (when batteries are easy to install on our
-   desktops, let's make a transition).
-   Useful functions that do not fit elsewhere.
+(**
+   Utility functions that do not fit elsewhere.
+   Many of these functions can be replaced by ocaml batteries.
+   Since we are using ocaml batteries, we should get rid of many of these.
 
-   Igor Konnov, 2011-2013
+   Igor Konnov, 2011-2016
 *)
 
 open Printf
@@ -24,12 +25,13 @@ module StringMap = Map.Make(String) (* deprecated: use StrMap *)
 module StrMap = Map.Make(String)
 module StrSet = Set.Make(String)
 
-(* short-hand functions *)
+(** a shorter name for string_of_int *)
 let int_s i = string_of_int i
+(** a shorter name for int_of_string *)
 let str_i s = int_of_string s
 
 
-(* make a cartesian product of lst on itself n times *)
+(** make a cartesian product of lst on itself n times *)
 let rec mk_product lst n =
     if n <= 0
     then raise (Failure "mk_product: n must be positive")
@@ -41,7 +43,7 @@ let rec mk_product lst n =
                 (mk_product lst (n - 1)))
 
 
-(* make a cartesian product of several lists *)
+(** make a cartesian product of several lists *)
 let rec mk_product_of_lists range_lists =
     match range_lists with
     | [] -> raise (Failure "mk_product_of_lists: range_lists is empty")
@@ -52,14 +54,14 @@ let rec mk_product_of_lists range_lists =
         List.concat (List.map mult (mk_product_of_lists tail))
 
 
-(* like String.join in python *)
+(** like String.join in python *)
 let str_join (sep: string) (strs: string list) =
     let join accum s = if accum <> "" then (accum ^ sep ^ s) else s in
     List.fold_left join "" strs
 
 let str_nempty (s: string): bool = s <> ""
 
-(* create a text representation of StringMap *)
+(** create a text representation of StringMap *)
 let str_map_s elem_fun map =
     let f k v a =
         Printf.sprintf "%s=%s%s"
@@ -67,13 +69,13 @@ let str_map_s elem_fun map =
     in
     StringMap.fold f map ""
 
-(* the last element of the list *)    
+(** the last element of the list *)    
 let rec list_end = function
     | [] -> raise (Invalid_argument "list_end []")
     | [ e ] -> e
     | _ :: tl -> list_end tl
 
-(* separate a list into three parts:
+(** split a list into three parts:
     before a matching element, the matching element, the tail.
     If the element is not found, then the two last resulting lists are empty.
  *)
@@ -105,7 +107,7 @@ let list_div match_fun lst =
 let list_cut_ignore match_fun lst = list_cut_general true match_fun lst
 
 
-(* Find the n-th element and
+(** Find the n-th element and
    return the elements before it, the element itself, and the elements after
  *)
 let rec list_nth_slice lst n =
@@ -141,7 +143,7 @@ let rec list_sub ilst istart ilen =
     search ilst istart ilen
 
 
-(* sort and remove duplicates, one could have used BatList.sort_unique *)
+(** sort and remove duplicates, one could have used BatList.sort_unique *)
 let list_sort_uniq comp_fun lst =    
     let consume_copy l cur prev =
         if (comp_fun cur prev) <> 0 then cur :: l else l in
@@ -156,30 +158,32 @@ let list_sort_uniq comp_fun lst =
     no_dups
 
 
-(* Find the position of the first element equal to e *)
+(** Find the position of the first element equal to e *)
 let list_find_pos e lst =
-    let rec fnd = function
+    (* FIXME: use a function from ocaml batteries? *)
+    let rec fnd i = function
         | [] -> raise Not_found
         | hd :: tl ->
-            if hd = e then 0 else 1 + (fnd tl)
+            if hd = e then i else fnd (1 + i) tl
     in
-    fnd lst
+    fnd 0 lst
 
 
 let list_find_match_pos match_fun lst =
-    let rec fnd = function
+    (* FIXME: use a function from ocaml batteries? *)
+    let rec fnd i = function
         | [] -> raise Not_found
         | hd :: tl ->
-            if match_fun hd then 0 else 1 + (fnd tl)
+            if match_fun hd then i else fnd (1 + i) tl
     in
-    fnd lst
+    fnd 0 lst
 
 
-(* Python-like range *)                                                         
+(** Python-like range. Deprecated: use sequences from ocaml batteries instead. *)
 let rec range i j =
     if j <= i then [] else i :: (range (i + 1) j)
 
-
+(** Python-like rev_range. Deprecated: use sequences from ocaml batteries instead. *)
 let rec rev_range i j =
     if j <= i then [] else (j - 1) :: (rev_range i (j - 1))
 
@@ -199,7 +203,7 @@ let str_starts_with substr str =
     else (String.sub str 0 ssl) = substr
 
 
-(*
+(**
    check two hash tables for element equality as standard "=" works
    only on the hash tables of the same capacity!
  *)
@@ -242,13 +246,13 @@ let hashtbl_filter_keys (pred: 'b -> bool) (tbl: ('a, 'b) Hashtbl.t) : ('a list)
     Hashtbl.fold filter tbl [] 
 
 
-(* a convenience function to avoid the plain Not_found message and exceptions *)
+(** a convenience function to avoid the plain Not_found message and exceptions *)
 let hashtbl_find (err_fun: 'a -> string) (tbl: ('a, 'b) Hashtbl.t) (a: 'a): 'b =
     try Hashtbl.find tbl a
     with Not_found -> raise (Failure ("Not_found: " ^ (err_fun a)))
 
 
-(* an oftenly needed version of hashtbl_find when a key is a string *)
+(** an oftenly needed version of hashtbl_find when a key is a string *)
 let hashtbl_find_str (tbl: (string, 'b) Hashtbl.t) (a: string): 'b =
     hashtbl_find (fun s -> s) tbl a
 
@@ -260,11 +264,11 @@ let map_merge_fst key aopt bopt =
     | None, Some _ -> bopt
 
 (* regular expressions: OCaml limits the number of matched groups
-   with 30. Here we provide an implementation that lifts this
-   limitation. This implementation will not work with nested groups.
+   to 30. Here we provide an implementation that lifts this
+   limitation. This implementation does not support nested groups.
  *)
 
-(* split a regex into two regexes:
+(** split a regex into two regexes:
      the one ending with group 'group' and the one after that group.
  *)
 let re_split re_s text start_pos group =
@@ -283,7 +287,7 @@ let re_split re_s text start_pos group =
         raise (Invalid_argument (sprintf "group %d of %s not found" group re_s))
 
 
-(* retrieve group_cnt matching groups, notwithstanding the group
+(** retrieve group_cnt matching groups, notwithstanding the group
    limit in ocaml (currently, 30)
  *)
 let re_all_groups re_s text group_cnt =
@@ -329,7 +333,7 @@ let rec ipow a n =
     else a * (ipow a (n - 1))
 
 
-(* make a short version of a string (by taking a prefix) and ensure there is
+(** make a short version of a string (by taking a prefix) and ensure there is
    no such a string in the table. If no short version can be generated, then
    a unique number is appended to the string.
  *)
@@ -370,7 +374,7 @@ let fold_file line_fun a filename =
     in
     read a
 
-(* stop watch class to measure time *)
+(** A stop-watch class to measure time *)
 class stop_watch ~(is_wall: bool) ~(with_children: bool) =
     object(self)
         val mutable start_time = 0.0
@@ -441,6 +445,10 @@ let short_time time =
 let short_time_now () = short_time (Unix.time ())
 
 
+(**
+ A human-readable printer for a duration, which is stripping the
+ unnecessary details.
+ *)
 let human_readable_duration duration =
     let plural s num =
         if num mod 10 = 1 then s else s ^ "s"
