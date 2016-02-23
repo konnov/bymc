@@ -706,7 +706,7 @@ class lib2_smt solver_cmd solver_args =
             self#comment "***************** RESET *****************\n";
             if m_incremental
             then self#pop_n m_pushes
-            else self#append_and_sync "(reset)\n";
+            else self#append_and_sync "(reset)\n"; (* XXX: not a standard command! *)
             m_need_evidence <- false;
             collect_asserts <- false;
             m_pushes <- 0;
