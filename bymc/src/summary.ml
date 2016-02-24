@@ -1,7 +1,7 @@
+open Batteries
 open Printf
 
-open Batteries
-
+open Accums
 open Debug
 open Smt
 open Spin
@@ -16,15 +16,14 @@ let path_counter = ref 0
 (** enumerate the values of missing variables *)
 (* XXX: there is a space for optimization *)
 let expand_cube f ctx partial_cube =
-    let leave_unbound n e l =
+    let collect_unbound n e l =
         match e with
         | Var v ->
-                if v#get_name = n && v#proc_name <> ""
+                if v#get_name = n && v#proc_name <> "" (* local *)
                 then v :: l
                 else l
         | _ -> l
     in
-
     let extend cube v i =
         let copy = Hashtbl.copy cube in
         Hashtbl.replace copy v#get_name (IntConst i);
@@ -42,7 +41,11 @@ let expand_cube f ctx partial_cube =
                 let each_val i = enum (extend cube v i) tl in
                 List.iter each_val (Accums.range l r)
     in
-    let unbound = Hashtbl.fold leave_unbound partial_cube [] in
+    let unbound = Hashtbl.fold collect_unbound partial_cube [] in
+    Debug.ltrace Trc.sum
+        (lazy (sprintf "  unbound(%d) = [%s]\n"
+            (List.length unbound)
+            (str_join ", " (List.map (fun v -> v#get_name) unbound))));
     enum partial_cube unbound
 
 
@@ -122,12 +125,10 @@ let enum_cubes rt ctx used vars cons assigns =
             let new_query = rt#solver#submit_query query in
             List.iter (each new_query) vars;
             let cube = Hashtbl.map (fun _ e -> simp get_val e) assigns in
-            trace Trc.sum (fun _ ->
-                let p n v = printf "    %s <- %s\n" n (SpinIrImp.expr_s v) in
-                Hashtbl.iter p cube;
-                sprintf "  simp_cons: %s\n  simp_vars:\n"
-                    (expr_s (simp get_val cons))
-            );
+            let pr n e s = s ^ (sprintf "\n    %s <- %s" n (SpinIrImp.expr_s e)) in
+            Debug.ltrace Trc.sum
+                (lazy (sprintf "  simp_cons: when %s {%s\n  }\n"
+                    (expr_s (simp get_val cons)) (Hashtbl.fold pr cube "")));
 
             (* if the cube is a partial assignment, enumerate all assignments *)
             expand_cube (add_rule get_val) ctx cube;
@@ -143,22 +144,18 @@ let enum_cubes rt ctx used vars cons assigns =
 
 
 let each_path rt ctx cons vals =
-    log INFO (sprintf "summarizing path %d..." !path_counter);
+    logtm INFO (sprintf "summarizing path %d..." !path_counter);
     path_counter := !path_counter + 1;
-    Debug.trace Trc.sum
-        (fun _ ->
-            let m = Printf.sprintf "each_path: %s" (SpinIrImp.expr_s cons) in
-            let m = m ^ (Hashtbl.fold (fun n e s ->
-                s ^ (sprintf " %s -> %s " n (SpinIrImp.expr_s e))) vals "") in
-            m ^ "\n"
-        );
+    let pr n e s = s ^ (sprintf "\n  %s <- %s" n (SpinIrImp.expr_s e)) in
+    Debug.ltrace Trc.sum
+        (lazy (sprintf "each_path: when %s {%s\n}\n"
+            (SpinIrImp.expr_s cons) (Hashtbl.fold pr vals "")));
     let used = SpinIr.expr_used_vars cons in
     let locals = List.filter (fun v -> v#proc_name <> "") used in
     enum_cubes rt ctx used locals cons vals;
-    trace Trc.sum (fun _ ->
-        let p n v = printf "  %s <- %s\n" n (SpinIrImp.expr_s v) in
-        Hashtbl.iter p vals;
-        sprintf "cons: %s\n" (SpinIrImp.expr_s cons))
+    Debug.ltrace Trc.sum
+        (lazy (sprintf "each_path: when %s {%s\n}\n"
+            (SpinIrImp.expr_s cons) (Hashtbl.fold pr vals "")))
 
 
 let summarize rt prog proc =
