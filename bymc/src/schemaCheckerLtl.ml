@@ -574,14 +574,9 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         printf " >%d" tac#top.F.no; flush stdout;
     in
     let sum_accel_at_most_one frames =
-        (* NOTE: using arithmetics directly. It is hard to say, which encoding is better.
         let expr =
             list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
         if expr <> Nop "" then BinEx (GE, IntConst 1, expr) else IntConst 1
-        *)
-        let ne0 f = BinEx (NE, Var f.F.accel_v, IntConst 0) in
-        let expr = list_to_binex OR (List.map ne0 frames) in
-        if expr <> Nop "" then expr else IntConst 1
     in
     (* find the unlocked rules excluding the rules as follows:
         when outside the loop, exclude self-loops;
