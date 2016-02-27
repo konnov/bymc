@@ -39,12 +39,12 @@ module F = struct
 
     (* auxillary functions *)
     let mk_loc_var (tt: data_type_tab) frame_no proto =
-        let nv = proto#fresh_copy (sprintf "F%d_at_%s" frame_no proto#get_name) in
+        let nv = proto#fresh_copy (sprintf "F%06d_at_%s" frame_no proto#get_name) in
         tt#set_type nv (tt#get_type proto);
         nv
 
     let mk_shared_var (tt: data_type_tab) frame_no proto =
-        let nv = proto#fresh_copy (sprintf "F%d_g_%s" frame_no proto#get_name) in
+        let nv = proto#fresh_copy (sprintf "F%06d_g_%s" frame_no proto#get_name) in
         tt#set_type nv (tt#get_type proto);
         nv
 
@@ -83,7 +83,7 @@ module F = struct
         let map, shared, new_vars =
             List.fold_left2 (copy_var mk_shared_var)
                 (map, [], new_vars) (List.rev sk.Sk.shared) (List.rev prev_frame.shared_vars) in
-        let accel_v = new_var (sprintf "F%d_warp" next_no) in
+        let accel_v = new_var (sprintf "F%06d_warp" next_no) in
         tt#set_type accel_v (new data_type SpinTypes.TUNSIGNED);
         { no = next_no; accel_v = accel_v;
             loc_vars = locs; shared_vars = shared;
