@@ -232,16 +232,41 @@ let atomic_to_expr sk ae =
     let ne0 i =
         BinEx (NE, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
     in
+    let varexp i = Var (SymbSkel.Sk.locvar sk i) in
+    (* We have two choices here: either using boolean expressions
+       over tests for zero, or using sums. These two different encodings
+       have different performance and memory consumption.
+    *)
     match ae with
     | And_Keq0 is ->
         list_to_binex AND (List.map eq0 is)
+        (* NOTE: using arithmetics directly
+        BinEx (EQ,
+            IntConst 0,
+            list_to_binex PLUS (List.map varexp is))
+         *)
 
     | AndOr_Kne0 ors ->
         let mk_or is = list_to_binex OR (List.map ne0 is) in
         list_to_binex AND (List.map mk_or ors)
+        (* NOTE: using arithmetics directly
+        let mk_or is =
+            BinEx (LT,
+                IntConst 0,
+                list_to_binex PLUS (List.map varexp is))
+        in
+        list_to_binex AND (List.map mk_or ors)
+        *)
+
 
     | Shared_Or_And_Keq0 (e, is) ->
         BinEx (OR, e, list_to_binex AND (List.map eq0 is))
+        (* NOTE: using arithmetics directly
+        let rhs =
+            BinEx (EQ, IntConst 0, list_to_binex PLUS (List.map varexp is))
+        in
+        BinEx (OR, e, rhs)
+        *)
 
 
 let utl_k_to_expr sk form =
@@ -549,9 +574,14 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         printf " >%d" tac#top.F.no; flush stdout;
     in
     let sum_accel_at_most_one frames =
+        (* NOTE: using arithmetics directly. It is hard to say, which encoding is better.
         let expr =
             list_to_binex PLUS (List.map (fun f -> Var f.F.accel_v) frames) in
         if expr <> Nop "" then BinEx (GE, IntConst 1, expr) else IntConst 1
+        *)
+        let ne0 f = BinEx (NE, Var f.F.accel_v, IntConst 0) in
+        let expr = list_to_binex OR (List.map ne0 frames) in
+        if expr <> Nop "" then expr else IntConst 1
     in
     (* find the unlocked rules excluding the rules as follows:
         when outside the loop, exclude self-loops;
