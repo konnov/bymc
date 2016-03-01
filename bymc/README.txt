@@ -138,13 +138,23 @@ or another SMT solver:
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
 
+5.1 Your package manager
+
 The easiest way to install the dependencies is to use your package manager,
 i.e., apt-get, zypper, etc. For instance, this tool is periodically built
 on Debian Wheezy, which makes all the libraries available via its package
 manager apt-get.
 
+5.1 Ocamlbrew
+
 If you do not have ocaml and the required ocaml packages, consider using
 ocamlbrew: http://opam.ocaml.org/doc/Quick_Install.html#h4-Usingocamlbrew
+
+In case you experience problems with installation of Oasis, which we do not
+use, install ocamlbrew as follows:
+
+$ curl -kL https://raw.github.com/hcarty/ocamlbrew/master/ocamlbrew-install \
+    | env OCAMLBREW_FLAGS="-r -b $HOME/ocamlbrew" bash
 
 Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
