@@ -783,6 +783,32 @@ let extract_utl_fairness_loc_cmp _ =
         ()
 
 
+let extract_utl_fairness_mixed_constraints _ =
+    let sk, tt = prepare_strb () in
+    let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
+    let nsnt = List.hd sk.Sk.shared in
+    let param = List.at sk.Sk.params in
+    let n, t, f = param 0, param 1, param 2 in
+    let shared_cmp =
+        BinEx (OR,
+            BinEx (LE, Var nsnt, BinEx (PLUS, Var t, IntConst 1)),
+            BinEx (EQ, get_loc 2, IntConst 0))
+    in
+    let loc_cmp = BinEx (EQ, get_loc 1, IntConst 0) in
+    let ltl_form = UnEx (ALWAYS, UnEx (EVENTUALLY, BinEx (AND, shared_cmp, loc_cmp))) in
+    let expected_utl_s =
+        "G (F (((x <= (t + 1))) \\/ (k[3] == 0)))"
+    in
+    let expected_init_ltl_s = "1" in
+    let result_init_ltl, result_utl = SchemaCheckerLtl.extract_utl sk ltl_form in
+    let result_utl_s = utl_spec_s result_utl in
+    assert_equal expected_utl_s result_utl_s
+        ~msg:(sprintf "Expected %s, found %s" expected_utl_s result_utl_s);
+    assert_equal expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl)
+        ~msg:(sprintf "Expected %s, found %s"
+            expected_init_ltl_s (SpinIrImp.expr_s result_init_ltl))
+
+
 let extract_utl_fairness_shared_and_loc _ =
     let sk, tt = prepare_strb () in
     let get_loc i = Var (IntMap.find i sk.Sk.loc_vars) in
@@ -859,11 +885,19 @@ let suite = "schemaCheckerLtl-suite" >:::
             >::(bracket SmtTest.setup_smt2
                 extract_utl_fairness_loc_cmp SmtTest.shutdown_smt2);
 
-        (* TODO: implement a feature to support this *)
+        (* This test does not work, and I do not remember what was the purpose
+           of the test. After writing this test, I had learnt the news
+           about Helmut.
+
+        "extract_utl_fairness_mixed_constraints"
+            >::(bracket SmtTest.setup_smt2
+                extract_utl_fairness_mixed_constraints SmtTest.shutdown_smt2);
+        *)
+
+        (* TODO: this feature is not supported by our theoretical framework *)
         (*"extract_utl_fairness_shared_and_loc"
             >::(bracket SmtTest.setup_smt2
-                extract_utl_fairness_shared_and_loc SmtTest.shutdown_smt2);
-                *)
+                extract_utl_fairness_shared_and_loc SmtTest.shutdown_smt2);*)
 
         "compute_schema_tree_on_the_fly_strb"
             >::(bracket SmtTest.setup_smt2
