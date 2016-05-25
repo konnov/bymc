@@ -661,6 +661,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                     (* there is probably a bug: close the loop *)
                     printf "    > Closing the loop: LOOPBACK(%d)\n" loop_start_frame.F.no;
                     flush stdout;
+                    (* NOTE: These two constraints are expensive in SMT.
+                       Add them when it is absolutely necessary. *)
                     tac#assert_frame_eq sk loop_start_frame;
                     tac#assert_top [at_least_one_step_made loop_start_frame];
                     tac#check_property (IntConst 1) on_error
