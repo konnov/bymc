@@ -647,17 +647,26 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 let lf = get_some prefix_last_frame in
                 let in_loop f = (f.F.no >= lf.F.no) in
                 let loop_start_frame = List.find in_loop tac#frame_hist in
-                tac#assert_frame_eq sk loop_start_frame;
-                tac#assert_top [at_least_one_step_made loop_start_frame];
-                printf " loop(%d)" loop_start_frame.F.no; flush stdout;
                 let on_error frame_hist =
                     let prefix, loop =
                         BatList.span (fun f -> not (in_loop f)) frame_hist in
                     dump_counterex_to_file solver sk "fixme" prefix loop
                 in
-                if tac#check_property (IntConst 1) on_error
-                then { m_is_err = true; m_schema_len = tac#top.F.no }
-                else { m_is_err = false; m_schema_len = tac#top.F.no }
+                printf " END.\n"; flush stdout;
+                (* postpone an expensive check with the closed loop *)
+                let found_bug =
+                if not (tac#check_property (IntConst 1) on_error)
+                then false (* no counterex. even without a loopback *)
+                else begin
+                    (* there is probably a bug: close the loop *)
+                    printf "    > Closing the loop: LOOPBACK(%d)\n" loop_start_frame.F.no;
+                    flush stdout;
+                    tac#assert_frame_eq sk loop_start_frame;
+                    tac#assert_top [at_least_one_step_made loop_start_frame];
+                    tac#check_property (IntConst 1) on_error
+                end
+                in
+                { m_is_err = found_bug; m_schema_len = tac#top.F.no }
             end
 
         | (PO_init utl_form) :: tl ->
