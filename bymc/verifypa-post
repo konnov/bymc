@@ -56,6 +56,8 @@ while true ; do
 done
 
 if [ "$#" -lt 2 ]; then
+    echo "Too few arguments ($# found, at least 2 expected): " $@
+    echo ""
     help_and_quit
 fi
 
