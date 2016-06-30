@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [1; 1; 100]
-let version_full = "ByMC-1.1.100-liveness"
+let version = [2; 0; 0]
+let version_full = "ByMC-2.0.0-liveness"
 
 let macro_prefix = "macro."
 
