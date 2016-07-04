@@ -484,7 +484,7 @@ let find_schema_multiplier invs =
     let worst n = function
     | AndOr_Kne0 _ -> max n 1           (* multiplying by 2 = 1 + 1 *)
     | Shared_Or_And_Keq0 _ -> max n 1   (* multiplying by 2 = 1 + 1 *)
-    | And_Keq0 _ -> max n 1   (* multiplying by 1 = 1 + 0 *)
+    | And_Keq0 _ -> max n 0   (* multiplying by 1 = 1 + 0 *)
     in
     1 + List.fold_left worst 0 invs
 
