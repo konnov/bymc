@@ -482,10 +482,11 @@ let find_schema_multiplier invs =
       The best bound so far (Theorem 6.4) formulated in the submission
     *)
     let worst n = function
-    | AndOr_Kne0 disjs -> max n 1           (* multiplying by 2 = 1 + 1 *)
-    | Shared_Or_And_Keq0 disjs -> max n 1   (* multiplying by 2 = 1 + 1 *)
-    | Shared_Or_And_Keq0 disjs -> max n 0   (* multiplying by 1 = 1 + 0 *)
-    1 + List.fold_left count 0 invs
+    | AndOr_Kne0 _ -> max n 1           (* multiplying by 2 = 1 + 1 *)
+    | Shared_Or_And_Keq0 _ -> max n 1   (* multiplying by 2 = 1 + 1 *)
+    | Shared_Or_And_Keq0 _ -> max n 0   (* multiplying by 1 = 1 + 0 *)
+    in
+    1 + List.fold_left worst 0 invs
 
 
 let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
