@@ -1,6 +1,7 @@
 (**
  
- An improvement of SlpsChecker that generates schemas on-the-fly and supports LTL(F,G).
+ An improvement of SchemaChecker that generates schemas on-the-fly
+ and supports LTL(F,G) over atomic propositions of constrained form.
 
  Igor Konnov, 2016
  *)
@@ -456,7 +457,7 @@ let po_elem_short_s sk = function
 
 
 let find_schema_multiplier invs =
-    (*
+    (* (* the first bound we proved *)
     let count_disjs n = function
         (* as it follows from the analysis, we need 3 * |Disjs| + 1 *)
     | AndOr_Kne0 disjs -> n + (List.length disjs)
@@ -465,17 +466,25 @@ let find_schema_multiplier invs =
         (* similar *)
     | Shared_Or_And_Keq0 _ -> n
     in
+    1 + 3 * (List.fold_left count_disjs 0 invs)
     *)
-    (* the new proof by Marijana gives us better bounds *)
+    (*
+    (* a better bound we proved later *)
     let count n = function
     | AndOr_Kne0 disjs -> max n 5
     | Shared_Or_And_Keq0 _ -> max n 3
-        (* this conjunction requires less rules, not more *)
+    (* this conjunction requires less rules, not more *)
     | And_Keq0 _ -> n
     in
-    (*
-    1 + 3 * (List.fold_left count_disjs 0 invs)
+    1 + List.fold_left count 0 invs
     *)
+    (*
+      The best bound so far (Theorem 6.4) formulated in the submission
+    *)
+    let worst n = function
+    | AndOr_Kne0 disjs -> max n 1           (* multiplying by 2 = 1 + 1 *)
+    | Shared_Or_And_Keq0 disjs -> max n 1   (* multiplying by 2 = 1 + 1 *)
+    | Shared_Or_And_Keq0 disjs -> max n 0   (* multiplying by 1 = 1 + 0 *)
     1 + List.fold_left count 0 invs
 
 
