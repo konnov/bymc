@@ -774,9 +774,15 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             tac#enter_context;
             (* the propositional subformulas should be satisfied right now *)
             assert_propositions uset lset props;
-            (* XXX: I do not understand why we do not introduce the invariants outside the loop *)
+            let new_invs = find_G_props (TL_and fs) in
+            (* TODO: figure out, whether the following optimization
+                     does not betray completeness:
             let new_invs =
-                if prefix_last_frame = None then [] else find_G_props (TL_and fs) in
+                if prefix_last_frame = None
+                then []
+                else find_G_props (TL_and fs) in
+            *)
+
             let result =
                 prune_or_continue prefix_last_frame uset lset
                     (append_invs invs new_invs) (node_type tl) tl
