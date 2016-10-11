@@ -301,8 +301,12 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
     object(self)
         inherit SchemaSmt.tac_t
 
-        val mutable m_frames = []       (** the frame stack *)
-        val mutable m_call_stack = []   (** we record the method calls here *)
+        (** the predefined result of check_property *)
+        val mutable m_check_property = false
+        (** the frame stack *)
+        val mutable m_frames = []
+        (** we record the method calls here *)
+        val mutable m_call_stack = []
 
         (** get the history of calls collected so far *)
         method get_call_history =
@@ -366,7 +370,8 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
         method check_property exp _ =
             let tag = sprintf "(check_property %s _)" (SpinIrImp.expr_s exp) in
             m_call_stack <- tag :: m_call_stack;
-            false (* no bug found *)
+            (* if m_check_property then no bug else bug *)
+            m_check_property
 
         method enter_context =
             m_call_stack <- "(enter_context)" :: m_call_stack
@@ -379,6 +384,9 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
             m_call_stack <- tag :: m_call_stack;
             let new_frame = F.advance_frame tt sk self#top (fun _ _ -> true) in
             self#push_frame new_frame
+
+        method set_check_property_result v =
+            m_check_property <- v
 
     end
 
@@ -614,8 +622,12 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
         "(enter_node LoopStart)";        (* entering the loop *)
         "(push_rule _ _ 4)";             (* a self-loop *)
+        (*
+        The new optimization postpones this expensive check
+
         "(assert_frame_eq _ 1)";    (* the reached frame equals to the loop start *)
         "(assert_top (F000002_warp > 0) _)"; (* at least one step was made *)
+        *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
@@ -648,9 +660,13 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_node LoopStart)";                      (* entering the loop *)
         "(push_rule _ _ 4)";
         "(push_rule _ _ 5)";
+        (*
+        The new optimization postpones this expensive check
+
         "(assert_frame_eq _ 10)";         (* the loop is closed *)
         "(assert_top ((F000011_warp > 0) || (F000012_warp > 0)) _)";
             (* at least one step was made *)
+        *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
@@ -679,12 +695,58 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(enter_node LoopStart)";                      (* entering the loop *)
         "(push_rule _ _ 4)";
         "(push_rule _ _ 5)";
+        (*
+        The new optimization postpones this expensive check
+
         "(assert_frame_eq _ 16)";         (* the loop is closed *)
         "(assert_top ((F000017_warp > 0) || (F000018_warp > 0)) _)";
+        *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
         "(leave_node LoopStart)";
         "(leave_node Intermediate)";
         "(leave_context)";
+        "(leave_node Intermediate)";
+        "(leave_context)";
+    ] in
+    assert_eq_hist expected_hist hist
+
+
+let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
+    let sk, tt = prepare_strb () in
+    let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
+    let tac = new mock_tac_t tt in
+    (* force check_property to return true instead of false *)
+    tac#set_check_property_result true;
+    let ltl_form = make_strb_corr sk in
+    let spec = extract_safety_or_utl tt sk ltl_form in
+    let ntt = tt#copy in
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
+    let result =
+        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
+    assert_equal true result.m_is_err_found
+        ~msg:"Expected an error, found none";
+
+    let hist = tac#get_call_history in
+    let expected_hist = [
+        (* a schema that does not unlock anything and goes to a loop *)
+        "(enter_context)";
+        "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
+        "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
+        "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
+        "(enter_node Intermediate)";
+        "(push_rule _ _ 0)";
+        "(assert_top ( ! (x >= ((1 + t) - f))) _)";
+        "(assert_top ( ! (x >= ((n - t) - f))) _)";
+        "(enter_node LoopStart)";        (* entering the loop *)
+        "(push_rule _ _ 4)";             (* a self-loop *)
+        "(check_property 1 _)";     (* the point where the property should be checked *)
+        (* perform the expensive check now *)
+        "(assert_frame_eq _ 1)";    (* the reached frame equals to the loop start *)
+        "(assert_top (F000002_warp > 0) _)"; (* at least one step was made *)
+        "(check_property 1 _)";     (* the point where the property should be checked *)
+        "(leave_node LoopStart)";
         "(leave_node Intermediate)";
         "(leave_context)";
     ] in
@@ -909,5 +971,10 @@ let suite = "schemaCheckerLtl-suite" >:::
         "gen_and_check_schemas_on_the_fly_strb_corr"
             >::(bracket SmtTest.setup_smt2
                 gen_and_check_schemas_on_the_fly_strb_corr SmtTest.shutdown_smt2);
+
+        "gen_and_check_schemas_on_the_fly_strb_corr_sat"
+            >::(bracket SmtTest.setup_smt2
+                gen_and_check_schemas_on_the_fly_strb_corr_sat
+                SmtTest.shutdown_smt2);
     ]
 
