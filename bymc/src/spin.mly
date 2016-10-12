@@ -1,18 +1,17 @@
-/* OCaml version of the (extended) Promela parser       */
-/* Adapted from the original yacc grammar of Spin 6.0.1 */
-/*                                                      */
-/* Igor Konnov 2012                                     */
+/* OCaml version of the (extended) Promela parser            */
+/* Adapted from the original yacc grammar of Spin 6.0.1,     */
+/* which can be found in spin.mly                            */
+/*                                                           */
+/* This grammar also contains parts for parsing threshold    */
+/* automata. Since ocamlyacc does not support well several   */
+/* grammars in the same project, we had to merge these two   */
+/* grammars together.                                        */
+/*                                                           */
+/* TODO: use menhir for better error reporting and decoupling */
+/* the grammars.                                             */
+/*                                                           */
+/* Igor Konnov 2012, 2016                                    */
 
-/***** spin: spin.y *****/
-
-/* Copyright (c) 1989-2003 by Lucent Technologies, Bell Laboratories.     */
-/* All Rights Reserved.  This software is for educational purposes only.  */
-/* No guarantee whatsoever is expressed or implied by the distribution of */
-/* this code.  Permission is given to distribute this code provided that  */
-/* this introductory message is not removed and no monies are exchanged.  */
-/* Software written by Gerard J. Holzmann.  For tool documentation see:   */
-/*             http://spinroot.com/                                       */
-/* Send all bug-reports and/or questions to: bugs@spinroot.com            */
 
 %{
 
@@ -277,14 +276,9 @@ inst	: /* empty */	{ IntConst 0 }
         }
     ;
 
-init	: INIT		/* { (* context = $1->sym; *) } */
+init	: INIT		    /* { } */
       Opt_priority
-      body		{ (* ProcList *rl;
-              rl = ready(context, ZN, $4->sq, 0, ZN, I_PROC);
-              runnable(rl, $3?$3->val:1, 1);
-              announce(":root:");
-              context = ZS; *)
-                }
+      body		        { }
     ;
 
 ltl	: ltl_prefix FNAME ltl_body	{
@@ -327,140 +321,61 @@ ltl_expr:
   /*| NEXT ltl_expr       %prec NEG {...} */
 	;
 
-claim	: CLAIM	optname	/* { (* if ($2 != ZN)
-              {	$1->sym = $2->sym;	(* new 5.3.0 *)
-              }
-              nclaims++;
-              context = $1->sym;
-              if (claimproc && !strcmp(claimproc, $1->sym->name))
-              {	fatal("claim %s redefined", claimproc);
-              }
-              claimproc = $1->sym->name; *)
-            } */
-      body		{ (* (void) ready($1->sym, ZN, $4->sq, 0, ZN, N_CLAIM);
-                  context = ZS; *)
-                }
+claim	: CLAIM	optname	body { }
     ;
 
-optname : /* empty */	{ (* char tb[32];
-              memset(tb, 0, 32);
-              sprintf(tb, "never_%d", nclaims);
-              $$ = nn(ZN, NAME, ZN, ZN);
-              $$->sym = lookup(tb); *)
-            }
-    | NAME		{ (* $$ = $1; *) }
+optname : /* empty */	{ }
+    | NAME		{ }
     ;
 
-events : TRACE	/* { (* context = $1->sym;
-              if (eventmap)
-                non_fatal("trace %s redefined", eventmap);
-              eventmap = $1->sym->name;
-              inEventMap++; *)
-            } */
+events : TRACE	
       body	{ raise (Not_implemented "TRACE")
-            (*
-              if (strcmp($1->sym->name, ":trace:") == 0)
-              {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, E_TRACE);
-              } else
-              {	(void) ready($1->sym, ZN, $3->sq, 0, ZN, N_TRACE);
-              }
-                  context = ZS;
-              inEventMap--; *)
-            }
+    }
     ;
 
-utype	: TYPEDEF NAME	/*	{ (* if (context)
-                   fatal("typedef %s must be global",
-                        $2->sym->name);
-                   owner = $2->sym; *)
-                } */
-      LCURLY decl_lst LCURLY	{
+utype	: TYPEDEF NAME LCURLY decl_lst LCURLY	{
                 raise (Not_implemented "typedef is not supported")
-             (* setuname($5); owner = ZS; *) }
+    }
     ;
 
-nm	: NAME			{ (* $$ = $1; *) }
-    | INAME			{ (* $$ = $1;
-                  if (IArgs)
-                  fatal("invalid use of '%s'", $1->sym->name); *)
-                }
+nm	: NAME			{ }
+    | INAME			{ }
     ;
 
-ns	: INLINE nm LPAREN		/* { (* NamesNotAdded++; *) } */
-      args RPAREN		{
+ns	: INLINE nm LPAREN args RPAREN {
                     raise (Not_implemented "inline")
-               (* prep_inline($2->sym, $5);
-                  NamesNotAdded--; *)
-                }
+    }
     ;
 
 c_fcts	: ccode			{
                     raise (Not_implemented "c_fcts")
-                  (* leaves pseudo-inlines with sym of
-                   * type CODE_FRAG or CODE_DECL in global context
-                   *)
                 }
     | cstate {}
     ;
 
 cstate	: C_STATE STRING STRING	{
                  raise (Not_implemented "c_state")
-                (*
-                  c_state($2->sym, $3->sym, ZS);
-                  has_code = has_state = 1; *)
                 }
     | C_TRACK STRING STRING {
                  raise (Not_implemented "c_track")
-                 (*
-                  c_track($2->sym, $3->sym, ZS);
-                  has_code = has_state = 1; *)
                 }
     | C_STATE STRING STRING	STRING {
                  raise (Not_implemented "c_state")
-                 (*
-                  c_state($2->sym, $3->sym, $4->sym);
-                  has_code = has_state = 1; *)
                 }
     | C_TRACK STRING STRING STRING {
                  raise (Not_implemented "c_track")
-                 (*
-                  c_track($2->sym, $3->sym, $4->sym);
-                  has_code = has_state = 1; *)
                 }
     ;
 
 ccode	: C_CODE {
                  raise (Not_implemented "c_code")
-                 (* Symbol *s;
-                  NamesNotAdded++;
-                  s = prep_inline(ZS, ZN);
-                  NamesNotAdded--;
-                  $$ = nn(ZN, C_CODE, ZN, ZN);
-                  $$->sym = s;
-                  has_code = 1; *)
                 }
     | C_DECL		{
                  raise (Not_implemented "c_decl")
-                 (* Symbol *s;
-                  NamesNotAdded++;
-                  s = prep_inline(ZS, ZN);
-                  NamesNotAdded--;
-                  s->type = CODE_DECL;
-                  $$ = nn(ZN, C_CODE, ZN, ZN);
-                  $$->sym = s;
-                  has_code = 1; *)
                 }
     ;
 cexpr	: C_EXPR	{
                  raise (Not_implemented "c_expr")
-                 (* Symbol *s;
-                  NamesNotAdded++;
-                  s = prep_inline(ZS, ZN);
-                  NamesNotAdded--;
-                  $$ = nn(ZN, C_EXPR, ZN, ZN);
-                  $$->sym = s;
-                  no_side_effects(s->name);
-                  has_code = 1; *)
                 }
     ;
 
@@ -472,8 +387,7 @@ sequence: step			{ $1 }
     ;
 
 step    : one_decl		{ $1 }
-    | XU vref_lst		{ raise (Not_implemented "XU vref_lst")
-        (* setxus($2, $1->val); $$ = ZN; *) }
+    | XU vref_lst		{ raise (Not_implemented "XU vref_lst") }
     | NAME COLON one_decl	{ fatal "label preceding declaration," "" }
     | NAME COLON XU		{ fatal "label predecing xr/xs claim," "" }
     | stmnt			    { $1 }
@@ -508,20 +422,9 @@ one_decl: vis TYPE var_list	{
     }
     | vis UNAME var_list	{
                   raise (Not_implemented "variables of user-defined types")
-               (* setutype($3, $2->sym, $1);
-                  $$ = expand($3, Expand_Ok); *)
                 }
     | vis TYPE asgn LCURLY nlst RCURLY {
                   raise (Not_implemented "mtype = {...}")
-                 (*
-                  if ($2->val != MTYPE)
-                    fatal("malformed declaration", 0);
-                  setmtype($5);
-                  if ($1)
-                    non_fatal("cannot %s mtype (ignored)",
-                        $1->sym->name);
-                  if (context != ZS)
-                    fatal("mtype declaration must be global", 0); *)
                 }
     ;
 
@@ -534,8 +437,8 @@ decl    : /* empty */		{ [] }
     | decl_lst      	    { $1 }
     ;
 
-vref_lst: varref		{ (* $$ = nn($1, XU, $1, ZN); *) }
-    | varref COMMA vref_lst	{ (* $$ = nn($1, XU, $1, $3); *) }
+vref_lst: varref		    { }
+    | varref COMMA vref_lst	{ }
     ;
 
 var_list: ivar              { [$1] }
@@ -545,41 +448,15 @@ var_list: ivar              { [$1] }
 ivar    : vardcl           	{ ($1, Nop "") }
     | vardcl ASGN expr   	{
         ($1, $3)
-        (* $$ = $1;
-          $1->sym->ini = $3;
-          trackvar($1,$3);
-          if ($3->ntyp == CONST
-          || ($3->ntyp == NAME && $3->sym->context))
-          {	has_ini = 2; /* local init */
-          } else
-          {	has_ini = 1; /* possibly global */
-          }
-          if (!initialization_ok && split_decl)
-          {	nochan_manip($1, $3, 0);
-            no_internals($1);
-            non_fatal(PART0 "'%s'" PART2, $1->sym->name);
-          } *)
         }
     | vardcl ASGN ch_init	{
           raise (Not_implemented "var = ch_init")
-       (* $1->sym->ini = $3;
-          $$ = $1; has_ini = 1;
-          if (!initialization_ok && split_decl)
-          {	non_fatal(PART1 "'%s'" PART2, $1->sym->name);
-          } *)
         }
     ;
 
 ch_init : LBRACE CONST RBRACE OF
       LCURLY typ_list RCURLY	{
                  raise (Not_implemented "channels")
-               (* if ($2->val) u_async++;
-                  else u_sync++;
-                      {	int i = cnt_mpars($6);
-                    Mpars = max(Mpars, i);
-                  }
-                      $$ = nn(ZN, CHAN, ZN, $6);
-                  $$->val = $2->val; *)
                     }
     ;
 
@@ -604,7 +481,7 @@ vardcl  : NAME {
         }
     ;
 
-varref	: cmpnd		{ $1 (* $$ = mk_explicit($1, Expand_Ok, NAME); *) }
+varref	: cmpnd		{ $1 }
     ;
 
 pfld	: NAME {
@@ -614,82 +491,41 @@ pfld	: NAME {
                 (* XXX: check that the current expression can use that *)
                 ((spec_scope ())#lookup $1)#as_var
             }
-    | NAME			/* { (* owner = ZS; *) } */
-      LBRACE expr RBRACE
+    | NAME LBRACE expr RBRACE
             { raise (Not_implemented
                 "Array references, e.g., x[y] are not implemented") }
     ;
 
-cmpnd	: pfld			/* { (* Embedded++;
-                  if ($1->sym->type == STRUCT)
-                    owner = $1->sym->Snm; *)
-                } */
-      sfld
-            {  $1
-               (* $$ = $1; $$->rgt = $3;
-                  if ($3 && $1->sym->type != STRUCT)
-                    $1->sym->type = STRUCT;
-                  Embedded--;
-                  if (!Embedded && !NamesNotAdded
-                  &&  !$1->sym->type)
-                   fatal("undeclared variable: %s",
-                        $1->sym->name);
-                  if ($3) validref($1, $3->lft);
-                  owner = ZS; *)
-                }
+cmpnd	: pfld sfld { $1 }
     ;
 
 sfld	: /* empty */		{ }
     | DOT cmpnd %prec DOT	{
          raise (Not_implemented
                 "Structure member addressing, e.g., x.y is not implemented")
-         (* $$ = nn(ZN, '.', $2, ZN); *) }
     ;
 
-stmnt	: Special		{ $1 (* $$ = $1; initialization_ok = 0; *) }
-    | Stmnt			{ $1 (* $$ = $1; initialization_ok = 0;
-                  if (inEventMap)
-                   non_fatal("not an event", (char * )0); *)
-                }
+stmnt	: Special		{ $1 }
+    | Stmnt			{ $1 }
     ;
 
-for_pre : FOR LPAREN			/*	{ (* in_for = 1; *) } */
-      varref		{ raise (Not_implemented "for") (* $$ = $4; *) }
+for_pre : FOR LPAREN varref		{ raise (Not_implemented "for") }
     ;
 
 for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
 
 Special :
     | HAVOC LPAREN varref_or_prime RPAREN { [MHavoc (fresh_id (), $3)]  }
-    | varref RCV	/*	{ (* Expand_Ok++; *) } */
-      rargs		{ raise (Not_implemented "rcv")
-                (* Expand_Ok--; has_io++;
-                  $$ = nn($1,  'r', $1, $4);
-                  trackchanuse($4, ZN, 'R'); *)
+    | varref RCV
+      rargs		{ raise (Not_implemented "rcv") }
+    | varref SND margs		{ raise (Not_implemented "snd")
                 }
-    | varref SND		/* { (* Expand_Ok++; *) } */
-      margs		{ raise (Not_implemented "snd")
-               (* Expand_Ok--; has_io++;
-                  $$ = nn($1, 's', $1, $4);
-                  $$->val=0; trackchanuse($4, ZN, 'S');
-                  any_runs($4); *)
-                }
-    | for_pre COLON expr DOTDOT expr RPAREN	/* { (*
-                  for_setup($1, $3, $5); in_for = 0; *)
-                } */
-      for_post	{
-          raise (Not_implemented "for_post")
-          (* $$ = for_body($1, 1); *)
-                }
-    | for_pre IN varref RPAREN	/* { (* $$ = for_index($1, $3); in_for = 0; *)
-                } */
-      for_post	{
-          raise (Not_implemented "for_pre")
-          (* $$ = for_body($5, 1); *)
-                }
+    | for_pre COLON expr DOTDOT expr RPAREN
+      for_post	{ raise (Not_implemented "for_post") }
+    | for_pre IN varref RPAREN
+      for_post	{ raise (Not_implemented "for_pre") }
     | SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
                     raise (Not_implemented "select")
-                  (* $$ = sel_index($3, $5, $7); *)
                 }
     | if_begin options FI	{
                 pop_labs ();                
@@ -740,45 +576,24 @@ Special :
 
 Stmnt	: varref_or_prime ASGN full_expr	{
                     [MExpr (fresh_id (), BinEx(ASGN, Var $1, $3))]
-                 (* $$ = nn($1, ASGN, $1, $3);
-				  trackvar($1, $3);
-				  nochan_manip($1, $3, 0);
-				  no_internals($1); *)
 				}
 	| varref INCR		{
                     let v = Var $1 in
                     [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(PLUS, v, IntConst 1)))]
-                 (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
-				  $$ = nn(ZN,  '+', $1, $$);
-				  $$ = nn($1, ASGN, $1, $$);
-				  trackvar($1, $1);
-				  no_internals($1);
-				  if ($1->sym->type == CHAN)
-				   fatal("arithmetic on chan", (char * )0); *)
 				}
 	| varref DECR	{
                     let v = Var $1 in
                     [MExpr (fresh_id (), BinEx(ASGN, v, BinEx(MINUS, v, IntConst 1)))]
-                 (* $$ = nn(ZN,CONST, ZN, ZN); $$->val = 1;
-				  $$ = nn(ZN,  '-', $1, $$);
-				  $$ = nn($1, ASGN, $1, $$);
-				  trackvar($1, $1);
-				  no_internals($1);
-				  if ($1->sym->type == CHAN)
-				   fatal("arithmetic on chan id's", (char * )0); *)
 				}
-	| PRINT	LPAREN STRING	/* { (* realread = 0; *) } */
-	  prargs RPAREN	{
+	| PRINT	LPAREN STRING prargs RPAREN	{
                     [MPrint (fresh_id (), $3, $4)]
-                    (* $$ = nn($3, PRINT, $5, ZN); realread = 1; *) }
+                }
 	| PRINTM LPAREN varref RPAREN	{
                     (* do we actually need it? *)
                     raise (Not_implemented "printm")
-                 (* $$ = nn(ZN, PRINTM, $3, ZN); *)
                 }
 	| PRINTM LPAREN CONST RPAREN	{
                     raise (Not_implemented "printm")
-                 (* $$ = nn(ZN, PRINTM, $3, ZN); *)
                 }
 	| ASSUME full_expr    	{
                     if is_expr_symbolic $2
@@ -787,42 +602,14 @@ Stmnt	: varref_or_prime ASGN full_expr	{
                 }
 	| ASSERT full_expr    	{
                     [MAssert (fresh_id (), $2)]
-                (* $$ = nn(ZN, ASSERT, $2, ZN); AST_track($2, 0); *) }
-	| ccode			{ raise (Not_implemented "ccode") (* $$ = $1; *) }
-	| varref R_RCV		/* { (* Expand_Ok++; *) } */
-	  rargs			{
-                    raise (Not_implemented "R_RCV")
-                (*Expand_Ok--; has_io++;
-				  $$ = nn($1,  'r', $1, $4);
-				  $$->val = has_random = 1;
-				  trackchanuse($4, ZN, 'R'); *)
-				}
-	| varref RCV		/* { (* Expand_Ok++; *) } */
-	  LT rargs GT		{ raise (Not_implemented "rcv")
-               (* Expand_Ok--; has_io++;
-				  $$ = nn($1, 'r', $1, $5);
-				  $$->val = 2;	/* fifo poll */
-				  trackchanuse($5, ZN, 'R'); *)
-				}
-	| varref R_RCV		/* { (* Expand_Ok++; *) } */
-	  LT rargs GT		{ raise (Not_implemented "r_rcv")
-               (* Expand_Ok--; has_io++;	/* rrcv poll */
-				  $$ = nn($1, 'r', $1, $5);
-				  $$->val = 3; has_random = 1;
-				  trackchanuse($5, ZN, 'R'); *)
-				}
-	| varref O_SND		/* { (* Expand_Ok++; *) } */
-	  margs			{ raise (Not_implemented "o_snd")
-               (* Expand_Ok--; has_io++;
-				  $$ = nn($1, 's', $1, $4);
-				  $$->val = has_sorted = 1;
-				  trackchanuse($4, ZN, 'S');
-				  any_runs($4); *)
-				}
-	| full_expr		{ [MExpr (fresh_id (), $1)]
-                     (* $$ = nn(ZN, 'c', $1, ZN); count_runs($$); *) }
-    | ELSE  		{ met_else := true; [] (* $$ = nn(ZN,ELSE,ZN,ZN); *)
-				}
+                }
+	| ccode			{ raise (Not_implemented "ccode") }
+	| varref R_RCV rargs { raise (Not_implemented "R_RCV") }
+	| varref RCV LT rargs GT { raise (Not_implemented "rcv") }
+	| varref R_RCV LT rargs GT { raise (Not_implemented "r_rcv") }
+	| varref O_SND margs { raise (Not_implemented "o_snd") }
+	| full_expr		{ [MExpr (fresh_id (), $1)] }
+    | ELSE  		{ met_else := true; [] }
 	| ATOMIC   LCURLY sequence OS RCURLY {
               [ MAtomic (fresh_id (), $3) ]
 		  }
@@ -832,9 +619,8 @@ Stmnt	: varref_or_prime ASGN full_expr	{
 	| LCURLY sequence OS RCURLY	{
               $2
 	   	  }
-	| INAME			/* { (* IArgs++; *) } */
-	  LPAREN args RPAREN		/* { (* pickup_inline($1->sym, $4); IArgs--; *) } */
-	  Stmnt			{ raise (Not_implemented "inline") (* $$ = $7; *) }
+	| INAME LPAREN args RPAREN
+	  Stmnt			{ raise (Not_implemented "inline") }
 	;
 
 if_begin : IF { push_new_labs () }
@@ -843,15 +629,11 @@ if_begin : IF { push_new_labs () }
 do_begin : DO { push_new_labs () }
 ;
 
-options : option		{
-            [$1]
-            (* $$->sl = seqlist($1->sq, 0); *) }
-	| option options	{
-            $1 :: $2
-            (* $$->sl = seqlist($1->sq, $2->sl); *) }
+options : option { [$1] }
+    | option options { $1 :: $2 }
 	;
 
-option_head : SEP   { met_else := false (* open_seq(0); *) }
+option_head : SEP   { met_else := false }
 ;
 
 option  : option_head
@@ -939,69 +721,27 @@ expr    : LPAREN expr RPAREN		{ $2 }
     /* not implemented yet */
 	| LPAREN expr SEMI expr COLON expr RPAREN {
                   raise (Not_implemented "ternary operator")
-                 (*
-				  $$ = nn(ZN,  OR, $4, $6);
-				  $$ = nn(ZN, '?', $2, $$); *)
 				}
 
-	| RUN aname		/* { (* Expand_Ok++;
-				  if (!context)
-				   fatal("used 'run' outside proctype",
-					(char * ) 0); *)
-				} */
-	  LPAREN args RPAREN
-	  Opt_priority		{
-                  raise (Not_implemented "run")
-               (* Expand_Ok--;
-				  $$ = nn($2, RUN, $5, ZN);
-				  $$->val = ($7) ? $7->val : 1;
-				  trackchanuse($5, $2, 'A'); trackrun($$); *)
-				}
-	| LEN LPAREN varref RPAREN	{
-                  raise (Not_implemented "len")
-                }
-	| ENABLED LPAREN expr RPAREN	{
-                  raise (Not_implemented "enabled")
-				}
-	| varref RCV LBRACE rargs RBRACE		{
-                  raise (Not_implemented "rcv")
-				}
-	| varref R_RCV LBRACE rargs RBRACE		{
-                  raise (Not_implemented "r_rcv")
-				}
+	| RUN aname	LPAREN args RPAREN
+	  Opt_priority		{ raise (Not_implemented "run") }
+	| LEN LPAREN varref RPAREN	{ raise (Not_implemented "len") }
+	| ENABLED LPAREN expr RPAREN { raise (Not_implemented "enabled") }
+	| varref RCV LBRACE rargs RBRACE { raise (Not_implemented "rcv") }
+	| varref R_RCV LBRACE rargs RBRACE
+        { raise (Not_implemented "r_rcv") }
     | varref_or_prime   { Var $1 }
-	| cexpr			{raise (Not_implemented "cexpr") (*  $$ = $1;  *)}
-	| CONST 	{
-                    IntConst $1
-               (* $$ = nn(ZN,CONST,ZN,ZN);
-				  $$->ismtyp = $1->ismtyp;
-				  $$->val = $1->val; *)
-				}
-	| TIMEOUT		{
-                   raise (Not_implemented "timeout")
-               (*  $$ = nn(ZN,TIMEOUT, ZN, ZN);  *)}
-	| NONPROGRESS		{
-                   raise (Not_implemented "nonprogress")
-                (* $$ = nn(ZN,NONPROGRESS, ZN, ZN);
-				  has_np++; *)
-				}
-	| PC_VAL LPAREN expr RPAREN	{
-                   raise (Not_implemented "pc_value")
-                (* $$ = nn(ZN, PC_VAL, $3, ZN);
-				  has_pcvalue++; *)
-				}
+	| cexpr			{raise (Not_implemented "cexpr") }
+	| CONST 	{ IntConst $1 }
+	| TIMEOUT		{ raise (Not_implemented "timeout") }
+	| NONPROGRESS		{ raise (Not_implemented "nonprogress") }
+	| PC_VAL LPAREN expr RPAREN	{ raise (Not_implemented "pc_value") }
 	| PNAME LBRACE expr RBRACE AT NAME
-	  			{  raise (Not_implemented "PNAME operations")
-                (*  $$ = rem_lab($1->sym, $3, $6->sym);  *)}
+	  			{  raise (Not_implemented "PNAME operations") }
 	| PNAME LBRACE expr RBRACE COLON pfld
-	  			{  raise (Not_implemented "PNAME operations")
-                (*  $$ = rem_var($1->sym, $3, $6->sym, $6->lft);  *)}
-	| PNAME AT NAME	{
-                   raise (Not_implemented "PNAME operations")
-                (*  $$ = rem_lab($1->sym, ZN, $3->sym);  *)}
-	| PNAME COLON pfld	{
-                   raise (Not_implemented "PNAME operations")
-                (*  $$ = rem_var($1->sym, ZN, $3->sym, $3->lft);  *)}
+	  			{  raise (Not_implemented "PNAME operations") }
+	| PNAME AT NAME	{ raise (Not_implemented "PNAME operations") }
+	| PNAME COLON pfld	{ raise (Not_implemented "PNAME operations") }
     ;
 
 
@@ -1046,8 +786,8 @@ atomic_prop:
     | LPAREN atomic_prop POR atomic_prop RPAREN { PropOr($2, $4) }
     ;
 
-Opt_priority:	/* none */	{(*  $$ = ZN;  *)}
-	| PRIORITY CONST	{(*  $$ = $2;  *)}
+Opt_priority:	/* none */	{}
+	| PRIORITY CONST	{}
 	;
 
 full_expr:	expr		{ $1 }
@@ -1055,7 +795,7 @@ full_expr:	expr		{ $1 }
 	;
 
 	/* an Expr cannot be negated - to protect Probe expressions */
-Expr	: Probe			{raise (Not_implemented "Probe") (*  $$ = $1;  *)}
+Expr	: Probe			{raise (Not_implemented "Probe") }
 	| LPAREN Expr RPAREN		{ $2 }
 	| Expr AND Expr		{ BinEx(AND, $1, $3) }
 	| Expr AND expr		{ BinEx(AND, $1, $3) }
@@ -1065,98 +805,57 @@ Expr	: Probe			{raise (Not_implemented "Probe") (*  $$ = $1;  *)}
 	| expr OR  Expr		{ BinEx(OR, $1, $3) }
 	;
 
-Probe	: FULL LPAREN varref RPAREN	{(*  $$ = nn($3,  FULL, $3, ZN);  *)}
-	| NFULL LPAREN varref RPAREN	{(*  $$ = nn($3, NFULL, $3, ZN);  *)}
-	| EMPTY LPAREN varref RPAREN	{(*  $$ = nn($3, EMPTY, $3, ZN);  *)}
-	| NEMPTY LPAREN varref RPAREN	{(*  $$ = nn($3,NEMPTY, $3, ZN);  *)}
+Probe	: FULL LPAREN varref RPAREN	{}
+	| NFULL LPAREN varref RPAREN	{}
+	| EMPTY LPAREN varref RPAREN	{}
+	| NEMPTY LPAREN varref RPAREN	{}
 	;
 
-Opt_enabler:	/* none */	{(*  $$ = ZN;  *)}
-	| PROVIDED LPAREN full_expr RPAREN	{ (* if (!proper_enabler($3))
-				  {	non_fatal("invalid PROVIDED clause",
-						(char * )0);
-					$$ = ZN;
-				  } else
-					$$ = $3; *)
-				 }
-	| PROVIDED error	{ (* $$ = ZN;
-				  non_fatal("usage: provided ( ..expr.. )",
-					(char * )0); *)
-				}
+Opt_enabler:	/* none */	{}
+	| PROVIDED LPAREN full_expr RPAREN	{ }
+	| PROVIDED error	{}
 	;
 
-basetype: TYPE			{ (* $$->sym = ZS;
-				  $$->val = $1->val;
-				  if ($$->val == UNSIGNED)
-				  fatal("unsigned cannot be used as mesg type", 0); *)
-				}
-	| UNAME			{ (* $$->sym = $1->sym;
-				  $$->val = STRUCT; *)
-				}
-    | error		{}	/* e.g., unsigned ':' const */
+basetype: TYPE			{}
+	| UNAME			    {}
+    | error		        {}	/* e.g., unsigned ':' const */
 	;
 
-typ_list: basetype		{(*  $$ = nn($1, $1->val, ZN, ZN);  *)}
-	| basetype COMMA typ_list	{(*  $$ = nn($1, $1->val, ZN, $3);  *)}
+typ_list: basetype		{}
+	| basetype COMMA typ_list	{}
 	;
 
-args    : /* empty */		{(*  $$ = ZN;  *)}
-	| arg			{(*  $$ = $1;  *)}
+args    : /* empty */		{}
+	| arg			{}
 	;
 
-prargs  : /* empty */		{ [] (*  $$ = ZN;  *)}
-	| COMMA arg		{ $2 (*  $$ = $2;  *)}
+prargs  : /* empty */		{ [] }
+	| COMMA arg		{ $2 }
 	;
 
-margs   : arg			{ (*  $$ = $1;  *)}
-	| expr LPAREN arg RPAREN	{(* if ($1->ntyp == ',')
-					$$ = tail_add($1, $3);
-				  else
-				  	$$ = nn(ZN, ',', $1, $3); *)
-				}
+margs   : arg			        {}
+	| expr LPAREN arg RPAREN	{}
 	;
 
 arg : expr	{ [$1] }
     | expr COMMA arg { $1 :: $3 }
 	;
 
-rarg	: varref		{ (* $$ = $1; trackvar($1, $1);
-				  trapwonly($1 /*, "rarg" */); *) }
-	| EVAL LPAREN expr RPAREN	{ (* $$ = nn(ZN,EVAL,$3,ZN);
-				  trapwonly($1 /*, "eval rarg" */); *) }
-	| CONST 		{ (* $$ = nn(ZN,CONST,ZN,ZN);
-				  $$->ismtyp = $1->ismtyp;
-				  $$->val = $1->val; *)
-				}
-	| MINUS CONST %prec UMIN	{ (* $$ = nn(ZN,CONST,ZN,ZN);
-				  $$->val = - ($2->val); *)
-				}
+rarg	: varref		{ }
+	| EVAL LPAREN expr RPAREN	{ }
+	| CONST 		{ }
+	| MINUS CONST %prec UMIN	{ }
 	;
 
-rargs	: rarg			{ (* if ($1->ntyp == ',')
-					$$ = $1;
-				  else
-				  	$$ = nn(ZN, ',', $1, ZN); *)
-				}
-	| rarg COMMA rargs	{ (* if ($1->ntyp == ',')
-					$$ = tail_add($1, $3);
-				  else
-				  	$$ = nn(ZN, ',', $1, $3); *)
-				}
-	| rarg LPAREN rargs RPAREN	{ (* if ($1->ntyp == ',')
-					$$ = tail_add($1, $3);
-				  else
-				  	$$ = nn(ZN, ',', $1, $3); *)
-				}
-	| LPAREN rargs RPAREN		{(*  $$ = $2;  *)}
+rargs	: rarg			{ }
+	| rarg COMMA rargs	{ }
+	| rarg LPAREN rargs RPAREN	{ }
+	| LPAREN rargs RPAREN		{}
 	;
 
-nlst	: NAME			{ (* $$ = nn($1, NAME, ZN, ZN);
-				  $$ = nn(ZN, ',', $$, ZN); *) }
-	| nlst NAME 		{ (* $$ = nn($2, NAME, ZN, ZN);
-				  $$ = nn(ZN, ',', $$, $1); *)
-				}
-	| nlst COMMA		{ (* $$ = $1; /* commas optional */ *) }
+nlst	: NAME			{ }
+	| nlst NAME 		{ }
+	| nlst COMMA		{ }
 	;
 %%
 
