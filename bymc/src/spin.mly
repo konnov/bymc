@@ -502,7 +502,7 @@ cmpnd	: pfld sfld { $1 }
 sfld	: /* empty */		{ }
     | DOT cmpnd %prec DOT	{
          raise (Not_implemented
-                "Structure member addressing, e.g., x.y is not implemented")
+                "Structure member addressing, e.g., x.y is not implemented") }
     ;
 
 stmnt	: Special		{ $1 }
