@@ -128,7 +128,6 @@ let token_s = function
       | UNAME s -> "UNAME " ^ s
       | PNAME s -> "PNAME " ^ s
       | INAME s -> "INAME " ^ s
-      | FNAME s -> "FNAME " ^ s
       | STRING s -> "STRING " ^ s
       | CLAIM -> "CLAIM"
       | TRACE -> "TRACE"

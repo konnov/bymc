@@ -11,6 +11,8 @@ open SpinIrImp
 
 open Cfg
 
+exception Syntax_err of string
+
 let debug = false
 
 type lex_state = {
@@ -19,6 +21,17 @@ type lex_state = {
     pragmas: (string * string) list; aux_bufs: lexbuf list;
     macro_if_stack: bool list; is_enabled: bool
 }
+
+
+let print_position (lexst: lex_state) mainbuf =
+    let buf = match lexst.aux_bufs with
+    | [] -> mainbuf
+    | b :: _ -> b
+    in
+    let pos = buf.lex_curr_p in
+    sprintf "%s:%d,%d" pos.pos_fname
+        pos.pos_lnum (pos.pos_cnum - pos.pos_bol + 1)
+
 
 (* XXX: why is aux_bufs a reference? *)
 (* lexer function decorated by a preprocessor *)
@@ -221,8 +234,14 @@ let parse_promela_of_chan opts chan basename dirname =
     in
     let ppfun = lex_pp lexst Spinlex.token in
     SpinParserState.reset_state ();
-    let units, type_tab = Spin.program ppfun lexbuf in
-
+    let units, type_tab = 
+        try Spin.program ppfun lexbuf with
+        | Spin.Error ->
+            raise (Syntax_err ((print_position !lexst lexbuf) ^ " syntax error"))
+        | SpinParserState.Promela_semantic_err msg ->
+            let err = (print_position !lexst lexbuf) ^ msg in
+            raise (SpinParserState.Promela_semantic_err err)
+    in
     (* postprocess: check late variable bindings and remove artifacts *)
     let units = List.map (postprocess units) units in
     if debug then begin

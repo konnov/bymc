@@ -9,6 +9,7 @@ open SpinIr
 exception Not_implemented of string
 exception Parse_error of string
 exception State_error of string
+exception Promela_semantic_err of string
 
 type spin_parser_state_t
 
