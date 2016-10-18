@@ -13,7 +13,8 @@ let position_s lexbuf =
 
 let lex_pp lexfun buf =
     let tok = lexfun buf in
-    Printf.printf "tok = %s\n" (SpinIrImp.token_s tok);
+    (* uncomment to debug:
+    Printf.printf "tok = %s\n" (SpinIrImp.token_s tok);*)
     tok
 
 

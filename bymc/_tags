@@ -17,3 +17,5 @@
 <src/pipeCmd.ml>: thread
 <test/*.ml>: package(oUnit), package(batteries), package(sexplib)
 <test/*.byte>: package(oUnit), package(batteries), package(sexplib)
+
+true: use_menhir

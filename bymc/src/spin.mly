@@ -198,7 +198,7 @@ let ta_find_loc name =
 %token  LSHIFT RSHIFT
 %token  COLON DOT COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
 %token  O_SND SND RCV R_RCV AT
-%token  NEVER NOTRACE TRACE ASSERT
+%token  NEVER NOTRACE TRACE
 %token	ALWAYS EVENTUALLY		    /* ltl */
 %token	UNTIL WEAK_UNTIL RELEASE	/* ltl */
 %token	NEXT IMPLIES EQUIV          /* ltl */
