@@ -5,6 +5,7 @@
 CFLAGS=-cflag -g -lflag -g -lflag -thread # the options at the end fix a bug
 
 target="./bymc.native" # use ./bymc.byte for debugging
+unittests=./unitTests.byte
 debug_target="./bymc.byte"
 ocamlver := $(shell ocaml -version | egrep -o '[0-9]+\.[0-9]+\.[0-9]+')
 ocaml_major := $(shell echo ${ocamlver} | perl -pe 's/([0-9]+)\.[0-9]+\.[0-9]+/\1/')
@@ -21,10 +22,12 @@ compile: ${target}
 
 debug: ${debug_target}
 
+${unittests}: src/*.ml src/*.mli src/*.mly test/*.ml
+	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte
+
 # unit tests
-test: clean
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte | ./script/ocaml-friendly
-	./unitTests.byte
+test: clean ${unittests}
+	${unittests}
 
 # functional tests
 integrate: clean

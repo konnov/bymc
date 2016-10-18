@@ -127,6 +127,48 @@ let fatal msg payload =
     let f, l, c = curr_pos() in
     raise (Failure (Printf.sprintf "%s:%d,%d %s %s\n" f l c msg payload))
 
+
+(* the rest here applies to the parser of threshold automata *)
+let ta_error message =
+    raise (TaErr.SyntaxErr message)
+
+(**
+   Check that all locations have have an associated list of integers that
+   contains exactly the number of local variables.
+ *)
+
+let ta_check_locations decls locs =
+    let rec count_locals n = function
+        | (TaIr.Local _) :: tl -> (count_locals (n + 1) tl)
+        | _ :: tl -> count_locals n tl
+        | [] -> n
+    in
+    let nlocals = count_locals 0 decls in
+    let check_one (loc_name, vals) =
+        let nvals = List.length vals in
+        if nlocals <> nvals
+        then let m =
+            sprintf "All locations must contain the list of %d integer values, found %d in %s" nlocals nvals loc_name in
+            raise (TaErr.SemanticErr m)
+    in
+    List.iter check_one locs
+
+
+let ta_loc_tbl = ref (Hashtbl.create 10)
+
+let ta_reset_locs () =
+    Hashtbl.clear !ta_loc_tbl
+
+let ta_put_loc name =
+    let j = Hashtbl.length !ta_loc_tbl in
+    Hashtbl.add !ta_loc_tbl name j
+
+let ta_find_loc name =
+    try Hashtbl.find !ta_loc_tbl name
+    with Not_found ->
+        raise (TaErr.SemanticErr (sprintf "location %s not found" name))
+
+
 %}
 
 %token	ASSERT PRINT PRINTM
@@ -177,6 +219,11 @@ let fatal msg payload =
  */
 %token  UMIN NEG VARREF ARR_ACCESS ARR_UPDATE
 
+/* threshold automata extensions (see the comment in the beginning) */
+%token  SKEL WHEN PARAMS SHARED INITS LOCATIONS RULES ASSUMES
+/* end of threshold automata extensions */
+
+
 %right	ASGN
 %left	O_SND R_RCV SND RCV
 %left	IMPLIES EQUIV			/* ltl */
@@ -198,6 +245,8 @@ let fatal msg payload =
 %type <token SpinIr.prog_unit list * SpinIr.data_type_tab> program
 %start expr
 %type <token SpinIr.expr> expr
+%start ta_module
+%type   <TaIr.Ta.ta_t> ta_module
 %%
 
 /** PROMELA Grammar Rules **/
@@ -219,6 +268,7 @@ unit	: proc	/* proctype        */    { [Proc $1] }
 	| c_fcts	/* c functions etc.   */ { [] }
 	| ns		/* named sequence     */ { [] }
 	| SEMI		/* optional separator */ { [] }
+    | IMPLIES	/* -> is the same as ; */ { [] }
     /* FORSYTE extensions */
     | prop_decl /* atomic propositions */ { [Stmt $1] }
 	| ASSUME full_expr /* assumptions */
@@ -644,10 +694,13 @@ option  : option_head
 
 OS	: /* empty */ {}
 	| SEMI			{ (* redundant semi at end of sequence *) }
+	| IMPLIES		{ (* redundant semi at end of sequence *) }
 	;
 
 MS	: SEMI			{ (* at least one semi-colon *) }
+    | IMPLIES       { (* or -> *)                   }
 	| MS SEMI		{ (* but more are okay too   *) }
+	| MS IMPLIES	{ (* not sure, whether it makes a lot of sense *) }
 	;
 
 aname	: NAME		{ $1 }
@@ -857,5 +910,284 @@ nlst	: NAME			{ }
 	| nlst NAME 		{ }
 	| nlst COMMA		{ }
 	;
+
+
+
+/* THRESHOLD AUTOMATA                                       */
+/*                                                          */
+/* It is easy to make this grammar menhir-compatible:       */
+/* uncomment named nodes and use them instead of            */
+/* numbered nodes such as $1, $2, etc.                      */
+
+ta_module
+    : SKEL /*n =*/ NAME LCURLY
+        /*ds =*/ ta_decls
+        /*ass =*/ ta_assumptions
+        /*locs =*/ ta_locations
+        /*is =*/ ta_inits
+        /*rs =*/ ta_rules
+      RCURLY EOF
+        {
+            let n, ds, ass, locs, is, rs = $2, $4, $5, $6, $7, $8 in
+            reset_state ();
+            ta_check_locations ds locs;
+            TaIr.mk_ta n (List.rev ds) ass locs is rs
+        }
+
+    /* error handling */
+    | SKEL NAME LCURLY ta_decls ta_assumptions ta_locations ta_inits ta_rules error
+        { ta_error "expected: '}' after rules {..}" }
+    | SKEL NAME LCURLY ta_decls ta_assumptions ta_locations ta_inits error
+        { ta_error "expected: rules {..} after inits {..}" }
+    | SKEL NAME LCURLY ta_decls ta_assumptions ta_locations error
+        { ta_error "expected: inits {..} after locations {..}" }
+    | SKEL NAME LCURLY ta_decls ta_assumptions error
+        { ta_error "expected: locations {..} after assumptions {..}" }
+    | SKEL NAME LCURLY ta_decls error
+        { ta_error "expected: assumptions {..} after declarations" }
+    | SKEL NAME error
+        { ta_error "expected: { after skel <name>" }
+    | SKEL error
+        { ta_error "expected: name after 'skel'" }
+	;
+
+ta_decls
+    :                                   { ta_reset_locs (); [] }
+    | /*tl =*/ ta_decls /*ds =*/ ta_decl        {
+        let tl, ds = $1, $2 in
+        ds @ tl
+    }
+    ;
+
+ta_decl
+    : ISLOCAL /*ls =*/ ta_locals SEMI       { let ls = $2 in ls }
+    | SHARED /*sh =*/ ta_shared SEMI        { let sh = $2 in sh }
+    | PARAMS /*ps =*/ ta_params SEMI    { let ps = $2 in ps }
+    ;
+
+ta_locals
+    : /*n =*/ NAME {
+        let n = $1 in
+        [ (TaIr.Local n) ]
+    }
+
+    | /*ns =*/ ta_locals COMMA /*n =*/ NAME {
+        let ns, n = $1, $3 in
+        (TaIr.Local n) :: ns
+    }
+    ;
+
+ta_shared
+    : /*n =*/ NAME {
+        let n = $1 in
+        [ (TaIr.Shared n) ]
+    }
+
+    | /*ns =*/ ta_shared COMMA /*n =*/ NAME {
+        let ns, n = $1, $3 in
+        (TaIr.Shared n) :: ns
+    }
+    ;
+
+ta_params
+    : /*n =*/ NAME {
+        let n = $1 in
+        [ (TaIr.Param n) ]
+    }
+
+    | /*ns =*/ ta_params COMMA /*n =*/ NAME {
+        let ns, n = $1, $3 in
+        (TaIr.Param n) :: ns
+    }
+    ;
+
+ta_assumptions
+    : ASSUMES LPAREN CONST RPAREN LCURLY /*es =*/ ta_rel_expr_list RCURLY {
+        let es = $6 in
+        es
+    }
+    ;
+
+ta_inits
+    : INITS LPAREN CONST RPAREN LCURLY /*es =*/ ta_rel_expr_list RCURLY {
+        let es = $6 in
+        es
+    }
+    ;
+
+ta_rules
+    : RULES LPAREN CONST RPAREN LCURLY /*rs =*/ ta_rule_list RCURLY {
+        let rs = $6 in
+        rs
+    }
+    ;
+
+ta_rule_list
+    : { [] }
+
+    | CONST COLON /*src =*/ NAME IMPLIES /*dst =*/ NAME
+        WHEN /*g =*/ ta_bool_expr
+        DO LCURLY /*a =*/ ta_bool_expr RCURLY SEMI /*rs =*/ ta_rule_list {
+            let src, dst, g, a, rs = $3, $5, $7, $10, $13 in
+            let r = TaIr.mk_rule (ta_find_loc src) (ta_find_loc dst) g a in
+            r :: rs
+        } 
+    
+    | error { ta_error "expected '<num>: <loc> -> <loc> when (..) do {..};" }
+    ;
+
+
+ta_rel_expr_list
+    : { [] }
+
+    | /*e =*/ ta_rel_expr SEMI /*es =*/ ta_rel_expr_list {
+        let e, es = $1, $3 in
+        e :: es
+    }
+    ;
+
+ta_locations
+    : LOCATIONS LPAREN CONST RPAREN LCURLY /*ls =*/ ta_locs RCURLY {
+        let ls = $6 in
+        ls
+    }
+    ;
+
+ta_locs
+    : { [] }
+    | /*l =*/ ta_one_loc SEMI /*ls =*/ ta_locs {
+        let l, ls = $1, $3 in
+        l :: ls
+    }
+    ;
+
+ta_one_loc
+    : /*n =*/ NAME COLON LBRACE /*l =*/ ta_int_list RBRACE {
+        let n, l = $1, $4 in
+        ta_put_loc n; (n, l) 
+    }
+
+    | error { ta_error "expected '<name>: [ int(; int)* ]'" }
+    ;
+
+ta_int_list
+    : /*i =*/ CONST {
+        let i = $1 in [i]
+    }
+    | /*i =*/ CONST SEMI {
+        let i = $1 in [i]
+    }
+    | /*i =*/ CONST SEMI /*is =*/ ta_int_list {
+        let i, is = $1, $3 in
+        i :: is
+    }
+    ;
+
+ta_bool_expr
+    : /*e =/ ta_and_expr
+        { let e = $1 in e }
+
+    | /*l =*/ ta_and_expr OR /*r =*/ ta_bool_expr {
+        let l, r = $1, $3 in
+        TaIr.Or (l, r)
+    }
+
+    | LPAREN /*e =*/ ta_bool_expr RPAREN
+        { let e = $2 in e }
+    ;
+
+ta_and_expr
+    : /*e =*/ ta_not_expr
+        { let e = $1 in e }
+
+    | /*l =*/ ta_not_expr AND /*r =*/ ta_and_expr {
+        let l, r = $1, $3 in
+        TaIr.And (l, r)
+    }
+    ;
+
+ta_not_expr
+    : /*e =*/ ta_rel_expr      { let e = $1 in TaIr.Cmp e }
+    | SND /*NOT*/ /*e =*/ ta_not_expr  { let e = $2 in TaIr.Not e }
+    ;
+
+/* we need this to deal with parentheses */
+ta_rel_expr
+    : /*e =*/ ta_cmp_expr
+        { let e = $1 in e }
+
+    | LPAREN /*e =*/ ta_rel_expr RPAREN
+        { let e = $2 in e }
+    ;
+
+ta_cmp_expr
+    : /* l =*/ta_arith_expr GT /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Gt (l, r)
+    }
+    | /* l =*/ta_arith_expr GE /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Geq (l, r)
+    }
+    | /* l =*/ta_arith_expr LT /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Lt (l, r)
+    }
+    | /* l =*/ta_arith_expr LE /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Leq (l, r)
+    }
+    | /* l =*/ta_arith_expr EQ /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Eq (l, r)
+    }
+    | /* l =*/ta_arith_expr NE /* r =*/ta_arith_expr  {
+        let l, r = $1, $3 in
+        TaIr.Neq (l, r)
+    }
+    ;
+
+ta_arith_expr
+    : /*e =*/ ta_mul_expr                      {
+        let e = $1 in e
+    }
+    | LPAREN /*e =*/ ta_arith_expr RPAREN      {
+        let e = $2 in e
+    }
+    | /* i =*/ta_mul_expr PLUS /* j =*/ta_mul_expr    {
+        let i, j = $1, $3 in
+        TaIr.Add (i, j)
+    }
+    | /* i =*/ta_mul_expr MINUS /* j =*/ta_mul_expr   {
+        let i, j = $1, $3 in
+        TaIr.Sub (i, j)
+    }
+    ;
+
+ta_mul_expr
+    : /*i =*/ ta_int_expr                      {
+        let i = $1 in i
+    }
+    | /*i =*/ ta_int_expr MULT /*j =*/ ta_int_expr {
+        let i, j = $1, $3 in
+        TaIr.Mul (i, j)
+    }
+    ;
+
+ta_int_expr
+    : /*i =*/ CONST      {
+        let i = $1 in
+        TaIr.Int i
+    }
+    | /*n =*/ NAME       {
+        let n = $1 in TaIr.Var n
+    }
+    | /*n =*/ NAME PRIME {
+        let n = $1 in
+        TaIr.NextVar n
+    }
+    ;
+
+
 %%
 

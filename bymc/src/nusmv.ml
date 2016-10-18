@@ -204,6 +204,15 @@ let token_s = function
       | PAND -> "and"
       | HAVOC -> "havoc"
       | PRIME -> "'"
+      (* threshold automata *)
+      | SKEL -> "skel"
+      | INITS -> "inits"
+      | WHEN -> "when"
+      | PARAMS -> "parameters"
+      | SHARED -> "shared"
+      | LOCATIONS -> "locations"
+      | RULES -> "rules"
+      | ASSUMES -> "assumptions"
 
 
 (* We need var_fun as variables can look either x or next(x).

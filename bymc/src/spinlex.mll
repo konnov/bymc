@@ -45,7 +45,10 @@ rule token = parse
  | "++"                  { INCR }
  | "<<"                  { LSHIFT }
  | ">>"                  { RSHIFT }
- | "->"                  { if is_lexer_normal() then SEMI else IMPLIES}
+ | "->"                  { IMPLIES
+     (* (*the old code differentiated between two modes: *)
+         if is_lexer_normal() then SEMI else IMPLIES*)
+                         }
  | ';'                   { SEMI }
  | '-'                   { MINUS }
  | '*'                   { MULT }
@@ -150,6 +153,16 @@ rule token = parse
  | "or"                  { POR } 
  | "havoc"               { HAVOC } 
  (* end of FORSYTE extensions } *)
+ (* threshold automata extensions (see the explanation in spin.mly) { *)
+ | "skel"                { SKEL }
+ | "when"                { WHEN }
+ | "parameters"          { PARAMS }
+ | "shared"              { SHARED }
+ | "inits"               { INITS }
+ | "locations"           { LOCATIONS }
+ | "rules"               { RULES }
+ | "assumptions"         { ASSUMES }
+ (* end of threshold automata extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
     {
