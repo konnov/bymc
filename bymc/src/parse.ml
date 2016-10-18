@@ -253,5 +253,5 @@ let parse_expr sym_tab str =
     lexbuf.lex_curr_p <- { lexbuf.lex_curr_p with pos_fname = "<string>" };
     SpinParserState.reset_state ();
     SpinParserState.push_scope sym_tab;
-    Spin.expr Spinlex.token lexbuf
+    Spin.single_expr Spinlex.token lexbuf
 

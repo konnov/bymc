@@ -192,7 +192,7 @@ let ta_find_loc name =
 %token  <string> INAME		        /* sym */
 %token  <string> FNAME		        /* atomic proposition name */
 %token	<string> STRING
-%token  CLAIM TRACE INIT	LTL	/* sym */
+%token  CLAIM INIT	LTL	/* sym */
 %token  NE EQ LT GT LE GE OR AND BITNOT BITOR BITXOR BITAND ASGN
 %token  MULT PLUS MINUS DIV MOD DECR INCR
 %token  LSHIFT RSHIFT
@@ -243,16 +243,18 @@ let ta_find_loc name =
 %left	DOT
 %start program
 %type <token SpinIr.prog_unit list * SpinIr.data_type_tab> program
-%start expr
-%type <token SpinIr.expr> expr
+%start single_expr
+%type <token SpinIr.expr> single_expr
 %start ta_module
 %type   <TaIr.Ta.ta_t> ta_module
 %%
 
 /** PROMELA Grammar Rules **/
 
+single_expr: short_expr EOF { $1 }
+
 program	: units	EOF { ($1, type_tab ()) }
-	;
+    ;
 
 units	: unit      { $1 }
     | units unit    { List.append $1 $2 }
@@ -284,8 +286,8 @@ unit	: proc	/* proctype        */    { [Proc $1] }
 proc	: inst		/* optional instantiator */
 	  proctype_name
 	  LPAREN decl RPAREN
-	  Opt_priority
-	  Opt_enabler
+	  opt_priority
+	  opt_enabler
 	  body	{
                 let my_scope = top_scope () in
                 let p = new proc my_scope#tab_name $1 in
@@ -314,7 +316,7 @@ proctype_name: PROCTYPE NAME {
 inst	: /* empty */	{ IntConst 0 }
     | ACTIVE	{ IntConst 1 }
     /* FORSYTE extension: any constant + a symbolic arith expression */
-    | ACTIVE LBRACE expr RBRACE {
+    | ACTIVE LBRACE short_expr RBRACE {
             match $3 with
             | IntConst i -> IntConst i
             | Var v ->
@@ -326,12 +328,10 @@ inst	: /* empty */	{ IntConst 0 }
         }
     ;
 
-init	: INIT		    /* { } */
-      Opt_priority
-      body		        { }
+init	: INIT opt_priority body		        { }
     ;
 
-ltl	: ltl_prefix FNAME ltl_body	{
+ltl	: ltl_prefix NAME ltl_body	{
         set_lexer_normal();
         (* TODO: put it somewhere *)
         Ltl($2, $3)
@@ -339,7 +339,7 @@ ltl	: ltl_prefix FNAME ltl_body	{
 ;
 
 ltl_prefix: LTL
-    { set_lexer_ltl() }
+    { (*set_lexer_ltl()*) }
 ;
 
 ltl_body: LCURLY ltl_expr RCURLY { $2 }
@@ -359,13 +359,10 @@ ltl_expr:
 	| EVENTUALLY ltl_expr { UnEx(EVENTUALLY, $2) }
     | ltl_expr AND ltl_expr         { BinEx(AND, $1, $3) }
     | ltl_expr OR ltl_expr          { BinEx(OR, $1, $3) }
-    | FNAME                        
-        { let v = new_var $1 in
-          (type_tab ())#set_type v (new data_type SpinTypes.TPROPOSITION);
-          Var v }
-    | FNAME AT FNAME                  { LabelRef($1, $3) }
+    | pfld                          { Var $1 }                        
+    | NAME AT NAME                  { LabelRef($1, $3) }
   /* TODO: implement this later
-    | LPAREN expr RPAREN            { }
+    | LPAREN short_expr RPAREN            { }
    */
   /* sorry, next time we support nexttime (hardly ever happens) */
   /*| NEXT ltl_expr       %prec NEG {...} */
@@ -378,8 +375,7 @@ optname : /* empty */	{ }
     | NAME		{ }
     ;
 
-events : TRACE	
-      body	{ raise (Not_implemented "TRACE")
+events : TRACE body	{ raise (Not_implemented "TRACE")
     }
     ;
 
@@ -429,11 +425,11 @@ cexpr	: C_EXPR	{
                 }
     ;
 
-body	: LCURLY sequence OS RCURLY    { $2 }
+body	: LCURLY sequence os RCURLY    { $2 }
     ;
 
 sequence: step			{ $1 }
-    | sequence MS step	{ List.append $1 $3 }
+    | sequence ms step	{ List.append $1 $3 }
     ;
 
 step    : one_decl		{ $1 }
@@ -496,18 +492,12 @@ var_list: ivar              { [$1] }
     ;
 
 ivar    : vardcl           	{ ($1, Nop "") }
-    | vardcl ASGN expr   	{
-        ($1, $3)
-        }
-    | vardcl ASGN ch_init	{
-          raise (Not_implemented "var = ch_init")
-        }
+    | vardcl ASGN short_expr { ($1, $3) }
+    | vardcl ASGN ch_init	{ raise (Not_implemented "var = ch_init") }
     ;
 
 ch_init : LBRACE CONST RBRACE OF
-      LCURLY typ_list RCURLY	{
-                 raise (Not_implemented "channels")
-                    }
+      LCURLY typ_list RCURLY { raise (Not_implemented "channels") }
     ;
 
 vardcl  : NAME {
@@ -541,7 +531,7 @@ pfld	: NAME {
                 (* XXX: check that the current expression can use that *)
                 ((spec_scope ())#lookup $1)#as_var
             }
-    | NAME LBRACE expr RBRACE
+    | NAME LBRACE short_expr RBRACE
             { raise (Not_implemented
                 "Array references, e.g., x[y] are not implemented") }
     ;
@@ -555,26 +545,26 @@ sfld	: /* empty */		{ }
                 "Structure member addressing, e.g., x.y is not implemented") }
     ;
 
-stmnt	: Special		{ $1 }
-    | Stmnt			{ $1 }
+stmnt	: special		{ $1 }
+    | reg_stmnt			{ $1 }
     ;
 
 for_pre : FOR LPAREN varref		{ raise (Not_implemented "for") }
     ;
 
-for_post: LCURLY sequence OS RCURLY { raise (Not_implemented "for") } ;
+for_post: LCURLY sequence os RCURLY { raise (Not_implemented "for") } ;
 
-Special :
+special :
     | HAVOC LPAREN varref_or_prime RPAREN { [MHavoc (fresh_id (), $3)]  }
     | varref RCV
       rargs		{ raise (Not_implemented "rcv") }
     | varref SND margs		{ raise (Not_implemented "snd")
                 }
-    | for_pre COLON expr DOTDOT expr RPAREN
+    | for_pre COLON short_expr DOTDOT short_expr RPAREN
       for_post	{ raise (Not_implemented "for_post") }
     | for_pre IN varref RPAREN
       for_post	{ raise (Not_implemented "for_pre") }
-    | SELECT LPAREN varref COLON expr DOTDOT expr RPAREN {
+    | SELECT LPAREN varref COLON short_expr DOTDOT short_expr RPAREN {
                     raise (Not_implemented "select")
                 }
     | if_begin options FI	{
@@ -624,7 +614,7 @@ Special :
     }
 ;
 
-Stmnt	: varref_or_prime ASGN full_expr	{
+reg_stmnt	: varref_or_prime ASGN full_expr	{
                     [MExpr (fresh_id (), BinEx(ASGN, Var $1, $3))]
 				}
 	| varref INCR		{
@@ -660,17 +650,17 @@ Stmnt	: varref_or_prime ASGN full_expr	{
 	| varref O_SND margs { raise (Not_implemented "o_snd") }
 	| full_expr		{ [MExpr (fresh_id (), $1)] }
     | ELSE  		{ met_else := true; [] }
-	| ATOMIC   LCURLY sequence OS RCURLY {
+	| ATOMIC   LCURLY sequence os RCURLY {
               [ MAtomic (fresh_id (), $3) ]
 		  }
-	| D_STEP LCURLY sequence OS RCURLY {
+	| D_STEP LCURLY sequence os RCURLY {
               [ MD_step (fresh_id (), $3) ]
 		  }
-	| LCURLY sequence OS RCURLY	{
+	| LCURLY sequence os RCURLY	{
               $2
 	   	  }
 	| INAME LPAREN args RPAREN
-	  Stmnt			{ raise (Not_implemented "inline") }
+	  reg_stmnt			{ raise (Not_implemented "inline") }
 	;
 
 if_begin : IF { push_new_labs () }
@@ -687,20 +677,20 @@ option_head : SEP   { met_else := false }
 ;
 
 option  : option_head
-      sequence OS	{
+      sequence os	{
           if !met_else then MOptElse $2 else MOptGuarded $2
       }
 	;
 
-OS	: /* empty */ {}
+os	: /* empty */ {}
 	| SEMI			{ (* redundant semi at end of sequence *) }
 	| IMPLIES		{ (* redundant semi at end of sequence *) }
 	;
 
-MS	: SEMI			{ (* at least one semi-colon *) }
+ms	: SEMI			{ (* at least one semi-colon *) }
     | IMPLIES       { (* or -> *)                   }
-	| MS SEMI		{ (* but more are okay too   *) }
-	| MS IMPLIES	{ (* not sure, whether it makes a lot of sense *) }
+	| ms SEMI		{ (* but more are okay too   *) }
+	| ms IMPLIES	{ (* not sure, whether it makes a lot of sense *) }
 	;
 
 aname	: NAME		{ $1 }
@@ -745,41 +735,41 @@ prop_arith_expr    :
 	| CONST { IntConst $1 }
     ;
 
-expr    : LPAREN expr RPAREN		{ $2 }
-	| expr PLUS expr		{ BinEx(PLUS, $1, $3) }
-	| expr MINUS expr		{ BinEx(MINUS, $1, $3) }
-	| expr MULT expr		{ BinEx(MULT, $1, $3) }
-	| expr DIV expr		    { BinEx(DIV, $1, $3) }
-	| expr MOD expr		    { BinEx(MOD, $1, $3) }
-	| expr BITAND expr		{ BinEx(BITAND, $1, $3) }
-	| expr BITXOR expr		{ BinEx(BITXOR, $1, $3) }
-	| expr BITOR expr		{ BinEx(BITOR, $1, $3) }
-	| expr GT expr		    { BinEx(GT, $1, $3) }
-	| expr LT expr		    { BinEx(LT, $1, $3) }
-	| expr GE expr		    { BinEx(GE, $1, $3) }
-	| expr LE expr		    { BinEx(LE, $1, $3) }
-	| expr EQ expr		    { BinEx(EQ, $1, $3) }
-	| expr NE expr		    { BinEx(NE, $1, $3) }
-	| expr AND expr		    { BinEx(AND, $1, $3) }
-	| expr OR  expr		    { BinEx(OR, $1, $3) }
-	| expr LSHIFT expr	    { BinEx(LSHIFT, $1, $3) }
-	| expr RSHIFT expr	    { BinEx(RSHIFT, $1, $3) }
-	| BITNOT expr		    { UnEx(BITNOT, $2) }
-	| MINUS expr %prec UMIN	{ UnEx(UMIN, $2) }
-	| NEG expr	            { UnEx(NEG, $2) }
+short_expr    : LPAREN short_expr RPAREN		{ $2 }
+	| short_expr PLUS short_expr		{ BinEx(PLUS, $1, $3) }
+	| short_expr MINUS short_expr		{ BinEx(MINUS, $1, $3) }
+	| short_expr MULT short_expr		{ BinEx(MULT, $1, $3) }
+	| short_expr DIV short_expr		    { BinEx(DIV, $1, $3) }
+	| short_expr MOD short_expr		    { BinEx(MOD, $1, $3) }
+	| short_expr BITAND short_expr		{ BinEx(BITAND, $1, $3) }
+	| short_expr BITXOR short_expr		{ BinEx(BITXOR, $1, $3) }
+	| short_expr BITOR short_expr		{ BinEx(BITOR, $1, $3) }
+	| short_expr GT short_expr		    { BinEx(GT, $1, $3) }
+	| short_expr LT short_expr		    { BinEx(LT, $1, $3) }
+	| short_expr GE short_expr		    { BinEx(GE, $1, $3) }
+	| short_expr LE short_expr		    { BinEx(LE, $1, $3) }
+	| short_expr EQ short_expr		    { BinEx(EQ, $1, $3) }
+	| short_expr NE short_expr		    { BinEx(NE, $1, $3) }
+	| short_expr AND short_expr		    { BinEx(AND, $1, $3) }
+	| short_expr OR  short_expr		    { BinEx(OR, $1, $3) }
+	| short_expr LSHIFT short_expr	    { BinEx(LSHIFT, $1, $3) }
+	| short_expr RSHIFT short_expr	    { BinEx(RSHIFT, $1, $3) }
+	| BITNOT short_expr		    { UnEx(BITNOT, $2) }
+	| MINUS short_expr %prec UMIN	{ UnEx(UMIN, $2) }
+	| NEG short_expr	            { UnEx(NEG, $2) }
     /* our extensions */
     | ALL LPAREN prop_expr RPAREN { UnEx (ALL, $3)  }
     | SOME LPAREN prop_expr RPAREN { UnEx (SOME, $3)  }
 
     /* not implemented yet */
-	| LPAREN expr SEMI expr COLON expr RPAREN {
+	| LPAREN short_expr SEMI short_expr COLON short_expr RPAREN {
                   raise (Not_implemented "ternary operator")
 				}
 
 	| RUN aname	LPAREN args RPAREN
-	  Opt_priority		{ raise (Not_implemented "run") }
+	  opt_priority		{ raise (Not_implemented "run") }
 	| LEN LPAREN varref RPAREN	{ raise (Not_implemented "len") }
-	| ENABLED LPAREN expr RPAREN { raise (Not_implemented "enabled") }
+	| ENABLED LPAREN short_expr RPAREN { raise (Not_implemented "enabled") }
 	| varref RCV LBRACE rargs RBRACE { raise (Not_implemented "rcv") }
 	| varref R_RCV LBRACE rargs RBRACE
         { raise (Not_implemented "r_rcv") }
@@ -788,10 +778,10 @@ expr    : LPAREN expr RPAREN		{ $2 }
 	| CONST 	{ IntConst $1 }
 	| TIMEOUT		{ raise (Not_implemented "timeout") }
 	| NONPROGRESS		{ raise (Not_implemented "nonprogress") }
-	| PC_VAL LPAREN expr RPAREN	{ raise (Not_implemented "pc_value") }
-	| PNAME LBRACE expr RBRACE AT NAME
+	| PC_VAL LPAREN short_expr RPAREN	{ raise (Not_implemented "pc_value") }
+	| PNAME LBRACE short_expr RBRACE AT NAME
 	  			{  raise (Not_implemented "PNAME operations") }
-	| PNAME LBRACE expr RBRACE COLON pfld
+	| PNAME LBRACE short_expr RBRACE COLON pfld
 	  			{  raise (Not_implemented "PNAME operations") }
 	| PNAME AT NAME	{ raise (Not_implemented "PNAME operations") }
 	| PNAME COLON pfld	{ raise (Not_implemented "PNAME operations") }
@@ -839,32 +829,32 @@ atomic_prop:
     | LPAREN atomic_prop POR atomic_prop RPAREN { PropOr($2, $4) }
     ;
 
-Opt_priority:	/* none */	{}
+opt_priority:	/* none */	{}
 	| PRIORITY CONST	{}
 	;
 
-full_expr:	expr		{ $1 }
-	| Expr		{ $1 }
+full_expr:	short_expr		{ $1 }
+	| norm_expr		{ $1 }
 	;
 
-	/* an Expr cannot be negated - to protect Probe expressions */
-Expr	: Probe			{raise (Not_implemented "Probe") }
-	| LPAREN Expr RPAREN		{ $2 }
-	| Expr AND Expr		{ BinEx(AND, $1, $3) }
-	| Expr AND expr		{ BinEx(AND, $1, $3) }
-	| expr AND Expr		{ BinEx(AND, $1, $3) }
-	| Expr OR  Expr		{ BinEx(OR, $1, $3) }
-	| Expr OR  expr		{ BinEx(OR, $1, $3) }
-	| expr OR  Expr		{ BinEx(OR, $1, $3) }
+	/* an norm_expr cannot be negated - to protect Probe expressions */
+norm_expr	: probe			{raise (Not_implemented "Probe") }
+	| LPAREN norm_expr RPAREN		{ $2 }
+	| norm_expr AND norm_expr		{ BinEx(AND, $1, $3) }
+	| norm_expr AND short_expr		{ BinEx(AND, $1, $3) }
+	| short_expr AND norm_expr		{ BinEx(AND, $1, $3) }
+	| norm_expr OR  norm_expr		{ BinEx(OR, $1, $3) }
+	| norm_expr OR  short_expr		{ BinEx(OR, $1, $3) }
+	| short_expr OR  norm_expr		{ BinEx(OR, $1, $3) }
 	;
 
-Probe	: FULL LPAREN varref RPAREN	{}
+probe	: FULL LPAREN varref RPAREN	{}
 	| NFULL LPAREN varref RPAREN	{}
 	| EMPTY LPAREN varref RPAREN	{}
 	| NEMPTY LPAREN varref RPAREN	{}
 	;
 
-Opt_enabler:	/* none */	{}
+opt_enabler:	/* none */	{}
 	| PROVIDED LPAREN full_expr RPAREN	{ }
 	| PROVIDED error	{}
 	;
@@ -887,15 +877,15 @@ prargs  : /* empty */		{ [] }
 	;
 
 margs   : arg			        {}
-	| expr LPAREN arg RPAREN	{}
+	| short_expr LPAREN arg RPAREN	{}
 	;
 
-arg : expr	{ [$1] }
-    | expr COMMA arg { $1 :: $3 }
+arg : short_expr	{ [$1] }
+    | short_expr COMMA arg { $1 :: $3 }
 	;
 
 rarg	: varref		{ }
-	| EVAL LPAREN expr RPAREN	{ }
+	| EVAL LPAREN short_expr RPAREN	{ }
 	| CONST 		{ }
 	| MINUS CONST %prec UMIN	{ }
 	;
