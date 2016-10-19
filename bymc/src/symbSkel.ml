@@ -1,6 +1,7 @@
-(* Extract a symbolic skeleton.
- *
- * Igor Konnov, 2014
+(*
+  Extract a symbolic skeleton (a threshold automaton).
+
+  Igor Konnov, 2014-2016
  *)
 
 open Printf
@@ -39,13 +40,14 @@ module Sk = struct
         loc_vars: var IntMap.t;
             (* variables that correspond to locations,
                e.g., used in the initialization part *)
+        forms: Spin.token SpinIr.expr Accums.StrMap.t; (** LTL formulas *)
     }
 
     let empty locals shared params =
         { name = ""; nlocs = 0; locs = [];
           locals = locals; shared = shared; params = params;
           nrules = 0; rules = []; inits = []; assumes = [];
-          loc_vars = IntMap.empty
+          loc_vars = IntMap.empty; forms = StrMap.empty;
         }
 
     let loc_by_no sk loc_no =
@@ -108,6 +110,12 @@ module Sk = struct
         in
         fprintf out "  rules (%d) {\n" sk.nrules;
         List.iter prule (lst_enum sk.rules);
+        fprintf out "  }\n";
+        fprintf out "  specifications (%d) {\n" (StrMap.cardinal sk.forms);
+        let pform name form =
+            fprintf out "    %s = %s;\n" name (expr_s form);
+        in
+        StrMap.iter pform sk.forms;
         fprintf out "  }\n";
         fprintf out "} /* %s */\n" sk.name
 
@@ -447,7 +455,20 @@ let fuse skels new_name =
     let each_skel_init (set, collected) sk = 
         List.fold_left each_init (set, collected) sk.Sk.inits
     in
-    let _, all_inits = List.fold_left each_skel_init (StrSet.empty, []) skels
+    let _, all_inits =
+        List.fold_left each_skel_init (StrSet.empty, []) skels
+    in
+    let merge_two_forms name a b =
+        match (a, b) with
+        | Some _, Some _ ->
+            raise (Failure ("Duplicate formula " ^ name))
+
+        | Some f, _ -> Some f
+
+        | _, b -> b
+    in
+    let merge_skel_forms forms sk =
+        StrMap.merge merge_two_forms forms sk.Sk.forms
     in
     {
         Sk.name = new_name;
@@ -461,6 +482,7 @@ let fuse skels new_name =
         Sk.shared = first.Sk.shared;
         Sk.params = first.Sk.params;
         Sk.assumes = List.concat (List.map (fun sk -> sk.Sk.assumes) skels);
+        Sk.forms = List.fold_left merge_skel_forms StrMap.empty skels;
     }
 
 

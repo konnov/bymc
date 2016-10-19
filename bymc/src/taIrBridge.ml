@@ -127,5 +127,6 @@ let skel_of_ta ta =
         Sk.loc_vars = loc_vars;
         Sk.nrules = List.length ta.Ta.rules;
         Sk.rules = List.map (map_rule var_map) ta.Ta.rules;
+        Sk.forms = StrMap.empty; (* TODO: add the formulas *)
     }
 

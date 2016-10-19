@@ -88,6 +88,7 @@ let test_skel_of_ta _ =
         Sk.params = [n];
         Sk.assumes =
             [ SpinIr.BinEx (Spin.GT, SpinIr.Var n, SpinIr.IntConst 42) ];
+        Sk.forms = StrMap.empty;
         Sk.inits = [];
         Sk.loc_vars = Accums.IntMap.singleton 0 x;
         Sk.nrules = 1;

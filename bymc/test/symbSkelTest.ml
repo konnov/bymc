@@ -67,8 +67,8 @@ let prepare2 () =
     tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t
 
 
-let test_fuse_several _ =
-    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t = prepare2 () in
+let mk_foo_bar params =
+    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t = params in
     let mk_eq loc_map loc_no e =
         BinEx (EQ, Var (IntMap.find loc_no loc_map), e)
     in
@@ -88,6 +88,8 @@ let test_fuse_several _ =
         ];
         Sk.loc_vars = locFoo_map;
         Sk.assumes = [];
+        Sk.forms = StrMap.singleton "safety"
+            (UnEx (ALWAYS, mk_eq locFoo_map 1 (IntConst 0)))
     }
     in
     let skBar = {
@@ -106,8 +108,17 @@ let test_fuse_several _ =
         ];
         Sk.loc_vars = locBar_map;
         Sk.assumes = [];
+        Sk.forms = StrMap.singleton "liveness"
+            (UnEx (EVENTUALLY, mk_eq locFoo_map 1 (IntConst 0)))
     }
     in
+    (skFoo, skBar)
+
+
+let test_fuse_several _ =
+    let params = prepare2 () in
+    let skFoo, skBar = mk_foo_bar params in
+    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t = params in
     let fused = SymbSkel.fuse [skFoo; skBar] "fusion" in
     assert_equal "fusion" fused.Sk.name
         ~msg:(sprintf "expected 'fusion', found %s" fused.Sk.name);
@@ -191,7 +202,21 @@ let test_fuse_several _ =
     assert_init "(loc0_X == (n - t))" 1;
     assert_init "(loc1_X == 0)" 2;
     assert_init "(locX_0 == t)" 3;
-    assert_init "(locX_1 == 0)" 4
+    assert_init "(locX_1 == 0)" 4;
+    (* check the specs *)
+    assert_equal 2 (StrMap.cardinal fused.Sk.forms)
+        ~msg:(sprintf "expected two LTL formulas, found %d"
+            (StrMap.cardinal fused.Sk.forms))
+
+
+let test_fuse_several_same_forms _ =
+    let params = prepare2 () in
+    let skFoo, _ = mk_foo_bar params in
+    try
+        ignore (SymbSkel.fuse [skFoo; skFoo] "fusion");
+        assert_failure "expected a failure"
+    with Failure _ ->
+        () (* ok *)
 
 
 let test_optimize_guards _ =
@@ -229,6 +254,8 @@ let test_optimize_guards _ =
         ];
         Sk.loc_vars = locFoo_map;
         Sk.assumes = [];
+        Sk.forms = StrMap.singleton "safety"
+            (UnEx (ALWAYS, mk_eq locFoo_map 1 (IntConst 0)))
     }
     in
     let sk = SymbSkel.optimize_guards skFoo in
@@ -252,12 +279,17 @@ let test_optimize_guards _ =
     assert_bool 
         (sprintf "found %s, expected one of %s and %s"
                 (expr_s r1.Sk.guard) (expr_s x_or_y) (expr_s y_or_x))
-        (x_or_y = r1.Sk.guard || y_or_x = r1.Sk.guard)
+        (x_or_y = r1.Sk.guard || y_or_x = r1.Sk.guard);
+    (* check the specs *)
+    assert_equal 1 (StrMap.cardinal sk.Sk.forms)
+        ~msg:(sprintf "expected one LTL formula, found %d"
+            (StrMap.cardinal sk.Sk.forms))
 
 
 let suite = "symbSkel-suite" >:::
     [
         "test_fuse_several" >:: test_fuse_several;
+        "test_fuse_several_same_forms" >:: test_fuse_several_same_forms;
         "test_optimize_guards" >:: test_optimize_guards;
     ]
 

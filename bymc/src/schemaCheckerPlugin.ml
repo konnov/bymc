@@ -25,6 +25,7 @@ let is_safety_spec tt s =
     | _ -> false
 
 
+(* TODO: use the formulas directly from the skeleton *)
 let get_proper_specs opts prog skels check_fun =
     let forms = Program.get_ltl_forms prog in
     let is_good name form =

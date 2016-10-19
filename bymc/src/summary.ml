@@ -194,6 +194,10 @@ let summarize_optimize_fuse ~keep_selfloops:keep_selfloops rt prog =
         | [sk] -> sk
         | skels -> SymbSkel.fuse skels "Fuse"
     in
+    (* finally, embed the LTL specifications *)
+    let ltl_forms = Program.get_ltl_forms (Ltl.embed_fairness prog) in
+    let forms = SymbSkel.expand_props_in_ltl_forms prog skels ltl_forms in
+    let sk = { sk with Sk.forms = forms } in
     Sk.to_file "fuse.sk" sk;
     sk
 
