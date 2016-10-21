@@ -1,6 +1,8 @@
 open Batteries
 open Printf
 
+open Accums
+
 type decl_t =
     | Local of string
     | Shared of string
@@ -32,6 +34,16 @@ type bool_expr_t =
     | Or of bool_expr_t * bool_expr_t
 
 
+type ltl_expr_t =
+    | LtlCmp of rel_expr_t
+    | LtlNot of ltl_expr_t
+    | LtlAnd of ltl_expr_t * ltl_expr_t
+    | LtlOr of ltl_expr_t * ltl_expr_t
+    | LtlImplies of ltl_expr_t * ltl_expr_t
+    | LtlF of ltl_expr_t
+    | LtlG of ltl_expr_t
+
+
 module Ta = struct
     type loc_def_t = string * int list
 
@@ -46,21 +58,24 @@ module Ta = struct
         locs: loc_def_t list;
         inits: rel_expr_t list;
         rules: rule_t list;
+        specs: ltl_expr_t StrMap.t;
     }
 end
 
 let empty =
     { Ta.name = ""; Ta.decls = []; Ta.assumptions = [];
-      Ta.locs = []; Ta.inits = []; Ta.rules = []; }
+      Ta.locs = []; Ta.inits = []; Ta.rules = [];
+      Ta.specs = StrMap.empty;
+    }
 
 
 let mk_rule src_loc dst_loc guard action =
     { Ta.src_loc; Ta.dst_loc; Ta.guard; Ta.action }
 
 
-let mk_ta n ds ass ls is rs =
+let mk_ta n ds ass ls is rs specs =
     { Ta.name = n; Ta.decls = ds; Ta.assumptions = ass;
-      Ta.locs = ls; Ta.inits = is; Ta.rules = rs; }
+      Ta.locs = ls; Ta.inits = is; Ta.rules = rs; Ta.specs = specs }
 
 
 let print_arith_expr out expr =
@@ -89,8 +104,48 @@ let print_rel_expr out expr =
         | Neq (l, r) -> pr " != " l r
         | Eq (l, r) -> pr " == " l r
     in
+    print expr
+
+
+let print_rel_expr_with_semi out expr =
     fprintf out "  ";
-    print expr;
+    print_rel_expr out expr;
+    fprintf out ";\n"
+
+
+let print_ltl_expr out name expr =
+    let rec pr = function
+        | LtlCmp e ->
+            fprintf out "(";
+            print_rel_expr out e;
+            fprintf out ")"
+
+        | LtlNot e ->
+            fprintf out "!("; pr e; fprintf out ")"
+
+        | LtlAnd (l, r) ->
+            fprintf out "("; pr l; fprintf out ")";
+            fprintf out " && ";
+            fprintf out "("; pr r; fprintf out ")"
+
+        | LtlOr (l, r) ->
+            fprintf out "("; pr l; fprintf out ")";
+            fprintf out " || ";
+            fprintf out "("; pr r; fprintf out ")"
+
+        | LtlImplies (l, r) ->
+            fprintf out "("; pr l; fprintf out ")";
+            fprintf out " -> ";
+            fprintf out "("; pr r; fprintf out ")"
+
+        | LtlF e ->
+            fprintf out "<>("; pr e; fprintf out ")"
+
+        | LtlG e ->
+            fprintf out "[]("; pr e; fprintf out ")"
+    in
+    fprintf out "  %s: " name;
+    pr expr;
     fprintf out ";\n"
 
 
@@ -109,8 +164,9 @@ let print_ta out ta =
         | Param name -> fprintf out "  parameters %s;\n" name
     in
     List.iter print_decl ta.Ta.decls;
-    List.iter (print_rel_expr out) ta.Ta.assumptions;
+    List.iter (print_rel_expr_with_semi out) ta.Ta.assumptions;
     List.iter (print_loc out) ta.Ta.locs;
-    List.iter (print_rel_expr out) ta.Ta.inits;
+    List.iter (print_rel_expr_with_semi out) ta.Ta.inits;
+    StrMap.iter (print_ltl_expr out) ta.Ta.specs;
     fprintf out "}\n";
 

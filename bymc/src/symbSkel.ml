@@ -113,7 +113,7 @@ module Sk = struct
         fprintf out "  }\n";
         fprintf out "  specifications (%d) {\n" (StrMap.cardinal sk.forms);
         let pform name form =
-            fprintf out "    %s = %s;\n" name (expr_s form);
+            fprintf out "    %s: %s;\n" name (expr_s form);
         in
         StrMap.iter pform sk.forms;
         fprintf out "  }\n";

@@ -75,7 +75,10 @@ let test_skel_of_ta _ =
         action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
     } ] in
     let assumes = [Gt (Var "n", Int 42)] in
-    let ta = TaIr.mk_ta "foo" ds assumes locs [] rules in
+    let mk0 name = LtlCmp (Eq (Var name, Int 0)) in
+    let unforg = LtlImplies (mk0 "loc_a", LtlG (mk0 "loc_b")) in
+    let forms = StrMap.singleton "unforg" unforg in
+    let ta = TaIr.mk_ta "foo" ds assumes locs [] rules forms in
     let x = SpinIr.new_var "x" in
     let g = SpinIr.new_var "g" in
     let n = SpinIr.new_var "n" in
@@ -88,7 +91,6 @@ let test_skel_of_ta _ =
         Sk.params = [n];
         Sk.assumes =
             [ SpinIr.BinEx (Spin.GT, SpinIr.Var n, SpinIr.IntConst 42) ];
-        Sk.forms = StrMap.empty;
         Sk.inits = [];
         Sk.loc_vars = Accums.IntMap.singleton 0 x;
         Sk.nrules = 1;
@@ -102,8 +104,9 @@ let test_skel_of_ta _ =
             Sk.act = [
                 SpinIr.BinEx (Spin.EQ,
                     SpinIr.UnEx (Spin.NEXT, SpinIr.Var g),
-                    SpinIr.BinEx (Spin.PLUS, SpinIr.Var g, SpinIr.IntConst 1))]
-        }]
+                    SpinIr.BinEx (Spin.PLUS, SpinIr.Var g, SpinIr.IntConst 1))];
+        }];
+        Sk.forms = Accums.StrMap.empty;
     } in
     expect_skel sk (TaIrBridge.skel_of_ta ta)
 

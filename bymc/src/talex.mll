@@ -33,6 +33,8 @@ rule token = parse
    [' ' '\t']+           { token lexbuf } (* skip spaces *)
  | '\n'                  { new_line lexbuf; token lexbuf }
  | "/*"                  { comment lexbuf }
+ | "<>"                  { LTLF }
+ | "[]"                  { LTLG }
  | '!'                   { NOT }
  | "&&"                  { AND }
  | "||"                  { OR }
@@ -58,6 +60,7 @@ rule token = parse
  | '''                   { PRIME }
  | "skel"                { SKEL } 
  | "assumptions"         { ASSUME } 
+ | "specifications"      { SPECIFICATIONS } 
  | "do"                  { DO }
  | "inits"               { INITS }
  | "local"               { LOCAL }

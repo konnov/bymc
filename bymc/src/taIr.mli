@@ -38,6 +38,16 @@ type bool_expr_t =
     | Or of bool_expr_t * bool_expr_t
 
 
+type ltl_expr_t =
+    | LtlCmp of rel_expr_t
+    | LtlNot of ltl_expr_t
+    | LtlAnd of ltl_expr_t * ltl_expr_t
+    | LtlOr of ltl_expr_t * ltl_expr_t
+    | LtlImplies of ltl_expr_t * ltl_expr_t
+    | LtlF of ltl_expr_t
+    | LtlG of ltl_expr_t
+
+
 module Ta: sig
     type loc_def_t = string * int list
 
@@ -52,6 +62,7 @@ module Ta: sig
         locs: loc_def_t list;
         inits: rel_expr_t list;
         rules: rule_t list;
+        specs: ltl_expr_t Accums.StrMap.t;
     }
 end
 
@@ -64,6 +75,7 @@ val mk_rule:
 val mk_ta:
     string -> decl_t list -> rel_expr_t list
            -> Ta.loc_def_t list -> rel_expr_t list -> Ta.rule_t list
+           -> ltl_expr_t Accums.StrMap.t
            -> Ta.ta_t
 
 val print_ta:

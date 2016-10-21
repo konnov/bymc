@@ -1,12 +1,14 @@
 open Batteries
 open OUnit
 
+open Accums
 open TaIr
 
-let expect_ta skel text =
+let expect_ta ta text =
     let out = TaParser.parse_input "<string>" (IO.input_string text) in
-    (*print_skel IO.stdout out;*)
-    assert_equal skel out
+    (*print_ta IO.stdout ta;
+    print_ta IO.stdout out;*)
+    assert_equal ta out
 
 
 let expect_exception text =
@@ -23,9 +25,10 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (mk_ta "foo" [] [] [] [] []) text
+    expect_ta (mk_ta "foo" [] [] [] [] [] StrMap.empty) text
 
 
 let test_header_skel_wrong _ =
@@ -57,9 +60,10 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Local "x"; Local "y" ] [] [] [] []) text
+    expect_ta (TaIr.mk_ta "foo" [ Local "x"; Local "y" ] [] [] [] [] StrMap.empty) text
 
 
 let test_decl_local_many _ =
@@ -70,9 +74,12 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Local "x"; Local "y"; Local "z" ] [] [] [] []) text
+    expect_ta
+        (TaIr.mk_ta "foo" [ Local "x"; Local "y"; Local "z" ] [] [] [] [] StrMap.empty)
+        text
 
 
 let test_decl_local_empty _ =
@@ -90,9 +97,12 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Shared "x"; Shared "y" ] [] [] [] []) text
+    expect_ta
+        (TaIr.mk_ta "foo" [ Shared "x"; Shared "y" ] [] [] [] [] StrMap.empty)
+        text
 
 
 let test_decl_shared_many _ =
@@ -103,9 +113,12 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Shared "x"; Shared "y"; Shared "z" ] [] [] [][]) text
+    expect_ta
+        (TaIr.mk_ta "foo" [ Shared "x"; Shared "y"; Shared "z" ] [] [] [] [] StrMap.empty)
+        text
 
 
 let test_decl_shared_empty _ =
@@ -123,9 +136,12 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Param "x"; Param "y" ] [] [] [] []) text
+    expect_ta
+        (TaIr.mk_ta "foo" [ Param "x"; Param "y" ] [] [] [] [] StrMap.empty)
+        text
 
 
 let test_decl_params_many _ =
@@ -136,9 +152,12 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
-    expect_ta (TaIr.mk_ta "foo" [ Param "x"; Param "y"; Param "z" ] [] [] [] []) text
+    expect_ta
+        (TaIr.mk_ta "foo" [ Param "x"; Param "y"; Param "z" ] [] [] [] [] StrMap.empty)
+        text
 
 
 let test_decl_params_empty _ =
@@ -158,11 +177,14 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Shared "g"; Param "n"; Param "t" ] in
     let ass = [ Gt (Var "n", Mul (Int 3, Var "t")) ] in
-    expect_ta (TaIr.mk_ta "foo" ds ass [] [] []) text
+    expect_ta
+        (TaIr.mk_ta "foo" ds ass [] [] [] StrMap.empty)
+        text
 
     
 let test_assumptions_many _ =
@@ -176,6 +198,7 @@ skel foo {
     locations (0) { }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Shared "g"; Param "n"; Param "t" ] in
@@ -184,7 +207,7 @@ skel foo {
         Leq (Var "t", Int 0);
 
     ] in
-    expect_ta (TaIr.mk_ta "foo" ds ass [] [] []) text
+    expect_ta (TaIr.mk_ta "foo" ds ass [] [] [] StrMap.empty) text
 
     
 let test_locations _ =
@@ -200,11 +223,12 @@ skel foo {
     }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
     let locs = [ ("loc_a", [0; 0]); ("loc_b", [0; 1]); ("loc_c", [1; 1]) ] in
-    expect_ta (TaIr.mk_ta "foo" ds [] locs [] []) text
+    expect_ta (TaIr.mk_ta "foo" ds [] locs [] [] StrMap.empty) text
 
     
 let test_locations_wrong _ =
@@ -220,6 +244,7 @@ skel foo {
     }
     inits (0) { }
     rules (0) { }
+    specifications (0) { }
 }"
     in
     expect_exception text
@@ -240,6 +265,7 @@ skel foo {
         loc_b == t;
     }
     rules (0) { }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
@@ -249,7 +275,7 @@ skel foo {
         Eq (Var "loc_b", Var "t");
 
     ] in
-    expect_ta (TaIr.mk_ta "foo" ds [] locs inits []) text
+    expect_ta (TaIr.mk_ta "foo" ds [] locs inits [] StrMap.empty) text
 
     
 let test_rules _ =
@@ -269,6 +295,7 @@ skel foo {
         when (g >= t + 1)
         do { g' == (g + 1) };
     }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
@@ -279,7 +306,7 @@ skel foo {
           action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
         }
     ] in
-    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules) text
+    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text
 
     
 let test_rules_two _ =
@@ -302,6 +329,7 @@ skel foo {
         when (g >= n - t)
         do { g' == g + 1 };
     }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
@@ -316,7 +344,7 @@ skel foo {
           action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)));
         };
     ] in
-    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules) text
+    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text
 
     
 let test_rules_bool _ =
@@ -339,6 +367,7 @@ skel foo {
         when ((g >= n - t) && ((g < 1) || (g >= n)))
         do { g' == g + 1 };
     }
+    specifications (0) { }
 }"
     in
     let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
@@ -349,13 +378,59 @@ skel foo {
           action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
         };
         { Ta.src_loc = 1; Ta.dst_loc = 0;
-          guard = And (Cmp (Geq (Var "g", Add (Var "t", Int 1))),
-                       Not (Or (Cmp (Lt (Var "g", Int 1)),
+          guard = And (Cmp (Geq (Var "g", Sub (Var "n", Var "t"))),
+                       (Or (Cmp (Lt (Var "g", Int 1)),
                            Cmp (Geq (Var "g", Var "n")))));
           action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)));
         };
     ] in
-    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules) text
+    expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text
+    
+
+let test_specifications _ =
+    let text = "\
+skel foo {
+    local x, y; shared g; parameters n, t;
+    assumptions (0) {
+    }
+    locations (0) {
+        loc_a: [0; 0];
+        loc_b: [0; 1];
+    }
+    inits (2) {
+        loc_a == n - t;
+        loc_b == t;
+    }
+    rules (0) { }
+    specifications (2) {
+        corr: <>([]((nsnt < 1) || (loc_a == 0) && (loc_b == 0))) -> <>((loc_b == 0));
+        unforg: (loc_a == 0) -> []((loc_b == 0));
+    }
+}"
+    in
+    let ds = [ Local "x"; Local "y"; Shared "g"; Param "n"; Param "t" ] in
+    let locs = [ ("loc_a", [0; 0]); ("loc_b", [0; 1]) ] in
+    let inits = [
+        Eq (Var "loc_a", Sub (Var "n", Var "t"));
+        Eq (Var "loc_b", Var "t");
+
+    ] in
+    let mk0 name = LtlCmp (Eq (Var name, Int 0)) in
+    let unforg =
+        LtlImplies (mk0 "loc_a", LtlG (mk0 "loc_b")) in
+    let corr =
+        LtlImplies (LtlF (LtlG
+                    (LtlOr (LtlCmp (Lt (Var "nsnt", Int 1)),
+                            LtlAnd (mk0 "loc_a", mk0 "loc_b"))
+                    )
+                ),
+            LtlF (mk0 "loc_b"))
+    in
+    let specs =
+        (* the order, in which the map is created, is important *)
+        StrMap.add "corr" corr (StrMap.singleton "unforg" unforg) 
+    in
+    expect_ta (TaIr.mk_ta "foo" ds [] locs inits [] specs) text
 
 
 let suite = "taParser-suite" >:::
@@ -379,9 +454,8 @@ let suite = "taParser-suite" >:::
         "test_locations_wrong" >:: test_locations_wrong;
         "test_inits" >:: test_inits;
         "test_rules" >:: test_rules;
-        (*
         "test_rules_two" >:: test_rules_two;
         "test_rules_bool" >:: test_rules_bool;
-        *)
+        "test_specifications" >:: test_specifications;
     ]
 

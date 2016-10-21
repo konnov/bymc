@@ -63,7 +63,10 @@ let find_loc name =
 %token	<int> CONST
 %token	<string> NAME
 
-%token  INITS ASSUME LOCATIONS RULES OR AND IMPLIES
+%token  INITS ASSUME LOCATIONS RULES SPECIFICATIONS
+%token  LTLF LTLG
+%token  IMPLIES
+%token  OR AND
 %token  NE EQ LT GT LE GE
 %token  NOT
 %token  PLUS MINUS
@@ -84,14 +87,17 @@ start
         locs = locations
         is = inits
         rs = rules
+        specs = specifications
       RCURLY EOF
         {
             check_locations ds locs;
-            TaIr.mk_ta n (List.rev ds) ass locs is rs
+            TaIr.mk_ta n (List.rev ds) ass locs is rs specs
         }
     (* error handling *)
+    | SKEL NAME LCURLY decls assumptions locations inits rules specifications error
+        { error "expected: '}' after specifications {..}" }
     | SKEL NAME LCURLY decls assumptions locations inits rules error
-        { error "expected: '}' after rules {..}" }
+        { error "expected: specifications after rules {..}" }
     | SKEL NAME LCURLY decls assumptions locations inits error
         { error "expected: rules {..} after inits {..}" }
     | SKEL NAME LCURLY decls assumptions locations error
@@ -205,9 +211,6 @@ bool_expr
     | l = and_expr OR r = bool_expr
         { Or (l, r) }
 
-    | LPAREN e = bool_expr RPAREN
-        { e }
-
     | error { error "expected a boolean expression" }
     ;
 
@@ -222,6 +225,7 @@ and_expr
 not_expr
     : e = cmp_expr      { Cmp e }
     | NOT e = not_expr  { Not e }
+    | LPAREN e = bool_expr RPAREN { e }
     ;
 
 (* we need this to deal with parentheses *)
@@ -258,5 +262,54 @@ int_expr
     : i = CONST                     { Int i }
     | n = NAME                      { Var n }
     | n = NAME PRIME                { NextVar n }
+    ;
+
+
+specifications
+    : SPECIFICATIONS LPAREN CONST RPAREN LCURLY forms = form_list RCURLY
+    { forms } 
+
+form_list
+    : { Accums.StrMap.empty }
+
+    | n = NAME COLON f = ltl_expr SEMI fs = form_list
+        { Accums.StrMap.add n f fs }
+    ;
+
+ltl_expr
+    : e = ltl_or_expr { e }
+    | l = ltl_or_expr IMPLIES r = ltl_expr
+        { LtlImplies (l, r) }
+    ;
+
+ltl_or_expr
+    : e = ltl_and_expr
+        { e }
+
+    | l = ltl_and_expr OR r = ltl_or_expr
+        { LtlOr (l, r) }
+
+    | error { error "expected a boolean expression" }
+    ;
+
+ltl_and_expr
+    : e = ltl_modality_expr
+        { e }
+
+    | l = ltl_modality_expr AND r = ltl_and_expr
+        { LtlAnd (l, r) }
+    ;
+
+ltl_modality_expr
+    : LTLF f = ltl_modality_expr { LtlF f}
+    | LTLG f = ltl_modality_expr { LtlG f}
+    | e = ltl_not_expr { e }
+    ;
+
+
+ltl_not_expr
+    : e = cmp_expr      { LtlCmp e }
+    | NOT e = ltl_not_expr  { LtlNot e }
+    | LPAREN e = ltl_expr RPAREN { e }
     ;
 
