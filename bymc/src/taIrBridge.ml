@@ -4,16 +4,22 @@ open Accums
 open SymbSkel
 open TaIr
 
-let map_arith_expr var_map e =
+let find_var var_map name =
+    try StrMap.find name var_map
+    with Not_found ->
+        raise (Failure (Printf.sprintf "Variable %s not found" name))
+
+
+let map_arith_expr var_fun e =
     let rec map = function
     | Int i ->
         SpinIr.IntConst i
 
     | Var n ->
-        SpinIr.Var (StrMap.find n var_map)
+        SpinIr.Var (var_fun n)
 
     | NextVar n ->
-        SpinIr.UnEx (Spin.NEXT, SpinIr.Var (StrMap.find n var_map))
+        SpinIr.UnEx (Spin.NEXT, SpinIr.Var (var_fun n))
 
     | Add (l, r) ->
         SpinIr.BinEx(Spin.PLUS, map l, map r)
@@ -27,11 +33,11 @@ let map_arith_expr var_map e =
     map e
 
 
-let map_rel_expr var_map e =
+let map_rel_expr var_fun e =
     let map tok l r =
         SpinIr.BinEx(tok,
-            map_arith_expr var_map l,
-            map_arith_expr var_map r)
+            map_arith_expr var_fun l,
+            map_arith_expr var_fun r)
     in
     match e with
     | Eq (l, r) ->
@@ -53,10 +59,10 @@ let map_rel_expr var_map e =
             map Spin.GE l r
 
 
-let map_bool_expr var_map e =
+let map_bool_expr var_fun e =
     let rec map = function
     | Cmp e ->
-            map_rel_expr var_map e
+            map_rel_expr var_fun e
 
     | Not e ->
             SpinIr.UnEx (Spin.NEG, map e)
@@ -70,11 +76,37 @@ let map_bool_expr var_map e =
     map e
 
 
-let map_rule var_map r = {
+let map_ltl_expr var_fun e =
+    let rec map = function
+        | LtlCmp e ->
+            map_rel_expr var_fun e
+
+        | LtlNot e ->
+            SpinIr.UnEx (Spin.NEG, map e)
+
+        | LtlF e ->
+            SpinIr.UnEx (Spin.EVENTUALLY, map e)
+
+        | LtlG e ->
+            SpinIr.UnEx (Spin.ALWAYS, map e)
+
+        | LtlAnd (l, r) ->
+            SpinIr.BinEx (Spin.AND, map l, map r)
+
+        | LtlOr (l, r) ->
+            SpinIr.BinEx (Spin.OR, map l, map r)
+
+        | LtlImplies (l, r) ->
+            SpinIr.BinEx (Spin.IMPLIES, map l, map r)
+    in
+    map e
+
+
+let map_rule var_fun r = {
     Sk.src = r.Ta.src_loc;
     Sk.dst = r.Ta.dst_loc;
-    Sk.guard = map_bool_expr var_map r.Ta.guard;
-    Sk.act = [ map_bool_expr var_map r.Ta.action ]
+    Sk.guard = map_bool_expr var_fun r.Ta.guard;
+    Sk.act = [ map_bool_expr var_fun r.Ta.action ]
 }
 
 
@@ -96,6 +128,17 @@ let skel_of_ta ta =
         | Shared n -> n
         | Param n -> n
     in
+    (* create one variable per location counter *)
+    let loc_vars =
+        let mk_loc_var map i name =
+            IntMap.add i (SpinIr.new_var name) map
+        in
+        let n = List.length ta.Ta.locs in
+        List.fold_left2 mk_loc_var IntMap.empty
+            (range 0 n) (List.map fst ta.Ta.locs)
+    in
+    (* and map the parameters, local and global variables
+       to Spin variables *)
     let var_map =
         let add m v =
             let nm = name v in
@@ -103,30 +146,31 @@ let skel_of_ta ta =
         in
         List.fold_left add StrMap.empty ta.Ta.decls
     in
+    (* ...as well as location counters *)
+    let var_map =
+        let add_var m v = StrMap.add v#get_name v m in
+        BatEnum.fold add_var var_map (IntMap.values loc_vars)
+    in
+    let var_fun = find_var var_map in
     let map f =
         List.filter f ta.Ta.decls
-            |> List.map (fun n -> StrMap.find (name n) var_map) 
+            |> List.map (fun n -> var_fun (name n)) 
     in
     let map_expr =
-        SpinIr.map_vars (fun v -> SpinIr.Var (StrMap.find v#get_name var_map))
+        SpinIr.map_vars (fun v -> SpinIr.Var (var_fun v#get_name))
     in
     let locals = map is_local in
-    let loc_vars =
-        List.fold_left2
-            (fun m i v -> IntMap.add i v m)
-            IntMap.empty (range 0 (List.length locals)) locals
-    in
     {
         Sk.name = ta.Ta.name; Sk.nlocs = List.length ta.Ta.locs;
         Sk.locs = List.map snd ta.Ta.locs;
         Sk.locals = map is_local;
         Sk.shared = map is_shared;
         Sk.params = map is_param;
-        Sk.assumes = List.map (map_rel_expr var_map) ta.Ta.assumptions;
-        Sk.inits = List.map (map_rel_expr var_map) ta.Ta.inits;
+        Sk.assumes = List.map (map_rel_expr var_fun) ta.Ta.assumptions;
+        Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
         Sk.loc_vars = loc_vars;
         Sk.nrules = List.length ta.Ta.rules;
-        Sk.rules = List.map (map_rule var_map) ta.Ta.rules;
-        Sk.forms = StrMap.empty; (* TODO: add the formulas *)
+        Sk.rules = List.map (map_rule var_fun) ta.Ta.rules;
+        Sk.forms = StrMap.map (map_ltl_expr var_fun) ta.Ta.specs;
     }
 

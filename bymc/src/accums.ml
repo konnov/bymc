@@ -21,8 +21,8 @@ module IntMap = BatMap.Make (struct
  let compare a b = a - b
 end)
 
-module StringMap = Map.Make(String) (* deprecated: use StrMap *)
-module StrMap = Map.Make(String)
+module StringMap = BatMap.Make(String) (* deprecated: use StrMap *)
+module StrMap = BatMap.Make(String)
 module StrSet = Set.Make(String)
 
 (** a shorter name for string_of_int *)
