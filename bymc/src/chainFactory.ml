@@ -174,6 +174,7 @@ module PiaPost = struct
         vr: VarRolePlugin.vr_plugin_t;
         pdom: PiaDomPlugin.pia_dom_plugin_t;
         pdg: PiaDataPlugin.pd_plugin_t;
+        pttp: PromelaToTaPlugin.promela_to_ta_plugin_t;
         slps: SchemaCheckerPlugin.slps_checker_plugin_t;
     }
 
@@ -183,8 +184,9 @@ module PiaPost = struct
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
+        let pttp = new PromelaToTaPlugin.promela_to_ta_plugin_t "pttp" in
         let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" in
-        { pp; vr; pdom; pdg; slps }
+        { pp; vr; pdom; pdg; pttp; slps }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
@@ -192,9 +194,34 @@ module PiaPost = struct
         chain#add_plugin plugins.vr OutOfPred;
         chain#add_plugin plugins.pdom OutOfPred;
         chain#add_plugin plugins.pdg OutOfPred;
+        chain#add_plugin plugins.pttp (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.slps (OutOfPlugin "piaDataShared");
         chain
 end
+
+(**
+  This is a modification of PiaPost that takes a threshold automaton as its input,
+  without parsing Promela code.
+  *)
+(*
+module TaPost = struct
+    type plugins_t = {
+        pttp: PromelaToTaPlugin.promela_to_ta_plugin_t;
+        slps: SchemaCheckerPlugin.slps_checker_plugin_t;
+    }
+
+    let mk_plugins () =
+        let pttp = new PromelaToTaPlugin.promela_to_ta_plugin_t "pttp" in
+        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" in
+        { pptp; slps }
+
+    let mk_chain plugins =
+        let chain = new plugin_chain_t in
+        chain#add_plugin plugins.pptp OutOfPred;
+        chain#add_plugin plugins.slps OutOfPred;
+        chain
+end
+*)
 
 
 let create_chain = function
