@@ -41,7 +41,7 @@ let get_proper_specs opts sk check_fun =
     good
 
 
-class slps_checker_plugin_t (plugin_name: string) (ta_source: promela_to_ta_plugin_t) =
+class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
     object(self)
         inherit analysis_plugin_t plugin_name
 

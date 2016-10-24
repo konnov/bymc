@@ -162,15 +162,24 @@ rule_list
     : { [] }
 
     | CONST COLON src = NAME IMPLIES dst = NAME
-        WHEN g = bool_expr
-        DO LCURLY a = bool_expr RCURLY SEMI rs = rule_list
+        WHEN grd = bool_expr
+        DO LCURLY acts = act_list RCURLY SEMI rs = rule_list
         {
-            let r = TaIr.mk_rule (find_loc src) (find_loc dst) g a in
+            let r = TaIr.mk_rule (find_loc src) (find_loc dst) grd acts in
             r :: rs
         } 
     
     | error { error "expected '<num>: <loc> -> <loc> when (..) do {..}" }
     ;
+
+
+act_list
+    : { [] }
+
+    | n = NAME PRIME EQ e = arith_expr SEMI acts = act_list
+        { (n, e) :: acts }
+
+    | error { error "expected var' == arith_expr" }
 
 
 rel_expr_list
@@ -289,7 +298,7 @@ ltl_or_expr
     | l = ltl_and_expr OR r = ltl_or_expr
         { LtlOr (l, r) }
 
-    | error { error "expected a boolean expression" }
+    | error { error "expected an ltl expression" }
     ;
 
 ltl_and_expr

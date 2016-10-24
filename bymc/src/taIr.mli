@@ -38,6 +38,9 @@ type bool_expr_t =
     | Or of bool_expr_t * bool_expr_t
 
 
+type action_t = string  * arith_expr_t
+
+
 type ltl_expr_t =
     | LtlCmp of rel_expr_t
     | LtlNot of ltl_expr_t
@@ -52,7 +55,7 @@ module Ta: sig
     type loc_def_t = string * int list
 
     type rule_t =
-        { src_loc: int; dst_loc: int; guard: bool_expr_t; action: bool_expr_t }
+        { src_loc: int; dst_loc: int; guard: bool_expr_t; actions: action_t list }
 
 
     type ta_t = {
@@ -69,7 +72,7 @@ end
 val empty: Ta.ta_t
 
 val mk_rule:
-    int -> int -> bool_expr_t -> bool_expr_t -> Ta.rule_t
+    int -> int -> bool_expr_t -> action_t list -> Ta.rule_t
 
 
 val mk_ta:

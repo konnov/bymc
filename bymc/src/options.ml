@@ -42,6 +42,11 @@ type options_t =
     }
 
 
+let input_s = function
+    | InputPromela -> "InputPromela"
+    | InputTa -> "InputTa"
+
+
 let empty =
     (* z3 is our default solver *)
     let smt = SmtLib2 [|"z3"; "-smt2"; "-in"|] in

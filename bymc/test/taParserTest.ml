@@ -293,7 +293,7 @@ skel foo {
     rules (1) {
     0:  loc_a -> loc_b
         when (g >= t + 1)
-        do { g' == (g + 1) };
+        do { g' == (g + 1); };
     }
     specifications (0) { }
 }"
@@ -303,7 +303,7 @@ skel foo {
     let rules = [
         { Ta.src_loc = 0; Ta.dst_loc = 1;
           guard = Cmp (Geq (Var "g", Add (Var "t", Int 1)));
-          action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
+          actions = [("g", Add (Var "g", Int 1))]
         }
     ] in
     expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text
@@ -324,10 +324,10 @@ skel foo {
     rules (2) {
     0:  loc_a -> loc_b
         when (g >= t + 1)
-        do { g' == g + 1 };
+        do { g' == g + 1; };
     1:  loc_b -> loc_a
         when (g >= n - t)
-        do { g' == g + 1 };
+        do { g' == g + 1; };
     }
     specifications (0) { }
 }"
@@ -337,11 +337,11 @@ skel foo {
     let rules = [
         { Ta.src_loc = 0; Ta.dst_loc = 1;
           guard = Cmp (Geq (Var "g", Add (Var "t", Int 1)));
-          action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)));
+          actions = [("g", Add (Var "g", Int 1))];
         };
         { Ta.src_loc = 1; Ta.dst_loc = 0;
           guard = Cmp (Geq (Var "g", Sub (Var "n", Var "t")));
-          action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)));
+          actions = [("g", Add (Var "g", Int 1))];
         };
     ] in
     expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text
@@ -362,10 +362,10 @@ skel foo {
     rules (2) {
     0:  loc_a -> loc_b
         when (g >= t + 1)
-        do { g' == g + 1 };
+        do { g' == g + 1; };
     1:  loc_b -> loc_a
         when ((g >= n - t) && ((g < 1) || (g >= n)))
-        do { g' == g + 1 };
+        do { g' == g + 1; };
     }
     specifications (0) { }
 }"
@@ -375,13 +375,13 @@ skel foo {
     let rules = [
         { Ta.src_loc = 0; Ta.dst_loc = 1;
           guard = Cmp (Geq (Var "g", Add (Var "t", Int 1)));
-          action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
+          actions = [("g", Add (Var "g", Int 1))]
         };
         { Ta.src_loc = 1; Ta.dst_loc = 0;
           guard = And (Cmp (Geq (Var "g", Sub (Var "n", Var "t"))),
                        (Or (Cmp (Lt (Var "g", Int 1)),
                            Cmp (Geq (Var "g", Var "n")))));
-          action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)));
+          actions = [("g", Add (Var "g", Int 1))];
         };
     ] in
     expect_ta (TaIr.mk_ta "foo" ds [] locs [] rules StrMap.empty) text

@@ -76,6 +76,12 @@ let map_bool_expr var_fun e =
     map e
 
 
+let map_action var_fun (lhs, exp) =
+    SpinIr.BinEx (Spin.EQ,
+        SpinIr.UnEx (Spin.NEXT, SpinIr.Var (var_fun lhs)),
+        map_arith_expr var_fun exp)
+
+
 let map_ltl_expr var_fun e =
     let rec map = function
         | LtlCmp e ->
@@ -106,7 +112,7 @@ let map_rule var_fun r = {
     Sk.src = r.Ta.src_loc;
     Sk.dst = r.Ta.dst_loc;
     Sk.guard = map_bool_expr var_fun r.Ta.guard;
-    Sk.act = [ map_bool_expr var_fun r.Ta.action ]
+    Sk.act = List.map (map_action var_fun) r.Ta.actions
 }
 
 

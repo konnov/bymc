@@ -65,7 +65,7 @@ let main () =
         begin
             match opts.action with
             | OptAbstract ->
-                let chain = ChainFactory.create_chain opts.chain in
+                let chain = ChainFactory.create_chain opts.input opts.chain in
                 let _ = do_abstraction rt chain in ()
 
             | OptRefine ->

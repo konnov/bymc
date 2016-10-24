@@ -34,6 +34,9 @@ type bool_expr_t =
     | Or of bool_expr_t * bool_expr_t
 
 
+type action_t = string  * arith_expr_t
+
+
 type ltl_expr_t =
     | LtlCmp of rel_expr_t
     | LtlNot of ltl_expr_t
@@ -48,7 +51,7 @@ module Ta = struct
     type loc_def_t = string * int list
 
     type rule_t =
-        { src_loc: int; dst_loc: int; guard: bool_expr_t; action: bool_expr_t }
+        { src_loc: int; dst_loc: int; guard: bool_expr_t; actions: action_t list }
 
 
     type ta_t = {
@@ -69,8 +72,8 @@ let empty =
     }
 
 
-let mk_rule src_loc dst_loc guard action =
-    { Ta.src_loc; Ta.dst_loc; Ta.guard; Ta.action }
+let mk_rule src_loc dst_loc guard actions =
+    { Ta.src_loc; Ta.dst_loc; Ta.guard; Ta.actions }
 
 
 let mk_ta n ds ass ls is rs specs =

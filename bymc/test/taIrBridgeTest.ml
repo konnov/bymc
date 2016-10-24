@@ -88,7 +88,7 @@ let test_skel_of_ta _ =
     let rules = [ {
         Ta.src_loc = 0; Ta.dst_loc = 1;
         guard = Cmp (Geq (Var "x", Add (Var "n", Int 1)));
-        action = Cmp (Eq (NextVar "g", Add (Var "g", Int 1)))
+        actions = [("g", Add (Var "g", Int 1))]
     } ] in
     let assumes = [Gt (Var "n", Int 42)] in
     let mk0 name = LtlCmp (Eq (Var name, Int 0)) in

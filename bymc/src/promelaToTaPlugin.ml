@@ -11,6 +11,7 @@ open SymbSkel
 class promela_to_ta_plugin_t (plugin_name: string) =
     object(self)
         inherit analysis_plugin_t(plugin_name)
+        inherit TaSource.ta_source_t
 
         val mutable m_skel: Sk.skel_t option = None
 
