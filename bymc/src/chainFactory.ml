@@ -185,7 +185,7 @@ module PiaPost = struct
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
         let pttp = new PromelaToTaPlugin.promela_to_ta_plugin_t "pttp" in
-        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" in
+        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" pttp in
         { pp; vr; pdom; pdg; pttp; slps }
 
     let mk_chain plugins =

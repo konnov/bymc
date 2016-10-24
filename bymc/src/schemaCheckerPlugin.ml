@@ -16,6 +16,7 @@ open Plugin
 open PorBounds
 open Spin
 open SpinIr
+open PromelaToTaPlugin
 
 module L = SchemaCheckerLtl
 
@@ -45,7 +46,7 @@ let get_proper_specs opts prog skels check_fun =
     SymbSkel.expand_props_in_ltl_forms prog skels good
 
 
-class slps_checker_plugin_t (plugin_name: string) =
+class slps_checker_plugin_t (plugin_name: string) (ta_source: promela_to_ta_plugin_t) =
     object(self)
         inherit analysis_plugin_t plugin_name
 
@@ -55,10 +56,7 @@ class slps_checker_plugin_t (plugin_name: string) =
         method transform rt =
             let sprog = self#get_input0 in
             let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
-            let sk = Summary.summarize_optimize_fuse rt sprog
-                ~keep_selfloops:(self#is_ltl tech)
-                    (* reachability is blind to self-loops *)
-            in
+            let sk = ta_source#get_ta in
             self#set_options rt;
             if "bounds" <> rt#caches#options.Options.spec
             then self#check tech rt sprog sk
