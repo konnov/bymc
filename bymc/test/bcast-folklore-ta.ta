@@ -78,3 +78,20 @@ skel Proc {
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0));
   }
 } /* Proc */
+
+/*
+#BEGIN-TEST correct-unforg
+$bymc_dir/verifypa-post ${testsource} unforg -O smt.log=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-corr
+$bymc_dir/verifypa-post ${testsource} corr -O smt.log=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+
+#BEGIN-TEST correct-relay
+$bymc_dir/verifypa-post ${testsource} relay -O smt.log=1
+#EXPECT grep "verified in 0 refinement" ${testlog}
+#END-TEST
+*/

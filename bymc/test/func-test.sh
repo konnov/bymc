@@ -26,7 +26,7 @@ fi
 
 mkdir "$run_dir" && cd "$run_dir"
 
-for f in $bymc_dir/test/*.pml; do
+for f in $bymc_dir/test/*.{pml,ta}; do
     ${bymc_dir}/test/extract-tests.py "$f"
 done
 

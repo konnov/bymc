@@ -11,6 +11,9 @@ open Runtime
   chain are usually connected, the module has to provide access to
   the plugins. This is the least painful way I have found so far.
  *)
+
+
+(** FMCAD'13: data + counter abstractions. *)
 module Pia = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -52,6 +55,7 @@ module Pia = struct
 end
 
 
+(** Just fixing the parameters and checking finite-state systems. *)
 module Conc = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -72,6 +76,7 @@ module Conc = struct
 end
 
 
+(** CONCUR'14: computing the diameter bound for bounded model checking *)
 module PiaBounds = struct
     type plugins_t = {
         pia: Pia.plugins_t;
@@ -99,6 +104,10 @@ module PiaBounds = struct
 end
 
 
+(**
+  CONCUR'14: Constructing threshold automata using data abstraction
+             and translating to the FAST input format.
+ *)
 module PiaFast = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -128,6 +137,11 @@ module PiaFast = struct
 end
 
 
+(**
+  Constructing threshold automata in a complicated way using NuSMV and BDDs.
+
+  @deprecated: this chain will be removed in the future. 
+ *)
 module PiaSkelSmv = struct
     type plugins_t = {
         pia: Pia.plugins_t;
@@ -147,6 +161,13 @@ module PiaSkelSmv = struct
 end
 
 
+(**
+  CAV'15 and POPL'17: perform SMT-based bounded model checking by:
+      (1) constructing threshold automata using data abstraction, and
+      (2) running SMT-based bounded model checking using schemas.
+
+  This is the most efficient technique that we have so far.
+  *)
 module PiaPost = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -177,12 +198,19 @@ end
 
 
 let create_chain = function
+    (* FMCAD'13: data + counter abstractions *)
     | "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
+    (* just fixing the parameters and checking finite-state systems *)
     | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
+    (* CONCUR'14: computing the diameter bound for bounded model checking *)
     | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
+    (* CONCUR'14: translating into the FAST input format *)
     | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
-    (* TODO: remove skelSmv *)
+    (* constructing threshold automata using BDDS, too complicated *)
+    (* TODO: deprecated, remove skelSmv *)
     | "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
+    (* CAV'15 and POPL'17: using schemas and SMT-based bounded model checking *)
     | "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
+
     | _ as n -> raise (Failure ("Unknown chain: " ^ n))
 
