@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [2; 2; 0]
-let version_full = "ByMC-2.2.0"
+let version = [2; 3; 0]
+let version_full = "ByMC-2.3.0-synt"
 
 let macro_prefix = "macro."
 
@@ -117,7 +117,9 @@ let parse_input_type filename =
 let parse_options _ =
     let opts = ref {empty with filename = ""} in
     let specs = [
-            ("--chain", (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds"; "post"; "fast"; "skelSmv"],
+            ("--chain",
+                (Arg.Symbol (["piaDataCtr"; "concrete"; "bounds";
+                              "post"; "synt"; "fast"; "skelSmv"],
                 (fun s -> opts := {!opts with chain = s}))),
                 " choose a transformation/refinement chain (default: piaDataCtr)."
             );

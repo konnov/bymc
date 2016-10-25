@@ -230,6 +230,36 @@ module TaPost = struct
 end
 
 
+(**
+  Synthesizing threshold automata using CEGYS loop.
+  *)
+module TaSynt = struct
+    type plugins_t = {
+        tapp: TaParserPlugin.ta_parser_plugin_t;
+        tsp: TaSyntPlugin.ta_synt_plugin_t;
+        slps: SchemaCheckerPlugin.slps_checker_plugin_t;
+    }
+
+    let mk_plugins () =
+        let tapp = new TaParserPlugin.ta_parser_plugin_t "tapp" in
+        let tsp = new TaSyntPlugin.ta_synt_plugin_t
+            "tsp" (tapp :> TaSource.ta_source_t)
+        in
+        let slps =
+            new SchemaCheckerPlugin.slps_checker_plugin_t
+                "slps" (tsp :> TaSource.ta_source_t)
+        in
+        { tapp; tsp; slps }
+
+    let mk_chain plugins =
+        let chain = new plugin_chain_t in
+        chain#add_plugin plugins.tapp OutOfPred;
+        chain#add_plugin plugins.tsp OutOfPred;
+        chain#add_plugin plugins.slps OutOfPred;
+        chain
+end
+
+
 let create_chain input chain_name =
     match (input, chain_name) with
     (* FMCAD'13: data + counter abstractions *)
@@ -247,6 +277,8 @@ let create_chain input chain_name =
     | InputPromela, "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
     (* same thing but using TA as input directly *)
     | InputTa, "post" -> TaPost.mk_chain (TaPost.mk_plugins ())
+    (* synthesizing threshold automata using Post *)
+    | InputTa, "synt" -> TaSynt.mk_chain (TaSynt.mk_plugins ())
 
     | input, chain_name ->
         let inp_s = Options.input_s input in
