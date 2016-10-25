@@ -301,7 +301,10 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
 
         method private assert_expr e =
             if (is_c_false e)
-            then solver#append_expr (BinEx (Spin.NE, IntConst 1, IntConst 1)) (* may be unreachable *)
+            (* assert false, which may be unreachable,
+               TODO: use a simpler theory? *)
+            then solver#append_expr
+                (BinEx (Spin.NE, IntConst 0, IntConst 0))
             else if (is_c_true e)
             then begin solver#comment "(assert true)"; 0 end
             else solver#append_expr e
