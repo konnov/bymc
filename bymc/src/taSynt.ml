@@ -17,10 +17,15 @@ let map_of_unknowns_vec (vec: (string * Spin.token SpinIr.expr) list) =
     List.fold_left add StrMap.empty vec
 
 
+(** compute the initial vector of unknowns *)
 let init_unknowns_vec sk =
     let mk_pair v = (v#get_name, IntConst 0) in
     List.map mk_pair sk.Sk.unknowns
 
+
+(* compute the next vector of unknowns *)
+let next_unknowns_vec sk vec =
+    vec
 
 let unknowns_vec_s vec =
     let pair_s (n, e) =
