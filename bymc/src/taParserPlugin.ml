@@ -42,9 +42,10 @@ class ta_parser_plugin_t (plugin_name: string) =
             let set_type v = data_type_tab#set_type v unsigned in
             List.iter set_type sk.Sk.params;
             List.iter set_type sk.Sk.shared;
-            Program.set_type_tab data_type_tab
-                (Program.set_params sk.Sk.params
-                    (Program.set_shared sk.Sk.shared Program.empty))
+            Program.set_assumes sk.Sk.assumes
+                (Program.set_type_tab data_type_tab
+                    (Program.set_params sk.Sk.params
+                        (Program.set_shared sk.Sk.shared Program.empty)))
 
 
         method parse filename =
@@ -61,7 +62,14 @@ class ta_parser_plugin_t (plugin_name: string) =
 
 
         method update_runtime rt =
-            ()
+            let prog = self#get_output in
+            (* introduce the parameters and the basic constraints on them *)
+            let append_var v = rt#solver#append_var_def v (get_type prog v) in
+            List.iter append_var (get_params prog);
+            let append_expr e = ignore (rt#solver#append_expr e) in
+            List.iter append_expr (get_assumes prog);
+            if not rt#solver#check
+            then raise (Program.Program_error "Basic assertions are contradictory")
 
         method decode_trail _ path = path
 
