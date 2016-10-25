@@ -56,9 +56,9 @@ let save_game (filename: string) (chain: plugin_chain_t) =
 
 
 (* transform the input as prescribed by the chain *)
-let do_abstraction rt chain =
+let do_verification rt chain =
     rt#solver#push_ctx;
-    rt#solver#comment "do_abstraction";
+    rt#solver#comment "do_verification";
     begin
         try ignore (chain#transform rt Program.empty)
         with InputRequired s ->
@@ -70,7 +70,7 @@ let do_abstraction rt chain =
     chain#get_output
 
 
-(* counter abstraction refinement *)
+(* abstraction refinement *)
 let do_refine rt =
     let chain = load_game serialization_filename rt in
     let (status, _) = chain#refine rt ([], []) in
