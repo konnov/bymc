@@ -11,10 +11,11 @@ skel Proc {
   /* the number of messages sent by the correct
      and crashed processes (the crashed processes can send their messages
      right before crashing) */
-  shared nsnt, nsntF;
-  parameters N;
+  shared nsnt, nsntF, nfaulty;
+  parameters N, F;
   assumptions (1) {
     N > 1;
+    N > F;
   }
 
   locations (7) {
@@ -32,39 +33,36 @@ skel Proc {
     nsntF == 0;
   }
 
-  rules (9) {
+  rules (8) {
   /* crashing without sending a message */
   0: loc0 -> loc2
-      when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; };
+      when (nfaulty < F)
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
   1: loc1 -> loc2
-      when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; };
+      when (nfaulty < F)
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
   /* crashing after sending a message */
-  2: loc0 -> loc2
-      when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF + 1; };
-  3: loc1 -> loc2
-      when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF + 1; };
+  2: loc1 -> loc2
+      when (nfaulty < F)
+      do { nsnt' == nsnt; nsntF' == nsntF + 1; nfaulty' == nfaulty + 1; };
   /* sending a message and accepting when initialized with value 1 */
-  4: loc1 -> loc3
+  3: loc1 -> loc3
       when (nsnt >= 0)
-      do { nsnt' == nsnt + 1; nsntF' == nsntF; };
+      do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
   /* sending a message and accepting when initialized with value 0 */
-  5: loc0 -> loc3
+  4: loc0 -> loc3
       when (nsnt + nsntF >= 1)
-      do { nsnt' == nsnt + 1; nsntF' == nsntF; };
+      do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
   /* self-loops in all the locations but loc1, from which processes must progress */
-  6: loc0 -> loc0
+  5: loc0 -> loc0
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; };
-  7: loc2 -> loc2
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+  6: loc2 -> loc2
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; };
-  8: loc3 -> loc3
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+  7: loc3 -> loc3
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; };
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
   }
   specifications (3) {
     /* safety */
@@ -72,9 +70,9 @@ skel Proc {
     /* the following two liveness properties require the following fairness constraint:
        if nsnt > 0, then every process should eventually leave the location loc0.
      */
-    corr: (<>[](nsnt == 0 || loc0 == 0))
+    corr: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
         -> ((loc0 == 0) -> <>(loc3 != 0));
-    relay: (<>[](nsnt == 0 || loc0 == 0))
+    relay: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
   }
 } /* Proc */
