@@ -82,14 +82,22 @@ let expect_skel expected actual =
 
 let test_skel_of_ta _ =
     let ds =
-        [ Local "x"; Shared "g"; Param "n" ]
+        [ Local "x"; Shared "g"; Param "n"; Unknown "a" ]
     in
     let locs = [ ("loc_0", [0]); ("loc_1", [1]) ] in
-    let rules = [ {
+    let r1 = {
         Ta.src_loc = 0; Ta.dst_loc = 1;
         guard = Cmp (Geq (Var "x", Add (Var "n", Int 1)));
         actions = [("g", Add (Var "g", Int 1))]
-    } ] in
+        }
+    in
+    let r2 = {
+        Ta.src_loc = 0; Ta.dst_loc = 1;
+        guard = Cmp (Geq (Var "x", Mul (Var "a", Var "n")));
+        actions = [("g", Add (Var "g", Int 1))]
+        }
+    in
+    let rules = [ r1; r2 ] in
     let assumes = [Gt (Var "n", Int 42)] in
     let mk0 name = LtlCmp (Eq (Var name, Int 0)) in
     let unforg =
@@ -102,6 +110,7 @@ let test_skel_of_ta _ =
     let x = SpinIr.new_var "x" in
     let g = SpinIr.new_var "g" in
     let n = SpinIr.new_var "n" in
+    let a = SpinIr.new_var "a" in
     let loc_0 = SpinIr.new_var "loc_0" in
     let loc_1 = SpinIr.new_var "loc_1" in
     let unforg_exp =
@@ -110,20 +119,7 @@ let test_skel_of_ta _ =
             SpinIr.UnEx (Spin.ALWAYS,
                 SpinIr.BinEx (Spin.EQ, SpinIr.Var loc_1, SpinIr.IntConst 0)))
     in
-    let sk = {
-        Sk.name = "foo";
-        Sk.nlocs = 2;
-        Sk.locs = [[0]; [1]];
-        Sk.locals = [x];
-        Sk.shared = [g];
-        Sk.params = [n];
-        Sk.assumes =
-            [ SpinIr.BinEx (Spin.GT, SpinIr.Var n, SpinIr.IntConst 42) ];
-        Sk.inits = [ (SpinIr.BinEx (Spin.EQ, SpinIr.Var loc_0, SpinIr.IntConst 0)) ];
-        Sk.loc_vars =
-            Accums.IntMap.add 1 loc_1 (Accums.IntMap.singleton 0 loc_0);
-        Sk.nrules = 1;
-        Sk.rules = [{
+    let sk_rule1 = {
             Sk.src = 0;
             Sk.dst = 1;
             Sk.guard =
@@ -134,7 +130,36 @@ let test_skel_of_ta _ =
                 SpinIr.BinEx (Spin.EQ,
                     SpinIr.UnEx (Spin.NEXT, SpinIr.Var g),
                     SpinIr.BinEx (Spin.PLUS, SpinIr.Var g, SpinIr.IntConst 1))];
-        }];
+        }
+    in
+    let sk_rule2 = {
+            Sk.src = 0;
+            Sk.dst = 1;
+            Sk.guard =
+                SpinIr.BinEx (Spin.GE,
+                    SpinIr.Var x,
+                    SpinIr.BinEx (Spin.MULT, SpinIr.Var a, SpinIr.Var n));
+            Sk.act = [
+                SpinIr.BinEx (Spin.EQ,
+                    SpinIr.UnEx (Spin.NEXT, SpinIr.Var g),
+                    SpinIr.BinEx (Spin.PLUS, SpinIr.Var g, SpinIr.IntConst 1))];
+        }
+    in
+    let sk = {
+        Sk.name = "foo";
+        Sk.nlocs = 2;
+        Sk.locs = [[0]; [1]];
+        Sk.locals = [x];
+        Sk.shared = [g];
+        Sk.params = [n];
+        Sk.unknowns = [a];
+        Sk.assumes =
+            [ SpinIr.BinEx (Spin.GT, SpinIr.Var n, SpinIr.IntConst 42) ];
+        Sk.inits = [ (SpinIr.BinEx (Spin.EQ, SpinIr.Var loc_0, SpinIr.IntConst 0)) ];
+        Sk.loc_vars =
+            Accums.IntMap.add 1 loc_1 (Accums.IntMap.singleton 0 loc_0);
+        Sk.nrules = 2;
+        Sk.rules = [ sk_rule1; sk_rule2 ];
         Sk.forms = Accums.StrMap.singleton "unforg" unforg_exp;
     } in
     expect_skel sk (TaIrBridge.skel_of_ta ta)

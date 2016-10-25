@@ -54,6 +54,7 @@ let prepare2 () =
     let pc1, pc2 = new_var "pc1", new_var "pc2" in
     List.iter (fun v -> tt#set_type v (mk_int_range 0 3)) [pc1; pc2];
     let x, y, n, t = new_var "x", new_var "y", new_var "n", new_var "t" in
+    let a, b = new_var "a", new_var "b" in
     n#set_symbolic; t#set_symbolic;
     List.iter
         (fun v -> tt#set_type v (new data_type SpinTypes.TUNSIGNED))
@@ -64,18 +65,21 @@ let prepare2 () =
     in
     let locFoo_map = List.fold_left add_loc IntMap.empty (range 0 3) in
     let locBar_map = List.fold_left add_loc IntMap.empty (range 0 3) in
-    tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t
+    tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t, a, b
 
 
 let mk_foo_bar params =
-    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t = params in
+    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t, a, b = params in
     let mk_eq loc_map loc_no e =
         BinEx (EQ, Var (IntMap.find loc_no loc_map), e)
     in
     let skFoo = {
         Sk.name = "foo";
         Sk.nlocs = 3; Sk.locs = [ [0]; [1]; [2] ];
-        Sk.locals = [ pc1 ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc1 ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [ a ];
         Sk.nrules = 2;
         Sk.rules = [
             mk_rule 0 1 (lt y t) [ keep x; keep y ];
@@ -95,7 +99,10 @@ let mk_foo_bar params =
     let skBar = {
         Sk.name = "bar";
         Sk.nlocs = 3; Sk.locs = [ [0]; [1]; [2] ];
-        Sk.locals = [ pc2 ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc2 ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [ b ];
         Sk.nrules = 2;
         Sk.rules = [
             mk_rule 0 1 (ge x t) [ keep x; keep y ];
@@ -118,7 +125,7 @@ let mk_foo_bar params =
 let test_fuse_several _ =
     let params = prepare2 () in
     let skFoo, skBar = mk_foo_bar params in
-    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t = params in
+    let tt, locFoo_map, locBar_map, pc1, pc2, x, y, n, t, a, b = params in
     let fused = SymbSkel.fuse [skFoo; skBar] "fusion" in
     assert_equal "fusion" fused.Sk.name
         ~msg:(sprintf "expected 'fusion', found %s" fused.Sk.name);
@@ -130,6 +137,8 @@ let test_fuse_several _ =
         ~msg:(sprintf "expected [x; y], found [%s]" (str_of_vars fused.Sk.shared));
     assert_equal [n; t] fused.Sk.params
         ~msg:(sprintf "expected [x; y], found [%s]" (str_of_vars fused.Sk.params));
+    assert_equal [a; b] fused.Sk.unknowns
+        ~msg:(sprintf "expected [a; b], found [%s]" (str_of_vars fused.Sk.unknowns));
     assert_equal [pc1; pc2] fused.Sk.locals
         ~msg:(sprintf "expected [x; y], found [%s]" (str_of_vars fused.Sk.locals));
     assert_equal 4 (List.length fused.Sk.rules)
@@ -241,7 +250,10 @@ let test_optimize_guards _ =
     let skFoo = {
         Sk.name = "foo";
         Sk.nlocs = 3; Sk.locs = [ [0]; [1]; [2] ];
-        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [];
         Sk.nrules = 2;
         Sk.rules = [
             mk_rule 0 1 g1 [ keep x; keep y ];

@@ -56,10 +56,9 @@ let find_loc name =
 
 %}
 
-%token  SKEL PARAMETERS
+%token  SKEL PARAMETERS UNKNOWNS LOCAL SHARED
 %token	SEMI
 %token	WHEN DO
-%token	LOCAL SHARED
 %token	<int> CONST
 %token	<string> NAME
 
@@ -117,6 +116,7 @@ decl
     : LOCAL ls = locals SEMI        { ls }
     | SHARED sh = shared SEMI       { sh }
     | PARAMETERS ps = params SEMI   { ps }
+    | UNKNOWNS us = unknowns SEMI   { us }
     ;
 
 locals
@@ -141,6 +141,14 @@ params
 
     | ns = params COMMA n = NAME
         { (Param n) :: ns }
+    ;
+
+unknowns
+    : n = NAME
+        { [ (Unknown n) ] }
+
+    | ns = unknowns COMMA n = NAME
+        { (Unknown n) :: ns }
     ;
 
 assumptions

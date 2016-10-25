@@ -8,9 +8,14 @@
 
 
 type decl_t =
+    (* local variables (finite domain) *)
     | Local of string
+    (** shared variables *)
     | Shared of string
+    (** parameters are constants, e.g., the number of processes, faults, etc. *)
     | Param of string
+    (** unknowns are used in synthesis *)
+    | Unknown of string
 
 
 type arith_expr_t =

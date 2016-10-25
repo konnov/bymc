@@ -144,6 +144,22 @@ skel foo {
         text
 
 
+let test_decl_unknowns _ =
+    let text = "\
+skel foo {
+    unknowns a, b;
+    assumptions (0) { }
+    locations (0) { }
+    inits (0) { }
+    rules (0) { }
+    specifications (0) { }
+}"
+    in
+    expect_ta
+        (TaIr.mk_ta "foo" [ Unknown "a"; Unknown "b"] [] [] [] [] StrMap.empty)
+        text
+
+
 let test_decl_params_many _ =
     let text = "\
 skel foo {
@@ -448,6 +464,7 @@ let suite = "taParser-suite" >:::
         "test_decl_params" >:: test_decl_params;
         "test_decl_params_many" >:: test_decl_params_many;
         "test_decl_params_empty" >:: test_decl_params_empty;
+        "test_decl_unknowns" >:: test_decl_unknowns;
         "test_assumptions_one" >:: test_assumptions_one;
         "test_assumptions_many" >:: test_assumptions_many;
         "test_locations" >:: test_locations;

@@ -129,10 +129,15 @@ let skel_of_ta ta =
         | Param _ -> true
         | _ -> false
     in
+    let is_unknown = function
+        | Unknown _ -> true
+        | _ -> false
+    in
     let name = function
         | Local n -> n
         | Shared n -> n
         | Param n -> n
+        | Unknown n -> n
     in
     (* create one variable per location counter *)
     let loc_vars =
@@ -172,6 +177,7 @@ let skel_of_ta ta =
         Sk.locals = map is_local;
         Sk.shared = map is_shared;
         Sk.params = map is_param;
+        Sk.unknowns = map is_unknown;
         Sk.assumes = List.map (map_rel_expr var_fun) ta.Ta.assumptions;
         Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
         Sk.loc_vars = loc_vars;

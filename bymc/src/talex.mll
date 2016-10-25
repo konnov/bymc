@@ -66,6 +66,7 @@ rule token = parse
  | "local"               { LOCAL }
  | "locations"           { LOCATIONS } 
  | "parameters"          { PARAMETERS } 
+ | "unknowns"            { UNKNOWNS } 
  | "rules"               { RULES } 
  | "shared"              { SHARED } 
  | "when"                { WHEN } 
