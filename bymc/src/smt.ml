@@ -328,7 +328,9 @@ let var_to_smtlib2 var tp =
         else List.concat
             (List.map (fun i -> cons_f (acc i)) (Accums.range 0 tp#nelems))
     in
-    decl :: (List.map (fun e -> sprintf "(assert %s)" (expr_to_smt2 e)) cons)
+    let assert_expr e = sprintf "(assert %s)" (expr_to_smt2 e) in
+    (* push the assertions *)
+    decl :: (List.map assert_expr cons)
 
 
 let parse_smt_model_q query lines =
@@ -759,6 +761,13 @@ class lib2_smt name solver_cmd solver_args =
 
         method append_expr expr =
             assert(not (PipeCmd.is_null m_pipe_cmd));
+            (* check for common mistakes *)
+            let check_common_errors = function
+            | IntConst n ->
+                raise (Failure (sprintf "(assert %d) is not a valid SMT expression" n))
+            | _ -> ()
+            in
+            check_common_errors expr;
             let e_s = expr_to_smt2 expr in
             let is_comment =
                 (String.length e_s) > 1 && e_s.[0] = ';' && e_s.[1] = ';'
