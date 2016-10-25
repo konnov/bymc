@@ -3,6 +3,7 @@ open OUnit
 let _ =
     let all = "all-tests" >:::
     [
+        TaSyntTest.suite;
         PipeCmdTest.suite;
         SmtTest.suite;
         AccumsTest.suite;
