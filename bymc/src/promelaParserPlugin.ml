@@ -52,6 +52,7 @@ class pp_plugin_t (plugin_name: string) =
             in
             rt#caches#set_options
                 { rt#caches#options with plugin_opts = new_plugin_opts };
+            (* introduce the parameters and the basic constraints on them *)
             let append_var v = rt#solver#append_var_def v (get_type prog v) in
             List.iter append_var (get_params prog);
             let append_expr e = ignore (rt#solver#append_expr e) in
