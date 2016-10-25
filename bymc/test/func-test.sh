@@ -2,14 +2,37 @@
 #
 # The script to extract and run functional tests.
 #
-# Run it with DRYRUN=1 ./func-test.sh, if you want to enumerate the tests without
-# executing them.
-#
 # Check test/bcast-byz.pml for the syntax of the tests.
 #
 # This script is as minimal as possible. No overdeveloped frameworks please.
 #
 # Igor Konnov, 2013-2016.
+
+
+case "$1" in
+    --all) CMD="all"; shift 1;;
+    "") CMD="all";;
+    --list) CMD="list"; shift 1;;
+    --only) CMD="only"; shift 1;;
+    -h) CMD="help";;
+    --help) CMD="help";;
+    *) CMD="help";;
+esac
+
+if [ "$CMD" == "help" ]; then
+    echo "Use: $0 [--all|--list|--only <test>|--help]"
+    echo ""
+    echo "  where:"
+    echo "    --list lists all tests"
+    echo "    --all runs all tests"
+    echo "    --only <test> runs only the test named <test>"
+    echo "    --help shows this help message"
+    exit 1
+fi
+
+if [ "$CMD" == "list" ]; then
+    DRYRUN=1
+fi
 
 bymc_dir=`dirname $0`
 export bymc_dir=`cd $bymc_dir/.. && pwd`
