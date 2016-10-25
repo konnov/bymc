@@ -33,6 +33,7 @@ module Sk = struct
         locals: var list; (* local variables *)
         shared: var list; (* shared variables *)
         params: var list; (* parameters *)
+        unknowns: SpinIr.var list; (** an extension used for synthesis *)
         assumes: token expr list; (* assumptions on the parameters *)
         nrules: int; (* the number of rules *)
         rules: rule_t list; (* the rules *)
@@ -45,7 +46,7 @@ module Sk = struct
 
     let empty locals shared params =
         { name = ""; nlocs = 0; locs = [];
-          locals = locals; shared = shared; params = params;
+          locals = locals; shared = shared; params = params; unknowns = [];
           nrules = 0; rules = []; inits = []; assumes = [];
           loc_vars = IntMap.empty; forms = StrMap.empty;
         }
@@ -89,6 +90,9 @@ module Sk = struct
             (str_join ", " (List.map vname sk.shared));
         fprintf out "  parameters %s;\n"
             (str_join ", " (List.map vname sk.params));
+        if sk.unknowns <> []
+        then fprintf out "  unknowns %s;\n"
+            (str_join ", " (List.map vname sk.unknowns));
         fprintf out "  assumptions (%d) {\n" (List.length sk.assumes);
         List.iter pexp sk.assumes;
         fprintf out "  }\n\n";
@@ -479,8 +483,9 @@ let fuse skels new_name =
         Sk.rules = all_rules;
         Sk.inits = List.rev all_inits;
         Sk.loc_vars = all_loc_vars;
-        Sk.shared = first.Sk.shared;
-        Sk.params = first.Sk.params;
+        Sk.shared = BatList.unique (List.concat (List.map (fun sk -> sk.Sk.shared) skels));
+        Sk.params = BatList.unique (List.concat (List.map (fun sk -> sk.Sk.params) skels));
+        Sk.unknowns = BatList.unique (List.concat (List.map (fun sk -> sk.Sk.unknowns) skels));
         Sk.assumes = List.concat (List.map (fun sk -> sk.Sk.assumes) skels);
         Sk.forms = List.fold_left merge_skel_forms StrMap.empty skels;
     }

@@ -92,7 +92,10 @@ let test_make_schema_tree_unlocking _ =
     let sk = {
         Sk.name = "foo";
         Sk.nlocs = 4; Sk.locs = [ [0]; [1]; [2]; [3] ];
-        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [];
         Sk.nrules = 4;
         Sk.rules = [
             mk_rule 0 1 (x >=. t) [ keep x; y =. y +. 1 ];
@@ -166,7 +169,10 @@ let test_make_schema_tree_locking _ =
     let sk = {
         Sk.name = "foo";
         Sk.nlocs = 4; Sk.locs = [ [0]; [1]; [2]; [3] ];
-        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [];
         Sk.nrules = 4;
         Sk.rules = [
             mk_rule 0 1 (x <. t) [ keep x; y =. y +. 1 ];
@@ -240,7 +246,10 @@ let test_make_schema_tree_unlocking_no_redundant_milestones _ =
     let sk = {
         Sk.name = "foo";
         Sk.nlocs = 4; Sk.locs = [ [0]; [1]; [2]; [3] ];
-        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t ];
+        Sk.unknowns = [];
         Sk.nrules = 5;
         Sk.rules = [
             mk_rule 0 1 (x >=. t)    [ keep x; y =. y +. 1 ];

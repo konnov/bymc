@@ -7,6 +7,7 @@ type decl_t =
     | Local of string
     | Shared of string
     | Param of string
+    | Unknown of string
 
 
 type arith_expr_t =
@@ -165,6 +166,7 @@ let print_ta out ta =
         | Local name -> fprintf out "  local %s;\n" name
         | Shared name -> fprintf out "  shared %s;\n" name
         | Param name -> fprintf out "  parameters %s;\n" name
+        | Unknown name -> fprintf out "  unknowns %s;\n" name
     in
     List.iter print_decl ta.Ta.decls;
     List.iter (print_rel_expr_with_semi out) ta.Ta.assumptions;

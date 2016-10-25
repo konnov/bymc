@@ -89,7 +89,10 @@ let prepare_strb () =
     let sk = {
         Sk.name = "strb";
         Sk.nlocs = nlocs; Sk.locs = [ [0]; [1]; [2]; [3]; ];
-        Sk.locals = [ pc ]; Sk.shared = [ x ]; Sk.params = [ n; t; f ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x ];
+        Sk.params = [ n; t; f ];
+        Sk.unknowns = [];
         Sk.nrules = 7;
         Sk.rules = [
             mk_rule 1 2 (IntConst 1) [ asgn x (sum x 1) ];
@@ -240,7 +243,10 @@ let prepare_aba () =
     let sk = {
         Sk.name = "asyn-agreement";
         Sk.nlocs = nlocs; Sk.locs = [ [0]; [1]; [2]; [3]; [4] ];
-        Sk.locals = [ pc ]; Sk.shared = [ x; y ]; Sk.params = [ n; t; f ];
+        Sk.locals = [ pc ];
+        Sk.shared = [ x; y ];
+        Sk.params = [ n; t; f ];
+        Sk.unknowns = [];
         Sk.nrules = 6;
         Sk.rules = [
             mk_rule 1 2 (IntConst 1) [ asgn x (sum x 1); keep y ];
