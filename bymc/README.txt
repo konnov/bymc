@@ -60,7 +60,17 @@ http://forsyte.at/software/bymc/#examples
 
 4. RUNNING
 
-4.1. SPIN
+4.1 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 and POPL'17 papers)
+
+using Z3:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
+
+or another SMT solver:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
+
+4.2. SPIN
 
 # checking models with concrete parameters using spin
 ./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
@@ -81,14 +91,14 @@ Parameterized model checking with the abstraction-refinement:
 ./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
 
-4.2. NuSMV with BDDs
+4.3. NuSMV with BDDs
 
 Parameterized model checking with the abstraction-refinement:
 
 ./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay
 
 
-4.3. NuSMV with BMC
+4.4. NuSMV with BMC
 
 Parameterized model checking with the abstraction-refinement:
 
@@ -108,12 +118,12 @@ or using lingeling for <length2> steps
     ${benchmarks}/bcast-byz.pml relay
 
 
-4.4 FAST
+4.5 FAST
 
 ./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
 
 
-4.5 COMPUTING DIAMETER (of PIA data abstraction)
+4.6 COMPUTING DIAMETER (of PIA data abstraction)
 
 ./analyse ${benchmarks}/bcast-byz.pml bounds
 
@@ -124,16 +134,6 @@ the new way to do that is (our CAV'15 submission):
 ./verifypa-post ${benchmarks}/bcast-byz.pml all
 
 The latter will check the properties as well (Sec. 4.6).
-
-4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 paper)
-
-using Z3:
-
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
-
-or another SMT solver:
-
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
 
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
