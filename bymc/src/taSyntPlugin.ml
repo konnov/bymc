@@ -24,10 +24,11 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
 
         method transform rt =
             let in_skel = ta_source#get_ta in
-            let unknowns_vec = init_unknowns_vec in_skel in
+            let iter = vec_iter_init in_skel 4 in
+            let vec = iter_to_unknowns_vec iter in
             log INFO
-                ("> Replacing the unknowns: " ^ (unknowns_vec_s unknowns_vec));
-            let out_skel = replace_unknowns in_skel unknowns_vec in
+                ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
+            let out_skel = replace_unknowns in_skel vec in
             m_out_skel <- Some out_skel;
             Sk.to_file "synt.ta" out_skel;
             self#get_input0
