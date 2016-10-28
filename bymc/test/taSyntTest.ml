@@ -57,11 +57,60 @@ let mk_foo params =
 let test_next_unknowns_vec _ =
     let tt, locFoo_map, pc, x, y, n, t, a, b = prepare () in
     let sk = mk_foo (tt, locFoo_map, pc, x, y, n, t, a, b) in
-    let init_vec = TaSynt.init_unknowns_vec sk in
-    (* check the specs *)
-    assert_equal ("a", IntConst 0) (List.nth init_vec 0);
-    assert_equal ("b", IntConst 0) (List.nth init_vec 1);
-    ()
+    let pairs_s es =
+        let p (n, e) = sprintf "(%s, %s)" n (SpinIrImp.expr_s e) in
+        "[" ^ (Accums.str_join ", " (List.map p es)) ^ "]"
+    in
+    let assert_equal_pairs expected_s actual =
+        let actual_s = pairs_s actual in
+        assert_equal actual_s expected_s
+            ~msg:(sprintf "expected %s, found %s" expected_s actual_s)
+    in
+    (* check the initial vector *)
+    let iter0 = TaSynt.vec_iter_init sk 2 in
+    let vec0 = TaSynt.iter_to_unknowns_vec iter0 in
+    assert_equal_pairs "[(a, 0), (b, 0)]" vec0;
+    (* the next vectors *)
+    let rec check iter exp_list =
+        match exp_list with
+        | [] -> iter
+
+        | hd :: tl ->
+            let next_iter = TaSynt.vec_iter_next iter in
+            let next_vec = TaSynt.iter_to_unknowns_vec next_iter in
+            assert_equal_pairs hd next_vec;
+            check next_iter tl
+    in
+    let expected_list = [
+        "[(a, 1), (b, 0)]"; "[(a, -1), (b, 0)]";
+        "[(a, 0), (b, 1)]"; "[(a, 0), (b, -1)]";
+        "[(a, 1), (b, 1)]"; "[(a, -1), (b, 1)]";
+            "[(a, 1), (b, -1)]"; "[(a, -1), (b, -1)]";
+        "[(a, 2), (b, 0)]"; "[(a, -2), (b, 0)]";
+        "[(a, 3), (b, 0)]"; "[(a, -3), (b, 0)]";
+        "[(a, 2), (b, 1)]"; "[(a, -2), (b, 1)]";
+            "[(a, 2), (b, -1)]"; "[(a, -2), (b, -1)]";
+        "[(a, 3), (b, 1)]"; "[(a, -3), (b, 1)]";
+            "[(a, 3), (b, -1)]"; "[(a, -3), (b, -1)]";
+        "[(a, 0), (b, 2)]"; "[(a, 0), (b, -2)]";
+        "[(a, 1), (b, 2)]"; "[(a, -1), (b, 2)]";
+            "[(a, 1), (b, -2)]"; "[(a, -1), (b, -2)]";
+        "[(a, 0), (b, 3)]"; "[(a, 0), (b, -3)]";
+        "[(a, 1), (b, 3)]"; "[(a, -1), (b, 3)]";
+            "[(a, 1), (b, -3)]"; "[(a, -1), (b, -3)]";
+        "[(a, 2), (b, 2)]"; "[(a, -2), (b, 2)]";
+            "[(a, 2), (b, -2)]"; "[(a, -2), (b, -2)]";
+        "[(a, 3), (b, 2)]"; "[(a, -3), (b, 2)]";
+            "[(a, 3), (b, -2)]"; "[(a, -3), (b, -2)]";
+        "[(a, 2), (b, 3)]"; "[(a, -2), (b, 3)]";
+            "[(a, 2), (b, -3)]"; "[(a, -2), (b, -3)]";
+        "[(a, 3), (b, 3)]"; "[(a, -3), (b, 3)]";
+            "[(a, 3), (b, -3)]"; "[(a, -3), (b, -3)]";
+    ]
+    in
+    let next_iter = TaSynt.vec_iter_next (check iter0 expected_list) in
+    assert_equal true (TaSynt.vec_iter_end next_iter)
+        ~msg:"expected the iterator end"
 
 
 let suite = "taSynt-suite" >:::
