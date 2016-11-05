@@ -14,6 +14,9 @@ open SpinIr
 open SymbSkel
 
 
+exception No_solution
+
+
 module BI = BatBig_int
 
 (** an iterator over the vectors of unknowns a_1, ..., a_k *)

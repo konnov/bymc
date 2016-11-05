@@ -15,19 +15,23 @@ else
 fi
 
 function mc_compile_first {
+    true
+}
+
+function mc_verify_spec {
     BYMC_FLAGS="--target none --chain synt --spec $PROP"
     echo ${TOOL} ${BYMC_FLAGS} -a "${PROG}"
     tee_or_die "${SYNT_OUT}" "bymc failed" \
         ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
-}
-
-function mc_verify_spec {
     egrep -q "counterexample for .* found" ${SYNT_OUT}
     test "$?" -ne 0
 }
 
 function mc_refine {
-    false
+    if [ -f "cex-fixme.trx" ]; then
+        echo "error" >refinement.out
+        tee_or_die "refinement.out" "refinement error" ${TOOL} -t cex-fixme.trx 2>&1
+    fi
 }
 
 function mc_collect_stat {
