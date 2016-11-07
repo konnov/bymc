@@ -160,6 +160,53 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     nprinted
 
 
+let counterex_of_frame_hist ?(start_no=0) solver sk out frame_hist =
+    let get_vars vars =
+        let query = solver#get_model_query in
+        List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
+        let new_query = solver#submit_query query in
+        let map v =
+            match Smt.Q.try_get new_query (Var v) with
+                | Smt.Q.Result e ->
+                    let k, n = B.demangle v in
+                    (k, n, e)
+                | Smt.Q.Cached ->
+                    raise (Failure "Unexpected Cached")
+        in
+        List.map map vars
+    in
+    solver#set_need_model true;
+    assert (frame_hist <> []);
+    let init_state =
+        let init_f = List.hd frame_hist in
+        let vs =
+            init_f.F.accel_v
+                :: (sk.Sk.params @ init_f.F.loc_vars @ init_f.F.shared_vars)
+        in
+        let init_list = get_vars vs in
+        let add map (_, name, exp) =
+            let ival =
+                match exp with
+                | IntConst i -> i
+                | _ -> raise (Failure "Expected (IntConst _)")
+            in
+            StrMap.add name ival map
+        in
+        List.fold_left add StrMap.empty init_list
+    in
+    let get_move f =
+        let get_accel_factor f =
+            match get_vars [f.F.accel_v] with
+            | [(B.KWarp, _, IntConst i)] -> i
+            | _ -> raise (Failure "Expected an integer acceleration factor")
+        in
+        { C.f_rule_no = f.F.rule_no; C.f_accel = get_accel_factor f }
+    in
+    let moves = List.map get_move frame_hist in
+    { C.f_init_state = init_state;
+      C.f_moves = moves; C.f_loop_index = start_no }
+
+
 let dump_counterex_to_file solver sk form_name frame_hist =
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
@@ -438,7 +485,7 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
                     && rule.Sk.src <> rule.Sk.dst)
                     || IntSet.mem basev#id next_shared
             in
-            let new_frame = F.advance_frame tt sk frame is_new_f in
+            let new_frame = F.advance_frame tt sk frame rule_no is_new_f in
             self#push_frame new_frame;
             let move loc sign =
                 let prev = List.nth frame.F.loc_vars loc in

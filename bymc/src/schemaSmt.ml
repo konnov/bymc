@@ -2,7 +2,9 @@
  An implementation of schemaSmt.
  *)
 
-open BatPrintf
+open Batteries
+open Printf
+open Sexplib
 
 open Accums
 open SpinIr
@@ -24,6 +26,8 @@ module F = struct
     type frame_t = {
         no: int;
             (** sequential number of the frame *)
+        rule_no: int;
+            (** the number of the rule that leads to this frame *)
         accel_v: SpinIr.var;
             (** acceleration factor of the transition leading to the frame *)
         loc_vars: SpinIr.var list;
@@ -68,7 +72,7 @@ module F = struct
     (**
      Introduce a new frame and connect it to the previous one.
      *)
-    let advance_frame tt sk prev_frame is_var_updated_fun =
+    let advance_frame tt sk prev_frame rule_no is_var_updated_fun =
         let next_no = 1 + prev_frame.no in 
         let copy_var ctor_fun (map, vs, new_vs) basev v =
             if is_var_updated_fun basev v
@@ -85,7 +89,7 @@ module F = struct
                 (map, [], new_vars) (List.rev sk.Sk.shared) (List.rev prev_frame.shared_vars) in
         let accel_v = new_var (sprintf "F%06d_warp" next_no) in
         tt#set_type accel_v (new data_type SpinTypes.TUNSIGNED);
-        { no = next_no; accel_v = accel_v;
+        { no = next_no; rule_no = rule_no; accel_v = accel_v;
             loc_vars = locs; shared_vars = shared;
             new_vars = new_vars; var_map = map }
 
@@ -96,12 +100,13 @@ module F = struct
         let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
         let empty_frame = {
             no = -1; (* advance_frame sets no to 0 *)
+            rule_no = -1; (* no rule to lead to the initial frame *)
             accel_v = new_var "";
             loc_vars = loc_vars; shared_vars = sk.Sk.shared;
             new_vars = []; var_map = IntMap.empty
         }
         in
-        advance_frame tt sk empty_frame (fun _ _ -> true)
+        advance_frame tt sk empty_frame (-1) (fun _ _ -> true)
 
     (**
      Push variable declarations into SMT.
@@ -136,6 +141,83 @@ module F = struct
     let assert_frame_eq solver tt vars frame1 frame2 =
         let eq v = BinEx (Spin.EQ, UnEx (Spin.NEXT, Var v), Var v) in
         assert_frame solver tt frame2 frame1 (List.map eq vars)
+end
+
+
+(**
+  A counterexample
+  *)
+module C = struct
+    type move_t = {
+        f_rule_no: int;   (** the rule that performed the move *)
+        f_accel: int;     (** the acceleration factor *)
+    }
+
+    type cex_t = {
+        f_loop_index: int;
+            (** the index of the loop start in the list f_moves *) 
+        f_init_state: int Accums.StrMap.t;
+            (** a variable assignment in the initial state *)
+        f_moves: move_t list;
+            (** the moves made *)
+    }
+
+    module S = Sexp
+
+    let save_cex filename cex =
+        let of_keyval (name, value) =
+            S.List [S.Atom name; S.Atom (string_of_int value)]
+        in
+        let of_move m =
+            S.List [S.Atom (string_of_int m.f_rule_no);
+                    S.Atom (string_of_int m.f_accel)]
+        in
+        let sexp = S.List [
+            S.List [
+                S.Atom "loop";
+                S.Atom (string_of_int cex.f_loop_index)
+            ];
+            S.List [
+                S.Atom "init";
+                S.List (List.map of_keyval (StrMap.bindings cex.f_init_state));
+            ];
+            S.List [
+                S.Atom "moves";
+                S.List (List.map of_move cex.f_moves)
+            ];
+        ]
+        in
+        S.save_hum filename sexp
+
+        
+    let load_cex filename =
+        let add_kv map = function
+            | S.List [S.Atom n; S.Atom v] ->
+                StrMap.add n (int_of_string v) map
+
+            | _ -> raise (Failure "Expected a pair of (string, int)")
+        in
+        let to_move = function
+            | S.List [S.Atom no; S.Atom acc] ->
+                { f_rule_no = int_of_string no; f_accel = int_of_string acc }
+
+            | _ -> raise (Failure "Expected a pair of (int, int)")
+        in
+        let parse = function
+            | S.List [
+                S.List [S.Atom "loop"; S.Atom ls];
+                S.List [S.Atom "init"; S.List init_lst];
+                S.List [S.Atom "moves"; S.List move_lst];
+            ] ->
+            {
+                f_loop_index = int_of_string ls;
+                f_init_state = List.fold_left add_kv StrMap.empty init_lst;
+                f_moves = List.map to_move move_lst;
+            }
+
+            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _))")
+        in
+        parse (S.load_sexp filename)
 end
 
 

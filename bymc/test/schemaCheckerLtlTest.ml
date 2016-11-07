@@ -390,7 +390,7 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
         method push_rule _ sk rule_no =
             let tag = sprintf "(push_rule _ _ %d)" rule_no in
             m_call_stack <- tag :: m_call_stack;
-            let new_frame = F.advance_frame tt sk self#top (fun _ _ -> true) in
+            let new_frame = F.advance_frame tt sk self#top rule_no (fun _ _ -> true) in
             self#push_frame new_frame
 
         method set_check_property_result v =
