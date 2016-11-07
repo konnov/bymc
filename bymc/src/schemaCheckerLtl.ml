@@ -233,7 +233,7 @@ let atomic_to_expr sk ae =
     let ne0 i =
         BinEx (NE, Var (SymbSkel.Sk.locvar sk i), IntConst 0)
     in
-    let varexp i = Var (SymbSkel.Sk.locvar sk i) in
+    (*let varexp i = Var (SymbSkel.Sk.locvar sk i) in*)
     (* We have two choices here: either using boolean expressions
        over tests for zero, or using sums. These two different encodings
        have different performance and memory consumption.
@@ -490,6 +490,7 @@ let find_schema_multiplier invs =
 
 
 let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
+    (* save the counterexample in a human-readable format *)
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
     fprintf out "----------------\n";
@@ -506,7 +507,12 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     end;
     fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;
-    printf "    > Saved counterexample to %s\n" fname
+    printf "    > Saved counterexample to %s\n" fname;
+    (* save the counterexample in a machine-readable format *)
+    let fname = sprintf "cex-%s.seq" form_name in
+    let out = open_out fname in
+    (* TODO: implement here *)
+    close_out out
 
 
 (** append the invariant lists while filtering out the duplicates *)

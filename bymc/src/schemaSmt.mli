@@ -15,6 +15,8 @@ module F: sig
     type frame_t = {
         no: int;
             (** sequential number of the frame *)
+        rule_no: int;
+            (** the number of the rule that leads to this frame *)
         accel_v: SpinIr.var;
             (** acceleration factor of the transition leading to the frame *)
         loc_vars: SpinIr.var list;
@@ -37,7 +39,7 @@ module F: sig
      Introduce a new frame and connect it to the previous one.
      *)
     val advance_frame: SpinIr.data_type_tab -> SymbSkel.Sk.skel_t -> frame_t
-        -> (SpinIr.var -> SpinIr.var -> bool) -> frame_t
+        -> int -> (SpinIr.var -> SpinIr.var -> bool) -> frame_t
 
     (**
      Push variable declarations into SMT.
@@ -63,6 +65,32 @@ module F: sig
     val to_frame_expr: frame_t -> frame_t
         -> Spin.token SpinIr.expr -> Spin.token SpinIr.expr
 end 
+
+
+(**
+  A counterexample
+  *)
+module C: sig
+    type move_t = {
+        f_rule_no: int;   (** the rule that performed the move *)
+        f_accel: int;     (** the acceleration factor *)
+    }
+
+    type cex_t = {
+        f_loop_index: int;
+            (** the index of the loop start in the list f_moves *) 
+        f_init_state: int Accums.StrMap.t;
+            (** a variable assignment in the initial state *)
+        f_moves: move_t list;
+            (** the moves made *)
+    }
+
+    (** save a counterexample to a file *)
+    val save_cex: string -> cex_t -> unit
+
+    (** load a counterexample from a file *)
+    val load_cex: string -> cex_t
+end
 
 
 (**
