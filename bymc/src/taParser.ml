@@ -13,8 +13,9 @@ let position_s lexbuf =
 
 let lex_pp lexfun buf =
     let tok = lexfun buf in
-    (* uncomment to debug:
-    Printf.printf "tok = %s\n" (SpinIrImp.token_s tok);*)
+    (* (* uncomment to debug (you can feed the stream to menhir --interpret): *)
+    Printf.printf "%s " (Talex.token_s tok);
+    *)
     tok
 
 

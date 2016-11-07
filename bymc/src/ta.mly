@@ -65,7 +65,8 @@ let find_loc name =
 %token  INITS ASSUME LOCATIONS RULES SPECIFICATIONS
 %token  LTLF LTLG
 %token  IMPLIES
-%token  OR AND
+%token  OR
+%token  AND
 %token  NE EQ LT GT LE GE
 %token  NOT
 %token  PLUS MINUS
@@ -73,6 +74,13 @@ let find_loc name =
 %token  COLON COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
 %token  PRIME
 %token  EOF
+
+%left IMPLIES
+%left OR
+%left AND
+%right NOT LTLF LTLG
+%left PLUS MINUS
+%left MULT
 
 %start  start
 %type   <TaIr.Ta.ta_t> start
@@ -170,14 +178,14 @@ rule_list
     : { [] }
 
     | CONST COLON src = NAME IMPLIES dst = NAME
-        WHEN grd = bool_expr
+        WHEN LPAREN grd = bool_expr RPAREN
         DO LCURLY acts = act_list RCURLY SEMI rs = rule_list
         {
             let r = TaIr.mk_rule (find_loc src) (find_loc dst) grd acts in
             r :: rs
         } 
     
-    | error { error "expected '<num>: <loc> -> <loc> when (..) do {..}" }
+    | error { error "expected '<num>: <loc> -> <loc> when (..) do {..};" }
     ;
 
 
@@ -195,6 +203,15 @@ rel_expr_list
 
     | e = rel_expr SEMI es = rel_expr_list
         { e :: es }
+    ;
+
+(* we need this to deal with parentheses *)
+rel_expr
+    : e = cmp_expr
+        { e }
+
+    | LPAREN e = rel_expr RPAREN
+        { e }
     ;
 
 locations
@@ -222,35 +239,19 @@ int_list
     ;
 
 bool_expr
-    : e = and_expr
-        { e }
+    : e = cmp_expr
+        { Cmp e }
 
-    | l = and_expr OR r = bool_expr
+    | NOT e = bool_expr
+        { Not e }
+
+    | l = bool_expr OR r = bool_expr
         { Or (l, r) }
 
-    | error { error "expected a boolean expression" }
-    ;
-
-and_expr
-    : e = not_expr
-        { e }
-
-    | l = not_expr AND r = and_expr
+    | l = bool_expr AND r = bool_expr
         { And (l, r) }
-    ;
 
-not_expr
-    : e = cmp_expr      { Cmp e }
-    | NOT e = not_expr  { Not e }
-    | LPAREN e = bool_expr RPAREN { e }
-    ;
-
-(* we need this to deal with parentheses *)
-rel_expr
-    : e = cmp_expr
-        { e }
-
-    | LPAREN e = rel_expr RPAREN
+    | LPAREN e = bool_expr RPAREN
         { e }
     ;
 
@@ -264,21 +265,14 @@ cmp_expr
     ;
 
 arith_expr
-    : e = mul_expr                      { e }
-    | LPAREN e = arith_expr RPAREN      { e }
-    | i = mul_expr PLUS j = mul_expr    { Add (i, j) }
-    | i = mul_expr MINUS j = mul_expr   { Sub (i, j) }
-    ;
-
-mul_expr
-    : i = int_expr                      { i }
-    | i = int_expr MULT j = int_expr    { Mul (i, j) }
-    ;
-
-int_expr
-    : i = CONST                     { Int i }
-    | n = NAME                      { Var n }
-    | n = NAME PRIME                { NextVar n }
+    : i = CONST                             { Int i }
+    | n = NAME                              { Var n }
+    | n = NAME PRIME                        { NextVar n }
+    | LPAREN e = arith_expr RPAREN          { e }
+    | i = arith_expr PLUS j = arith_expr    { Add (i, j) }
+    | i = arith_expr MINUS j = arith_expr   { Sub (i, j) }
+    | i = arith_expr MULT j = arith_expr    { Mul (i, j) }
+    /*| LPAREN error                          { error "expected (arith_expr)" }*/
     ;
 
 
@@ -294,39 +288,27 @@ form_list
     ;
 
 ltl_expr
-    : e = ltl_or_expr { e }
-    | l = ltl_or_expr IMPLIES r = ltl_expr
+    : e = cmp_expr
+        { LtlCmp e }
+
+    | NOT e = ltl_expr
+        { LtlNot e }
+
+    | LTLF e = ltl_expr
+        { LtlF e }
+
+    | LTLG e = ltl_expr
+        { LtlG e }
+
+    | l = ltl_expr IMPLIES r = ltl_expr
         { LtlImplies (l, r) }
-    ;
 
-ltl_or_expr
-    : e = ltl_and_expr
-        { e }
-
-    | l = ltl_and_expr OR r = ltl_or_expr
+    | l = ltl_expr OR r = ltl_expr
         { LtlOr (l, r) }
 
-    | error { error "expected an ltl expression" }
-    ;
-
-ltl_and_expr
-    : e = ltl_modality_expr
-        { e }
-
-    | l = ltl_modality_expr AND r = ltl_and_expr
+    | l = ltl_expr AND r = ltl_expr
         { LtlAnd (l, r) }
-    ;
 
-ltl_modality_expr
-    : LTLF f = ltl_modality_expr { LtlF f}
-    | LTLG f = ltl_modality_expr { LtlG f}
-    | e = ltl_not_expr { e }
-    ;
-
-
-ltl_not_expr
-    : e = cmp_expr      { LtlCmp e }
-    | NOT e = ltl_not_expr  { LtlNot e }
     | LPAREN e = ltl_expr RPAREN { e }
     ;
 
