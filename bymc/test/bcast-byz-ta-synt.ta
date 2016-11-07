@@ -17,6 +17,7 @@ skel Proc {
   assumptions (1) {
     N > 3 * T;
     T >= F;
+    T >= 1;
   }
 
   locations (7) {
@@ -33,16 +34,15 @@ skel Proc {
     nsnt == 0;
   }
 
-  rules (7) {
-  1: loc0 -> loc3
-      when (nsnt >= (a2 * N + b2 * T + c2 - F))
-      do { nsnt' == nsnt + 1; };
-
+  rules (8) {
   /* send a message when having value 1 */
   0: loc1 -> loc2
       when (nsnt >= 0)
       do { nsnt' == nsnt + 1; };
   /* accept directly */
+  1: loc0 -> loc3
+      when (nsnt >= (a2 * N + b2 * T + c2 - F))
+      do { nsnt' == nsnt + 1; };
   2: loc1 -> loc3
       when (nsnt >= a2 * N + b2 * T + c2 - F)
       do { nsnt' == nsnt + 1; };
@@ -51,17 +51,17 @@ skel Proc {
       when (nsnt >= a1 * N + b1 * T + c1 - F)
       do { nsnt' == nsnt + 1; };
   /* accept */
-  3: loc2 -> loc3
+  4: loc2 -> loc3
       when (nsnt >= a2 * N + b2 * T + c2 - F)
       do { nsnt' == nsnt; };
   /* self-loops in all the locations but loc1, from which processes must progress */
-  4: loc0 -> loc0
+  5: loc0 -> loc0
       when (nsnt >= 0)
       do { nsnt' == nsnt; };
-  5: loc2 -> loc2
+  6: loc2 -> loc2
       when (nsnt >= 0)
       do { nsnt' == nsnt; };
-  6: loc3 -> loc3
+  7: loc3 -> loc3
       when (nsnt >= 0)
       do { nsnt' == nsnt; };
   }
@@ -71,10 +71,12 @@ skel Proc {
     /* the following two liveness properties require the following fairness constraint:
        if nsnt > 0, then every process should eventually leave the location loc0.
      */
-    corr: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
-        -> ((loc0 == 0) -> <>(loc3 != 0));
+    corr: /*( <>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
+        -> */ ((loc0 == 0) -> <>(loc3 != 0));
+    /*
     relay: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
+        */
   }
 } /* Proc */
 
