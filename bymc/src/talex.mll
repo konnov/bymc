@@ -27,7 +27,51 @@ let new_line lexbuf =
             Lexing.pos_lnum = lcp.Lexing.pos_lnum + 1;
             Lexing.pos_bol = lcp.Lexing.pos_cnum;
     }
+
+let token_s = function
+    | LTLF -> "LTLF"
+    | LTLG -> "LTLG"
+    | NOT -> "NOT"
+    | AND -> "AND"
+    | OR -> "OR"
+    | PLUS -> "PLUS"
+    | IMPLIES -> "IMPLIES"
+    | MINUS -> "MINUS"
+    | MULT -> "MULT"
+    | NE -> "NE"
+    | EQ -> "EQ"
+    | LT -> "LT"
+    | GT -> "GT"
+    | LE -> "LE"
+    | GE -> "GE"
+    | COMMA -> "COMMA"
+    | LPAREN -> "LPAREN"
+    | RPAREN -> "RPAREN"
+    | LBRACE -> "LBRACE"
+    | RBRACE -> "RBRACE"
+    | LCURLY -> "LCURLY"
+    | RCURLY -> "RCURLY"
+    | COLON -> "COLON"
+    | SEMI -> "SEMI"
+    | PRIME -> "PRIME"
+    | SKEL -> "SKEL"
+    | ASSUME -> "ASSUME"
+    | SPECIFICATIONS -> "SPECIFICATIONS"
+    | DO -> "DO"
+    | INITS -> "INITS"
+    | LOCAL -> "LOCAL"
+    | LOCATIONS -> "LOCATIONS"
+    | PARAMETERS -> "PARAMETERS"
+    | UNKNOWNS -> "UNKNOWNS"
+    | RULES -> "RULES"
+    | SHARED -> "SHARED"
+    | WHEN -> "WHEN"
+    | CONST i -> "CONST" (*Printf.sprintf "CONST(%d)" i*)
+    | NAME n -> "NAME" (*Printf.sprintf "NAME(%s)" n*)
+    | EOF -> "EOF"
+
 }
+
 
 rule token = parse
    [' ' '\t']+           { token lexbuf } (* skip spaces *)

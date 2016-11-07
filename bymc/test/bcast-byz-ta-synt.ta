@@ -1,0 +1,81 @@
+/* a template for the ST reliable broadcast */
+
+skel Proc {
+  /* the control locations are as follows:
+    0 is the initial state with value 0,
+    1 is the initial state with value 1,
+    2 is the sent state,
+    3 is the accepting state
+   */
+  local pc;
+  /* the number of messages sent by the correct processes */
+  shared nsnt;
+  parameters N, T, F;
+  unknowns a1, b1, c1, a2, b2, c2; /* the constants to be found by synthesis */
+
+
+  assumptions (1) {
+    N > 3 * T;
+    T >= F;
+  }
+
+  locations (7) {
+    loc0: [0];
+    loc1: [1];
+    loc2: [2];
+    loc3: [3];
+  }
+
+  inits (8) {
+    (loc0 + loc1) == N - F;
+    loc2 == 0;
+    loc3 == 0;
+    nsnt == 0;
+  }
+
+  rules (7) {
+  1: loc0 -> loc3
+      when (nsnt >= (a2 * N + b2 * T + c2 - F))
+      do { nsnt' == nsnt + 1; };
+
+  /* send a message when having value 1 */
+  0: loc1 -> loc2
+      when (nsnt >= 0)
+      do { nsnt' == nsnt + 1; };
+  /* accept directly */
+  2: loc1 -> loc3
+      when (nsnt >= a2 * N + b2 * T + c2 - F)
+      do { nsnt' == nsnt + 1; };
+  /* send a message */
+  3: loc0 -> loc2
+      when (nsnt >= a1 * N + b1 * T + c1 - F)
+      do { nsnt' == nsnt + 1; };
+  /* accept */
+  3: loc2 -> loc3
+      when (nsnt >= a2 * N + b2 * T + c2 - F)
+      do { nsnt' == nsnt; };
+  /* self-loops in all the locations but loc1, from which processes must progress */
+  4: loc0 -> loc0
+      when (nsnt >= 0)
+      do { nsnt' == nsnt; };
+  5: loc2 -> loc2
+      when (nsnt >= 0)
+      do { nsnt' == nsnt; };
+  6: loc3 -> loc3
+      when (nsnt >= 0)
+      do { nsnt' == nsnt; };
+  }
+  specifications (3) {
+    /* safety */
+    unforg: (loc1 == 0) -> [](loc3 == 0);
+    /* the following two liveness properties require the following fairness constraint:
+       if nsnt > 0, then every process should eventually leave the location loc0.
+     */
+    corr: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
+        -> ((loc0 == 0) -> <>(loc3 != 0));
+    relay: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
+        -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
+  }
+} /* Proc */
+
+
