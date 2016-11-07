@@ -99,13 +99,14 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let new_cex = C.load_cex "cex-fixme.scm" in
             let in_skel = ta_source#get_ta in
             let old_iter, cexs = self#load_iter rt in_skel in
+            let all_cexs = new_cex :: cexs in
             let does_cex_apply iter cex =
                 let vec = iter_to_unknowns_vec iter in
                 let fixed_skel = replace_unknowns in_skel vec in
                 TaSynt.is_cex_applicable fixed_skel cex
             in
             let is_falsified iter =
-                List.exists (does_cex_apply iter) (new_cex :: cexs)
+                List.exists (does_cex_apply iter) all_cexs
             in
             let rec find_new_iter iter =
                 let new_iter = vec_iter_next iter in
@@ -116,14 +117,16 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     else new_iter
             in
             let next_valid_iter = find_new_iter old_iter in
-            self#save_iter rt next_valid_iter (new_cex :: cexs);
+            self#save_iter rt next_valid_iter all_cexs;
             if vec_iter_end next_valid_iter
             then begin
                 let msg = sprintf
-                    "Reached the upper bound %d on each unknown. No solution found"
+                    "Reached the upper bound %d on each unknown. No solution found."
                     (Accums.ipow 2 (self#get_bit_len rt))
                 in
                 log INFO msg;
+                log INFO (sprintf "Collected %d counterexamples in total"
+                    (List.length all_cexs));
                 (false, self#get_output)
             end else begin
                 let vec = iter_to_unknowns_vec next_valid_iter in
