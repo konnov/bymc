@@ -12,6 +12,7 @@ open Accums
 open Spin
 open SpinIr
 open SymbSkel
+open SchemaSmt
 
 
 exception No_solution
@@ -137,4 +138,55 @@ let replace_unknowns sk unknowns_vec =
               Sk.rules = List.map map_rule sk.Sk.rules;
               Sk.inits = List.map sub sk.Sk.inits }
 
+
+(** check, whether a counterexample is applicable to the skeleton *)    
+let is_cex_applicable sk cex =
+    let get_int = function
+        | IntConst i -> i
+        | _ as e ->
+            raise (Failure ("Expected IntConst _, found %s" ^ (SpinIrImp.expr_s e)))
+    in
+    let bind state var =
+        try IntConst (StrMap.find var#get_name state)
+        with Not_found -> Var var
+    in
+    let apply_action state = function
+        | BinEx (EQ, UnEx (NEXT, Var lhs), rhs) ->
+            let rhs_val =
+                Simplif.compute_consts (SpinIr.map_vars (bind state) rhs)
+            in
+            StrMap.add lhs#get_name (get_int rhs_val) state
+            
+        | _ as e ->
+            let m = "Unexpected action: " ^ (SpinIrImp.expr_s e) in
+            raise (Failure m)
+    in
+    let rec is_app state = function
+        | [] ->
+            true    (* no moves left *)
+
+        | m :: tl ->    (* check the guard of the rule associated with m *)
+            let r = List.nth sk.Sk.rules m.C.f_rule_no in
+            let guard_val = Simplif.compute_consts
+                (SpinIr.map_vars (bind state) r.Sk.guard)
+            in
+            match guard_val with
+            | IntConst 0 ->
+                (* the guard evaluates to false *)
+                false
+
+            | IntConst 1 ->
+                (* the guard evaluates to true, go on *)
+                let next_state =
+                    List.fold_left apply_action state r.Sk.act
+                in
+                is_app next_state tl
+
+            | _ as e ->
+                let m = sprintf "Unexpected outcome of the guard %s: %s"
+                    (SpinIrImp.expr_s r.Sk.guard) (SpinIrImp.expr_s guard_val)
+                in
+                raise (Failure m)
+    in
+    is_app cex.C.f_init_state cex.C.f_moves
 

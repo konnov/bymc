@@ -7,6 +7,7 @@ open Plugin
 open Program
 open Spin
 open SymbSkel
+open SchemaSmt
 
 open TaSynt
 
@@ -25,7 +26,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
 
         method transform rt =
             let in_skel = ta_source#get_ta in
-            let iter = self#load_iter rt in_skel in
+            let iter, _ = self#load_iter rt in_skel in
             let vec = iter_to_unknowns_vec iter in
             log INFO
                 ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
@@ -47,7 +48,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         (** As our refinement loop is iteratively calling the tool,
             we load the iterator from file.
          *)
-        method load_iter rt skel =
+        method load_iter rt skel: vec_iter_t * C.cex_t list =
             let iter_exists =
                 try Unix.access m_iter_filename [Unix.F_OK]; true
                 with Unix.Unix_error _ -> false 
@@ -55,11 +56,11 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             if not iter_exists
             then begin
                 let iter = vec_iter_init skel (self#get_bit_len rt) in
-                self#save_iter rt iter;
-                iter
+                self#save_iter rt iter [];
+                iter, []
             end else begin
                 let cin = open_in_bin m_iter_filename in
-                let (iter: vec_iter_t) =
+                let (pair: vec_iter_t * C.cex_t list) =
                     try Marshal.from_channel cin
                     with Failure e ->
                         let m = "\nERROR: The serialized iterator is corrupted."
@@ -68,17 +69,17 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                         raise (Failure e)
                 in
                 close_in cin;
-                iter
+                pair
             end
 
 
         (**
           Save the iterator to file
           *)
-        method save_iter rt iter =
+        method save_iter rt iter (cexs: C.cex_t list) =
             log INFO (sprintf "saving iterator to %s..." m_iter_filename);
             let cout = open_out_bin m_iter_filename in
-            Marshal.to_channel cout iter [Marshal.Closures];
+            Marshal.to_channel cout (iter, cexs) [Marshal.Closures];
             close_out cout
 
 
@@ -95,8 +96,28 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             path
 
         method refine rt path =
-            let iter = vec_iter_next (self#load_iter rt self#get_ta) in
-            if vec_iter_end iter
+            let new_cex = C.load_cex "cex-fixme.scm" in
+            let in_skel = ta_source#get_ta in
+            let old_iter, cexs = self#load_iter rt in_skel in
+            let does_cex_apply iter cex =
+                let vec = iter_to_unknowns_vec iter in
+                let fixed_skel = replace_unknowns in_skel vec in
+                TaSynt.is_cex_applicable fixed_skel cex
+            in
+            let is_falsified iter =
+                List.exists (does_cex_apply iter) (new_cex :: cexs)
+            in
+            let rec find_new_iter iter =
+                let new_iter = vec_iter_next iter in
+                if (vec_iter_end new_iter)
+                then new_iter
+                else if (is_falsified new_iter)
+                    then find_new_iter new_iter
+                    else new_iter
+            in
+            let next_valid_iter = find_new_iter old_iter in
+            self#save_iter rt next_valid_iter (new_cex :: cexs);
+            if vec_iter_end next_valid_iter
             then begin
                 let msg = sprintf
                     "Reached the upper bound %d on each unknown. No solution found"
@@ -105,10 +126,9 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 log INFO msg;
                 (false, self#get_output)
             end else begin
-                let vec = iter_to_unknowns_vec iter in
+                let vec = iter_to_unknowns_vec next_valid_iter in
                 log INFO
                     ("> Next unknowns to try: " ^ (unknowns_vec_s vec));
-                self#save_iter rt iter;
                 (true, self#get_output)
             end
 

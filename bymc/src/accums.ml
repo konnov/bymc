@@ -69,6 +69,13 @@ let str_map_s elem_fun map =
     in
     StringMap.fold f map ""
 
+
+(** create a map out of a list of pairs *)
+let str_map_of_pair_list (init_map: 'b StrMap.t) (pairs: (string * int) list) =
+    let add m (k, v) = StrMap.add k v m in
+    List.fold_left add init_map pairs
+
+
 (** the last element of the list *)    
 let rec list_end = function
     | [] -> raise (Invalid_argument "list_end []")
