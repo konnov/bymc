@@ -509,10 +509,10 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     close_out out;
     printf "    > Saved counterexample to %s\n" fname;
     (* save the counterexample in a machine-readable format *)
-    let fname = sprintf "cex-%s.seq" form_name in
-    let out = open_out fname in
-    (* TODO: implement here *)
-    close_out out
+    (* write in a machine-readable format *)
+    let machine_fname = sprintf "cex-%s.scm" form_name in
+    SchemaSmt.C.save_cex machine_fname
+        (SchemaChecker.counterex_of_frame_hist solver sk (prefix_frames @ loop_frames))
 
 
 (** append the invariant lists while filtering out the duplicates *)

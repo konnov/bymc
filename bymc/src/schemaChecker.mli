@@ -35,6 +35,11 @@ val write_counterex:
     ?start_no:int  -> Smt.smt_solver -> SymbSkel.Sk.skel_t -> unit BatIO.output
     -> F.frame_t list -> int
 
+(* Transform a counterexample into cex_t *)
+val counterex_of_frame_hist:
+    ?start_no:int  -> Smt.smt_solver -> SymbSkel.Sk.skel_t
+    -> F.frame_t list -> SchemaSmt.C.cex_t
+
 (**
  An SMT implementation of tac_t.
 
