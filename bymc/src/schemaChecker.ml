@@ -160,7 +160,7 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     nprinted
 
 
-let counterex_of_frame_hist ?(start_no=0) solver sk out frame_hist =
+let counterex_of_frame_hist ?(start_no=0) solver sk frame_hist =
     let get_vars vars =
         let query = solver#get_model_query in
         List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
@@ -179,10 +179,7 @@ let counterex_of_frame_hist ?(start_no=0) solver sk out frame_hist =
     assert (frame_hist <> []);
     let init_state =
         let init_f = List.hd frame_hist in
-        let vs =
-            init_f.F.accel_v
-                :: (sk.Sk.params @ init_f.F.loc_vars @ init_f.F.shared_vars)
-        in
+        let vs = sk.Sk.params @ init_f.F.loc_vars @ init_f.F.shared_vars in
         let init_list = get_vars vs in
         let add map (_, name, exp) =
             let ival =
@@ -202,7 +199,10 @@ let counterex_of_frame_hist ?(start_no=0) solver sk out frame_hist =
         in
         { C.f_rule_no = f.F.rule_no; C.f_accel = get_accel_factor f }
     in
-    let moves = List.map get_move frame_hist in
+    let is_nonzero m =
+        m.C.f_accel <> 0
+    in
+    let moves = List.filter is_nonzero (List.map get_move frame_hist) in
     { C.f_init_state = init_state;
       C.f_moves = moves; C.f_loop_index = start_no }
 
