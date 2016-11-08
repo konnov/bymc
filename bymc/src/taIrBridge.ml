@@ -171,12 +171,14 @@ let skel_of_ta ta =
         SpinIr.map_vars (fun v -> SpinIr.Var (var_fun v#get_name))
     in
     let locals = map is_local in
+    let params = map is_param in
+    List.iter (fun v -> v#set_symbolic) params; (* mark parameters as symbolic *)
     {
         Sk.name = ta.Ta.name; Sk.nlocs = List.length ta.Ta.locs;
         Sk.locs = List.map snd ta.Ta.locs;
         Sk.locals = map is_local;
         Sk.shared = map is_shared;
-        Sk.params = map is_param;
+        Sk.params = params;
         Sk.unknowns = map is_unknown;
         Sk.assumes = List.map (map_rel_expr var_fun) ta.Ta.assumptions;
         Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
