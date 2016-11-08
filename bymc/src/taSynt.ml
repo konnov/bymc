@@ -136,7 +136,9 @@ let replace_unknowns sk unknowns_vec =
     { sk with Sk.unknowns = [];
               Sk.assumes = List.map sub sk.Sk.assumes;
               Sk.rules = List.map map_rule sk.Sk.rules;
-              Sk.inits = List.map sub sk.Sk.inits }
+              Sk.inits = List.map sub sk.Sk.inits;
+              Sk.forms = StrMap.map sub sk.Sk.forms;
+    }
 
 
 (** check, whether a counterexample is applicable to the skeleton *)    
@@ -182,7 +184,7 @@ let is_cex_applicable sk cex =
                 in
                 is_app next_state tl
 
-            | _ as e ->
+            | _ ->
                 let m = sprintf "Unexpected outcome of the guard %s: %s"
                     (SpinIrImp.expr_s r.Sk.guard) (SpinIrImp.expr_s guard_val)
                 in
