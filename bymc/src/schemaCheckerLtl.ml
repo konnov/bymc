@@ -1419,7 +1419,7 @@ let can_handle_spec type_tab sk form =
         ignore (extract_safety_or_utl type_tab sk form);
         true
     with IllegalLtl_error m ->
-        Debug.ltrace Trc.scl (lazy (sprintf "IllegalLtl_error: %s\n" m));
+        log INFO (sprintf "IllegalLtl_error: %s\n" m);
         false
 
 
