@@ -310,7 +310,7 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
         inherit SchemaSmt.tac_t
 
         (** the predefined result of check_property *)
-        val mutable m_check_property = false
+        val mutable m_check_property_fun = (fun _ -> false)
         (** the frame stack *)
         val mutable m_frames = []
         (** we record the method calls here *)
@@ -379,7 +379,7 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
             let tag = sprintf "(check_property %s _)" (SpinIrImp.expr_s exp) in
             m_call_stack <- tag :: m_call_stack;
             (* if m_check_property then no bug else bug *)
-            m_check_property
+            m_check_property_fun ()
 
         method enter_context =
             m_call_stack <- "(enter_context)" :: m_call_stack
@@ -393,8 +393,8 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
             let new_frame = F.advance_frame tt sk self#top rule_no (fun _ _ -> true) in
             self#push_frame new_frame
 
-        method set_check_property_result v =
-            m_check_property <- v
+        method set_check_property_fun (f: unit -> bool) =
+            m_check_property_fun <- f
 
     end
 
@@ -403,6 +403,14 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     let sk, tt = prepare_strb () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t tt in
+    let call_count = ref 0 in
+    let prop_fun _ =
+        let cc = !call_count in
+        let res = (cc mod 2) = 0 in
+        call_count := !call_count + 1;
+        res
+    in
+    tac#set_check_property_fun prop_fun;
     let ltl_form = make_strb_unforg sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let bad_form =
@@ -425,6 +433,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         (* the only path *)
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
@@ -432,6 +441,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(push_rule _ _ 0)";    (* enables g1 *)
         "(assert_top (1 >= F000002_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 0)";
@@ -441,6 +451,7 @@ let gen_and_check_schemas_on_the_fly_strb _ =
         "(push_rule _ _ 0)";
         "(assert_top (1 >= (F000006_warp + F000005_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 2)";
@@ -461,6 +472,14 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     let sk, tt = prepare_aba () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t tt in
+    let call_count = ref 0 in
+    let prop_fun _ =
+        let cc = !call_count in
+        let res = (cc mod 2) = 0 in
+        call_count := !call_count + 1;
+        res
+    in
+    tac#set_check_property_fun prop_fun;
     let ltl_form = make_aba_unforg sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let bad_form =
@@ -474,15 +493,15 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
-    assert_equal false result.m_is_err_found
-        ~msg:"Expected no errors, found one";
-
     let hist = tac#get_call_history in
-    let check_prop = sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form) in
+    let check_prop =
+        sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form)
+    in
     let expected_hist = [
         (* the first path *)
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
@@ -490,6 +509,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 0)"; (* enables g1 *)
         "(assert_top (1 >= F000002_warp) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 0)";
@@ -501,6 +521,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 3)"; (* enables g2 *)
         "(assert_top (1 >= ((F000008_warp + F000007_warp) + F000006_warp)) _)";
         "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)";
@@ -510,6 +531,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
         "(assert_top (1 >= ((((F000018_warp + F000017_warp) + F000016_warp) + F000015_warp) + F000014_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -525,6 +547,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         (* the second path *)
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
@@ -532,6 +555,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 0)"; (* enables g2 *)
         "(assert_top (1 >= F000026_warp) _)";
         "(assert_top (y >= ((t + 1) - f)) _)"; (* g2 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
@@ -539,6 +563,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g3 *)
         "(assert_top (1 >= ((F000032_warp + F000031_warp) + F000030_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 5)";
@@ -548,6 +573,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 4)"; "(push_rule _ _ 5)"; (* enables g1 *)
         "(assert_top (1 >= (((F000040_warp + F000039_warp) + F000038_warp) + F000037_warp)) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)";  (* g1 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -563,6 +589,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         (* the third path *)
         "(enter_context)";
         "(assert_top ((((loc1 == 0) && (loc2 == 0)) && (loc3 == 0)) && (loc4 == 0)) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         check_prop;
@@ -570,6 +597,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 0)"; (* enables g2 *)
         "(assert_top (1 >= F000048_warp) _)";
         "(assert_top (y >= ((t + 1) - f)) _)";  (* g2 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)";
         check_prop;
@@ -577,6 +605,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 2)"; "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; (* enables g1 *)
         "(assert_top (1 >= ((F000054_warp + F000053_warp) + F000052_warp)) _)";
         "(assert_top (x >= ((1 + ((n - t) / 2)) - f)) _)"; (* g1 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)";
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)";
@@ -586,6 +615,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(push_rule _ _ 0)"; "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; (* enables g3 *)
         "(assert_top (1 >= ((((F000064_warp + F000063_warp) + F000062_warp) + F000061_warp) + F000060_warp)) _)";
         "(assert_top (y >= (((2 * t) + 1) - f)) _)";    (* g3 is enabled *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Leaf)";
         "(push_rule _ _ 1)"; "(push_rule _ _ 2)"; "(push_rule _ _ 0)";
         "(push_rule _ _ 4)"; "(push_rule _ _ 3)"; "(push_rule _ _ 5)";
@@ -599,13 +629,24 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(leave_node Intermediate)";
         "(leave_context)";
     ] in
-    assert_eq_hist expected_hist hist
+    assert_eq_hist expected_hist hist;
+    assert_equal false result.m_is_err_found
+        ~msg:"Expected no errors, found one"
+
 
 
 let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let sk, tt = prepare_strb () in
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t tt in
+    let call_count = ref 0 in
+    let prop_fun _ =
+        let cc = !call_count in
+        let res = (cc != 2 && cc != 7 && cc != 11) in
+        call_count := !call_count + 1;
+        res
+    in
+    tac#set_check_property_fun prop_fun;
     let ltl_form = make_strb_corr sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let ntt = tt#copy in
@@ -614,9 +655,6 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
-    assert_equal false result.m_is_err_found
-        ~msg:"Expected no errors, found one";
-
     let hist = tac#get_call_history in
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
@@ -624,10 +662,12 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         "(assert_top ( ! (x >= ((1 + t) - f))) _)";
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node LoopStart)";        (* entering the loop *)
         "(push_rule _ _ 4)";             (* a self-loop *)
         (*
@@ -646,6 +686,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         "(enter_context)";
@@ -653,6 +694,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (1 >= F000004_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 0)";
@@ -662,9 +704,11 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (1 >= (F000008_warp + F000007_warp)) _)";
         "(assert_top (x >= ((n - t) - f)) _)"; (* g2 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 0)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node LoopStart)";                      (* entering the loop *)
         "(push_rule _ _ 4)";
         "(push_rule _ _ 5)";
@@ -689,6 +733,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
         "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         "(enter_context)";
@@ -696,10 +741,12 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(assert_top (1 >= F000014_warp) _)";
         "(assert_top (x >= ((1 + t) - f)) _)"; (* g1 is actually enabled *)
         "(assert_top (loc3 == 0) _)";    (* the G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 1)";
         "(push_rule _ _ 0)";
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node LoopStart)";                      (* entering the loop *)
         "(push_rule _ _ 4)";
         "(push_rule _ _ 5)";
@@ -715,8 +762,12 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
         "(leave_context)";
         "(leave_node Intermediate)";
         "(leave_context)";
-    ] in
-    assert_eq_hist expected_hist hist
+    ]
+    in
+    assert_eq_hist expected_hist hist;
+    assert_equal false result.m_is_err_found
+        ~msg:"Expected no errors, found one"
+
 
 
 let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
@@ -724,7 +775,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
     let deps = PorBounds.compute_deps ~against_only:false !SmtTest.solver sk in
     let tac = new mock_tac_t tt in
     (* force check_property to return true instead of false *)
-    tac#set_check_property_result true;
+    let always_true _ = true in
+    tac#set_check_property_fun always_true;
     let ltl_form = make_strb_corr sk in
     let spec = extract_safety_or_utl tt sk ltl_form in
     let ntt = tt#copy in
@@ -740,13 +792,15 @@ let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
         "(enter_context)";
-        "(assert_top (loc3 == 0) _)";    (* k[3] = 0 *)
+        "(assert_top (loc3 == 0) _)";       (* k[3] = 0 *)
         "(assert_top (((loc0 == 0) && (loc2 == 0)) && (loc3 == 0)) _)";
-        "(assert_top (loc3 == 0) _)";    (* G k[3] = 0 *)
+        "(assert_top (loc3 == 0) _)";       (* G k[3] = 0 *)
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node Intermediate)";
         "(push_rule _ _ 0)";
         "(assert_top ( ! (x >= ((1 + t) - f))) _)";
         "(assert_top ( ! (x >= ((n - t) - f))) _)";
+        "(check_property 1 _)";             (* check for unsat *)
         "(enter_node LoopStart)";        (* entering the loop *)
         "(push_rule _ _ 4)";             (* a self-loop *)
         "(check_property 1 _)";     (* the point where the property should be checked *)
