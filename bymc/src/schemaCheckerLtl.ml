@@ -804,7 +804,8 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
 
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
-        if (not reach_opt) || solver#check
+        if (not reach_opt)
+            || tac#check_property (IntConst 1) ignore
         then begin
             (* first, extend an execution with a suffix
                 that does not enable new conditions *)
