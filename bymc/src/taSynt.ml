@@ -181,6 +181,9 @@ let is_cex_applicable sk cex =
             let guard_val = Simplif.compute_consts
                 (SpinIr.map_vars (bind state) r.Sk.guard)
             in
+            printf " rule %d: guard %s evaluates to %s\n"
+                m.C.f_rule_no
+                (SpinIrImp.expr_s r.Sk.guard) (SpinIrImp.expr_s guard_val);
             match guard_val with
             | IntConst 0 ->
                 (* the guard evaluates to false *)
