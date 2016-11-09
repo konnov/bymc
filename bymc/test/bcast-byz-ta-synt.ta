@@ -68,13 +68,18 @@ skel Proc {
   specifications (3) {
     /* safety */
     unforg: (loc1 == 0) -> [](loc3 == 0);
-    /* the following two liveness properties require the following fairness constraint:
-       if nsnt > 0, then every process should eventually leave the location loc0.
-     */
-    corr: /*( <>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
-        -> */ ((loc0 == 0) -> <>(loc3 != 0));
+    corr: ( <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0))
+            && <>[](nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
+            && <>[]((nsnt < a2 * N + b2 * T + c2)
+                || loc2 == 0)
+            && <>[](loc1 == 0))
+        -> ((loc0 == 0) -> <>(loc3 != 0));
     /*
-    relay: (<>[]((nsnt == 0 || loc0 == 0)) && <>[](loc1 == 0))
+    relay: ( <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0))
+            && <>[](nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
+            && <>[]((nsnt < a2 * N + b2 * T + c2)
+                || loc2 == 0)
+            && <>[](loc1 == 0))
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
         */
   }
