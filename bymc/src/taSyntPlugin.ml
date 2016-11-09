@@ -28,8 +28,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let in_skel = ta_source#get_ta in
             let iter, _ = self#load_iter rt in_skel in
             let vec = iter_to_unknowns_vec iter in
-            log INFO
-                ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
+            log INFO ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
             let out_skel = replace_unknowns in_skel vec in
             m_out_skel <- Some out_skel;
             Sk.to_file "synt.ta" out_skel;
@@ -39,6 +38,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         method get_ta =
             match m_out_skel with
             | Some sk -> sk
+
             | None ->
                 let m =
                     "Plugin ta_synt_plugin_t has not been called yet"
@@ -96,24 +96,36 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             path
 
         method refine rt path =
-            let new_cex = C.load_cex "cex-fixme.scm" in
             let in_skel = ta_source#get_ta in
             let old_iter, cexs = self#load_iter rt in_skel in
-            let all_cexs = new_cex :: cexs in
-            let does_cex_apply iter cex =
-                let vec = iter_to_unknowns_vec iter in
-                let fixed_skel = replace_unknowns in_skel vec in
-                TaSynt.is_cex_applicable fixed_skel cex
-            in
-            let is_falsified iter =
-                List.exists (does_cex_apply iter) all_cexs
+            let new_cex = C.load_cex "cex-fixme.scm" in
+            C.save_cex (sprintf "cex%d.scm" (List.length cexs)) new_cex;
+            let all_cexs = cexs @ [new_cex] in
+            let find_applicable_cex iter cexs =
+                let rec find num = function
+                    | [] -> -1
+
+                    | hd :: tl ->
+                        let vec = iter_to_unknowns_vec iter in
+                        let fixed_skel = replace_unknowns in_skel vec in
+                        if TaSynt.is_cex_applicable fixed_skel hd
+                        then num
+                        else find (num + 1) tl
+                in
+                find 0 cexs
             in
             let rec find_new_iter iter =
                 let new_iter = vec_iter_next iter in
                 if (vec_iter_end new_iter)
                 then new_iter
-                else if (is_falsified new_iter)
-                    then find_new_iter new_iter
+                else let cex_num = find_applicable_cex new_iter all_cexs in
+                    if (cex_num >= 0)
+                    then begin
+                        let vec = iter_to_unknowns_vec new_iter in
+                        log INFO (sprintf "> %s is falsified by counterexample %d: "
+                            (unknowns_vec_s vec) cex_num);
+                            find_new_iter new_iter
+                    end
                     else new_iter
             in
             let next_valid_iter = find_new_iter old_iter in
