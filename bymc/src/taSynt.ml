@@ -152,12 +152,21 @@ let is_cex_applicable sk cex =
         try IntConst (StrMap.find var#get_name state)
         with Not_found -> Var var
     in
-    let apply_action state = function
-        | BinEx (EQ, UnEx (NEXT, Var lhs), rhs) ->
+    let apply_action accel state = function
+        | BinEx (EQ, UnEx (NEXT, Var lhs),
+                BinEx (PLUS, Var rhs, IntConst i)) ->
+                    (* multiply the added value by the acceleration factor *)
+            let mul_rhs =
+                BinEx (PLUS, Var rhs, IntConst (i * accel)) in
             let rhs_val =
-                Simplif.compute_consts (SpinIr.map_vars (bind state) rhs)
+                Simplif.compute_consts (SpinIr.map_vars (bind state) mul_rhs)
             in
             StrMap.add lhs#get_name (get_int rhs_val) state
+
+        | BinEx (EQ, UnEx (NEXT, Var lhs), Var rhs) ->
+            if lhs#get_name = rhs#get_name
+            then state
+            else StrMap.add lhs#get_name (StrMap.find rhs#get_name state) state
             
         | _ as e ->
             let m = "Unexpected action: " ^ (SpinIrImp.expr_s e) in
@@ -180,7 +189,7 @@ let is_cex_applicable sk cex =
             | IntConst 1 ->
                 (* the guard evaluates to true, go on *)
                 let next_state =
-                    List.fold_left apply_action state r.Sk.act
+                    List.fold_left (apply_action m.C.f_accel) state r.Sk.act
                 in
                 is_app next_state tl
 
