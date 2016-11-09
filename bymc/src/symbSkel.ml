@@ -108,9 +108,10 @@ module Sk = struct
         fprintf out "  }\n\n";
         let prule (i, r) =
             let loc j = locname (List.nth sk.locs j) in
+            let e_s e = (expr_s e) ^ ";" in
             fprintf out "  %d: %s -> %s\n      when (%s)\n      do { %s };\n"
                 i (loc r.src) (loc r.dst) (expr_s r.guard)
-                (str_join "; " (List.map expr_s r.act))
+                (str_join " " (List.map e_s r.act))
         in
         fprintf out "  rules (%d) {\n" sk.nrules;
         List.iter prule (lst_enum sk.rules);
