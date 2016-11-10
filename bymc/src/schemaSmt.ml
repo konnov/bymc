@@ -154,12 +154,16 @@ module C = struct
     }
 
     type cex_t = {
+        f_form_name: string;
+            (** formula name *)
         f_loop_index: int;
             (** the index of the loop start in the list f_moves *) 
         f_init_state: int Accums.StrMap.t;
             (** a variable assignment in the initial state *)
         f_moves: move_t list;
             (** the moves made *)
+        f_iorder: int list;
+            (** the order that has generated the counterexample *)
     }
 
     module S = Sexp
@@ -174,6 +178,10 @@ module C = struct
         in
         let sexp = S.List [
             S.List [
+                S.Atom "spec";
+                S.Atom cex.f_form_name;
+            ];
+            S.List [
                 S.Atom "loop";
                 S.Atom (string_of_int cex.f_loop_index)
             ];
@@ -184,6 +192,10 @@ module C = struct
             S.List [
                 S.Atom "moves";
                 S.List (List.map of_move cex.f_moves)
+            ];
+            S.List [
+                S.Atom "iorder";
+                S.List (List.map (fun i-> S.Atom (string_of_int i)) cex.f_iorder)
             ];
         ]
         in
@@ -203,19 +215,27 @@ module C = struct
 
             | _ -> raise (Failure "Expected a pair of (int, int)")
         in
+        let to_int = function
+            | S.Atom i_s -> int_of_string i_s
+            | _ -> raise (Failure "Expected an integer")
+        in
         let parse = function
             | S.List [
+                S.List [S.Atom "spec"; S.Atom form_name];
                 S.List [S.Atom "loop"; S.Atom ls];
                 S.List [S.Atom "init"; S.List init_lst];
                 S.List [S.Atom "moves"; S.List move_lst];
+                S.List [S.Atom "iorder"; S.List iorder];
             ] ->
             {
+                f_form_name = form_name;
                 f_loop_index = int_of_string ls;
                 f_init_state = List.fold_left add_kv StrMap.empty init_lst;
                 f_moves = List.map to_move move_lst;
+                f_iorder = List.map to_int iorder;
             }
 
-            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _))")
+            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _) (iorder _))")
         in
         parse (S.load_sexp filename)
 end

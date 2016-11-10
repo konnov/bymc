@@ -77,12 +77,16 @@ module C: sig
     }
 
     type cex_t = {
+        f_form_name: string;
+            (** formula name *)
         f_loop_index: int;
             (** the index of the loop start in the list f_moves *) 
         f_init_state: int Accums.StrMap.t;
             (** a variable assignment in the initial state *)
         f_moves: move_t list;
             (** the moves made *)
+        f_iorder: int list;
+            (** the order that has generated the counterexample *)
     }
 
     (** save a counterexample to a file *)

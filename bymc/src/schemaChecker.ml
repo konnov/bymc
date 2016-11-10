@@ -160,7 +160,7 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     nprinted
 
 
-let counterex_of_frame_hist ?(start_no=0) solver sk frame_hist =
+let counterex_of_frame_hist ?(start_no=0) solver sk form_name iorder frame_hist =
     let get_vars vars =
         let query = solver#get_model_query in
         List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
@@ -199,12 +199,10 @@ let counterex_of_frame_hist ?(start_no=0) solver sk frame_hist =
         in
         { C.f_rule_no = f.F.rule_no; C.f_accel = get_accel_factor f }
     in
-    let is_nonzero m =
-        m.C.f_accel <> 0
-    in
-    let moves = List.filter is_nonzero (List.map get_move frame_hist) in
-    { C.f_init_state = init_state;
-      C.f_moves = moves; C.f_loop_index = start_no }
+    let moves = List.map get_move (List.tl frame_hist) in
+    { C.f_form_name = form_name;
+      C.f_init_state = init_state; C.f_loop_index = start_no;
+      C.f_moves = moves; C.f_iorder = iorder; }
 
 
 let dump_counterex_to_file solver sk form_name frame_hist =

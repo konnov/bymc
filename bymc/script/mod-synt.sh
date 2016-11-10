@@ -28,9 +28,11 @@ function mc_verify_spec {
 }
 
 function mc_refine {
-    if [ -f "cex-fixme.trx" ]; then
+    SPEC=`egrep "counterexample for .* found" ${SYNT_OUT} \
+        | sed 's/counterexample for \(.*\) found/\\1/'`
+    if [ "$SPEC" != "" ]; then
         echo "error" >refinement.out
-        tee_or_die "refinement.out" "refinement error" ${TOOL} -t cex-fixme.trx 2>&1
+        tee_or_die "refinement.out" "refinement error" ${TOOL} -t cex-${SPEC}.trx 2>&1
     fi
 }
 
