@@ -423,7 +423,8 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
+            !SmtTest.solver sk ("unforg", spec) deps
+            (tac :> tac_t) (fun _ -> ()) in
     assert_equal false result.m_is_err_found
         ~msg:"Expected no errors, found one";
 
@@ -492,7 +493,8 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
+            !SmtTest.solver sk ("unforg", spec) deps
+            (tac :> tac_t) (fun _ -> ()) in
     let hist = tac#get_call_history in
     let check_prop =
         sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form)
@@ -654,7 +656,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
+            !SmtTest.solver sk ("corr", spec) deps
+            (tac :> tac_t) (fun _ -> ()) in
     let hist = tac#get_call_history in
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
@@ -784,7 +787,8 @@ let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
     tac#push_frame initf;
     let result =
         SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
-            !SmtTest.solver sk spec deps (tac :> tac_t) (fun _ -> ()) in
+            !SmtTest.solver sk ("corr", spec) deps
+            (tac :> tac_t) (fun _ -> ()) in
     assert_equal true result.m_is_err_found
         ~msg:"Expected an error, found none";
 

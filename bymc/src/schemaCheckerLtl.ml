@@ -1033,11 +1033,9 @@ let accum_stat r_st watch no schema_len =
 
 
 (**
-  Construct the schema tree and check it on-the-fly.
-
-  The construction is similar to compute_static_schema_tree, but is dynamic.
- *)
-let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_fun =
+  Create a cut graph from a UTL_TB formula and add a threshold graph.
+  *)
+let mk_cut_and_threshold_graph sk deps spec =    
     let nelems, order, rmap =
         match spec with
         | UTL (_, utl_form) ->
@@ -1059,6 +1057,16 @@ let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_
     in
     (* add the guards *)
     let size, order, rev_map = poset_mixin_guards deps nelems order rmap in
+    (size, order, rev_map)
+
+
+(**
+  Construct the schema tree and check it on-the-fly.
+
+  The construction is similar to compute_static_schema_tree, but is dynamic.
+ *)
+let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_fun =
+    let size, order, rev_map = mk_cut_and_threshold_graph sk deps spec in
     let get_elem num =
         try IntMap.find num rev_map
         with Not_found ->
