@@ -134,6 +134,7 @@ let test_is_cex_applicable _ =
     let unknowns_vec = [("a", IntConst 2); ("b", IntConst 1)] in
     let fixed_skel = TaSynt.replace_unknowns sk unknowns_vec in
     let cex0 = {
+        C.f_form_name = "corr";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -144,11 +145,13 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 0; C.f_accel = 1 };
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
+        C.f_iorder = [0; 1];
     }
     in
     assert_equal false (TaSynt.is_cex_applicable fixed_skel cex0)
         ~msg:"expected the counterexample 0 to be inapplicable";
     let cex1 = {
+        C.f_form_name = "corr";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -158,11 +161,13 @@ let test_is_cex_applicable _ =
         C.f_moves = [
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
+        C.f_iorder = [0; 1];
     }
     in
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex1)
         ~msg:"expected the counterexample 1 to be applicable";
     let cex2 = {
+        C.f_form_name = "corr";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -173,6 +178,7 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 0; C.f_accel = 1 };
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
+        C.f_iorder = [0; 1];
     }
     in
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex2)
