@@ -102,7 +102,8 @@ val find_error:
  *)
 val gen_and_check_schemas_on_the_fly:
     Smt.smt_solver
-        -> SymbSkel.Sk.skel_t -> spec_t
+        -> SymbSkel.Sk.skel_t
+        -> (string * spec_t)
         -> PorBounds.D.deps_t -> SchemaSmt.tac_t
         -> (unit -> unit)
         -> result_t

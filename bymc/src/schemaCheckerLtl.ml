@@ -489,7 +489,7 @@ let find_schema_multiplier invs =
     1 + List.fold_left worst 0 invs
 
 
-let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
+let dump_counterex_to_file solver sk form_name iorder prefix_frames loop_frames =
     (* save the counterexample in a human-readable format *)
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
@@ -510,9 +510,10 @@ let dump_counterex_to_file solver sk form_name prefix_frames loop_frames =
     printf "    > Saved counterexample to %s\n" fname;
     (* save the counterexample in a machine-readable format *)
     (* write in a machine-readable format *)
-    let machine_fname = sprintf "cex-%s.scm" form_name in
+    let machine_fname = "cex-fixme.scm" in
     SchemaSmt.C.save_cex machine_fname
-        (SchemaChecker.counterex_of_frame_hist solver sk (prefix_frames @ loop_frames))
+        (SchemaChecker.counterex_of_frame_hist
+            solver sk form_name iorder (prefix_frames @ loop_frames))
 
 
 (** append the invariant lists while filtering out the duplicates *)
@@ -566,7 +567,7 @@ let fail_first a b =
     else Lazy.force b
 
 
-let check_one_order solver sk spec deps tac ~reach_opt elem_order =
+let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, elem_order) =
     let is_incr_safety, init_form, safety_bad =
         (* In the incremental mode, we distinguish between safety and the general LTL.
            Thus, for safety we do not enumerate possible orderings of F, but
@@ -638,7 +639,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
         assert (mult >= 1);
         BatEnum.iter push_schema (1--mult);
         let on_error frame_hist =
-            dump_counterex_to_file solver sk "fixme" frame_hist [];
+            dump_counterex_to_file solver sk form_name iorder frame_hist [];
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
@@ -669,7 +670,7 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
                 let on_error frame_hist =
                     let prefix, loop =
                         BatList.span (fun f -> not (in_loop f)) frame_hist in
-                    dump_counterex_to_file solver sk "fixme" prefix loop
+                    dump_counterex_to_file solver sk form_name iorder prefix loop
                 in
                 printf " END.\n"; flush stdout;
                 (* postpone an expensive check with the closed loop *)
@@ -941,7 +942,8 @@ let compute_fingerprint order =
     BatBuffer.contents buf
 
 
-let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
+let enum_orders (map_fun: int -> po_elem_t)
+        (order_fun: (int list * po_elem_t list) -> 'r)
         (is_end_fun: 'r -> bool) (result: 'r ref) (iter: linord_iter_t): 'r =
     let visited = Hashtbl.create 1024 in
     let not_loop e = (e <> po_loop) in
@@ -966,7 +968,7 @@ let enum_orders (map_fun: int -> po_elem_t) (order_fun: po_elem_t list -> 'r)
             (*printf "  visiting %s\n" fingerprint;*)
             Hashtbl.add visited fingerprint 1;
             let eorder = List.map map_fun filtered in
-            result := order_fun eorder;
+            result := order_fun (filtered, eorder);
         end;
         if not (is_end_fun !result)
         then linord_iter_next iter;
@@ -1035,7 +1037,7 @@ let accum_stat r_st watch no schema_len =
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
-let gen_and_check_schemas_on_the_fly solver sk spec deps tac reset_fun =
+let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_fun =
     let nelems, order, rmap =
         match spec with
         | UTL (_, utl_form) ->
@@ -1087,12 +1089,13 @@ let gen_and_check_schemas_on_the_fly solver sk spec deps tac reset_fun =
         the precise timing is given at the end *)
     let watch = new Accums.stop_watch ~is_wall:true ~with_children:true in
     watch#start "";
-    let each_order eorder = 
+    let each_order (iorder, eorder) = 
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
         printf "  -> %s...\n" (str_join "  " (List.map pp eorder));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
-        let res = check_one_order solver sk spec deps tac ~reach_opt:ropt eorder in
+        let res = check_one_order solver sk (form_name, spec) deps
+                tac ~reach_opt:ropt (iorder, eorder) in
         accum_stat r_stat watch !current res.m_schema_len;
         reset_fun ();
         res.m_is_err
@@ -1500,7 +1503,7 @@ let find_error rt tt sk form_name ltl_form deps =
         tac#assert_top sk.Sk.inits;
     end;
     let result =
-        gen_and_check_schemas_on_the_fly my_solver sk spec deps tac reset_fun
+        gen_and_check_schemas_on_the_fly my_solver sk (form_name, spec) deps tac reset_fun
     in
     my_solver#set_need_model false;
     if SchemaOpt.is_incremental ()
