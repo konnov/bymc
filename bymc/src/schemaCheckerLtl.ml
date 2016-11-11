@@ -489,7 +489,7 @@ let find_schema_multiplier invs =
     1 + List.fold_left worst 0 invs
 
 
-let dump_counterex_to_file solver sk form_name iorder prefix_frames loop_frames =
+let dump_counterex_to_file solver sk deps form_name iorder prefix_frames loop_frames =
     (* save the counterexample in a human-readable format *)
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
@@ -513,7 +513,7 @@ let dump_counterex_to_file solver sk form_name iorder prefix_frames loop_frames 
     let machine_fname = "cex-fixme.scm" in
     SchemaSmt.C.save_cex machine_fname
         (SchemaChecker.counterex_of_frame_hist
-            solver sk form_name iorder (prefix_frames @ loop_frames))
+            solver sk deps form_name iorder (prefix_frames @ loop_frames))
 
 
 (** append the invariant lists while filtering out the duplicates *)
@@ -639,7 +639,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         assert (mult >= 1);
         BatEnum.iter push_schema (1--mult);
         let on_error frame_hist =
-            dump_counterex_to_file solver sk form_name iorder frame_hist [];
+            dump_counterex_to_file solver sk deps form_name iorder frame_hist [];
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
@@ -670,7 +670,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 let on_error frame_hist =
                     let prefix, loop =
                         BatList.span (fun f -> not (in_loop f)) frame_hist in
-                    dump_counterex_to_file solver sk form_name iorder prefix loop
+                    dump_counterex_to_file solver sk deps form_name iorder prefix loop
                 in
                 printf " END.\n"; flush stdout;
                 (* postpone an expensive check with the closed loop *)

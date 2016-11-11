@@ -53,19 +53,21 @@ skel Proc {
       do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
   /* sending a message and accepting when initialized with value 1 */
   4: loc1 -> loc3
-      when (nsnt + nsntF >= a1 * N + b1)
+      when (nsnt >= 0) /*a1 * N + b1)*/
       do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
   /* sending a message and accepting when initialized with value 0 */
   5: loc0 -> loc3
-      when (nsnt + nsntF >= a2 * N + b2)
+      when (nsnt >= a2 * N + b2)
       do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
   /* self-loops in all the locations but loc1, from which processes must progress */
   6: loc0 -> loc0
       when (nsnt >= 0)
       do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+  /*
   7: loc3 -> loc3
       when (nsnt >= 0)
       do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+   */
   }
   specifications (3) {
     /* safety */
@@ -74,10 +76,10 @@ skel Proc {
        if nsnt > 0, then every process should eventually leave the location loc0.
      */
     corr: (<>[]((nsnt < a2 * N + b2) || loc0 == 0)
-            && <>[]((nsnt < a1 * N + b1) || loc1 == 0))
+            /*&& <>[]((nsnt < a1 * N + b1) || loc1 == 0)*/)
         -> ((loc0 == 0) -> <>(loc3 != 0));
     relay: (<>[]((nsnt < a2 * N + b2) || loc0 == 0)
-            && <>[]((nsnt < a1 * N + b1) || loc1 == 0))
+            /*&& <>[]((nsnt < a1 * N + b1) || loc1 == 0)*/)
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
   }
 } /* Proc */

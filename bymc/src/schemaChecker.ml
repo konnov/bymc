@@ -160,7 +160,7 @@ let write_counterex ?(start_no=0) solver sk out frame_hist =
     nprinted
 
 
-let counterex_of_frame_hist ?(start_no=0) solver sk form_name iorder frame_hist =
+let counterex_of_frame_hist ?(start_no=0) solver sk deps form_name iorder frame_hist =
     let get_vars vars =
         let query = solver#get_model_query in
         List.iter (fun v -> ignore (Smt.Q.try_get query (Var v))) vars;
@@ -200,9 +200,13 @@ let counterex_of_frame_hist ?(start_no=0) solver sk form_name iorder frame_hist 
         { C.f_rule_no = f.F.rule_no; C.f_accel = get_accel_factor f }
     in
     let moves = List.map get_move (List.tl frame_hist) in
-    { C.f_form_name = form_name;
-      C.f_init_state = init_state; C.f_loop_index = start_no;
-      C.f_moves = moves; C.f_iorder = iorder; }
+    {
+        C.f_form_name = form_name;
+        C.f_init_state = init_state; C.f_loop_index = start_no;
+        C.f_moves = moves; C.f_iorder = iorder;
+        C.f_nuconds = List.length deps.D.uconds;
+        C.f_nlconds = List.length deps.D.lconds;
+    }
 
 
 let dump_counterex_to_file solver sk form_name frame_hist =
@@ -396,7 +400,6 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             let slv = solver in
             slv#comment "push: check_property";
             let stack_level = slv#get_stack_level in
-            
             if SpinIr.is_c_false form
             then false  (* it never holds *)
             else begin

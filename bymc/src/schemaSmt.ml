@@ -164,6 +164,10 @@ module C = struct
             (** the moves made *)
         f_iorder: int list;
             (** the order that has generated the counterexample *)
+        f_nuconds: int;
+            (** the number of unlocking guards *)
+        f_nlconds: int;
+            (** the number of locking guards *)
     }
 
     module S = Sexp
@@ -197,6 +201,12 @@ module C = struct
                 S.Atom "iorder";
                 S.List (List.map (fun i-> S.Atom (string_of_int i)) cex.f_iorder)
             ];
+            S.List [
+                S.Atom "nuconds";
+                S.Atom (string_of_int cex.f_nuconds);
+                S.Atom "nlconds";
+                S.Atom (string_of_int cex.f_nlconds);
+            ];
         ]
         in
         S.save_hum filename sexp
@@ -226,6 +236,8 @@ module C = struct
                 S.List [S.Atom "init"; S.List init_lst];
                 S.List [S.Atom "moves"; S.List move_lst];
                 S.List [S.Atom "iorder"; S.List iorder];
+                S.List [S.Atom "nuconds"; S.Atom nuconds;
+                        S.Atom "nlconds"; S.Atom nlconds];
             ] ->
             {
                 f_form_name = form_name;
@@ -233,9 +245,11 @@ module C = struct
                 f_init_state = List.fold_left add_kv StrMap.empty init_lst;
                 f_moves = List.map to_move move_lst;
                 f_iorder = List.map to_int iorder;
+                f_nuconds = int_of_string nuconds;
+                f_nlconds = int_of_string nlconds;
             }
 
-            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _) (iorder _))")
+            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _) (iorder _) (nuconds _ nlconds _))")
         in
         parse (S.load_sexp filename)
 end
