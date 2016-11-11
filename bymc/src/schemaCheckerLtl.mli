@@ -67,6 +67,7 @@ type utl_k_spec_t =
     | TL_G of utl_k_spec_t        (** G \phi *)
     | TL_and of utl_k_spec_t list (* a conjunction *)
 
+
 (**
  A classification of temporal formulas
  *)
@@ -87,6 +88,10 @@ type po_elem_t =
     | PO_tl of int (* id *) * utl_k_spec_t
         (** an extremal appearance of a temporal-logic formula *)
 
+
+(* extract struc_of_utl_k_spec from utl_k_spec_t *)
+val struc_of_po_elem:
+    po_elem_t -> SchemaSmt.C.po_elem_struc_t
 
 (** Create the initial statistics *)
 val mk_stat: unit -> stat_t

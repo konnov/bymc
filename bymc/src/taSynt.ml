@@ -232,7 +232,8 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
         val mutable m_depth  = 0
         val mutable m_valid = true (* is the current set of constraints valid? *)
         val mutable m_moves_left = cex.C.f_moves
-        val mutable m_state: int StrMap.t = cex.C.f_init_state
+        val mutable m_state: int StrMap.t =
+            StrMap.add "F000000_warp" 0 cex.C.f_init_state
         
         method top =
             let rec find = function
@@ -420,7 +421,7 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
                     List.fold_left (apply_action move.C.f_accel) new_state actions
                 in
                 (* also add the acceleration factor into the state *)
-                printf "\nadded %s = %d\n" frame.F.accel_v#get_name move.C.f_accel;
+                (*printf "\nadded %s = %d\n" frame.F.accel_v#get_name move.C.f_accel;*)
                 m_state <- StrMap.add new_frame.F.accel_v#get_name move.C.f_accel new_state
             in
             (* it might happen that the rules diverge, e.g., when the counterexample
@@ -441,25 +442,22 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
 
 (** check, whether a counterexample is applicable to the skeleton *)    
 let is_cex_applicable_new solver type_tab sk deps cex =
-    if (cex.C.f_nuconds <> (List.length deps.D.uconds))
-            || (cex.C.f_nlconds <> (List.length deps.D.lconds))
-    then false (* the counterexamples has a different number of milestones *)
+    let spec =
+        let form = StrMap.find cex.C.f_form_name sk.Sk.forms in
+        let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
+        SCL.extract_safety_or_utl type_tab sk neg_form
+    in
+    let size, par_order, rev_map =
+        SCL.mk_cut_and_threshold_graph sk deps spec
+    in
+    let eorder =
+        try List.map (fun n -> IntMap.find n rev_map) cex.C.f_iorder
+        with Not_found -> []
+    in
+    let po_elem_struc_list = List.map SCL.struc_of_po_elem eorder in
+    if po_elem_struc_list <> cex.C.f_po_struc
+    then false
     else begin
-        let spec =
-            let form = StrMap.find cex.C.f_form_name sk.Sk.forms in
-            let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
-            SCL.extract_safety_or_utl type_tab sk neg_form
-        in
-        let size, par_order, rev_map =
-            SCL.mk_cut_and_threshold_graph sk deps spec
-        in
-        let get_elem num =
-            try IntMap.find num rev_map
-            with Not_found ->
-                raise (Failure 
-                    (sprintf "Not_found (key=%d) in is_cex_applicable_new" num))
-        in
-        let eorder = List.map get_elem cex.C.f_iorder in
         let ntt = type_tab#copy in
         (* XXX: introduce variables for the location counters *)
         let loc_vars = IntMap.values sk.Sk.loc_vars in

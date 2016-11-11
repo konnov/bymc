@@ -204,8 +204,7 @@ let counterex_of_frame_hist ?(start_no=0) solver sk deps form_name iorder frame_
         C.f_form_name = form_name;
         C.f_init_state = init_state; C.f_loop_index = start_no;
         C.f_moves = moves; C.f_iorder = iorder;
-        C.f_nuconds = List.length deps.D.uconds;
-        C.f_nlconds = List.length deps.D.lconds;
+        C.f_po_struc = [];
     }
 
 
