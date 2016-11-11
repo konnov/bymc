@@ -102,13 +102,20 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             C.save_cex (sprintf "cex%d.scm" (List.length cexs)) new_cex;
             let all_cexs = cexs @ [new_cex] in
             let find_applicable_cex iter cexs =
+                let flow_opt = SchemaOpt.is_flow_opt_enabled () in
+                let type_tab = Program.get_type_tab self#get_input0 in
                 let rec find num = function
                     | [] -> -1
 
                     | hd :: tl ->
                         let vec = iter_to_unknowns_vec iter in
                         let fixed_skel = replace_unknowns in_skel vec in
-                        if TaSynt.is_cex_applicable fixed_skel hd
+                        let deps =
+                            PorBounds.compute_deps
+                                ~against_only:flow_opt rt#solver fixed_skel
+                        in
+                        if TaSynt.is_cex_applicable_new
+                            rt#solver type_tab fixed_skel deps hd
                         then num
                         else find (num + 1) tl
                 in
@@ -118,15 +125,18 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 let new_iter = vec_iter_next iter in
                 if (vec_iter_end new_iter)
                 then new_iter
-                else let cex_num = find_applicable_cex new_iter all_cexs in
+                else begin
+                    let vec = iter_to_unknowns_vec new_iter in
+                    log INFO (sprintf "> Checking %s..." (unknowns_vec_s vec));
+                    let cex_num = find_applicable_cex new_iter all_cexs in
                     if (cex_num >= 0)
                     then begin
-                        let vec = iter_to_unknowns_vec new_iter in
                         log INFO (sprintf "> %s is falsified by counterexample %d: "
                             (unknowns_vec_s vec) cex_num);
-                            find_new_iter new_iter
+                        find_new_iter new_iter
                     end
                     else new_iter
+                end
             in
             let next_valid_iter = find_new_iter old_iter in
             self#save_iter rt next_valid_iter all_cexs;

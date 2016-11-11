@@ -41,6 +41,13 @@ type result_t = {
     m_stat: stat_t;
 }
 
+(* 
+  An internal result structure. Used by check_one_order.
+
+  TODO: get rid of it.
+ *)
+type internal_result_t = { m_is_err: bool; m_schema_len: int; }
+
 (**
  The type of atomic formulas supported by the model checker
  *)
@@ -70,6 +77,16 @@ type spec_t =
         (* an unrestricted propositional formula for the initial states
            and a UTL formula *)
 
+(**
+ The elements of the constructed partial order
+ *)
+type po_elem_t =
+    | PO_init of utl_k_spec_t (** the initial state and the associated formulas *)
+    | PO_loop_start of utl_k_spec_t (** the loop start point (with the invariants) *)
+    | PO_guard of PSet.elt  (** an unlocking/locking guard *)
+    | PO_tl of int (* id *) * utl_k_spec_t
+        (** an extremal appearance of a temporal-logic formula *)
+
 
 (** Create the initial statistics *)
 val mk_stat: unit -> stat_t
@@ -96,9 +113,18 @@ val find_error:
         -> Spin.token SpinIr.expr
         -> PorBounds.D.deps_t
         -> result_t
+
+(**
+  Check one linear order.
+ *)
+val check_one_order:
+    Smt.smt_solver -> SymbSkel.Sk.skel_t -> (string * spec_t)
+    -> PorBounds.D.deps_t -> SchemaSmt.tac_t -> reach_opt:bool
+    -> (int list * po_elem_t list)
+    -> internal_result_t
    
 (**
- Enumerate all schemas and try to find a bug.
+ Enumerate all orders and try to find a bug.
  *)
 val gen_and_check_schemas_on_the_fly:
     Smt.smt_solver
@@ -119,6 +145,20 @@ val gen_and_check_schemas_on_the_fly:
  *)
 val extract_utl: SymbSkel.Sk.skel_t -> Spin.token SpinIr.expr
     -> Spin.token SpinIr.expr * utl_k_spec_t
+
+
+(**
+  Create a cut graph from a UTL_TB formula and add a threshold graph.
+
+  @param skel a threshold automaton.
+  @param deps dependencies.
+  @param spec a specification.
+
+  @return (num_vertices, partial_order, reverse_map).
+*)
+val mk_cut_and_threshold_graph:
+    SymbSkel.Sk.skel_t -> PorBounds.D.deps_t -> spec_t
+    -> (int * ((int * int) list) * (po_elem_t Accums.IntMap.t))
 
 
 (**

@@ -87,6 +87,10 @@ module C: sig
             (** the moves made *)
         f_iorder: int list;
             (** the order that has generated the counterexample *)
+        f_nuconds: int;
+            (** the number of unlocking guards *)
+        f_nlconds: int;
+            (** the number of locking guards *)
     }
 
     (** save a counterexample to a file *)

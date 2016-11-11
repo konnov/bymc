@@ -65,7 +65,7 @@ let mk_foo params =
         Sk.loc_vars = locFoo_map;
         Sk.assumes = [];
         Sk.forms = StrMap.singleton "safety"
-            (UnEx (ALWAYS, mk_eq locFoo_map 1 (IntConst 0)))
+            (UnEx (ALWAYS, mk_eq locFoo_map 2 (IntConst 0)))
     }
 
 
@@ -134,7 +134,7 @@ let test_is_cex_applicable _ =
     let unknowns_vec = [("a", IntConst 2); ("b", IntConst 1)] in
     let fixed_skel = TaSynt.replace_unknowns sk unknowns_vec in
     let cex0 = {
-        C.f_form_name = "corr";
+        C.f_form_name = "unforg";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -151,7 +151,7 @@ let test_is_cex_applicable _ =
     assert_equal false (TaSynt.is_cex_applicable fixed_skel cex0)
         ~msg:"expected the counterexample 0 to be inapplicable";
     let cex1 = {
-        C.f_form_name = "corr";
+        C.f_form_name = "unforg";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -167,7 +167,7 @@ let test_is_cex_applicable _ =
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex1)
         ~msg:"expected the counterexample 1 to be applicable";
     let cex2 = {
-        C.f_form_name = "corr";
+        C.f_form_name = "unforg";
         C.f_loop_index = 1;
         C.f_init_state =
             Accums.str_map_of_pair_list StrMap.empty [
@@ -182,7 +182,26 @@ let test_is_cex_applicable _ =
     }
     in
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex2)
-        ~msg:"expected the counterexample 2 to be applicable"
+        ~msg:"expected the counterexample 2 to be applicable";
+    (* this is a counterexample that should not be applicable,
+       but it was found to be (spuriously) applicable *)
+    let cex3 = {
+        C.f_form_name = "unforg";
+        C.f_loop_index = 1;
+        C.f_init_state =
+            Accums.str_map_of_pair_list StrMap.empty [
+                ("n", 2); ("t", 3); ("x", 2);
+                ("loc_0", 2);  ("loc_1", 0); ("loc_2", 0);
+            ];
+        C.f_moves = [
+            { C.f_rule_no = 0; C.f_accel = 1 };
+            { C.f_rule_no = 1; C.f_accel = 1 };
+        ];
+        C.f_iorder = [0; 1];
+    }
+    in
+    assert_equal true (TaSynt.is_cex_applicable fixed_skel cex3)
+        ~msg:"expected the counterexample 3 to be inapplicable"
 
 
 let suite = "taSynt-suite" >:::
