@@ -148,6 +148,13 @@ end
   A counterexample
   *)
 module C = struct
+    (* the structure of a partial order *)
+    type po_elem_struc_t =
+        | PO_init_struc
+        | PO_loop_start_struc
+        | PO_guard_struc
+        | PO_tl_struc
+
     type move_t = {
         f_rule_no: int;   (** the rule that performed the move *)
         f_accel: int;     (** the acceleration factor *)
@@ -164,13 +171,42 @@ module C = struct
             (** the moves made *)
         f_iorder: int list;
             (** the order that has generated the counterexample *)
-        f_nuconds: int;
-            (** the number of unlocking guards *)
-        f_nlconds: int;
-            (** the number of locking guards *)
+        f_po_struc: po_elem_struc_t list;
+            (** the structure of the linear order required by the counterex. *)
     }
 
     module S = Sexp
+
+    let sexp_of_po_elem_struc = function
+        | PO_init_struc ->
+            S.Atom "PO_init"
+
+        | PO_loop_start_struc ->
+            S.Atom "PO_loop_start"
+
+        | PO_guard_struc ->
+            S.Atom "PO_guard"
+
+        | PO_tl_struc ->
+            S.Atom "PO_tl"
+
+
+    let po_elem_struc_of_sexp = function
+        | S.Atom "PO_init" ->
+            PO_init_struc
+
+        | S.Atom "PO_loop_start" ->
+            PO_loop_start_struc
+
+        | S.Atom "PO_guard" ->
+            PO_guard_struc
+
+        | S.Atom "PO_tl" ->
+            PO_tl_struc
+
+        | _ ->
+            raise (Failure "Unexpected sexp")
+
 
     let save_cex filename cex =
         let of_keyval (name, value) =
@@ -201,12 +237,8 @@ module C = struct
                 S.Atom "iorder";
                 S.List (List.map (fun i-> S.Atom (string_of_int i)) cex.f_iorder)
             ];
-            S.List [
-                S.Atom "nuconds";
-                S.Atom (string_of_int cex.f_nuconds);
-                S.Atom "nlconds";
-                S.Atom (string_of_int cex.f_nlconds);
-            ];
+            S.List ((S.Atom "linord")
+                :: (List.map sexp_of_po_elem_struc cex.f_po_struc))
         ]
         in
         S.save_hum filename sexp
@@ -236,8 +268,7 @@ module C = struct
                 S.List [S.Atom "init"; S.List init_lst];
                 S.List [S.Atom "moves"; S.List move_lst];
                 S.List [S.Atom "iorder"; S.List iorder];
-                S.List [S.Atom "nuconds"; S.Atom nuconds;
-                        S.Atom "nlconds"; S.Atom nlconds];
+                S.List ((S.Atom "linord") :: es);
             ] ->
             {
                 f_form_name = form_name;
@@ -245,11 +276,10 @@ module C = struct
                 f_init_state = List.fold_left add_kv StrMap.empty init_lst;
                 f_moves = List.map to_move move_lst;
                 f_iorder = List.map to_int iorder;
-                f_nuconds = int_of_string nuconds;
-                f_nlconds = int_of_string nlconds;
+                f_po_struc = List.map po_elem_struc_of_sexp es;
             }
 
-            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _) (iorder _) (nuconds _ nlconds _))")
+            | _ -> raise (Failure "Expected ((loop int) (init _) (moves _) (iorder _) (linord _ ))")
         in
         parse (S.load_sexp filename)
 end

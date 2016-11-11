@@ -71,6 +71,13 @@ end
   A counterexample
   *)
 module C: sig
+    (* the structure of a partial order *)
+    type po_elem_struc_t =
+        | PO_init_struc
+        | PO_loop_start_struc
+        | PO_guard_struc
+        | PO_tl_struc
+
     type move_t = {
         f_rule_no: int;   (** the rule that performed the move *)
         f_accel: int;     (** the acceleration factor *)
@@ -87,10 +94,8 @@ module C: sig
             (** the moves made *)
         f_iorder: int list;
             (** the order that has generated the counterexample *)
-        f_nuconds: int;
-            (** the number of unlocking guards *)
-        f_nlconds: int;
-            (** the number of locking guards *)
+        f_po_struc: po_elem_struc_t list;
+            (** the structure of the linear order required by the counterex. *)
     }
 
     (** save a counterexample to a file *)

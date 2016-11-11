@@ -456,6 +456,20 @@ let po_elem_short_s sk = function
         sprintf "INIT"
 
 
+let struc_of_po_elem = function
+    | PO_init _ ->
+            C.PO_init_struc
+
+    | PO_loop_start _ ->
+            C.PO_loop_start_struc
+
+    | PO_guard _ ->
+            C.PO_guard_struc
+
+    | PO_tl _ ->
+            C.PO_tl_struc
+
+
 let find_schema_multiplier invs =
     (* (* the first bound we proved *)
     let count_disjs n = function
@@ -489,7 +503,8 @@ let find_schema_multiplier invs =
     1 + List.fold_left worst 0 invs
 
 
-let dump_counterex_to_file solver sk deps form_name iorder prefix_frames loop_frames =
+let dump_counterex_to_file solver sk deps form_name
+        (iorder, po_elem_struc_list) prefix_frames loop_frames =
     (* save the counterexample in a human-readable format *)
     let fname = sprintf "cex-%s.trx" form_name in
     let out = open_out fname in
@@ -511,9 +526,11 @@ let dump_counterex_to_file solver sk deps form_name iorder prefix_frames loop_fr
     (* save the counterexample in a machine-readable format *)
     (* write in a machine-readable format *)
     let machine_fname = "cex-fixme.scm" in
+    let cex = SchemaChecker.counterex_of_frame_hist
+            solver sk deps form_name iorder (prefix_frames @ loop_frames)
+    in
     SchemaSmt.C.save_cex machine_fname
-        (SchemaChecker.counterex_of_frame_hist
-            solver sk deps form_name iorder (prefix_frames @ loop_frames))
+        { cex with C.f_po_struc = po_elem_struc_list }
 
 
 (** append the invariant lists while filtering out the duplicates *)
@@ -639,7 +656,9 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         assert (mult >= 1);
         BatEnum.iter push_schema (1--mult);
         let on_error frame_hist =
-            dump_counterex_to_file solver sk deps form_name iorder frame_hist [];
+            let po_elem_struc_list = List.map struc_of_po_elem elem_order in
+            dump_counterex_to_file solver sk deps
+                form_name (iorder, po_elem_struc_list) frame_hist [];
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
@@ -654,7 +673,10 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         let pos_factor f = BinEx (GT, Var f.F.accel_v, IntConst 0) in
         (* remove the first frame,
            as its acceleration factor still belongs to the prefix *)
-        list_to_binex OR (List.map pos_factor (List.tl loop_frames))
+        let es = List.map pos_factor (List.tl loop_frames) in
+        if es <> []
+        then [list_to_binex OR es]
+        else []
     in
     let rec search prefix_last_frame uset lset invs = function
         | [] ->
@@ -670,7 +692,10 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 let on_error frame_hist =
                     let prefix, loop =
                         BatList.span (fun f -> not (in_loop f)) frame_hist in
-                    dump_counterex_to_file solver sk deps form_name iorder prefix loop
+                    let po_elem_struc_list =
+                        List.map struc_of_po_elem elem_order in
+                    dump_counterex_to_file solver sk deps
+                        form_name (iorder, po_elem_struc_list) frame_hist [];
                 in
                 printf " END.\n"; flush stdout;
                 (* postpone an expensive check with the closed loop *)
@@ -684,7 +709,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                     (* NOTE: These two constraints are expensive in SMT.
                        Add them when it is absolutely necessary. *)
                     tac#assert_frame_eq sk loop_start_frame;
-                    tac#assert_top [at_least_one_step_made loop_start_frame];
+                    tac#assert_top (at_least_one_step_made loop_start_frame);
                     tac#check_property (IntConst 1) on_error
                 end
                 in

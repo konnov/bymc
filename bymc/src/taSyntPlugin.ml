@@ -104,16 +104,16 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let find_applicable_cex iter cexs =
                 let flow_opt = SchemaOpt.is_flow_opt_enabled () in
                 let type_tab = Program.get_type_tab self#get_input0 in
+                let vec = iter_to_unknowns_vec iter in
+                let fixed_skel = replace_unknowns in_skel vec in
+                let deps =
+                    PorBounds.compute_deps
+                        ~against_only:flow_opt rt#solver fixed_skel
+                in
                 let rec find num = function
                     | [] -> -1
 
                     | hd :: tl ->
-                        let vec = iter_to_unknowns_vec iter in
-                        let fixed_skel = replace_unknowns in_skel vec in
-                        let deps =
-                            PorBounds.compute_deps
-                                ~against_only:flow_opt rt#solver fixed_skel
-                        in
                         if TaSynt.is_cex_applicable_new
                             rt#solver type_tab fixed_skel deps hd
                         then num
