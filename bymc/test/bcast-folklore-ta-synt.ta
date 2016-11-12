@@ -75,11 +75,11 @@ skel Proc {
     /* the following two liveness properties require the following fairness constraint:
        if nsnt > 0, then every process should eventually leave the location loc0.
      */
-    corr: (<>[]((nsnt < a2 * N + b2) || loc0 == 0)
-            && <>[]((nsnt < a1 * N + b1) || loc1 == 0))
+    corr: <>[](((nsnt < a2 * N + b2) || loc0 == 0)
+            && ((nsnt < a1 * N + b1) || loc1 == 0))
         -> ((loc0 == 0) -> <>(loc3 != 0));
-    relay: (<>[]((nsnt < a2 * N + b2) || loc0 == 0)
-            && <>[]((nsnt < a1 * N + b1) || loc1 == 0))
+    relay: <>[](((nsnt < a2 * N + b2) || loc0 == 0)
+            && ((nsnt < a1 * N + b1) || loc1 == 0))
         -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
   }
 } /* Proc */
