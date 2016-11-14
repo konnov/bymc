@@ -429,7 +429,6 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
              *)
             if rule_no = move.C.f_rule_no && m_valid
             then do_update ()
-            else m_valid <- true
 
 
         method set_incremental (_: bool) =
