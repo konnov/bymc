@@ -23,7 +23,7 @@ function mc_verify_spec {
     echo ${TOOL} ${BYMC_FLAGS} -a "${PROG}"
     tee_or_die "${SYNT_OUT}" "bymc failed" \
         ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
-    egrep -q "counterexample for .* found" ${SYNT_OUT}
+    egrep -q "(counterexample for .* found|\(synt-no-solution\))" ${SYNT_OUT}
     test "$?" -ne 0
 }
 

@@ -476,3 +476,16 @@ let is_cex_applicable_new solver type_tab sk deps cex =
         res.SCL.m_is_err
     end
 
+
+(** Is the synthesized solution vacuously true, i.e.,
+    the assumptions are contradictory.
+ *)
+let is_ta_vacuous solver sk =
+    solver#push_ctx;
+    let append_expr e = ignore (solver#append_expr e) in
+    List.iter append_expr sk.Sk.assumes;
+    let unsat = not solver#check in
+    solver#pop_ctx;
+    unsat
+
+

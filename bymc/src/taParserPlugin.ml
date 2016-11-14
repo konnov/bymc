@@ -42,6 +42,7 @@ class ta_parser_plugin_t (plugin_name: string) =
             let set_type v = data_type_tab#set_type v unsigned in
             List.iter set_type sk.Sk.params;
             List.iter set_type sk.Sk.shared;
+            List.iter set_type sk.Sk.unknowns;
             Program.set_assumes sk.Sk.assumes
                 (Program.set_type_tab data_type_tab
                     (Program.set_params sk.Sk.params
@@ -62,10 +63,14 @@ class ta_parser_plugin_t (plugin_name: string) =
 
 
         method update_runtime rt =
+            let sk = self#get_ta in
             let prog = self#get_output in
-            (* introduce the parameters and the basic constraints on them *)
+            (* introduce the parameters to the solver *)
             let append_var v = rt#solver#append_var_def v (get_type prog v) in
             List.iter append_var (get_params prog);
+            (* as we have unknowns now, we also add them *)
+            List.iter append_var (sk.Sk.unknowns);
+            (* add the assumptions to check their consistency *)
             let append_expr e = ignore (rt#solver#append_expr e) in
             List.iter append_expr (get_assumes prog);
             if not rt#solver#check
