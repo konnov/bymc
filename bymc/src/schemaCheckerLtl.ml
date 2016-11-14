@@ -1233,11 +1233,19 @@ module TL = struct
             TL_p (AndOr_Kne0 ors)
 
         | ExtShared_Or_And_Keq0 (shared_es, is) ->
-            TL_p (Shared_Or_And_Keq0 (list_to_binex OR shared_es, is))
+            let not_useless e = (e <> (IntConst 1)) in
+            let filtered = List.filter not_useless shared_es in
+            if filtered <> []
+            then TL_p (Shared_Or_And_Keq0 (list_to_binex OR filtered, is))
+            else TL_p (And_Keq0 is)
 
         | ExtList lst ->
+            let not_useless e = (e <> (IntConst 1)) in
             let each (es, is) =
-                TL_p (Shared_Or_And_Keq0 (list_to_binex OR es, is))
+                let filtered = List.filter not_useless es in
+                if filtered <> []
+                then TL_p (Shared_Or_And_Keq0 (list_to_binex OR filtered, is))
+                else TL_p (And_Keq0 is)
             in
             TL_and (List.map each lst)
 
@@ -1325,6 +1333,19 @@ module TL = struct
 
         | (ExtList lst1, ExtList lst2) ->
                 ExtList (lst1 @ lst2)
+
+        (* ...and many special cases *)
+        | (ExtShared_Or_And_Keq0 (es1, is1), Eq0 j) ->
+                ExtList [(es1, is1); ([IntConst 1], [j])]
+
+        | (Eq0 j, ExtShared_Or_And_Keq0 (es1, is1)) ->
+                ExtList [(es1, is1); ([IntConst 1], [j])]
+
+        | (ExtList lst1, Eq0 j) ->
+                ExtList (lst1 @ [([IntConst 1], [j])])
+
+        | (Eq0 j, ExtList lst1) ->
+                ExtList (([IntConst 1], [j]) :: lst1)
 
         | _ ->
             raise Unexpected_err
