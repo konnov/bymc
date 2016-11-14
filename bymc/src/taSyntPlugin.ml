@@ -26,12 +26,34 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
 
         method transform rt =
             let in_skel = ta_source#get_ta in
-            let iter, _ = self#load_iter rt in_skel in
-            let vec = iter_to_unknowns_vec iter in
-            log INFO ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
-            let out_skel = replace_unknowns in_skel vec in
-            m_out_skel <- Some out_skel;
-            Sk.to_file "synt.ta" out_skel;
+            let rec skip_vacuous iter =
+                if TaSynt.vec_iter_end iter
+                then iter
+                else begin
+                    let vec = iter_to_unknowns_vec iter in
+                    log INFO ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
+                    let out_skel = replace_unknowns in_skel vec in
+                    if TaSynt.is_ta_vacuous rt#solver out_skel
+                    then begin
+                        log INFO ("  > Contradictory assumptions. Skipped.");
+                        skip_vacuous (vec_iter_next iter)
+                    end
+                    else iter
+                end
+            in
+            let iter, cexs = self#load_iter rt in_skel in
+            let new_iter = skip_vacuous iter in
+            self#save_iter rt new_iter cexs;
+            if TaSynt.vec_iter_end new_iter
+            then begin
+                m_out_skel <- None;
+                log INFO ("(synt-no-solution)");
+            end else begin
+                let vec = iter_to_unknowns_vec new_iter in
+                let out_skel = replace_unknowns in_skel vec in
+                m_out_skel <- Some out_skel;
+                Sk.to_file "synt.ta" out_skel;
+            end;
             self#get_input0
 
 
@@ -101,11 +123,10 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let new_cex = C.load_cex "cex-fixme.scm" in
             C.save_cex (sprintf "cex%d.scm" (List.length cexs)) new_cex;
             let all_cexs = cexs @ [new_cex] in
-            let find_applicable_cex iter cexs =
+            let find_applicable_cex fixed_skel iter cexs =
                 let flow_opt = SchemaOpt.is_flow_opt_enabled () in
                 let type_tab = Program.get_type_tab self#get_input0 in
-                let vec = iter_to_unknowns_vec iter in
-                let fixed_skel = replace_unknowns in_skel vec in
+
                 let deps =
                     PorBounds.compute_deps
                         ~against_only:flow_opt rt#solver fixed_skel
@@ -127,14 +148,25 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 then new_iter
                 else begin
                     let vec = iter_to_unknowns_vec new_iter in
-                    log INFO (sprintf "> Checking %s..." (unknowns_vec_s vec));
-                    let cex_num = find_applicable_cex new_iter all_cexs in
+                    let vec_s = unknowns_vec_s vec in
+                    log INFO (sprintf "> Checking %s..." vec_s);
+                    let fixed_skel = replace_unknowns in_skel vec in
+                    let falsified = ref false in
+                    if TaSynt.is_ta_vacuous rt#solver fixed_skel
+                    then begin
+                        log INFO ("  > contradicting assumptions");
+                        falsified := true
+                    end;
+                    let cex_num =
+                        find_applicable_cex fixed_skel new_iter all_cexs in
                     if (cex_num >= 0)
                     then begin
-                        log INFO (sprintf "> %s is falsified by counterexample %d: "
-                            (unknowns_vec_s vec) cex_num);
-                        find_new_iter new_iter
-                    end
+                        log INFO (sprintf "  > %s is falsified by counterexample %d: "
+                            vec_s cex_num);
+                        falsified := true
+                    end;
+                    if !falsified
+                    then find_new_iter new_iter
                     else new_iter
                 end
             in
@@ -149,6 +181,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 log INFO msg;
                 log INFO (sprintf "Collected %d counterexamples in total"
                     (List.length all_cexs));
+                log INFO ("(synt-no-solution)");
                 (false, self#get_output)
             end else begin
                 let vec = iter_to_unknowns_vec next_valid_iter in
