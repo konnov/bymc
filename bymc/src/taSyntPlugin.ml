@@ -126,7 +126,6 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let find_applicable_cex fixed_skel iter cexs =
                 let flow_opt = SchemaOpt.is_flow_opt_enabled () in
                 let type_tab = Program.get_type_tab self#get_input0 in
-
                 let deps =
                     PorBounds.compute_deps
                         ~against_only:flow_opt rt#solver fixed_skel
@@ -151,23 +150,24 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     let vec_s = unknowns_vec_s vec in
                     log INFO (sprintf "> Checking %s..." vec_s);
                     let fixed_skel = replace_unknowns in_skel vec in
-                    let falsified = ref false in
-                    if TaSynt.is_ta_vacuous rt#solver fixed_skel
-                    then begin
-                        log INFO ("  > contradicting assumptions");
-                        falsified := true
-                    end;
+                    let is_vac = TaSynt.is_ta_vacuous rt#solver fixed_skel in
+                    if is_vac then log INFO ("  > contradicting assumptions");
                     let cex_num =
-                        find_applicable_cex fixed_skel new_iter all_cexs in
-                    if (cex_num >= 0)
+                        if is_vac
+                        then (-1)
+                        else find_applicable_cex fixed_skel new_iter all_cexs
+                    in
+                    if (cex_num < 0)
                     then begin
-                        log INFO (sprintf "  > %s is falsified by counterexample %d: "
-                            vec_s cex_num);
-                        falsified := true
-                    end;
-                    if !falsified
-                    then find_new_iter new_iter
-                    else new_iter
+                        log INFO (sprintf "No applicable counterexample among %d"
+                            (List.length all_cexs));
+                        new_iter (* no counterexample *)
+                    end else begin
+                        log INFO
+                            (sprintf "  > %s is falsified by counterexample %d: "
+                                vec_s cex_num);
+                        find_new_iter new_iter
+                    end
                 end
             in
             let next_valid_iter = find_new_iter old_iter in

@@ -103,21 +103,26 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
 
             log INFO "  > Running SchemaChecker (the CAV'15 reachability version)...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
-            let each_form name form =
-                reset_stat ();
-                logtm INFO (sprintf "      > Checking %s..." name);
-                let err = check_tree name form tree in
-                let msg =
-                    if err
-                    then sprintf "    > SLPS: counterexample for %s found" name
-                    else sprintf "      > Spec %s holds" name
-                in
-                log INFO msg;
-                print_stat ()
+            let each_form name form err_found =
+                if err_found
+                then true
+                else begin
+                    reset_stat ();
+                    logtm INFO (sprintf "      > Checking %s..." name);
+                    let err = check_tree name form tree in
+                    let msg =
+                        if err
+                        then sprintf "    > SLPS: counterexample for %s found" name
+                        else sprintf "      > Spec %s holds" name
+                    in
+                    log INFO msg;
+                    print_stat ();
+                    err
+                end
             in
             let specs =
                 get_proper_specs rt#caches#options sk (is_safety_spec tt) in
-            StrMap.iter each_form specs
+            ignore (StrMap.fold each_form specs false)
 
 
         method check_ltl rt sk tt =
@@ -129,23 +134,28 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
                 L.find_error rt tt sk name form deps
             in
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
-            let each_form name form =
-                logtm INFO (sprintf "      > Checking %s..." name);
-                let result = check name form in
-                let msg =
-                    if result.L.m_is_err_found
-                    then sprintf "    > SLPS: counterexample for %s found" name
-                    else sprintf "      > Spec %s holds" name
-                in
-                log INFO msg;
-                printf "%s\n" (L.stat_s result.L.m_stat)
+            let each_form name form err_found =
+                if err_found
+                then true
+                else begin
+                    logtm INFO (sprintf "      > Checking %s..." name);
+                    let result = check name form in
+                    let msg =
+                        if result.L.m_is_err_found
+                        then sprintf "    > SLPS: counterexample for %s found" name
+                        else sprintf "      > Spec %s holds" name
+                    in
+                    log INFO msg;
+                    printf "%s\n" (L.stat_s result.L.m_stat);
+                    result.L.m_is_err_found
+                end
             in
             let can_handle f =
                 let negated = Ltl.normalize_form (UnEx (NEG, f)) in
                 L.can_handle_spec tt sk negated
             in
             let specs = get_proper_specs rt#caches#options sk can_handle in
-            StrMap.iter each_form specs
+            ignore (StrMap.fold each_form specs false)
 
 
         method check tech rt sprog sk =

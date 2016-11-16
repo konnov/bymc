@@ -1537,7 +1537,8 @@ let find_error rt tt sk form_name ltl_form deps =
             let append_var v = my_solver#append_var_def v (tt#get_type v) in
             List.iter append_var sk.Sk.params;
             let append_expr e = ignore (my_solver#append_expr e) in
-            List.iter append_expr sk.Sk.assumes;
+            let non_trivial e = e <> (IntConst 1) in
+            List.iter append_expr (List.filter non_trivial sk.Sk.assumes);
             tac#push_frame initf;
             my_solver#comment "initial constraints from the spec";
             (* push the initial node, so the predicate optimization works *)

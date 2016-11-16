@@ -98,6 +98,9 @@ module C: sig
             (** the structure of the linear order required by the counterex. *)
     }
 
+    (* a string representation of a po_elem_struc_t *)
+    val po_elem_struc_s: po_elem_struc_t -> string
+
     (** save a counterexample to a file *)
     val save_cex: string -> cex_t -> unit
 
