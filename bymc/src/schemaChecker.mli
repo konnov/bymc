@@ -84,6 +84,8 @@ class tree_tac_t: Smt.smt_solver -> SpinIr.data_type_tab ->
 
         method push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
 
+        method reset: unit
+
         method set_incremental: bool -> unit
 
         method get_incremental: bool

@@ -444,6 +444,11 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
             then do_update ()
 
 
+        method reset =
+            m_frames <- [];
+            m_depth <- 0
+
+
         method set_incremental (_: bool) =
             ()
 

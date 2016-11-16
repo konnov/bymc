@@ -1539,6 +1539,9 @@ let find_error rt tt sk form_name ltl_form deps =
             let append_expr e = ignore (my_solver#append_expr e) in
             let non_trivial e = e <> (IntConst 1) in
             List.iter append_expr (List.filter non_trivial sk.Sk.assumes);
+            (* BUGFIX: erase all frames,
+                otherwise we add more and more initial frames*)
+            tac#reset;
             tac#push_frame initf;
             my_solver#comment "initial constraints from the spec";
             (* push the initial node, so the predicate optimization works *)
