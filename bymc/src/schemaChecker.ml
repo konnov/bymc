@@ -315,7 +315,7 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
         val mutable m_frames = []
         val mutable m_depth  = 0
         val mutable m_incremental = true (** is mode incremental *)
-        val m_pred_ctx = P.mk_context solver
+        val mutable m_pred_ctx = P.mk_context solver
         
         method top =
             let rec find = function
@@ -522,6 +522,12 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             let accelerated =
                 List.map (B.accelerate_expr new_frame.F.accel_v) actions in
             self#assert_top2 accelerated
+
+
+        method reset =
+            m_frames <- [];
+            m_depth <- 0;
+            m_pred_ctx <- P.mk_context solver
 
 
         method set_incremental b =
