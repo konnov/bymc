@@ -177,18 +177,21 @@ module C = struct
 
     module S = Sexp
 
-    let sexp_of_po_elem_struc = function
+    let po_elem_struc_s = function
         | PO_init_struc ->
-            S.Atom "PO_init"
+            "PO_init"
 
         | PO_loop_start_struc ->
-            S.Atom "PO_loop_start"
+            "PO_loop_start"
 
         | PO_guard_struc ->
-            S.Atom "PO_guard"
+            "PO_guard"
 
         | PO_tl_struc ->
-            S.Atom "PO_tl"
+            "PO_tl"
+
+    let sexp_of_po_elem_struc e =
+        S.Atom (po_elem_struc_s e)
 
 
     let po_elem_struc_of_sexp = function

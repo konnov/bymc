@@ -9,6 +9,7 @@ open Batteries
 open Printf
 
 open Accums
+open Debug
 open PorBounds
 open Spin
 open SpinIr
@@ -266,12 +267,14 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
             m_frames <- (Frame f) :: m_frames
 
         method private assert_expr e =
-            if (is_c_false e)
+            if not m_valid || (is_c_false e)
             then m_valid <- false
             else if not (is_c_true e)
             then begin
                 let e_val =
                     Simplif.compute_consts (SpinIr.map_vars (bind m_state) e) in
+                (*printf "expr = %s\n" (SpinIrImp.expr_s e);
+                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);*)
                 match e_val with
                 | IntConst 0 ->
                     m_valid <- false
@@ -303,23 +306,27 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
             m_depth <- m_depth + 1
 
         method check_property form error_fun =
-            if SpinIr.is_c_false form
-            then begin
-                m_valid <- false;  (* never holds *)
-                false
-            end else begin
-                m_depth <- m_depth + 1;
-                if not (is_c_true form)
-                then begin
-                    self#assert_top [form];
-                end;
-                (* ignore the error function here
-                if m_valid
-                then error_fun self#frame_hist;
-                *)
-                m_depth <- m_depth - 1;
-                m_valid
-            end
+            let prop_value =
+                if SpinIr.is_c_false form
+                then false
+                else begin
+                    if (is_c_true form)
+                    then m_valid (* the previous evaluation propagates *)
+                    else begin
+                        let old_valid = m_valid in
+                        self#assert_top [form];
+                        let res = m_valid in
+                        m_valid <- old_valid;
+                        (* take the previous along the path into account *)
+                        res && m_valid
+                    end
+                    (* ignore the error function here
+                    if m_valid
+                    then error_fun self#frame_hist;
+                    *)
+                end
+            in
+            prop_value
 
         method leave_node kind =
             let rec unroll = function
@@ -374,6 +381,9 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
                     let loc_var = IntMap.find loc sk.Sk.loc_vars in
                     let old_val = StrMap.find loc_var#get_name state in
                     let new_val = add_fun old_val move.C.f_accel in
+                    if new_val < 0
+                    then m_valid <- false; (* WARNING: updating the attribute here *)
+                    (*printf "updating loc%d from %d to %d\n" loc old_val new_val;*)
                     StrMap.add loc_var#get_name new_val state
                 in
                 let new_state =
@@ -418,14 +428,17 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
                 in
                 m_moves_left <- List.tl m_moves_left;
                 let new_state =
-                    List.fold_left (apply_action move.C.f_accel) new_state actions
+                    if m_valid
+                    then List.fold_left
+                        (apply_action move.C.f_accel) new_state actions
+                    else m_state
                 in
                 (* also add the acceleration factor into the state *)
                 (*printf "\nadded %s = %d\n" frame.F.accel_v#get_name move.C.f_accel;*)
                 m_state <- StrMap.add new_frame.F.accel_v#get_name move.C.f_accel new_state
             in
             (* it might happen that the rules diverge, e.g., when the counterexample
-               is generated for another sequence of rules
+               is generated from another sequence of rules
              *)
             if rule_no = move.C.f_rule_no && m_valid
             then do_update ()
@@ -444,19 +457,43 @@ let is_cex_applicable_new solver type_tab sk deps cex =
     let spec =
         let form = StrMap.find cex.C.f_form_name sk.Sk.forms in
         let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
-        SCL.extract_safety_or_utl type_tab sk neg_form
+        (*printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);*)
+        let ltl, utl = SCL.extract_utl sk neg_form in
+        SCL.UTL (ltl, utl)
     in
     let size, par_order, rev_map =
         SCL.mk_cut_and_threshold_graph sk deps spec
     in
+    let is_struct_ok =
+        (* is there a way to decode the order? *)
+        size > (List.fold_left max 0 cex.C.f_iorder)
+    in
+    (*
+    let kvs =
+        List.map
+            (fun (k, v) ->
+                sprintf "%d -> %s" k (C.po_elem_struc_s (SCL.struc_of_po_elem v)))
+            (IntMap.bindings rev_map)
+    in
+    printf "rev_map(%d) = {%s}\n" size (str_join ", " kvs);
+    *)
     let eorder =
         try List.map (fun n -> IntMap.find n rev_map) cex.C.f_iorder
         with Not_found -> []
     in
     let po_elem_struc_list = List.map SCL.struc_of_po_elem eorder in
-    if po_elem_struc_list <> cex.C.f_po_struc
-    then false
+    if not is_struct_ok (*po_elem_struc_list <> cex.C.f_po_struc*)
+    then begin
+        (*
+        printf "The structures are not equal:\n  %s\n  %s\n"
+            (str_join ", " (List.map C.po_elem_struc_s po_elem_struc_list))
+            (str_join ", " (List.map C.po_elem_struc_s cex.C.f_po_struc));
+            *)
+        false
+    end
     else begin
+        log INFO (sprintf "Using the order: %s...\n"
+            (str_join ", " (List.map C.po_elem_struc_s po_elem_struc_list)));
         let ntt = type_tab#copy in
         (* XXX: introduce variables for the location counters *)
         let loc_vars = IntMap.values sk.Sk.loc_vars in
@@ -481,11 +518,18 @@ let is_cex_applicable_new solver type_tab sk deps cex =
     the assumptions are contradictory.
  *)
 let is_ta_vacuous solver sk =
-    solver#push_ctx;
-    let append_expr e = ignore (solver#append_expr e) in
-    List.iter append_expr sk.Sk.assumes;
-    let unsat = not solver#check in
-    solver#pop_ctx;
-    unsat
+    if List.mem (IntConst 0) sk.Sk.assumes
+    then true (* assume(0) is met *)
+    else begin
+        solver#push_ctx;
+        let append_expr e =
+            if e <> (IntConst 1)
+            then ignore (solver#append_expr e)
+        in
+        List.iter append_expr sk.Sk.assumes;
+        let unsat = not solver#check in
+        solver#pop_ctx;
+        unsat
+    end
 
 

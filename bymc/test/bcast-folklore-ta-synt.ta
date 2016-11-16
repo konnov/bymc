@@ -17,7 +17,6 @@ skel Proc {
   assumptions (1) {
     N > 1;
     N > F + 1;
-    F == 1;
   }
 
   locations (4) {
