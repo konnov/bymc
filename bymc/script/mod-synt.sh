@@ -22,7 +22,8 @@ function mc_verify_spec {
     BYMC_FLAGS="--target none --chain synt --spec $PROP"
     echo ${TOOL} ${BYMC_FLAGS} -a "${PROG}"
     tee_or_die "${SYNT_OUT}" "bymc failed" \
-        ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG}
+        ${TIME} ${TOOL} ${BYMC_FLAGS} -a ${PROG} \
+        -O schema.noreachopt=1 -O schema.incremental=0
     egrep -q "(counterexample for .* found|\(synt-no-solution\))" ${SYNT_OUT}
     test "$?" -ne 0
 }
@@ -32,7 +33,8 @@ function mc_refine {
         | sed 's/counterexample for \(.*\) found/\\1/'`
     if [ "$SPEC" != "" ]; then
         echo "error" >refinement.out
-        tee_or_die "refinement.out" "refinement error" ${TOOL} -t cex-${SPEC}.trx 2>&1
+        tee_or_die "refinement.out" "refinement error" 2>&1 ${TOOL}\
+            -t cex-${SPEC}.trx -O schema.noreachopt=1 -O schema.incremental=0
     fi
 }
 
