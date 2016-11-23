@@ -34,7 +34,8 @@ let check_locations decls locs =
         let nvals = List.length vals in
         if nlocals <> nvals
         then let m =
-            sprintf "All locations must contain the list of %d integer values, found %d in %s" nlocals nvals loc_name in
+            sprintf "All locations must contain the list of %d integer values, found %d in %s"
+                nlocals nvals loc_name in
             raise (TaErr.SemanticErr m)
     in
     List.iter check_one locs
@@ -271,6 +272,7 @@ arith_expr
     | LPAREN e = arith_expr RPAREN          { e }
     | i = arith_expr PLUS j = arith_expr    { Add (i, j) }
     | i = arith_expr MINUS j = arith_expr   { Sub (i, j) }
+    | MINUS j = arith_expr                  { Sub (Int 0, j) }
     | i = arith_expr MULT j = arith_expr    { Mul (i, j) }
     /*| LPAREN error                          { error "expected (arith_expr)" }*/
     ;
