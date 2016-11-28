@@ -92,4 +92,9 @@ val set_ltl_forms: (expr_t) StringMap.t -> program_t -> program_t
 val is_global: program_t -> var -> bool
 val is_not_global: program_t -> var -> bool
 
+(* has any plugin find a bug? *)
+val has_bug: program_t -> bool
+
+(* indicate that a bug has been found *)
+val set_has_bug: bool -> program_t -> program_t
 

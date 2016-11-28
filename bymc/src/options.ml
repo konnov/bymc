@@ -8,8 +8,8 @@ open Str
 
 open Accums
 
-let version = [2; 3; 0]
-let version_full = "ByMC-2.3.0-synt"
+let version = [2; 4; 0]
+let version_full = "ByMC-2.4.0-synt"
 
 let macro_prefix = "macro."
 
@@ -18,7 +18,7 @@ type input_t =
     | InputTa       (** threshold automata *)
 
 type action_opt_t =
-    | OptAbstract | OptRefine | OptVersion | OptNone
+    | OptAbstract | OptRefine | OptAbstractRefineLight | OptVersion | OptNone
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv | ToolNone
 
@@ -130,6 +130,10 @@ let parse_options _ =
              "try to refine a program produced before (using a counterexample).");
             (* TODO: get rid of it,
                 it should fit into the standard chain workflow *)
+            ("-l", Arg.Unit
+             (fun () ->
+                 opts := {!opts with action = OptAbstractRefineLight; }),
+             "lightweight abstraction/refinement without an external tool (if supported by the chain).");
             ("-s", Arg.String (fun s ->
                 opts := {!opts with action = OptAbstract;
                     chain = "concrete";

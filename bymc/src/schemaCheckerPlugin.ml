@@ -53,14 +53,16 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
             let sk = ta_source#get_ta in
             self#set_options rt;
-            if "bounds" <> rt#caches#options.Options.spec
-            then self#check tech rt sprog sk
-            else begin (* compute the bounds using the summary *)
-                let dom = rt#caches#analysis#get_pia_dom in
-                let dom_size = dom#length in
-                PorBounds.compute_diam rt#solver dom_size sk;
-            end;
-            sprog
+            let is_buggy = if "bounds" <> rt#caches#options.Options.spec
+                then self#check tech rt sprog sk
+                else begin (* compute the bounds using the summary *)
+                    let dom = rt#caches#analysis#get_pia_dom in
+                    let dom_size = dom#length in
+                    PorBounds.compute_diam rt#solver dom_size sk;
+                    false
+                end
+            in
+            Program.set_has_bug is_buggy sprog
 
 
         method check_reachability_cav15 rt sk tt =
@@ -100,7 +102,6 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let check_tree name form tree =
                 SchemaChecker.is_error_tree rt tt sk on_leaf name form deps tree
             in
-
             log INFO "  > Running SchemaChecker (the CAV'15 reachability version)...";
             log INFO (sprintf "    > %d schemas to inspect..." nleafs);
             let each_form name form err_found =
@@ -122,7 +123,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             in
             let specs =
                 get_proper_specs rt#caches#options sk (is_safety_spec tt) in
-            ignore (StrMap.fold each_form specs false)
+            StrMap.fold each_form specs false
 
 
         method check_ltl rt sk tt =
@@ -155,7 +156,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
                 L.can_handle_spec tt sk negated
             in
             let specs = get_proper_specs rt#caches#options sk can_handle in
-            ignore (StrMap.fold each_form specs false)
+            StrMap.fold each_form specs false
 
 
         method check tech rt sprog sk =

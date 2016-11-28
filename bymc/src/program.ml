@@ -22,7 +22,8 @@ type program_t = {
     f_procs: Spin.token proc list;
     f_atomics: (var * Spin.token atomic_expr) list;
     f_ltl_forms: expr_t StringMap.t;
-    f_spurious_steps: (expr_t * expr_t) list
+    f_is_buggy: bool;
+    f_spurious_steps: (expr_t * expr_t) list;
 }
 
 let empty = {
@@ -32,6 +33,7 @@ let empty = {
     f_type_tab = new data_type_tab;
     f_assumes = []; f_procs = []; f_unsafes = [];
     f_atomics = []; f_ltl_forms = StringMap.empty;
+    f_is_buggy = false;
     f_spurious_steps = []
 }
 
@@ -171,7 +173,13 @@ let get_spurious_steps prog =
 
 let set_spurious_steps steps prog =
     { prog with f_spurious_steps = steps }
-    
+   
+let has_bug prog =
+    prog.f_is_buggy
+
+let set_has_bug is_buggy prog =
+    { prog with f_is_buggy = is_buggy }
+ 
 let program_of_units type_tab units =
     let fold_u prog = function
     | Stmt (MDecl(_, v, e)) ->
