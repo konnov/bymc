@@ -24,7 +24,9 @@ let print_version_if_needed opts =
     | OptVersion ->
         printf "%s\n" version_full;
         Pervasives.exit 1
-    | _ -> ()
+
+    | _ ->
+        ()
 
 
 let run_solver opts =
@@ -66,12 +68,17 @@ let main () =
             match opts.action with
             | OptAbstract ->
                 let chain = ChainFactory.create_chain opts.input opts.chain in
-                let _ = do_verification rt chain in ()
+                ignore (do_verification rt chain)
 
             | OptRefine ->
                 do_refine rt
 
-            | _ -> printf "No options given. Bye.\n"
+            | OptAbstractRefineLight ->
+                let chain = ChainFactory.create_chain opts.input opts.chain in
+                ignore (abstract_verify_refine_light rt chain)
+
+            | _ ->
+                printf "No options given. Bye.\n"
         end;
         let _ = solver#stop in ()
     with End_of_file ->

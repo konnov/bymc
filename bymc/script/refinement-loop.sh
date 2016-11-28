@@ -41,6 +41,7 @@ function tee_or_die {
     FILE=$1
     MSG=$2
     shift 2
+    echo "$@"
     {
         set -o pipefail
         $@ 2>&1 | tee $FILE
