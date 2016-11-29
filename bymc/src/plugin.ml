@@ -39,6 +39,10 @@ class plugin_t (plugin_name: string) =
             try Accums.StrMap.find fullname options
             with Not_found ->
                 raise (Plugin_error ("Plugin option " ^ fullname ^ " not found"))
+
+
+        method dispose (rt: runtime_t) =
+            ()
     end
 
 
@@ -197,5 +201,8 @@ class plugin_chain_t =
                 | _ -> raise (Failure "empty plugin queue")
             end;
             (res, m_out)
+
+        method dispose rt =
+            List.iter (fun (p, _) -> p#dispose rt) m_plugins
 
     end

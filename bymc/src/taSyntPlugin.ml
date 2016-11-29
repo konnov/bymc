@@ -107,5 +107,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             in
             List.map map template.Sk.unknowns
 
+        method dispose rt =
+            (self#get_synt_solver rt)#stop
+
     end
 
