@@ -143,8 +143,8 @@ let wrap_with_stack_trace_on_exception f =
         if Printexc.backtrace_status ()
         then begin
             fprintf stderr "\nException: %s\n\n" (Printexc.to_string e);
-            (*print_backtrace ()*)
-            Printexc.print_backtrace stderr
+            print_backtrace ()
+            (*Printexc.print_backtrace stderr*)
         end else begin
             fprintf stderr "\nException: %s\n\n" (Printexc.to_string e);
             fprintf stderr "(Trace is not available. Compile with -g?\n";

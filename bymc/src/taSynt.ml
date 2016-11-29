@@ -457,6 +457,174 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
     end
 
 
+(**
+ A tactic that transforms a counterexample into constraints over the unknowns.
+
+ This class is a modified copy of SchemaChecker.eval_tac_t.
+ XXX: Refactor.
+ *)
+class simp_tac_t (tt: SpinIr.data_type_tab)
+        (cex: C.cex_t) (template: SymbSkel.Sk.skel_t) =
+    object(self)
+        inherit tac_t
+
+        val mutable m_moves_left = cex.C.f_moves
+        val mutable m_state: int StrMap.t =
+            StrMap.add "F000000_warp" 0 cex.C.f_init_state
+        val mutable m_eval_tac = new eval_tac_t tt cex
+        (* we collect assertions here, since we need a negation *)
+        val mutable m_assertions = []
+        
+        method top =
+            m_eval_tac#top
+
+        method frame_hist =
+            m_eval_tac#frame_hist
+
+        method push_frame f =
+            m_eval_tac#push_frame f
+
+        method private assert_expr e =
+            if not (is_c_true e) && not (is_c_false e)
+            then begin
+                let e_val =
+                    Simplif.compute_consts (SpinIr.map_vars (bind m_state) e) in
+                (*printf "expr = %s\n" (SpinIrImp.expr_s e);
+                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);*)
+                m_assertions <- e_val :: m_assertions
+            end
+
+        method assert_top assertions =
+            m_eval_tac#assert_top assertions;
+            List.iter self#assert_expr assertions 
+
+        method assert_top2 assertions =
+            raise (Failure "not implemented")
+
+        method assert_frame_eq sk loop_frame =
+            m_eval_tac#assert_frame_eq sk loop_frame
+
+        method enter_node kind =
+            m_eval_tac#enter_node kind
+
+        method check_property form error_fun =
+            let res = m_eval_tac#check_property form error_fun in
+            (* check with the evaluation on the current parameters *)
+            self#assert_top (if res then [form] else [(UnEx (NEG, form))]);
+            res
+
+        method leave_node kind =
+            m_eval_tac#leave_node kind
+
+        method enter_context =
+            m_eval_tac#enter_context
+
+        method leave_context =
+            m_eval_tac#leave_context
+
+        method push_rule deps sk rule_no =
+            let get_int = function
+                | IntConst i -> i
+                | _ as e ->
+                    raise (Failure ("Expected IntConst _, found %s" ^ (SpinIrImp.expr_s e)))
+            in
+            let not_redundant_action = function
+                | BinEx (Spin.EQ, UnEx (Spin.NEXT, Var l), Var r) ->
+                        l#get_name <> r#get_name
+                | _ -> true
+            in
+            (* NOTE: we extract the rule from the template *)
+            let rule = List.nth template.Sk.rules rule_no in
+            let move = List.hd m_moves_left in
+            let do_update _ =
+                let frame = self#top in
+                let actions = List.filter not_redundant_action rule.Sk.act in
+                (* push the rule to eval_tac_t *)
+                m_eval_tac#push_rule deps sk rule_no;
+                (* and now we have a new frame! *)
+                let new_frame = self#top in
+                self#push_frame new_frame;
+                let move_loc state loc add_fun =
+                    let loc_var = IntMap.find loc sk.Sk.loc_vars in
+                    let old_val = StrMap.find loc_var#get_name state in
+                    let new_val = add_fun old_val move.C.f_accel in
+                    assert (new_val >= 0);
+                    StrMap.add loc_var#get_name new_val state
+                in
+                let new_state =
+                    if rule.Sk.src <> rule.Sk.dst (* don't do it for self-loops *)
+                    then move_loc
+                            (move_loc m_state rule.Sk.src (-))
+                            rule.Sk.dst (+)
+                    else m_state
+                in
+                let apply_action accel state = function
+                    | BinEx (EQ, UnEx (NEXT, Var lhs),
+                            BinEx (PLUS, Var rhs, IntConst i)) ->
+                                (* multiply the added value by the acceleration factor *)
+                        let mul_rhs =
+                            BinEx (PLUS, Var rhs, IntConst (i * accel)) in
+                        let rhs_val =
+                            Simplif.compute_consts (SpinIr.map_vars (bind state) mul_rhs)
+                        in
+                        StrMap.add lhs#get_name (get_int rhs_val) state
+
+                    | BinEx (EQ, UnEx (NEXT, Var lhs), Var rhs) ->
+                        if lhs#get_name = rhs#get_name
+                        then state
+                        else StrMap.add lhs#get_name (StrMap.find rhs#get_name state) state
+                        
+                    | _ as e ->
+                        let m = "Unexpected action: " ^ (SpinIrImp.expr_s e) in
+                        raise (Failure m)
+                in
+                m_moves_left <- List.tl m_moves_left;
+                let new_state =
+                    List.fold_left
+                        (apply_action move.C.f_accel) new_state actions
+                in
+                (* also add the acceleration factor into the state *)
+                m_state <- StrMap.add new_frame.F.accel_v#get_name move.C.f_accel new_state
+            in
+            (* it might happen that the rules diverge, e.g., when the counterexample
+               is generated from another sequence of rules
+             *)
+            assert (rule_no = move.C.f_rule_no);
+            do_update ();
+            let simp_guard =
+                Simplif.compute_consts (SpinIr.map_vars (bind m_state) rule.Sk.guard)
+            in
+            m_assertions <- simp_guard :: m_assertions (* push the assertions *)
+
+
+        method reset =
+            m_eval_tac#reset
+
+        method set_incremental (_: bool) =
+            ()
+
+        method get_incremental =
+            false
+
+
+        (**
+         Finally, push the assertions to the solver.
+
+         NOTE: this is the most interesting function here!
+         *)
+        method push_assertions (synt_solver: Smt.smt_solver) =
+            let e = Simplif.propagate_not
+                ~negate:true (list_to_binex AND m_assertions) in
+            let se = Simplif.compute_consts e in
+            match se with
+            | IntConst 0 ->
+                raise (Failure "The example is unconditionally true")
+
+            | _ ->
+                ignore (synt_solver#append_expr se)
+    end
+
+
 (** check, whether a counterexample is applicable to the skeleton *)    
 let is_cex_applicable_new solver type_tab sk deps cex =
     let spec =
@@ -537,4 +705,42 @@ let is_ta_vacuous solver sk =
         unsat
     end
 
+
+(**
+ Push a counterexample to the own synthesis of the solver.
+ *)
+let push_counterexample solver synt_solver type_tab sk deps template cex =
+    let spec =
+        let form = StrMap.find cex.C.f_form_name sk.Sk.forms in
+        let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
+        (*printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);*)
+        let ltl, utl = SCL.extract_utl sk neg_form in
+        SCL.UTL (ltl, utl)
+    in
+    let size, par_order, rev_map =
+        SCL.mk_cut_and_threshold_graph sk deps spec
+    in
+    let eorder =
+        try List.map (fun n -> IntMap.find n rev_map) cex.C.f_iorder
+        with Not_found -> []
+    in
+    let ntt = type_tab#copy in
+    (* XXX: introduce variables for the location counters *)
+    let loc_vars = IntMap.values sk.Sk.loc_vars in
+    let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+    BatEnum.iter set_type loc_vars;
+    (* END: XXX *)
+    let tac = new simp_tac_t ntt cex template in
+    solver#push_ctx;
+    let initf = F.init_frame ntt sk in
+    tac#push_frame initf;
+    tac#assert_top sk.Sk.inits;
+    let res =
+        SCL.check_one_order solver sk (cex.C.f_form_name, spec) deps
+                (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
+    in
+    solver#pop_ctx;
+    (* push the assertions! *)
+    tac#push_assertions synt_solver;
+    ()
 

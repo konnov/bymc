@@ -8,6 +8,7 @@ open Program
 open Spin
 open SymbSkel
 open SchemaSmt
+open Smt
 
 open TaSynt
 
@@ -22,94 +23,44 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         inherit TaSource.ta_source_t
 
         val mutable m_out_skel: Sk.skel_t option = None
-        val m_iter_filename = "iter.ser"
+        val mutable m_synt_solver = None (* we need own our copy here to keep counterex. *)
+        val mutable m_unknowns_vec: (string * Spin.token SpinIr.expr) list = []
+        val mutable m_n_cexs = 0
 
         method transform rt =
-            let in_skel = ta_source#get_ta in
-            let rec skip_vacuous iter =
-                if TaSynt.vec_iter_end iter
-                then iter
-                else begin
-                    let vec = iter_to_unknowns_vec iter in
-                    log INFO ("> Replacing the unknowns: " ^ (unknowns_vec_s vec));
-                    let out_skel = replace_unknowns in_skel vec in
-                    if TaSynt.is_ta_vacuous rt#solver out_skel
-                    then begin
-                        log INFO ("  > Contradictory assumptions. Skipped.");
-                        skip_vacuous (vec_iter_next iter)
-                    end
-                    else iter
-                end
-            in
-            let iter, cexs = self#load_iter rt in_skel in
-            let new_iter = skip_vacuous iter in
-            self#save_iter rt new_iter cexs;
-            if TaSynt.vec_iter_end new_iter
+            let template_skel = ta_source#get_ta in
+            if m_unknowns_vec = []
             then begin
-                m_out_skel <- None;
-                log INFO ("(synt-no-solution)");
-            end else begin
-                let vec = iter_to_unknowns_vec new_iter in
-                let out_skel = replace_unknowns in_skel vec in
-                m_out_skel <- Some out_skel;
-                Sk.to_file "synt.ta" out_skel;
+                let mk0 v = (v#get_name, SpinIr.IntConst 0) in
+                m_unknowns_vec <- List.map mk0 template_skel.Sk.unknowns;
+                log INFO ("> Starting with: " ^ (unknowns_vec_s m_unknowns_vec));
+                let synt_solver = self#get_synt_solver rt in
+                let int_type = new SpinIr.data_type SpinTypes.TUNSIGNED in
+                let append_var v = synt_solver#append_var_def v int_type in
+                List.iter append_var (template_skel.Sk.unknowns)
             end;
+            let out_skel = replace_unknowns template_skel m_unknowns_vec in
+            Sk.to_file "synt.ta" out_skel;
+            m_out_skel <- Some out_skel;
             self#get_input0
 
 
-        method get_ta =
+        method private get_ta =
             match m_out_skel with
             | Some sk -> sk
+            | None -> raise (Failure "ta_synt_plugin_t must have been called")
+
+
+        method private get_synt_solver rt =
+            match m_synt_solver with
+            | Some solver ->
+                solver
 
             | None ->
-                let m =
-                    "Plugin ta_synt_plugin_t has not been called yet"
-                in
-                raise (Failure m)
-
-        (** As our refinement loop is iteratively calling the tool,
-            we load the iterator from file.
-         *)
-        method load_iter rt skel: vec_iter_t * C.cex_t list =
-            let iter_exists =
-                try Unix.access m_iter_filename [Unix.F_OK]; true
-                with Unix.Unix_error _ -> false 
-            in
-            if not iter_exists
-            then begin
-                let iter = vec_iter_init skel (self#get_bit_len rt) in
-                self#save_iter rt iter [];
-                iter, []
-            end else begin
-                let cin = open_in_bin m_iter_filename in
-                let (pair: vec_iter_t * C.cex_t list) =
-                    try Marshal.from_channel cin
-                    with Failure e ->
-                        let m = "\nERROR: The serialized iterator is corrupted."
-                            ^ " Did you recompile the tool?\n\n" in
-                        fprintf stderr "%s" m;
-                        raise (Failure e)
-                in
-                close_in cin;
-                pair
-            end
-
-
-        (**
-          Save the iterator to file
-          *)
-        method save_iter rt iter (cexs: C.cex_t list) =
-            log INFO (sprintf "saving iterator to %s..." m_iter_filename);
-            let cout = open_out_bin m_iter_filename in
-            Marshal.to_channel cout (iter, cexs) [Marshal.Closures];
-            close_out cout
-
-
-        method get_bit_len rt =
-            if self#has_opt rt "bitlen"
-            then int_of_string (self#get_opt rt "bitlen")
-            else 2
-
+                let solver = rt#solver#clone_not_started "synt" in
+                solver#start;
+                m_synt_solver <- Some solver;
+                solver
 
         method update_runtime rt =
             ()
@@ -118,77 +69,43 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             path
 
         method refine rt path =
-            let in_skel = ta_source#get_ta in
-            let old_iter, cexs = self#load_iter rt in_skel in
+            let template_skel = ta_source#get_ta in
             let new_cex = C.load_cex "cex-fixme.scm" in
-            C.save_cex (sprintf "cex%d.scm" (List.length cexs)) new_cex;
-            let all_cexs = cexs @ [new_cex] in
-            let find_applicable_cex fixed_skel iter cexs =
-                let flow_opt = SchemaOpt.is_flow_opt_enabled () in
-                let type_tab = Program.get_type_tab self#get_input0 in
-                let deps =
-                    PorBounds.compute_deps
-                        ~against_only:flow_opt rt#solver fixed_skel
-                in
-                let rec find num = function
-                    | [] -> -1
-
-                    | hd :: tl ->
-                        if TaSynt.is_cex_applicable_new
-                            rt#solver type_tab fixed_skel deps hd
-                        then num
-                        else find (num + 1) tl
-                in
-                find 0 cexs
+            C.save_cex (sprintf "cex%d.scm" m_n_cexs) new_cex;
+            m_n_cexs <- m_n_cexs + 1;
+            let synt_solver = self#get_synt_solver rt in
+            let type_tab = Program.get_type_tab self#get_input0 in
+            let fixed_skel = replace_unknowns template_skel m_unknowns_vec in
+            let flow_opt = SchemaOpt.is_flow_opt_enabled () in
+            let deps =
+                PorBounds.compute_deps ~against_only:flow_opt rt#solver fixed_skel
             in
-            let rec find_new_iter iter =
-                let new_iter = vec_iter_next iter in
-                if (vec_iter_end new_iter)
-                then new_iter
-                else begin
-                    let vec = iter_to_unknowns_vec new_iter in
-                    let vec_s = unknowns_vec_s vec in
-                    log INFO (sprintf "> Checking %s..." vec_s);
-                    let fixed_skel = replace_unknowns in_skel vec in
-                    let is_vac = TaSynt.is_ta_vacuous rt#solver fixed_skel in
-                    if is_vac then log INFO ("  > contradicting assumptions");
-                    let cex_num =
-                        if is_vac
-                        then (-1)
-                        else find_applicable_cex fixed_skel new_iter all_cexs
-                    in
-                    if (cex_num < 0)
-                    then begin
-                        log INFO (sprintf "No applicable counterexample among %d"
-                            (List.length all_cexs));
-                        new_iter (* no counterexample *)
-                    end else begin
-                        log INFO
-                            (sprintf "  > %s is falsified by counterexample %d: "
-                                vec_s cex_num);
-                        find_new_iter new_iter
-                    end
-                end
-            in
-            let next_valid_iter = find_new_iter old_iter in
-            self#save_iter rt next_valid_iter all_cexs;
-            if vec_iter_end next_valid_iter
+            TaSynt.push_counterexample rt#solver synt_solver type_tab fixed_skel deps template_skel new_cex;
+            if not synt_solver#check
             then begin
-                let msg = sprintf
-                    "Reached the upper bound %d on each unknown. No solution found."
-                    (Accums.ipow 2 (self#get_bit_len rt))
-                in
-                log INFO msg;
-                log INFO (sprintf "Collected %d counterexamples in total"
-                    (List.length all_cexs));
+                log INFO (sprintf "Collected %d counterexamples in total" m_n_cexs);
                 log INFO ("(synt-no-solution)");
                 (false, self#get_output)
             end else begin
-                let vec = iter_to_unknowns_vec next_valid_iter in
-                log INFO
-                    ("> Next unknowns to try: " ^ (unknowns_vec_s vec));
+                m_unknowns_vec <- self#find_unknowns synt_solver template_skel;
+                log INFO ("> Next unknowns to try: " ^ (unknowns_vec_s m_unknowns_vec));
                 (true, self#get_output)
             end
+
+        method private find_unknowns synt_solver template =
+            let q = synt_solver#get_model_query in
+            let try_var v = ignore (Smt.Q.try_get q (SpinIr.Var v)) in
+            List.iter try_var template.Sk.unknowns;
+            let new_query = synt_solver#submit_query q in
+            let map v =
+                match Smt.Q.try_get new_query (Var v) with
+                    | Smt.Q.Result e ->
+                        (v#get_name, e)
+
+                    | Smt.Q.Cached ->
+                        raise (Failure "Unexpected Cached")
+            in
+            List.map map template.Sk.unknowns
 
     end
 
