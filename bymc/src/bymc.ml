@@ -75,12 +75,14 @@ let main () =
 
             | OptAbstractRefineLight ->
                 let chain = ChainFactory.create_chain opts.input opts.chain in
-                ignore (abstract_verify_refine_light rt chain)
+                ignore (abstract_verify_refine_light rt chain);
+                chain#dispose rt;
 
             | _ ->
                 printf "No options given. Bye.\n"
         end;
-        let _ = solver#stop in ()
+        let _ = solver#stop in
+        log INFO "Bye!"
     with End_of_file ->
         log ERROR "Premature end of file";
         exit 1

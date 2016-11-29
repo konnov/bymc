@@ -25,6 +25,8 @@ class plugin_t: string ->
 
         method has_opt: Runtime.runtime_t -> string -> bool
         method get_opt: Runtime.runtime_t -> string -> string
+
+        method dispose: Runtime.runtime_t -> unit
     end
 
 
@@ -56,6 +58,8 @@ class virtual transform_plugin_t: string ->
            return true if successful *)
         method virtual refine:
             Runtime.runtime_t -> Program.lasso_t -> bool * Program.program_t
+
+        method dispose: Runtime.runtime_t -> unit
     end
 
 
@@ -67,6 +71,8 @@ class virtual analysis_plugin_t: string ->
             Runtime.runtime_t -> Program.lasso_t -> Program.lasso_t
         method refine:
             Runtime.runtime_t -> Program.lasso_t -> bool * Program.program_t
+
+        method dispose: Runtime.runtime_t -> unit
     end
 
 
@@ -98,6 +104,8 @@ class plugin_chain_t:
         method get_input: Program.program_t
 
         method get_output: Program.program_t
+
+        method dispose: Runtime.runtime_t -> unit
 
     end
 
