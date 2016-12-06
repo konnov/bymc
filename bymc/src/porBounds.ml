@@ -111,7 +111,7 @@ let print_milestone lockt (name, id, m, _) =
         (PSet.str (PSet.add id (PSet.empty))) (SpinIrImp.expr_s m))
 
 
-(* a deps for numerous dependencies we collect here *)
+(* numerous dependencies on threshold automata are collected here *)
 module D = struct
     type deps_t = {
         (* control flow graph with rules as the vertices and

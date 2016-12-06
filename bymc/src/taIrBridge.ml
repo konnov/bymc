@@ -172,14 +172,15 @@ let skel_of_ta ta =
     in
     let locals = map is_local in
     let params = map is_param in
-    List.iter (fun v -> v#set_symbolic) params; (* mark parameters as symbolic *)
+    let unknowns = map is_unknown in
+    List.iter (fun v -> v#set_symbolic) (params @ unknowns); (* mark parameters and unknowns as symbolic *)
     {
         Sk.name = ta.Ta.name; Sk.nlocs = List.length ta.Ta.locs;
         Sk.locs = List.map snd ta.Ta.locs;
         Sk.locals = map is_local;
         Sk.shared = map is_shared;
         Sk.params = params;
-        Sk.unknowns = map is_unknown;
+        Sk.unknowns = unknowns;
         Sk.assumes = List.map (map_rel_expr var_fun) ta.Ta.assumptions;
         Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
         Sk.loc_vars = loc_vars;

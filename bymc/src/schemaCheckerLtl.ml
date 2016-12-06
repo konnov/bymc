@@ -528,6 +528,7 @@ let dump_counterex_to_file solver sk deps form_name
     let machine_fname = "cex-fixme.scm" in
     let cex = SchemaChecker.counterex_of_frame_hist
             solver sk deps form_name iorder (prefix_frames @ loop_frames)
+            ~start_no:(List.length prefix_frames)
     in
     SchemaSmt.C.save_cex machine_fname
         { cex with C.f_po_struc = po_elem_struc_list }
@@ -695,7 +696,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                     let po_elem_struc_list =
                         List.map struc_of_po_elem elem_order in
                     dump_counterex_to_file solver sk deps
-                        form_name (iorder, po_elem_struc_list) frame_hist [];
+                        form_name (iorder, po_elem_struc_list) prefix loop;
                 in
                 printf " END.\n"; flush stdout;
                 (* postpone an expensive check with the closed loop *)
