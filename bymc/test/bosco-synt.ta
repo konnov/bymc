@@ -18,10 +18,12 @@ skel Proc {
   /* the constants to be found by synthesis */
   unknowns a1, b1, a2, b2, a3, b3, a4, b4, a5, b5;
 
-
-  assumptions (1) {
+    /*
     a1 != 0; a2 != 0; a3 != 0; a4 != 0; a5 != 0;
     b1 != 0; b2 != 0; b3 != 0; b4 != 0; b5 != 0;
+    */
+
+  assumptions (1) {
     N > 7 * T;
     T >= F;
     T >= 1;
@@ -36,7 +38,7 @@ skel Proc {
     (loc0 + loc1) == N - F;
     loc2 == 0; loc3 == 0; loc4 == 0;
     loc5 == 0; loc6 == 0; loc7 == 7;
-    nsnt0 == 0; nsnt1 == 0;
+    nsnt0 == 0; nsnt1 == 0; nsnt01 == 0;
   }
 
   rules (0) {

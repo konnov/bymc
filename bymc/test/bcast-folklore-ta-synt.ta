@@ -15,8 +15,8 @@ skel Proc {
   parameters N, F;
   unknowns a1, b1, a2, b2; /* the constants to be found by synthesis */
   assumptions (1) {
-    N > 1;
-    N > F + 1;
+    N >= 1;
+    N > F;
   }
 
   locations (4) {
@@ -62,11 +62,12 @@ skel Proc {
   6: loc0 -> loc0
       when (nsnt >= 0)
       do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
-  /*
-  7: loc3 -> loc3
+  7: loc1 -> loc1 /* it is crucial to have this self-loop, although it is not obvious */
       when (nsnt >= 0)
       do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
-   */
+  8: loc3 -> loc3
+      when (nsnt >= 0)
+      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
   }
   specifications (3) {
     /* safety */
