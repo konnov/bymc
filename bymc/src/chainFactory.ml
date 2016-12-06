@@ -237,7 +237,6 @@ module TaSynt = struct
     type plugins_t = {
         tapp: TaParserPlugin.ta_parser_plugin_t;
         tsp: TaSyntPlugin.ta_synt_plugin_t;
-        slps: SchemaCheckerPlugin.slps_checker_plugin_t;
     }
 
     let mk_plugins () =
@@ -245,17 +244,12 @@ module TaSynt = struct
         let tsp = new TaSyntPlugin.ta_synt_plugin_t
             "tsp" (tapp :> TaSource.ta_source_t)
         in
-        let slps =
-            new SchemaCheckerPlugin.slps_checker_plugin_t
-                "slps" (tsp :> TaSource.ta_source_t)
-        in
-        { tapp; tsp; slps }
+        { tapp; tsp; }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
         chain#add_plugin plugins.tapp OutOfPred;
         chain#add_plugin plugins.tsp OutOfPred;
-        chain#add_plugin plugins.slps OutOfPred;
         chain
 end
 

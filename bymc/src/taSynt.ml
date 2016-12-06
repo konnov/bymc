@@ -123,7 +123,17 @@ let unknowns_vec_s vec =
 
 
 (** replace unknowns with the values given in the unknowns vector *)
-let replace_unknowns sk unknowns_vec =
+let replace_unknowns_in_expr unknowns_vec exp =
+    let vec_map = map_of_unknowns_vec unknowns_vec in
+    let map_fun v =
+        try StrMap.find v#get_name vec_map
+        with Not_found -> Var v
+    in
+    Simplif.compute_consts (map_vars map_fun exp)
+
+
+(** replace unknowns with the values given in the unknowns vector *)
+let replace_unknowns_in_skel sk unknowns_vec =
     let vec_map = map_of_unknowns_vec unknowns_vec in
     let sub exp =
         let map_fun v =
@@ -141,6 +151,26 @@ let replace_unknowns sk unknowns_vec =
               Sk.rules = List.map map_rule sk.Sk.rules;
               Sk.inits = List.map sub sk.Sk.inits;
               Sk.forms = StrMap.map sub sk.Sk.forms;
+    }
+
+
+(** replace unknowns with the values given in the unknowns vector *)
+let replace_unknowns_in_deps deps unknowns_vec =
+    let vec_map = map_of_unknowns_vec unknowns_vec in
+    let sub exp =
+        let map_fun v =
+            try StrMap.find v#get_name vec_map
+            with Not_found -> Var v
+        in
+        Simplif.compute_consts (map_vars map_fun exp)
+    in
+    let map_mstone (n, elt, exp, lock) =
+        (n, elt, sub exp, lock)
+    in
+    { deps with D.cond_map = PSetEltMap.map sub deps.D.cond_map;
+              D.act_map = PSetEltMap.map sub deps.D.act_map;
+              D.uconds = List.map map_mstone deps.D.uconds;
+              D.lconds = List.map map_mstone deps.D.lconds;
     }
 
 
@@ -225,7 +255,8 @@ let bind state var =
 
  This class is a modified copy of SchemaChecker.tree_tac_t.
  *)
-class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
+class eval_tac_t (tt: SpinIr.data_type_tab)
+        (cex: C.cex_t) (unknowns: (string * Spin.token SpinIr.expr) list) =
     object(self)
         inherit tac_t
 
@@ -234,7 +265,12 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
         val mutable m_valid = true (* is the current set of constraints valid? *)
         val mutable m_moves_left = cex.C.f_moves
         val mutable m_state: int StrMap.t =
-            StrMap.add "F000000_warp" 0 cex.C.f_init_state
+            let add m (n, e) = match e with
+            | IntConst i -> StrMap.add n i m
+            | _ -> raise (Failure "Expected IntConst _")
+            in
+            List.fold_left add
+                (StrMap.add "F000000_warp" 0 cex.C.f_init_state) unknowns
         
         method top =
             let rec find = function
@@ -464,14 +500,15 @@ class eval_tac_t (tt: SpinIr.data_type_tab) (cex: C.cex_t) =
  XXX: Refactor.
  *)
 class simp_tac_t (tt: SpinIr.data_type_tab)
-        (cex: C.cex_t) (template: SymbSkel.Sk.skel_t) =
+        (cex: C.cex_t) (template: SymbSkel.Sk.skel_t)
+        (unknowns: (string * Spin.token SpinIr.expr) list) =
     object(self)
         inherit tac_t
 
         val mutable m_moves_left = cex.C.f_moves
         val mutable m_state: int StrMap.t =
             StrMap.add "F000000_warp" 0 cex.C.f_init_state
-        val mutable m_eval_tac = new eval_tac_t tt cex
+        val mutable m_eval_tac = new eval_tac_t tt cex unknowns
         (* we collect assertions here, since we need a negation *)
         val mutable m_assertions = []
         
@@ -489,8 +526,8 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             then begin
                 let e_val =
                     Simplif.compute_consts (SpinIr.map_vars (bind m_state) e) in
-                (*printf "expr = %s\n" (SpinIrImp.expr_s e);
-                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);*)
+                printf "expr = %s\n" (SpinIrImp.expr_s e);
+                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);
                 m_assertions <- e_val :: m_assertions
             end
 
@@ -673,7 +710,7 @@ let is_cex_applicable_new solver type_tab sk deps cex =
         let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
         BatEnum.iter set_type loc_vars;
         (* END: XXX *)
-        let tac = new eval_tac_t ntt cex in
+        let tac = new eval_tac_t ntt cex [] in
         solver#push_ctx;
         let initf = F.init_frame ntt sk in
         tac#push_frame initf;
@@ -707,36 +744,31 @@ let is_ta_vacuous solver sk =
 
 
 (**
- Push a counterexample to the own synthesis of the solver.
+ Push a counterexample to the own solver of the synthesizer.
  *)
-let push_counterexample solver synt_solver type_tab sk deps template cex =
+let push_counterexample solver synt_solver type_tab sk deps template unknowns cex =
     let spec =
-        let form = StrMap.find cex.C.f_form_name sk.Sk.forms in
+        let form = StrMap.find cex.C.f_form_name template.Sk.forms in
         let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
         (*printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);*)
-        let ltl, utl = SCL.extract_utl sk neg_form in
+        let ltl, utl = SCL.extract_utl template neg_form in
         SCL.UTL (ltl, utl)
     in
     let size, par_order, rev_map =
-        SCL.mk_cut_and_threshold_graph sk deps spec
+        (* XXX: using deps from sk, not template *)
+        SCL.mk_cut_and_threshold_graph template deps spec
     in
     let eorder =
         try List.map (fun n -> IntMap.find n rev_map) cex.C.f_iorder
         with Not_found -> []
     in
-    let ntt = type_tab#copy in
-    (* XXX: introduce variables for the location counters *)
-    let loc_vars = IntMap.values sk.Sk.loc_vars in
-    let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
-    BatEnum.iter set_type loc_vars;
-    (* END: XXX *)
-    let tac = new simp_tac_t ntt cex template in
+    let tac = new simp_tac_t type_tab cex template unknowns in
     solver#push_ctx;
-    let initf = F.init_frame ntt sk in
+    let initf = F.init_frame type_tab sk in
     tac#push_frame initf;
     tac#assert_top sk.Sk.inits;
     let res =
-        SCL.check_one_order solver sk (cex.C.f_form_name, spec) deps
+        SCL.check_one_order solver template (cex.C.f_form_name, spec) deps
                 (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
     in
     solver#pop_ctx;

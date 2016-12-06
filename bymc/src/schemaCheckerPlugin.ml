@@ -130,7 +130,6 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let flow_opt = SchemaOpt.is_flow_opt_enabled () in
             let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
-
             let check name form =
                 L.find_error rt tt sk name form deps
             in
