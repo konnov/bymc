@@ -48,8 +48,11 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 log INFO ("> Next unknowns to try: " ^ (unknowns_vec_s m_unknowns_vec));
                 let fixed_skel = replace_unknowns_in_skel template_skel m_unknowns_vec in
                 Sk.to_file "synt.ta" fixed_skel;
-                if self#has_counterex rt ntt fixed_skel
-                then if self#do_refine rt ntt fixed_skel
+                if not (self#has_counterex rt ntt fixed_skel)
+                then begin
+                    log INFO (sprintf "> Finished after %d refinements" m_n_cexs);
+                end
+                else if self#do_refine rt ntt fixed_skel
                     then loop ()
             in
             loop ();
