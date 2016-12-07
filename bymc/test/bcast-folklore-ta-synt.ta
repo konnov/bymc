@@ -19,14 +19,14 @@ skel Proc {
     N > F;
   }
 
-  locations (4) {
+  locations (0) {
     loc0: [0]; /* initialized with value 0 */
     loc1: [1]; /* initialized with value 1 */
     loc2: [2]; /* crashed */
     loc3: [3]; /* accepted */
   }
 
-  inits (5) {
+  inits (0) {
     (loc0 + loc1) == N;
     loc2 == 0;
     loc3 == 0;
@@ -34,7 +34,7 @@ skel Proc {
     nsntF == 0;
   }
 
-  rules (8) {
+  rules (0) {
   /* crashing without sending a message */
   0: loc0 -> loc2
       when (nfaulty < F)
