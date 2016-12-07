@@ -214,9 +214,11 @@ let is_cex_applicable sk cex =
             let guard_val = Simplif.compute_consts
                 (SpinIr.map_vars (bind state) r.Sk.guard)
             in
+            (*
             printf " rule %d: guard %s evaluates to %s\n"
                 m.C.f_rule_no
                 (SpinIrImp.expr_s r.Sk.guard) (SpinIrImp.expr_s guard_val);
+             *)
             match guard_val with
             | IntConst 0 ->
                 (* the guard evaluates to false *)
@@ -526,8 +528,8 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             then begin
                 let e_val =
                     Simplif.compute_consts (SpinIr.map_vars (bind m_state) e) in
-                printf "expr = %s\n" (SpinIrImp.expr_s e);
-                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);
+                (*printf "expr = %s\n" (SpinIrImp.expr_s e);
+                printf "e_val = %s\n" (SpinIrImp.expr_s e_val);*)
                 m_assertions <- e_val :: m_assertions
             end
 
@@ -766,7 +768,8 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
     solver#push_ctx;
     let initf = F.init_frame type_tab sk in
     tac#push_frame initf;
-    tac#assert_top sk.Sk.inits;
+    tac#assert_top template.Sk.assumes;
+    tac#assert_top template.Sk.inits;
     let res =
         SCL.check_one_order solver template (cex.C.f_form_name, spec) deps
                 (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
@@ -775,4 +778,15 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
     (* push the assertions! *)
     tac#push_assertions synt_solver;
     ()
+
+
+(** exclude a given tuple of unknowns from consideration *)
+let exclude_unknowns synt_solver unknowns =
+    let neq (name, value) = BinEx (NE, Var (SpinIr.new_var name), value) in
+    let ineqs = List.map neq unknowns in
+    if ineqs <> []
+    then begin
+        synt_solver#comment ("excluded " ^ (unknowns_vec_s unknowns));
+        ignore (synt_solver#append_expr (list_to_binex OR ineqs))
+    end
 
