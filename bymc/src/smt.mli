@@ -42,7 +42,7 @@ class virtual smt_solver:
 
           @param new_name the new name (used in the logs)
         *)
-        method virtual clone_not_started: string -> smt_solver
+        method virtual clone_not_started: ?logic:string -> string -> smt_solver
 
         (**
          Set a theory.
@@ -144,7 +144,7 @@ class yices_smt: string -> string ->
         method reset: unit
 
         (** make a copy of the solver object without starting the new copy *)
-        method clone_not_started: string -> smt_solver
+        method clone_not_started: ?logic:string -> string -> smt_solver
 
         (**
          Set a theory. In this implementation, the method is doing nothing.
@@ -252,7 +252,7 @@ class lib2_smt: string-> string -> string array ->
         method reset: unit
 
         (** make a copy of the solver object without starting the new copy *)
-        method clone_not_started: string -> smt_solver
+        method clone_not_started: ?logic:string -> string -> smt_solver
 
         (**
          Set a theory.
@@ -355,7 +355,7 @@ class mathsat5_smt: string ->
         method reset: unit
 
         (** make a copy of the solver object without starting the new copy *)
-        method clone_not_started: string -> smt_solver
+        method clone_not_started: ?logic:string -> string -> smt_solver
 
         (**
          Set a theory. In this implementation, the method is doing nothing.
