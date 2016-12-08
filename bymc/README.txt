@@ -160,7 +160,7 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install batteries ounit ocamlgraph sexplib menhir
+$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie
 
 If you want to compile mathsat's library, you have to also install:
 
