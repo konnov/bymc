@@ -955,6 +955,7 @@ let poset_make_utl form =
   we compute the unique fingerprint of the order.
   For the moment, we use just a simple string representation.
   XXX: storing fingerprints slowly becomes a bottleneck in this technique.
+  TODO: use a tree over words on po elements.
   *)
 let compute_fingerprint order =
     let buf = BatBuffer.create (3 * (List.length order)) in
@@ -966,6 +967,88 @@ let compute_fingerprint order =
     in
     ignore (List.fold_left append true order);
     BatBuffer.contents buf
+
+
+(**
+  Iterating over partial orders on threshold-and-cut graphs.
+  *)
+module POI = struct
+    type po_iter_t = {
+        loiter: linord_iter_t;
+        visited: (string, bool) Hashtbl.t;
+        map_fun: int -> po_elem_t;
+        po_seq: (int list) ref;
+        mapped_seq: (po_elem_t list) ref;
+    }
+
+    let trunc_guards_after_loop map_fun order =
+        let not_loop e = (e <> po_loop) in
+        let not_guard num =
+            match map_fun num with
+            | PO_guard _ -> false
+            | _ -> true
+        in
+        if po_loop = (List.hd order)
+        then List.tl order (* incremental safety *)
+        else let prefix, loop = BatList.span not_loop order in
+            let floop = List.filter not_guard loop in
+            prefix @ floop (* liveness or non-incremental safety *)
+
+    (**
+      Create a new iterator using an iterator for posets
+     *)
+    let iter_first map_fun init_linorder_iter =
+        let iorder = 
+            if linord_iter_is_end init_linorder_iter
+            then []
+            else trunc_guards_after_loop map_fun
+                     (BatArray.to_list (linord_iter_get init_linorder_iter))
+        in
+        let visited = Hashtbl.create 1024 in
+        Hashtbl.add visited (compute_fingerprint iorder) true;
+        {
+            loiter = init_linorder_iter;
+            visited = visited;
+            map_fun = map_fun;
+            po_seq = ref iorder;
+            mapped_seq = ref (List.map map_fun iorder);
+        }
+
+    (** Get the current sequence pointed by the iterator *)
+    let iter_get_iorder poi =
+        !(poi.po_seq)
+
+    (** Get the mapping of the current sequence on po_elem_t *)
+    let iter_get_eorder poi =
+        !(poi.mapped_seq)
+
+    (** Is the end of the sequence reached? *)
+    let iter_is_end poi =
+        linord_iter_is_end poi.loiter
+
+    (**
+      Advance the iterator value (by updating its arguments in place).
+     *)
+    let iter_next poi =
+        let rec find_next () =
+            linord_iter_next poi.loiter;
+            if not (linord_iter_is_end poi.loiter)
+            then begin
+                let order = BatArray.to_list (linord_iter_get poi.loiter) in
+                let filtered = trunc_guards_after_loop poi.map_fun order in
+                let fingerprint = compute_fingerprint filtered in
+                if Hashtbl.mem poi.visited fingerprint
+                then find_next ()
+                else begin
+                    Hashtbl.add poi.visited fingerprint true;
+                    poi.po_seq := filtered;
+                    poi.mapped_seq := List.map poi.map_fun filtered
+                end
+            end
+        in
+        find_next ()
+end
+
 
 
 let enum_orders (map_fun: int -> po_elem_t)
@@ -992,7 +1075,7 @@ let enum_orders (map_fun: int -> po_elem_t)
         if not (Hashtbl.mem visited fingerprint)
         then begin
             (*printf "  visiting %s\n" fingerprint;*)
-            Hashtbl.add visited fingerprint 1;
+            Hashtbl.add visited fingerprint true;
             let eorder = List.map map_fun filtered in
             result := order_fun (filtered, eorder);
         end;
@@ -1106,15 +1189,19 @@ let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_
     let pord (a, b) =
         sprintf "%s < %s" (po_elem_short_s sk (get_elem a)) (po_elem_short_s sk (get_elem b))
     in
-    logtm INFO (sprintf "The partial order is:\n    %s\n\n"
-        (str_join ", " (List.map pord order)));
+    logtm INFO (sprintf "%s: the partial order is:\n    %s\n\n"
+        form_name (str_join ", " (List.map pord order)));
 
     (* count the linear extensions *)
-    logtm INFO (sprintf "Counting linear extensions...\n");
+    logtm INFO (form_name ^ ": counting linear extensions...");
+    let poi = POI.iter_first get_elem (linord_iter_first size order) in
     let total_count = ref 0 in
-    enum_orders get_elem (fun _ -> total_count := 1 + !total_count)
-        (fun _ -> false) (ref ()) (linord_iter_first size order);
-    logtm INFO (sprintf "%d linear extensions to enumerate\n\n" !total_count);
+    while not (POI.iter_is_end poi) do
+        total_count := 1 + !total_count;
+        POI.iter_next poi
+    done;
+    logtm INFO (sprintf
+        "%s: %d linear extensions to enumerate\n\n" form_name !total_count);
 
     (* and check the properties for each of them *)
     let current = ref 0 in
@@ -1123,22 +1210,27 @@ let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_
         the precise timing is given at the end *)
     let watch = new Accums.stop_watch ~is_wall:true ~with_children:true in
     watch#start "";
-    let each_order (iorder, eorder) = 
-        let pp e = sprintf "%3s" (po_elem_short_s sk e) in
-        printf "  -> %s...\n" (str_join "  " (List.map pp eorder));
+    let poi = POI.iter_first get_elem (linord_iter_first size order) in
+    let rec search () =
+        let iorder = POI.iter_get_iorder poi in
+        let eorder = POI.iter_get_eorder poi in
+         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
+        printf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
         let res = check_one_order solver sk (form_name, spec) deps
                 tac ~reach_opt:ropt (iorder, eorder) in
         accum_stat r_stat watch !current res.m_schema_len;
         reset_fun ();
-        res.m_is_err
+        POI.iter_next poi;
+        if res.m_is_err
+        then true
+        else if POI.iter_is_end poi
+            then false
+            else search ()
     in
-    (* enumerate all the linear extensions *)
-    let is_err_found =
-        enum_orders get_elem each_order
-            (fun r -> r) (ref false) (linord_iter_first size order)
-    in
+    (* enumerate all linear extensions *)
+    let is_err_found = search () in
     { m_is_err_found = is_err_found;
         m_counterexample_filename = "fixme"; m_stat = !r_stat}
 
@@ -1554,9 +1646,6 @@ let find_error rt tt sk form_name ltl_form deps =
     let result =
         gen_and_check_schemas_on_the_fly my_solver sk (form_name, spec) deps tac reset_fun
     in
-    my_solver#set_need_model false;
-    if SchemaOpt.is_incremental ()
-    then my_solver#pop_ctx
-    else my_solver#stop;
+    my_solver#stop;
     result
 
