@@ -3,6 +3,8 @@
  * primitives. The process is served by a separate thread that takes care of
  * avoiding deadlocks and other low-level surprises.
  *
+ * TODO: rewrite using lwt.
+ *
  * Igor Konnov, 2013
  *)
 

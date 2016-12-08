@@ -10,6 +10,7 @@ open Str
 open BatEnum
 open Sexplib
 
+open Accums
 open Debug
 open PipeCmd
 open SpinTypes
@@ -91,7 +92,7 @@ class virtual smt_solver =
         method virtual reset: unit
 
         (** make a copy of the solver object without starting the new copy *)
-        method virtual clone_not_started: string -> smt_solver
+        method virtual clone_not_started: ?logic: string -> string -> smt_solver
 
         (**
          Set a theory.
@@ -435,8 +436,10 @@ class yices_smt (name: string) (solver_cmd: string) =
             m_pushes <- 0;
             m_inconsistent_pushes <- 0
 
-        method clone_not_started new_name =
+        method clone_not_started ?logic new_name =
             let copy = new yices_smt new_name solver_cmd in
+            if logic <> None
+            then copy#set_logic (get_some logic);
             copy#set_need_model m_need_evidence;
             copy#set_need_unsat_cores m_need_unsat_cores;
             copy#set_collect_asserts collect_asserts;
@@ -667,6 +670,8 @@ class lib2_smt name solver_cmd solver_args =
         val mutable m_last_id = 1
         (** the number of times the solver has been started *)
         val mutable m_nstarts = 0
+        (** the theory to use *)
+        val mutable m_logic = None
 
         method start =
             let args_s = BatArray.fold_left (fun a s -> a ^ " " ^ s) "" solver_args in
@@ -690,6 +695,9 @@ class lib2_smt name solver_cmd solver_args =
                 fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
                 flush clog
             end;
+            if m_logic <> None
+            then self#append_and_sync (sprintf "(set-logic %s)" (get_some m_logic));
+
             if m_enable_lockstep
             then self#append_and_sync "(set-option :print-success true)\n"
             else self#append_and_sync "(set-option :print-success false)\n";
@@ -736,8 +744,10 @@ class lib2_smt name solver_cmd solver_args =
             if m_incremental
             then self#push_ctx
 
-        method clone_not_started new_name =
+        method clone_not_started ?logic new_name =
             let copy = new lib2_smt new_name solver_cmd solver_args in
+            if logic <> None
+            then copy#set_logic (get_some logic);
             copy#set_incremental_mode m_incremental;
             copy#set_need_model m_need_evidence;
             copy#set_need_unsat_cores m_need_unsat_cores;
@@ -748,7 +758,10 @@ class lib2_smt name solver_cmd solver_args =
             (copy :> smt_solver)
 
         method set_logic (theory: string): unit =
-            self#append_and_sync (sprintf "(set-logic %s)" theory)
+            m_logic <- Some theory;
+            if not (PipeCmd.is_null m_pipe_cmd)
+            then self#append_and_sync (sprintf "(set-logic %s)" theory)
+            (* else postpone until start() *)
 
         method append_var_def (v: var) (tp: data_type) =
             assert(not (PipeCmd.is_null m_pipe_cmd));
@@ -1032,8 +1045,10 @@ class mathsat5_smt name =
             m_pushes <- 0;
             self#push_ctx
 
-        method clone_not_started new_name =
+        method clone_not_started ?logic new_name =
             let copy = new mathsat5_smt new_name in
+            if logic <> None
+            then copy#set_logic (get_some logic);
             copy#set_need_unsat_cores m_need_unsat_cores;
             copy#set_enable_log m_enable_log;
             (copy :> smt_solver)

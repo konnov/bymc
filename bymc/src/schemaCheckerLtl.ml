@@ -493,7 +493,7 @@ let find_schema_multiplier invs =
     1 + List.fold_left count 0 invs
     *)
     (*
-      The best bound so far (Theorem 6.4) formulated in the submission
+      The best bound so far (Theorem 6.4) formulated in the POPL'17
     *)
     let worst n = function
     | AndOr_Kne0 _ -> max n 1           (* multiplying by 2 = 1 + 1 *)
@@ -1481,7 +1481,11 @@ let can_handle_spec type_tab sk form =
         log INFO (sprintf "IllegalLtl_error: %s\n" m);
         false
 
-
+(**
+ * This function enumerates all lassos that can potentially form a counterexample.
+ *
+ * NOTE: this function creates multiple copies of the SMT solver.
+ *)
 let find_error rt tt sk form_name ltl_form deps =
     let check_trivial = function
     | Safety (init_form, bad_form) ->
@@ -1509,23 +1513,28 @@ let find_error rt tt sk form_name ltl_form deps =
     in
     check_trivial spec;
 
-    (* In the non-incremental mode, we have to reset the solver a lot,
-       so we just make our own copy of the solver, instead of corrupting
-       the global instance.
-     *)
-    let my_solver =
-        if SchemaOpt.is_incremental ()
-        then rt#solver
-        else rt#solver#clone_not_started "schemaLtl"
-    in
-
-    if SchemaOpt.is_incremental ()
-    then my_solver#push_ctx;
-    my_solver#set_need_model true;
+    (* Create own copy of the solver, instead of corrupting
+       the global instance. *)
+    let my_solver = rt#solver#clone_not_started ?logic:(Some "QF_LIA") "schemaLtl" in
 
     let ntt = tt#copy in
     let tac = new SchemaChecker.tree_tac_t my_solver ntt in
     let initf = F.init_frame ntt sk in
+    let init_solver_fun _ =
+        my_solver#comment "top-level declarations";
+        let append_var v = my_solver#append_var_def v (tt#get_type v) in
+        List.iter append_var sk.Sk.params;
+        let append_expr e = ignore (my_solver#append_expr e) in
+        let non_trivial e = e <> (IntConst 1) in
+        List.iter append_expr (List.filter non_trivial sk.Sk.assumes);
+        (* BUGFIX: erase all frames,
+            otherwise we add more and more initial frames*)
+        tac#reset;
+        tac#push_frame initf;
+        my_solver#comment "initial constraints from the spec";
+        (* push the initial node, so the predicate optimization works *)
+        tac#assert_top sk.Sk.inits;
+    in
     let reset_fun _ =
         if not (SchemaOpt.is_incremental ())
         then begin
@@ -1533,34 +1542,15 @@ let find_error rt tt sk form_name ltl_form deps =
             my_solver#stop;
             my_solver#set_incremental_mode false;
             my_solver#start;
-            my_solver#set_logic "QF_LIA";
-            my_solver#comment "top-level declarations";
-            let append_var v = my_solver#append_var_def v (tt#get_type v) in
-            List.iter append_var sk.Sk.params;
-            let append_expr e = ignore (my_solver#append_expr e) in
-            let non_trivial e = e <> (IntConst 1) in
-            List.iter append_expr (List.filter non_trivial sk.Sk.assumes);
-            (* BUGFIX: erase all frames,
-                otherwise we add more and more initial frames*)
-            tac#reset;
-            tac#push_frame initf;
-            my_solver#comment "initial constraints from the spec";
-            (* push the initial node, so the predicate optimization works *)
-            tac#assert_top sk.Sk.inits;
+            init_solver_fun ();
         end
     in
 
     (* WARNING: here we restart the solver *)
-    if not (SchemaOpt.is_incremental ())
-    then begin
-        tac#set_incremental false;
-        my_solver#start;
-        reset_fun ()
-    end else begin
-        tac#push_frame initf;
-        my_solver#comment "initial constraints from the spec";
-        tac#assert_top sk.Sk.inits;
-    end;
+    my_solver#start;
+    my_solver#set_need_model true;
+    tac#set_incremental (SchemaOpt.is_incremental ());
+    init_solver_fun ();
     let result =
         gen_and_check_schemas_on_the_fly my_solver sk (form_name, spec) deps tac reset_fun
     in
