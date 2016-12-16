@@ -955,7 +955,7 @@ let poset_make_utl form =
   we compute the unique fingerprint of the order.
   For the moment, we use just a simple string representation.
   XXX: storing fingerprints slowly becomes a bottleneck in this technique.
-  TODO: use a tree over words on po elements.
+  TODO: use a trie on po elements.
   *)
 let compute_fingerprint order =
     let buf = BatBuffer.create (3 * (List.length order)) in
@@ -1049,6 +1049,66 @@ module POI = struct
         find_next ()
 end
 
+
+(**
+  Search iterator.
+ *)
+module SchemaIter = struct
+    type search_iter_t = {
+        po_iter: POI.po_iter_t; (** the current iterator on partial orders *)
+        err_found: bool;    (** is error found at the current iteration *)
+        cex: string option; (** the name of a counterexample (if any) *)
+        r_stat: stat_t ref;       (** search statistics *)
+    }
+
+    let iter_first po_iter r_stat =
+        {
+            po_iter; err_found = false; cex = None; r_stat = r_stat;
+        }
+
+    let iter_is_end iter =
+        POI.iter_is_end iter.po_iter
+
+    let iter_next iter =
+        POI.iter_next iter.po_iter;
+        { iter with
+            err_found = false;
+            cex = None;
+        }
+
+    let iter_is_err_found iter =
+        iter.err_found
+
+    let iter_get_cex iter =
+        if iter.err_found
+        then get_some iter.cex
+        else raise (Failure "No counterexample when iter_is_err_found = false")
+
+    let iter_get_stat iter =
+        !(iter.r_stat)
+
+    let set_error iter counterexample_name =
+        { iter with err_found = true; cex = Some counterexample_name }
+end
+
+
+(**
+  The search structure.
+  *)
+module S = struct
+    (**
+     This record type is used to control the search
+     *)
+    type search_t = {
+        iter: SchemaIter.search_iter_t;
+            (** the search iterator *)
+        check_fun: SchemaIter.search_iter_t -> SchemaIter.search_iter_t;
+            (** check the current schema *)
+        dispose_search_fun: unit -> unit;
+            (** call this function in the end of the search,
+                e.g., stop the SMT solver *)
+    }
+end
 
 
 let enum_orders (map_fun: int -> po_elem_t)
@@ -1174,7 +1234,7 @@ let mk_cut_and_threshold_graph sk deps spec =
 
   The construction is similar to compute_static_schema_tree, but is dynamic.
  *)
-let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_fun =
+let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
     let size, order, rev_map = mk_cut_and_threshold_graph sk deps spec in
     let get_elem num =
         try IntMap.find num rev_map
@@ -1210,11 +1270,10 @@ let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_
         the precise timing is given at the end *)
     let watch = new Accums.stop_watch ~is_wall:true ~with_children:true in
     watch#start "";
-    let poi = POI.iter_first get_elem (linord_iter_first size order) in
-    let rec search () =
-        let iorder = POI.iter_get_iorder poi in
-        let eorder = POI.iter_get_eorder poi in
-         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
+    let check iter =
+        let iorder = POI.iter_get_iorder iter.SchemaIter.po_iter in
+        let eorder = POI.iter_get_eorder iter.SchemaIter.po_iter in
+        let pp e = sprintf "%3s" (po_elem_short_s sk e) in
         printf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
@@ -1222,17 +1281,13 @@ let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_
                 tac ~reach_opt:ropt (iorder, eorder) in
         accum_stat r_stat watch !current res.m_schema_len;
         reset_fun ();
-        POI.iter_next poi;
         if res.m_is_err
-        then true
-        else if POI.iter_is_end poi
-            then false
-            else search ()
+        then SchemaIter.set_error iter "fixme"
+        else iter
     in
-    (* enumerate all linear extensions *)
-    let is_err_found = search () in
-    { m_is_err_found = is_err_found;
-        m_counterexample_filename = "fixme"; m_stat = !r_stat}
+    let poi = POI.iter_first get_elem (linord_iter_first size order) in
+    (* return the check function and the iterator *)
+    (check, SchemaIter.iter_first poi r_stat)
 
 
 (**
@@ -1578,7 +1633,7 @@ let can_handle_spec type_tab sk form =
  *
  * NOTE: this function creates multiple copies of the SMT solver.
  *)
-let find_error rt tt sk form_name ltl_form deps =
+let mk_search_control rt tt sk form_name ltl_form deps =
     let check_trivial = function
     | Safety (init_form, bad_form) ->
         if SpinIr.is_c_false bad_form
@@ -1607,7 +1662,9 @@ let find_error rt tt sk form_name ltl_form deps =
 
     (* Create own copy of the solver, instead of corrupting
        the global instance. *)
-    let my_solver = rt#solver#clone_not_started ?logic:(Some "QF_LIA") "schemaLtl" in
+    let my_solver =
+        rt#solver#clone_not_started
+        ?logic:(Some "QF_LIA") ("schemaLtl_" ^ form_name) in
 
     let ntt = tt#copy in
     let tac = new SchemaChecker.tree_tac_t my_solver ntt in
@@ -1643,9 +1700,74 @@ let find_error rt tt sk form_name ltl_form deps =
     my_solver#set_need_model true;
     tac#set_incremental (SchemaOpt.is_incremental ());
     init_solver_fun ();
-    let result =
-        gen_and_check_schemas_on_the_fly my_solver sk (form_name, spec) deps tac reset_fun
+    (* enumerate all linear extensions *)
+    let (check_fun, iter) =
+        mk_schema_iterator my_solver sk (form_name, spec) deps tac reset_fun
     in
-    my_solver#stop;
+    {
+        S.iter = iter;
+        S.check_fun = check_fun;
+        S.dispose_search_fun = (fun _ -> my_solver#stop);
+    }
+
+
+(**
+ * This function enumerates all lassos that can potentially form a counterexample.
+ *
+ * NOTE: this function creates multiple copies of the SMT solver.
+ *)
+let find_error_in_single_form rt tt sk form_name ltl_form deps =
+    let ctrl = mk_search_control rt tt sk form_name ltl_form deps in
+    let rec search iter =
+        if SchemaIter.iter_is_end iter
+        then iter
+        else let iter = ctrl.S.check_fun iter in
+            if SchemaIter.iter_is_err_found iter
+            then iter
+            else search (SchemaIter.iter_next iter)
+    in
+    let end_iter = search ctrl.S.iter in
+    ctrl.S.dispose_search_fun ();
+    end_iter
+
+
+(**
+   This function is similar to find_error_in_single_form but it enumerates
+   lassos for multiple formulas. The lassos that correspond to different
+   formulas are interleaved, i.e., the ith lasso of the first formula is
+   checked, then the ith lasso of the second formula, etc. The function stops
+   when either the first error is found, or all lassos are enumerated.
+
+   If an error is found, then the iterator of the failed formula is returned.
+   Otherwise None is returned.
+ 
+   NOTE: this function creates multiple copies of the SMT solver.
+ *)
+let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
+    let mk_ctrl (name, form) = mk_search_control rt tt sk name form deps in
+    let ctrls = List.map mk_ctrl named_forms in
+    let iter_each (is_err, collected) (iter, check_fun) =
+        if is_err || SchemaIter.iter_is_end iter
+        then (is_err, collected)
+        else let iter = check_fun iter in
+            if SchemaIter.iter_is_err_found iter
+            then (true, [(iter, check_fun)])
+            else let ni = SchemaIter.iter_next iter in
+                (false, (ni, check_fun) :: collected)
+    in
+    let rec search iterXfuns =
+        let (is_err, new_iterXfuns) =
+            List.fold_left iter_each (false, []) iterXfuns in
+        if is_err
+        then let last_iter, _ = List.hd new_iterXfuns in
+            Some last_iter      (* there must be one that flagged the error *)
+        else if new_iterXfuns = []
+            then None
+            else search new_iterXfuns
+    in
+    let check_funs = List.map (fun c -> c.S.check_fun) ctrls in
+    let iters = List.map (fun c -> c.S.iter) ctrls in
+    let result = search (List.combine iters check_funs) in
+    List.iter (fun c -> c.S.dispose_search_fun ()) ctrls;
     result
 

@@ -130,24 +130,24 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let flow_opt = SchemaOpt.is_flow_opt_enabled () in
             let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
-            let check name form =
-                L.find_error rt tt sk name form deps
-            in
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
             let each_form name form err_found =
                 if err_found
                 then true
                 else begin
                     logtm INFO (sprintf "      > Checking %s..." name);
-                    let result = check name form in
+                    let end_iter =
+                        L.find_error_in_single_form rt tt sk name form deps in
+                    let is_err_found = L.SchemaIter.iter_is_err_found end_iter in
+                    let stat = L.SchemaIter.iter_get_stat end_iter in
                     let msg =
-                        if result.L.m_is_err_found
+                        if is_err_found
                         then sprintf "    > SLPS: counterexample for %s found" name
                         else sprintf "      > Spec %s holds" name
                     in
                     log INFO msg;
-                    printf "%s\n" (L.stat_s result.L.m_stat);
-                    result.L.m_is_err_found
+                    printf "%s\n" (L.stat_s stat);
+                    is_err_found
                 end
             in
             let can_handle f =

@@ -43,7 +43,7 @@ let is_null cs =
 
 
 (* the writes are handled by a separate thread, all writes are non-blocking *)
-let write_handler (wts, fdout) =
+let write_handler (pid, wts, fdout) =
     let sleep_tm = 0.001 in
     (* measure how many thread yields we can do in 1 msec *)
     let utime _ = (Unix.times ()).Unix.tms_utime in
@@ -59,13 +59,29 @@ let write_handler (wts, fdout) =
     (* if you want to see this annoying message, uncomment it:
     printf "[writer thread]: about %d yields in 1 msec\n" !max_yields;
     *)
+    (* blocking write *)
+    let writeln l = 
+        trace Trc.cmd (fun _ -> sprintf "writeln@%d: %s\n" pid l);
+        let ln = l ^ "\n" in
+        try let _ = Unix.write fdout ln 0 (String.length ln) in ()
+        with Unix.Unix_error (e, op, msg) ->
+        begin
+            let uem = Unix.error_message e in
+            trace Trc.cmd (fun _ -> sprintf "critical error: %s" uem);
+            fprintf stderr
+                "[writer thread] %s: on '%s'. Terminated." uem ln;
+            Thread.exit ()
+        end
+    in
     (* process the input lines *)
     let yields = ref 0 in
     while !(wts.state) <> Stopping do
         (* fprintf stderr ".\n"; flush stderr; *)
         if !(wts.dirty) (* don't bother CPU with redundant mutex locks *)
         then begin
+            trace Trc.cmd (fun _ -> sprintf "Before Lock@%d\n" pid);
             Mutex.lock wts.mutex;
+            trace Trc.cmd (fun _ -> sprintf "After Lock@%d\n" pid);
             let lines =
                 match !(wts.pending_writes) with
                 | _ :: _ as l ->
@@ -75,23 +91,10 @@ let write_handler (wts, fdout) =
                     end
                 | [] -> []
             in
-            Mutex.unlock wts.mutex;
             wts.dirty := false;
+            Mutex.unlock wts.mutex;
             yields := 0; (* maximum processing speed again *)
             (* now write the line to the output, might be blocked *)
-            let writeln l = 
-                trace Trc.cmd (fun _ -> sprintf "writeln: %s" l);
-                let ln = l ^ "\n" in
-                try let _ = Unix.write fdout ln 0 (String.length ln) in ()
-                with Unix.Unix_error (e, op, msg) ->
-                begin
-                    let uem = Unix.error_message e in
-                    trace Trc.cmd (fun _ -> sprintf "critical error: %s" uem);
-                    fprintf stderr
-                        "[writer thread] %s: on '%s'. Terminated." uem ln;
-                    Thread.exit ()
-                end
-            in
             List.iter writeln lines
         end;
         (* idle a little bit an then sleep *)
@@ -101,6 +104,8 @@ let write_handler (wts, fdout) =
         else Thread.yield () (* else busy waiting several times *)
     done;
     wts.state := Stopped;
+    (* flush all pending writes *)
+    List.iter writeln (List.rev !(wts.pending_writes));
     trace Trc.cmd (fun _ -> sprintf "Stopped")
 
 
@@ -168,13 +173,14 @@ let create prog args err_filename =
         (* the parent *)
         Unix.close in_pipe_o; 
         Unix.close out_pipe_i;
-        Unix.close fderr
+        Unix.close fderr;
+        fprintf stderr " PID %d " pid; flush stdout;
     end;
     let writer_state = {
         state = ref Running; dirty = ref false;
         mutex = Mutex.create (); pending_writes = ref []
     } in
-    let writer_thread = Thread.create write_handler (writer_state, out_pipe_o) in
+    let writer_thread = Thread.create write_handler (pid, writer_state, out_pipe_o) in
     let cin = Unix.in_channel_of_descr in_pipe_i in
     set_binary_mode_in cin false;
     {

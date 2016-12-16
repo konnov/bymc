@@ -132,7 +132,7 @@ let test_is_cex_applicable _ =
     let tt, locFoo_map, pc, x, n, t, a, b = prepare () in
     let sk = mk_foo (tt, locFoo_map, pc, x, n, t, a, b) in
     let unknowns_vec = [("a", IntConst 2); ("b", IntConst 1)] in
-    let fixed_skel = TaSynt.replace_unknowns sk unknowns_vec in
+    let fixed_skel = TaSynt.replace_unknowns_in_skel sk unknowns_vec in
     let cex0 = {
         C.f_form_name = "unforg";
         C.f_loop_index = 1;
@@ -146,6 +146,7 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
         C.f_iorder = [0; 1];
+        C.f_po_struc = [C.PO_init_struc; C.PO_tl_struc];
     }
     in
     assert_equal false (TaSynt.is_cex_applicable fixed_skel cex0)
@@ -162,6 +163,7 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
         C.f_iorder = [0; 1];
+        C.f_po_struc = [C.PO_init_struc; C.PO_tl_struc];
     }
     in
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex1)
@@ -179,6 +181,7 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
         C.f_iorder = [0; 1];
+        C.f_po_struc = [C.PO_init_struc; C.PO_tl_struc];
     }
     in
     assert_equal true (TaSynt.is_cex_applicable fixed_skel cex2)
@@ -198,9 +201,10 @@ let test_is_cex_applicable _ =
             { C.f_rule_no = 1; C.f_accel = 1 };
         ];
         C.f_iorder = [0; 1];
+        C.f_po_struc = [C.PO_init_struc; C.PO_tl_struc];
     }
     in
-    assert_equal true (TaSynt.is_cex_applicable fixed_skel cex3)
+    assert_equal false (TaSynt.is_cex_applicable fixed_skel cex3)
         ~msg:"expected the counterexample 3 to be inapplicable"
 
 

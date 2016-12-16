@@ -53,7 +53,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 then begin
                     log INFO "> Assumptions are violated";
                     let synt_solver = get_some m_synt_solver in
-                    exclude_unknowns synt_solver m_unknowns_vec;
+                    exclude_unknowns synt_solver
+                        template_skel.Sk.assumes m_unknowns_vec;
                     finished := not synt_solver#check;
                     m_unknowns_vec <- self#find_unknowns synt_solver template_skel
                 end else begin
@@ -75,25 +76,20 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             (* call the ltl technique *)
             (* NOTE: copied from SchemaCheckerPlugin.check_ltl *)
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
-            let each_form name form err_found =
-                if err_found
-                then true
-                else begin
-                    logtm INFO (sprintf "      > Checking %s..." name);
-                    let result =
-                        L.find_error rt type_tab fixed_skel name form fixed_deps
-                    in
-                    let msg =
-                        if result.L.m_is_err_found
-                        then sprintf "    > SLPS: counterexample for %s found" name
-                        else sprintf "      > Spec %s holds" name
-                    in
-                    log INFO msg;
-                    printf "%s\n" (L.stat_s result.L.m_stat);
-                    result.L.m_is_err_found
-                end
+            let forms = StrMap.bindings fixed_skel.Sk.forms in
+            let end_iters =
+                L.find_error_in_many_forms_interleaved
+                    rt type_tab fixed_skel forms fixed_deps
             in
-            StrMap.fold each_form fixed_skel.Sk.forms false
+            match end_iters with
+                | None ->
+                    log INFO "      > All specifications hold";
+                    false
+
+                | Some iter ->
+                    let cex = L.SchemaIter.iter_get_cex iter in
+                    log INFO (sprintf "    > SLPS: counterexample for %s found" cex);
+                    true
 
 
         method do_refine rt type_tab fixed_skel =
@@ -124,6 +120,9 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let int_type = new SpinIr.data_type SpinTypes.TUNSIGNED in
             let append_var v = synt_solver#append_var_def v int_type in
             List.iter append_var (template_skel.Sk.unknowns);
+            List.iter append_var (template_skel.Sk.params);
+            let assume e = ignore (synt_solver#append_expr e) in
+            List.iter assume template_skel.Sk.assumes;
             (*
               Compute dependencies on the template automaton.
               Note that these dependencies are not as optimal as in the fixed case.
