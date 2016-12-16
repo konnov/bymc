@@ -18,12 +18,10 @@ skel Proc {
   /* the constants to be found by synthesis */
   unknowns a1, b1, a2, b2, a3, b3, a4, b4, a5, b5;
 
-    /*
-    a1 != 0; a2 != 0; a3 != 0; a4 != 0; a5 != 0;
-    b1 != 0; b2 != 0; b3 != 0; b4 != 0; b5 != 0;
-    */
-
   assumptions (1) {
+    a1 <= 4; a2 <= 4; a3 <= 4; a4 <= 4; a5 <= 4;
+    b1 <= 4; b2 <= 4; b3 <= 4; b4 <= 4; b5 <= 4;
+    a1 + a2 + a3 + a4 + a5 + b1 + b2 + b3 + b4 + b5 > 0;
     N > 7 * T;
     T >= F;
     T >= 1;
@@ -106,16 +104,29 @@ skel Proc {
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
 
   /* self loops */
-  10: loc4 -> loc4
+  11: loc0 -> loc0
       when (nsnt0 >= 0 && nsnt1 >= 0)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
-  11: loc5 -> loc5
+  12: loc1 -> loc1
       when (nsnt0 >= 0 && nsnt1 >= 0)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
-  12: loc6 -> loc6
+  13: loc2 -> loc2
       when (nsnt0 >= 0 && nsnt1 >= 0)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
-  13: loc7 -> loc7
+  14: loc3 -> loc3
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
+
+  15: loc4 -> loc4
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
+  16: loc5 -> loc5
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
+  17: loc6 -> loc6
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
+  18: loc7 -> loc7
       when (nsnt0 >= 0 && nsnt1 >= 0)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   }

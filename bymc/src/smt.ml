@@ -675,8 +675,10 @@ class lib2_smt name solver_cmd solver_args =
 
         method start =
             let args_s = BatArray.fold_left (fun a s -> a ^ " " ^ s) "" solver_args in
-            Debug.logtm Debug.INFO
-                (sprintf "Starting the SMT solver: %s%s" solver_cmd args_s);
+            Printf.fprintf stderr
+                "%s: Starting the SMT solver %s%s... "
+                (short_time_now ()) solver_cmd args_s;
+            flush stderr;
             assert(PipeCmd.is_null m_pipe_cmd);
             let errname =
                 if m_nstarts = 0
@@ -720,17 +722,21 @@ class lib2_smt name solver_cmd solver_args =
             end;
             if m_incremental
             then self#push_ctx; (* a backup context to reset *)
-            m_nstarts <- m_nstarts + 1
+            m_nstarts <- m_nstarts + 1;
+            Printf.fprintf stderr "DONE\n";
+            flush stderr
 
         
         method stop =
-            Debug.logtm Debug.INFO ("Stopping the SMT solver...");
+            Printf.fprintf stderr
+                "%s: Stopping the SMT solver... " (short_time_now ());
+            flush stderr;
             assert(not (PipeCmd.is_null m_pipe_cmd));
             self#append "(exit)\n";
-            self#sync;
             close_out clog;
             ignore (PipeCmd.destroy m_pipe_cmd);
-            m_pipe_cmd <- PipeCmd.null ()
+            m_pipe_cmd <- PipeCmd.null ();
+            Printf.fprintf stderr "DONE\n"; flush stderr
 
         method reset =
             self#comment "***************** RESET *****************\n";

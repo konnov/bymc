@@ -12,6 +12,26 @@ open SymbSkel
 open SchemaSmt
 open SchemaCheckerLtl
 
+module SCL = SchemaCheckerLtl
+module SI = SCL.SchemaIter
+    
+(* compatibility with the old implementation *)
+let gen_and_check_schemas_on_the_fly solver sk (form_name, spec) deps tac reset_fun =
+    let (check_fun, iter) =
+        SCL.mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun
+    in
+    let rec search iter =
+        if SI.iter_is_end iter
+        then iter
+        else let iter = check_fun iter in
+            if SI.iter_is_err_found iter
+            then iter
+            else search (SI.iter_next iter)
+    in
+    let end_iter = search iter in
+    SI.iter_is_err_found end_iter
+
+
 (* wrap a test with this function to see the tracing output *)
 let with_tracing test_fun arg =
     Debug.enable_tracing () Trc.scl;
@@ -422,11 +442,10 @@ let gen_and_check_schemas_on_the_fly_strb _ =
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     let result =
-        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+        gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk ("unforg", spec) deps
             (tac :> tac_t) (fun _ -> ()) in
-    assert_equal false result.m_is_err_found
-        ~msg:"Expected no errors, found one";
+    assert_equal false result ~msg:"Expected no errors, found one";
 
     let hist = tac#get_call_history in
     let check_prop = sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form) in
@@ -492,9 +511,10 @@ let gen_and_check_schemas_on_the_fly_aba _ =
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     let result =
-        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+        gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk ("unforg", spec) deps
-            (tac :> tac_t) (fun _ -> ()) in
+            (tac :> tac_t) (fun _ -> ())
+    in
     let hist = tac#get_call_history in
     let check_prop =
         sprintf "(check_property %s _)" (SpinIrImp.expr_s bad_form)
@@ -632,8 +652,7 @@ let gen_and_check_schemas_on_the_fly_aba _ =
         "(leave_context)";
     ] in
     assert_eq_hist expected_hist hist;
-    assert_equal false result.m_is_err_found
-        ~msg:"Expected no errors, found one"
+    assert_equal false result ~msg:"Expected no errors, found one"
 
 
 
@@ -655,9 +674,10 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     let result =
-        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+        gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk ("corr", spec) deps
-            (tac :> tac_t) (fun _ -> ()) in
+            (tac :> tac_t) (fun _ -> ())
+    in
     let hist = tac#get_call_history in
     let expected_hist = [
         (* a schema that does not unlock anything and goes to a loop *)
@@ -768,8 +788,7 @@ let gen_and_check_schemas_on_the_fly_strb_corr _ =
     ]
     in
     assert_eq_hist expected_hist hist;
-    assert_equal false result.m_is_err_found
-        ~msg:"Expected no errors, found one"
+    assert_equal false result ~msg:"Expected no errors, found one"
 
 
 
@@ -786,11 +805,11 @@ let gen_and_check_schemas_on_the_fly_strb_corr_sat _ =
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     let result =
-        SchemaCheckerLtl.gen_and_check_schemas_on_the_fly
+        gen_and_check_schemas_on_the_fly
             !SmtTest.solver sk ("corr", spec) deps
-            (tac :> tac_t) (fun _ -> ()) in
-    assert_equal true result.m_is_err_found
-        ~msg:"Expected an error, found none";
+            (tac :> tac_t) (fun _ -> ())
+    in
+    assert_equal true result ~msg:"Expected an error, found none";
 
     let hist = tac#get_call_history in
     let expected_hist = [

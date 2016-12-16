@@ -16,11 +16,14 @@ let save_cex _ =
             { C.f_rule_no = 1; f_accel = 33 };
         ];
         C.f_iorder = [1; 2; 3];
+        C.f_po_struc = [
+            C.PO_init_struc; C.PO_guard_struc; C.PO_loop_start_struc; C.PO_tl_struc
+        ]
     }
     in
     let expected =
         "((spec corr) (loop 0) (init ((x 1) (y 2))) (moves ((0 22) (1 33)))\n"
-        ^ " (iorder (1 2 3)))\n"
+        ^ " (iorder (1 2 3)) (linord PO_init PO_guard PO_loop_start PO_tl))\n"
     in
     C.save_cex "cex.scm" cex;
     let input = BatFile.open_in "cex.scm" in
@@ -33,7 +36,7 @@ let save_cex _ =
 let load_cex _ =
     let text =
         "((spec corr) (loop 0) (init ((x 1) (y 2))) (moves ((0 22) (1 33)))\n"
-        ^ " (iorder (1 2 3)))\n"
+        ^ " (iorder (1 2 3)) (linord PO_init PO_guard PO_loop_start PO_tl))\n"
     in
     let output = BatFile.open_out ~mode:[`create; `trunc] "cex.scm" in
     fprintf output "%s\n" text;
@@ -48,6 +51,9 @@ let load_cex _ =
             { C.f_rule_no = 1; f_accel = 33 };
         ];
         C.f_iorder = [1; 2; 3];
+        C.f_po_struc = [
+            C.PO_init_struc; C.PO_guard_struc; C.PO_loop_start_struc; C.PO_tl_struc
+        ]
     }
     in
     assert_equal expected result ~msg:("Unexpected counterexample")

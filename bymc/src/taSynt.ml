@@ -781,7 +781,7 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
 
 
 (** exclude a given tuple of unknowns from consideration *)
-let exclude_unknowns synt_solver unknowns =
+let exclude_unknowns synt_solver assumptions unknowns =
     let neq (name, value) = BinEx (NE, Var (SpinIr.new_var name), value) in
     let ineqs = List.map neq unknowns in
     if ineqs <> []
