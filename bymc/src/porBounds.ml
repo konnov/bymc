@@ -142,13 +142,14 @@ module D = struct
         umask: PSet.t;
         (* the mask of locking milestone candidates *)
         lmask: PSet.t;
+
+        (* implication relation between the conditions of the same type *)
+        cond_imp: PSet.t PSetEltMap.t;
+
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
         (* basic conditions to be locked *)
         lconds: mstone_t list;
-
-        (* implication relation between the conditions of the same type *)
-        cond_imp: PSet.t PSetEltMap.t;
     }
 
     let empty = {

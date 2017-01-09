@@ -8,6 +8,8 @@ open SpinIrImp
 open SymbSkel
 open SchemaSmt
 
+module PB = PorBounds
+
 
 let prepare () =
     let opts = Options.empty in
@@ -208,9 +210,68 @@ let test_is_cex_applicable _ =
         ~msg:"expected the counterexample 3 to be inapplicable"
 
 
+(*
+Merge equivalent conditions into one.
+E.g., x >= a, x >= 2 * a, x >= 3 * a will be merged into one when a = 0.
+*)
+let test_merge_in_deps _ =
+    (* prepare the test set *)
+    let x, a, b = new_var "x", new_var "a", new_var "b" in
+    a#set_symbolic; b#set_symbolic;
+    let tt = new data_type_tab in
+    let set_type v = tt#set_type v (new data_type SpinTypes.TUNSIGNED) in
+    List.iter set_type [x; a; b];
+    let mk_cond coeff rhs =
+        BinEx (GE, Var x, BinEx (MULT, IntConst coeff, Var rhs))
+    in
+    let c1, c2, c3, c4 = mk_cond 1 a, mk_cond 2 a, mk_cond 3 a, mk_cond 1 b in
+    let id1, id2, id3, id4 =
+        PSet.new_thing (), PSet.new_thing (), PSet.new_thing (), PSet.new_thing ()
+    in
+    (* the TA is: 0 =c1,c2=> 1 =c2,c3=> 2 =c4=> 3 *)
+    let cond_map =
+        let map_add m (k, v) = PB.PSetEltMap.add k v m in
+        List.fold_left map_add PB.PSetEltMap.empty
+        [(id1, c1); (id2, c2); (id3, c3); (id4, c4)]
+    in
+    let mk_set ids =
+        let set_add s id = PSet.add id s in
+        List.fold_left set_add PSet.empty ids
+    in
+    let rule_pre =
+        let setmap_add m (no, ids) = IntMap.add no (mk_set ids) m in
+        List.fold_left setmap_add IntMap.empty
+            [ (0, [id1; id2]);   (1, [id2; id3]);   (2, [id4]) ]
+    in
+    let umask = mk_set [id1; id2; id3; id4] in
+    let uconds = [
+        ("U1", id1, c1, PB.Unlock);
+        ("U2", id2, c2, PB.Unlock);
+        ("U3", id3, c3, PB.Unlock);
+        ("U4", id4, c4, PB.Unlock);
+    ]
+    in
+    let cond_imp =
+        let setmap_add m (id, ids) = PB.PSetEltMap.add id (mk_set ids) m in
+        List.fold_left setmap_add PB.PSetEltMap.empty
+            [ (id1, []); (id2, [id1]); (id3, [id1; id2]); (id4, []) ]
+    in
+    let deps = {
+        PB.D.empty with
+        rule_pre; umask; uconds; cond_map;
+    }
+    in
+    (* do the test *)
+    let unknowns_vec = [("a", IntConst 0); ("b", IntConst 1)] in
+    let new_deps = TaSynt.merge_in_deps deps in
+    assert_equal 2 (PB.PSetEltMap.cardinal deps.PB.D.cond_map)
+        ~msg:"expected cardinality 2"
+
+
 let suite = "taSynt-suite" >:::
     [
         "test_next_unknowns_vec" >:: test_next_unknowns_vec;
         "test_is_cex_applicable" >:: test_is_cex_applicable;
+        "test_merge_in_deps" >:: test_merge_in_deps;
     ]
 
