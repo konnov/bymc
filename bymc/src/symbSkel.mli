@@ -1,7 +1,8 @@
-(** Symbolic skeleton (aka threshold automaton) and functions
+(**
+   Symbolic skeleton (aka threshold automaton) and functions
    to manipulate it.
 
-   @author Igor Konnov, 2014
+   @author Igor Konnov, 2014-2016
  *)
 
 module Sk: sig
@@ -31,6 +32,7 @@ module Sk: sig
         loc_vars: SpinIr.var Accums.IntMap.t;
             (** variables that correspond to locations,
                e.g., used in the initialization part *)
+        forms: Spin.token SpinIr.expr Accums.StrMap.t; (** LTL formulas *)
     }
 
     (** construct an empty skeleton *)
@@ -46,9 +48,10 @@ module Sk: sig
     (** get the counter assigned to a location *)
     val locvar: skel_t -> int -> SpinIr.var
 
-    (** save skeleton to a file *)
+    (** save the skeleton to a file *)
     val to_file: string -> skel_t -> unit
 
+    (** print the skeleton to a channel *)
     val print: out_channel -> skel_t -> unit
 end
 

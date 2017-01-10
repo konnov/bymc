@@ -8,10 +8,14 @@ open Str
 
 open Accums
 
-let version = [2; 1; 4]
-let version_full = "ByMC-2.1.4"
+let version = [2; 2; 0]
+let version_full = "ByMC-2.2.0"
 
 let macro_prefix = "macro."
+
+type input_t =
+    | InputPromela  (** parameteric Promela *)
+    | InputTa       (** threshold automata *)
 
 type action_opt_t =
     | OptAbstract | OptRefine | OptVersion | OptNone
@@ -23,6 +27,7 @@ type smt_opt_t = SmtYices | SmtLib2 of string array | SmtMathsat5
 type options_t =
     {
         action: action_opt_t;
+        input: input_t;
         trail_name: string;
         filename: string;
         spec: string;
@@ -36,11 +41,18 @@ type options_t =
         plugin_dir: string;
     }
 
+
+let input_s = function
+    | InputPromela -> "InputPromela"
+    | InputTa -> "InputTa"
+
+
 let empty =
     (* z3 is our default solver *)
     let smt = SmtLib2 [|"z3"; "-smt2"; "-in"|] in
     {
-        action = OptNone; trail_name = ""; filename = ""; spec = "";
+        action = OptNone; input = InputPromela;
+        trail_name = ""; filename = ""; spec = "";
         chain = "piaDataCtr";
         param_assignments = StrMap.empty;
         mc_tool = ToolSpin; bdd_pass = false; verbose = false;
@@ -93,6 +105,13 @@ let parse_smt s =
         with Invalid_argument _ ->
             raise (Failure ("Unknown --smt argument: " ^ s))
     end
+
+
+let parse_input_type filename =
+    if Filename.check_suffix filename ".ta"
+        || Filename.check_suffix filename ".sk"
+    then InputTa
+    else InputPromela
 
 
 let parse_options _ =
@@ -153,5 +172,6 @@ let parse_options _ =
     let usage_msg = "Use: bymc [options] promela_file"
     in
     Arg.parse specs anon_fun usage_msg;
+    opts := { !opts with input = (parse_input_type !opts.filename) };
     !opts
 

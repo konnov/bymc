@@ -3,6 +3,9 @@
  * Igor Konnov, 2014
  *)
 
+open Printf
+
+open Options
 open Plugin
 open Runtime
 
@@ -11,6 +14,9 @@ open Runtime
   chain are usually connected, the module has to provide access to
   the plugins. This is the least painful way I have found so far.
  *)
+
+
+(** FMCAD'13: data + counter abstractions. *)
 module Pia = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -52,6 +58,7 @@ module Pia = struct
 end
 
 
+(** Just fixing the parameters and checking finite-state systems. *)
 module Conc = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -72,6 +79,7 @@ module Conc = struct
 end
 
 
+(** CONCUR'14: computing the diameter bound for bounded model checking *)
 module PiaBounds = struct
     type plugins_t = {
         pia: Pia.plugins_t;
@@ -99,6 +107,10 @@ module PiaBounds = struct
 end
 
 
+(**
+  CONCUR'14: Constructing threshold automata using data abstraction
+             and translating to the FAST input format.
+ *)
 module PiaFast = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
@@ -128,6 +140,11 @@ module PiaFast = struct
 end
 
 
+(**
+  Constructing threshold automata in a complicated way using NuSMV and BDDs.
+
+  @deprecated: this chain will be removed in the future. 
+ *)
 module PiaSkelSmv = struct
     type plugins_t = {
         pia: Pia.plugins_t;
@@ -147,12 +164,20 @@ module PiaSkelSmv = struct
 end
 
 
+(**
+  CAV'15 and POPL'17: perform SMT-based bounded model checking by:
+      (1) constructing threshold automata using data abstraction, and
+      (2) running SMT-based bounded model checking using schemas.
+
+  This is the most efficient technique that we have so far.
+  *)
 module PiaPost = struct
     type plugins_t = {
         pp: PromelaParserPlugin.pp_plugin_t;
         vr: VarRolePlugin.vr_plugin_t;
         pdom: PiaDomPlugin.pia_dom_plugin_t;
         pdg: PiaDataPlugin.pd_plugin_t;
+        pttp: PromelaToTaPlugin.promela_to_ta_plugin_t;
         slps: SchemaCheckerPlugin.slps_checker_plugin_t;
     }
 
@@ -162,8 +187,11 @@ module PiaPost = struct
         let pdom = new PiaDomPlugin.pia_dom_plugin_t "piaDom" in
         let pdg =
             new PiaDataPlugin.pd_plugin_t ~keep_shared:true "piaDataShared" in
-        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t "slps" in
-        { pp; vr; pdom; pdg; slps }
+        let pttp = new PromelaToTaPlugin.promela_to_ta_plugin_t "pttp" in
+        let slps = new SchemaCheckerPlugin.slps_checker_plugin_t
+            "slps" (pttp :> TaSource.ta_source_t)
+        in
+        { pp; vr; pdom; pdg; pttp; slps }
 
     let mk_chain plugins =
         let chain = new plugin_chain_t in
@@ -171,18 +199,56 @@ module PiaPost = struct
         chain#add_plugin plugins.vr OutOfPred;
         chain#add_plugin plugins.pdom OutOfPred;
         chain#add_plugin plugins.pdg OutOfPred;
+        chain#add_plugin plugins.pttp (OutOfPlugin "piaDataShared");
         chain#add_plugin plugins.slps (OutOfPlugin "piaDataShared");
         chain
 end
 
+(**
+  This is a modification of PiaPost that takes a threshold automaton as its input,
+  without parsing Promela code.
+  *)
+module TaPost = struct
+    type plugins_t = {
+        tapp: TaParserPlugin.ta_parser_plugin_t;
+        slps: SchemaCheckerPlugin.slps_checker_plugin_t;
+    }
 
-let create_chain = function
-    | "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
-    | "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
-    | "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
-    | "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
-    (* TODO: remove skelSmv *)
-    | "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
-    | "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
-    | _ as n -> raise (Failure ("Unknown chain: " ^ n))
+    let mk_plugins () =
+        let tapp = new TaParserPlugin.ta_parser_plugin_t "tapp" in
+        let slps =
+            new SchemaCheckerPlugin.slps_checker_plugin_t
+                "slps" (tapp :> TaSource.ta_source_t)
+        in
+        { tapp; slps }
+
+    let mk_chain plugins =
+        let chain = new plugin_chain_t in
+        chain#add_plugin plugins.tapp OutOfPred;
+        chain#add_plugin plugins.slps OutOfPred;
+        chain
+end
+
+
+let create_chain input chain_name =
+    match (input, chain_name) with
+    (* FMCAD'13: data + counter abstractions *)
+    | InputPromela, "piaDataCtr" -> Pia.mk_chain (Pia.mk_plugins ())
+    (* just fixing the parameters and checking finite-state systems *)
+    | InputPromela, "concrete" -> Conc.mk_chain (Conc.mk_plugins ())
+    (* CONCUR'14: computing the diameter bound for bounded model checking *)
+    | InputPromela, "bounds" -> PiaBounds.mk_chain (PiaBounds.mk_plugins ())
+    (* CONCUR'14: translating into the FAST input format *)
+    | InputPromela, "fast" -> PiaFast.mk_chain (PiaFast.mk_plugins ())
+    (* constructing threshold automata using BDDS, too complicated *)
+    (* TODO: deprecated, remove skelSmv *)
+    | InputPromela, "skelSmv" -> PiaSkelSmv.mk_chain (PiaSkelSmv.mk_plugins ())
+    (* CAV'15 and POPL'17: using schemas and SMT-based bounded model checking *)
+    | InputPromela, "post" -> PiaPost.mk_chain (PiaPost.mk_plugins ())
+    (* same thing but using TA as input directly *)
+    | InputTa, "post" -> TaPost.mk_chain (TaPost.mk_plugins ())
+
+    | input, chain_name ->
+        let inp_s = Options.input_s input in
+        raise (Failure (sprintf "Unknown input/chain: %s and %s" inp_s chain_name))
 

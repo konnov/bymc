@@ -3,7 +3,6 @@
 
     open SpinTypes
     open Spin
-    open SpinlexGlue
 
     exception Unexpected_token of string
     let string_chars s = String.sub s 1 ((String.length s) - 2)
@@ -45,7 +44,7 @@ rule token = parse
  | "++"                  { INCR }
  | "<<"                  { LSHIFT }
  | ">>"                  { RSHIFT }
- | "->"                  { if is_lexer_normal() then SEMI else IMPLIES}
+ | "->"                  { IMPLIES }
  | ';'                   { SEMI }
  | '-'                   { MINUS }
  | '*'                   { MULT }
@@ -150,11 +149,20 @@ rule token = parse
  | "or"                  { POR } 
  | "havoc"               { HAVOC } 
  (* end of FORSYTE extensions } *)
+ (* threshold automata extensions (see the explanation in spin.mly) { *)
+ | "skel"                { SKEL }
+ | "when"                { WHEN }
+ | "parameters"          { PARAMS }
+ | "shared"              { SHARED }
+ | "inits"               { INITS }
+ | "locations"           { LOCATIONS }
+ | "rules"               { RULES }
+ | "assumptions"         { ASSUMES }
+ (* end of threshold automata extensions } *)
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
  | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
     {
-        let s = Lexing.lexeme lexbuf in
-        if is_lexer_normal() then NAME s else FNAME s
+        NAME (Lexing.lexeme lexbuf)
     }
  | '"' [^ '"']* '"'      { STRING (string_chars (Lexing.lexeme lexbuf)) }
  | '#' ['_' 'A'-'z']['_' 'A'-'z' '0'-'9']*

@@ -103,7 +103,8 @@ let test_make_schema_tree_unlocking _ =
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
             mk_eq 2 (IntConst 0); mk_eq 3 (IntConst 0) ];
         Sk.loc_vars = loc_map;
-        Sk.assumes = []
+        Sk.assumes = [];
+        Sk.forms = StrMap.empty;
     }
     in
     let tree, deps = PorBounds.make_schema_tree !solver sk in
@@ -176,7 +177,8 @@ let test_make_schema_tree_locking _ =
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
             mk_eq 2 (IntConst 0); mk_eq 3 (IntConst 0) ];
         Sk.loc_vars = loc_map;
-        Sk.assumes = []
+        Sk.assumes = [];
+        Sk.forms = StrMap.empty;
     }
     in
     let tree, deps = PorBounds.make_schema_tree !solver sk in
@@ -250,7 +252,8 @@ let test_make_schema_tree_unlocking_no_redundant_milestones _ =
         Sk.inits = [ mk_eq 0 (Var n); mk_eq 1 (IntConst 0);
             mk_eq 2 (IntConst 0); mk_eq 3 (IntConst 0) ];
         Sk.loc_vars = loc_map;
-        Sk.assumes = []
+        Sk.assumes = [];
+        Sk.forms = StrMap.empty;
     }
     in
     let tree, deps = PorBounds.make_schema_tree !solver sk in

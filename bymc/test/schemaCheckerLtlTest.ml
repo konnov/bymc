@@ -114,6 +114,7 @@ let prepare_strb () =
             BinEx (GE, Var t, Var f);
             BinEx (GE, Var f, IntConst 0);
         ];
+        Sk.forms = StrMap.empty; (* TODO: add the formulas *)
     }
     in
     declare_parameters sk tt;
@@ -264,6 +265,7 @@ let prepare_aba () =
             BinEx (GE, Var t, Var f);
             BinEx (GE, Var f, IntConst 0);
         ];
+        Sk.forms = StrMap.empty; (* TODO: add the formulas *)
     }
     in
     declare_parameters sk tt;

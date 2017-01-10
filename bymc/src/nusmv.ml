@@ -128,7 +128,6 @@ let token_s = function
       | UNAME s -> "UNAME " ^ s
       | PNAME s -> "PNAME " ^ s
       | INAME s -> "INAME " ^ s
-      | FNAME s -> "FNAME " ^ s
       | STRING s -> "STRING " ^ s
       | CLAIM -> "CLAIM"
       | TRACE -> "TRACE"
@@ -204,6 +203,15 @@ let token_s = function
       | PAND -> "and"
       | HAVOC -> "havoc"
       | PRIME -> "'"
+      (* threshold automata *)
+      | SKEL -> "skel"
+      | INITS -> "inits"
+      | WHEN -> "when"
+      | PARAMS -> "parameters"
+      | SHARED -> "shared"
+      | LOCATIONS -> "locations"
+      | RULES -> "rules"
+      | ASSUMES -> "assumptions"
 
 
 (* We need var_fun as variables can look either x or next(x).

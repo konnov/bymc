@@ -299,6 +299,16 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             F.declare_frame solver tt f;
             m_frames <- (Frame f) :: m_frames
 
+        method private assert_expr e =
+            if (is_c_false e)
+            (* assert false, which may be unreachable,
+               TODO: use a simpler theory? *)
+            then solver#append_expr
+                (BinEx (Spin.NE, IntConst 0, IntConst 0))
+            else if (is_c_true e)
+            then begin solver#comment "(assert true)"; 0 end
+            else solver#append_expr e
+
         method assert_top assertions =
             let frame = self#top in
             let replace es =
@@ -308,7 +318,7 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             in
             List.map (F.to_frame_expr frame frame) assertions
                 |> replace
-                |> List.iter (fun e -> ignore (solver#append_expr e))
+                |> List.iter (fun e -> ignore (self#assert_expr e))
 
         method assert_top2 assertions =
             let top, prev = self#top2 in
@@ -319,7 +329,7 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             in
             List.map (F.to_frame_expr prev top) assertions
                 |> replace
-                |> List.iter (fun e -> ignore (solver#append_expr e))
+                |> List.iter (fun e -> ignore (self#assert_expr e))
 
         method assert_frame_eq sk loop_frame =
             solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);

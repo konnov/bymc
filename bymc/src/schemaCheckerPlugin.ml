@@ -16,6 +16,7 @@ open Plugin
 open PorBounds
 open Spin
 open SpinIr
+open PromelaToTaPlugin
 
 module L = SchemaCheckerLtl
 
@@ -25,26 +26,22 @@ let is_safety_spec tt s =
     | _ -> false
 
 
-let get_proper_specs opts prog skels check_fun =
-    let forms = Program.get_ltl_forms prog in
+let get_proper_specs opts sk check_fun =
     let is_good name form =
         let asked = opts.Options.spec in
-        let expanded = expand_props_in_ltl prog skels form in
-        Debug.ltrace Trc.scl
-            (lazy (sprintf " expanded %s = %s\n" name (SpinIrImp.expr_s expanded)));
-        (asked = "all" || asked = name) && (check_fun expanded)
+        (asked = "all" || asked = name) && (check_fun form)
     in
-    let good, bad = StrMap.partition is_good forms in
+    let good, bad = StrMap.partition is_good sk.Sk.forms in
     let p name _ =
         if opts.Options.spec <> "all" && opts.Options.spec <> name
         then printf "      > Skipped %s (since you asked)\n" name
         else printf "      > Skipped %s (not supported)\n" name
     in
     StrMap.iter p bad;
-    SymbSkel.expand_props_in_ltl_forms prog skels good
+    good
 
 
-class slps_checker_plugin_t (plugin_name: string) =
+class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
     object(self)
         inherit analysis_plugin_t plugin_name
 
@@ -54,10 +51,7 @@ class slps_checker_plugin_t (plugin_name: string) =
         method transform rt =
             let sprog = self#get_input0 in
             let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
-            let sk = Summary.summarize_optimize_fuse rt sprog
-                ~keep_selfloops:(self#is_ltl tech)
-                    (* reachability is blind to self-loops *)
-            in
+            let sk = ta_source#get_ta in
             self#set_options rt;
             if "bounds" <> rt#caches#options.Options.spec
             then self#check tech rt sprog sk
@@ -69,7 +63,7 @@ class slps_checker_plugin_t (plugin_name: string) =
             sprog
 
 
-        method check_reachability_cav15 rt sprog sk tt =
+        method check_reachability_cav15 rt sk tt =
             let tree, deps = PorBounds.make_schema_tree rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
 
@@ -122,11 +116,11 @@ class slps_checker_plugin_t (plugin_name: string) =
                 print_stat ()
             in
             let specs =
-                get_proper_specs rt#caches#options sprog [sk] (is_safety_spec tt) in
+                get_proper_specs rt#caches#options sk (is_safety_spec tt) in
             StrMap.iter each_form specs
 
 
-        method check_ltl rt sprog sk tt =
+        method check_ltl rt sk tt =
             let flow_opt = SchemaOpt.is_flow_opt_enabled () in
             let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
@@ -150,21 +144,20 @@ class slps_checker_plugin_t (plugin_name: string) =
                 let negated = Ltl.normalize_form (UnEx (NEG, f)) in
                 L.can_handle_spec tt sk negated
             in
-            let fprog = Ltl.embed_fairness sprog in
-            let specs =
-                get_proper_specs rt#caches#options fprog [sk] can_handle in
+            let specs = get_proper_specs rt#caches#options sk can_handle in
             StrMap.iter each_form specs
 
 
         method check tech rt sprog sk =
+            (* introduce variables for the location counters *)
             let loc_vars = IntMap.values sk.Sk.loc_vars in
             let ntt = (Program.get_type_tab sprog)#copy in
             let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
             BatEnum.iter set_type loc_vars;
-
+            (* call the required technique *)
             if self#is_ltl tech
-            then self#check_ltl rt sprog sk ntt
-            else self#check_reachability_cav15 rt sprog sk ntt
+            then self#check_ltl rt sk ntt
+            else self#check_reachability_cav15 rt sk ntt
 
         method update_runtime rt =
             ()

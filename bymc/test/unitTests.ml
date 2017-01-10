@@ -14,6 +14,8 @@ let _ =
         PorBoundsTest.suite;
         PosetTest.suite;
         SchemaCheckerLtlTest.suite;
+        TaIrBridgeTest.suite;
+        TaParserTest.suite;
     ]
     in
     run_test_tt_main all

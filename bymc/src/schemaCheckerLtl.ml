@@ -621,13 +621,16 @@ let check_one_order solver sk spec deps tac ~reach_opt elem_order =
             if rules <> [] then begin
                 (* push the first rule together with the invariants *)
                 tac#push_rule deps sk (List.hd rules);
-                assert_propositions uset lset filtered_invs
-            end;
-            List.iter push_rule (List.tl rules)
+                assert_propositions uset lset filtered_invs;
+                List.iter push_rule (List.tl rules)
+            end
+            else solver#comment "warning: empty schema"
         in
         (* specifications /\_{X \subseteq Y} \/_{i \in X} k_i \ne 0
            require a schema multiplied several times *)
-        BatEnum.iter push_schema (1--(find_schema_multiplier invs));
+        let mult = find_schema_multiplier invs in
+        assert (mult >= 1);
+        BatEnum.iter push_schema (1--mult);
         let on_error frame_hist =
             dump_counterex_to_file solver sk "fixme" frame_hist [];
         in

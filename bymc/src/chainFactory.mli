@@ -3,5 +3,5 @@
  * Igor Konnov, 2014
  *)
 
-val create_chain: string -> Plugin.plugin_chain_t
+val create_chain: Options.input_t -> string -> Plugin.plugin_chain_t
 

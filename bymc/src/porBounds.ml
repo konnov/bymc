@@ -364,13 +364,16 @@ let collect_conditions accum sk =
     List.fold_left each_rule accum sk.Sk.rules
 
 
-let does_r_affect_cond solver shared lockt r cond =
+let does_r_affect_cond solver params shared lockt r cond =
     let mk_layer i =
         let h = Hashtbl.create (List.length shared) in
         let add v =
             let nv = v#copy (sprintf "%s$%d" v#get_name i) in
             Hashtbl.replace h v#id nv
         in
+        (* we have a single (global) copy of parameters *)
+        List.iter (fun v -> Hashtbl.replace h v#id v) params;
+        (* and one copy of shared variables per layer *)
         List.iter add shared;
         h
     in
@@ -467,7 +470,7 @@ let compute_unlocking ?(against_only=true) loc_reach lockt solver sk
                 let cond_and_left = (PSet.singleton c_id, left_pre_post) in
                 let plus_checked = P2Set.add cond_and_left checked in
                 if not (P2Set.mem cond_and_left checked)
-                then if does_r_affect_cond solver sk.Sk.shared lockt left c
+                then if does_r_affect_cond solver sk.Sk.params sk.Sk.shared lockt left c
                     then (plus_checked, PSet.add c_id mset)
                     else (plus_checked, mset)
                 else (checked, mset)
