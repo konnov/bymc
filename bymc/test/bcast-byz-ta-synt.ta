@@ -14,11 +14,12 @@ skel Proc {
   unknowns a1, b1, c1, a2, b2, c2; /* the constants to be found by synthesis */
 
   assumptions (0) {
-    (b2 != 2);
     N > 3 * T;
     T >= F;
     T >= 1;
   }
+    /*(b2 != 2);*/
+
 
   locations (0) {
     loc0: [0];
