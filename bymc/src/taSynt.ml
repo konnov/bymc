@@ -659,6 +659,9 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             | IntConst 0 ->
                 raise (Failure "The example is unconditionally true")
 
+            | IntConst 1 ->
+                () (* just ignore *)
+
             | _ ->
                 ignore (synt_solver#append_expr se)
     end
@@ -768,7 +771,8 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
     solver#push_ctx;
     let initf = F.init_frame type_tab sk in
     tac#push_frame initf;
-    tac#assert_top template.Sk.assumes;
+    let not_const_true e = (e <> (IntConst 1)) in
+    tac#assert_top (List.filter not_const_true template.Sk.assumes);
     tac#assert_top template.Sk.inits;
     let res =
         SCL.check_one_order solver template (cex.C.f_form_name, spec) deps

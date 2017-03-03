@@ -783,7 +783,8 @@ class lib2_smt name solver_cmd solver_args =
             (* check for common mistakes *)
             let check_common_errors = function
             | IntConst n ->
-                raise (Failure (sprintf "(assert %d) is not a valid SMT expression" n))
+                let m = sprintf "(assert %d) is not a valid SMT expression" n in
+                raise (Failure m)
             | _ -> ()
             in
             check_common_errors expr;
