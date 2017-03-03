@@ -102,7 +102,7 @@ let ltrace (mod_code: string) (text: string lazy_t) =
     end
 
 
-let print_backtrace _ =
+let print_backtrace bt =
     fprintf stderr " -----------------------------------------------\n";
     let print_prev_slot prev cnt =
         if prev <> ""
@@ -110,12 +110,11 @@ let print_backtrace _ =
             then fprintf stderr "%s\n" prev
             else fprintf stderr "%s\n  (repeats %d times)\n" prev cnt
     in
-    let bt = Printexc.get_raw_backtrace () in
-
     let p _ =
         match Printexc.backtrace_slots bt with
         | None -> fprintf stderr "No backtrace information available\n"
         | Some slots ->
+            fprintf stderr " (%d slots)\n" (Array.length slots);
             let ps (prev, cnt) i slot =
                 match Printexc.Slot.format i slot with
                 | Some s ->
@@ -142,8 +141,10 @@ let wrap_with_stack_trace_on_exception f =
     let on_exception e =
         if Printexc.backtrace_status ()
         then begin
+            (* bugfix: save the backtrace immediately, as the later fprintf might damage it *)
+            let bt = Printexc.get_raw_backtrace () in
             fprintf stderr "\nException: %s\n\n" (Printexc.to_string e);
-            print_backtrace ()
+            print_backtrace bt
             (*Printexc.print_backtrace stderr*)
         end else begin
             fprintf stderr "\nException: %s\n\n" (Printexc.to_string e);
