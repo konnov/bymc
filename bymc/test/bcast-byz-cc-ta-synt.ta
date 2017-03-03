@@ -58,32 +58,32 @@ skel Proc {
   /* send a message when having value 1 */
   4: loc1 -> loc2
       when (nsnt >= 0)
-      do { nsnt' == nsnt + 1; };
+      do { nsnt' == nsnt + 1; ncrashed' == ncrashed; };
   /* accept directly */
   5: loc0 -> loc3
       when (nsnt >= (a2 * N + b2 * Tb + c2 * Tcc + d2 - Fb))
-      do { nsnt' == nsnt + 1; };
+      do { nsnt' == nsnt + 1; ncrashed' == ncrashed; };
   6: loc1 -> loc3
       when (nsnt >= (a2 * N + b2 * Tb + c2 * Tcc + d2 - Fb))
-      do { nsnt' == nsnt + 1; };
+      do { nsnt' == nsnt + 1; ncrashed' == ncrashed; };
   /* send a message */
   7: loc0 -> loc2
       when (nsnt >= (a1 * N + b1 * Tb + c1 * Tcc + d1 - Fb))
-      do { nsnt' == nsnt + 1; };
+      do { nsnt' == nsnt + 1; ncrashed' == ncrashed; };
   /* accept */
   8: loc2 -> loc3
       when (nsnt >= (a2 * N + b2 * Tb + c2 * Tcc + d2 - Fb))
-      do { nsnt' == nsnt; };
+      do { nsnt' == nsnt; ncrashed' == ncrashed; };
   /* self-loops in all the locations but loc1, from which processes must progress */
   9: loc0 -> loc0
       when (nsnt >= 0)
-      do { nsnt' == nsnt; };
+      do { nsnt' == nsnt; ncrashed' == ncrashed; };
   10: loc2 -> loc2
       when (nsnt >= 0)
-      do { nsnt' == nsnt; };
+      do { nsnt' == nsnt; ncrashed' == ncrashed; };
   11: loc3 -> loc3
       when (nsnt >= 0)
-      do { nsnt' == nsnt; };
+      do { nsnt' == nsnt; ncrashed' == ncrashed; };
   }
   specifications (3) {
     /* safety */
