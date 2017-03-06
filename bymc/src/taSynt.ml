@@ -629,11 +629,17 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
                is generated from another sequence of rules
              *)
             assert (rule_no = move.C.f_rule_no);
-            do_update ();
+            (* compute the current value of the rule guard *)
             let simp_guard =
                 Simplif.compute_consts (SpinIr.map_vars (bind m_state) rule.Sk.guard)
             in
-            m_assertions <- simp_guard :: m_assertions (* push the assertions *)
+            (*printf "rule %d, factor %d, simp_guard = %s\n"
+                rule_no move.C.f_accel (SpinIrImp.expr_s simp_guard);*)
+            (* and then do an update as prescribed by the actions *)
+            do_update ();
+            if move.C.f_accel > 0
+            then m_assertions <- simp_guard :: m_assertions (* push the assertions *)
+            (* else the rule was not fired, ignore its guards *)
 
 
         method reset =
@@ -660,7 +666,11 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
                 raise (Failure "The example is unconditionally true")
 
             | IntConst 1 ->
-                () (* just ignore *)
+                (* The counterexample appears to be useless... What shall we do? *)
+                let pa e = printf "  %s\n" (SpinIrImp.expr_s e) in
+                printf "Collected assertions (there should be no zeros!):\n";
+                List.iter pa m_assertions;
+                raise (Failure "Useless counterexample. Giving up.")
 
             | _ ->
                 ignore (synt_solver#append_expr se)
