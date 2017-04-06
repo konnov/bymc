@@ -1,0 +1,224 @@
+/* a template for Ben-Or */
+
+skel Proc {
+  /* the control locations are as follows:
+    0 is the initial state with value 0 (V0),
+    1 is the initial state with value 1 (V1),
+    2 is the sent state (SR),
+    3 is the sent propose (SP),
+    4 is the received propose (RP),
+    5 is the decided 0 (D0),
+    6 is the decided 1 (D1),
+    7 is coin toss (CT),
+    8 is estimate 0 (E0),
+    9 is estimate in 1 (E1),
+    10 is crashed (CR),
+   */
+  local pc;
+  /* the number of messages sent by the correct processes */
+  shared nsntR0double, nsntR1double, nsntR01, nsntP0, nsntP1, nsntPQ, nsntP01Q, nfaulty;
+  parameters N, T, Fi, Fe;
+
+  assumptions (0) {
+    N > 2 * T;
+    T >= Fi + Fe;
+    T >= 1;
+  }
+
+  locations (0) {
+    locV0: [0];
+    locV1: [1];
+    locSR: [2];
+    locSP: [3];
+    locRP: [4];
+    locD0: [5];
+    locD1: [6];
+    locCT: [7];
+    locE0: [8];
+    locE1: [9];
+    locCR: [10];
+  }
+
+  inits (0) {
+    (locV0 + locV1) == N - Fi;
+    locSR == 0;
+    locSP == 0;
+    locRP == 0;
+    locD0 == 0;
+    locD1 == 0;
+    locCT == 0;
+    locE0 == 0;
+    locE1 == 0;
+    locCR == Fi;
+    nsntR0double == 0;
+    nsntR1double == 0;
+    nsntR01 == 0;
+    nsntP0 == 0;
+    nsntP1 == 0;
+    nsntPQ == 0;
+    nsntP01Q == 0;
+    nfaulty == 0;
+  }
+
+  rules (0) {
+  0: locV0 -> locSR
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double + 2; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01 + 1; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  1: locV1 -> locSR
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double + 2;
+            nsntR01' == nsntR01 + 1; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  2: locSR -> locSP
+      when (nsntR01 >= N - T && nsntR0double > N)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+        nsntR01' == nsntR01; nsntP0' == nsntP0 + 1; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q + 1; nfaulty' == nfaulty; };
+  3: locSR -> locSP
+      when (nsntR01 >= N - T && nsntR1double > N)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1 + 1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q + 1; nfaulty' == nfaulty; };
+  4: locSR -> locSP
+      when (nsntR01 >= N - T && nsntR0double <= N && nsntR1double <= N)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ + 1; nsntP01Q' == nsntP01Q + 1; nfaulty' == nfaulty; };
+  5: locSP -> locD0
+      when (nsntP01Q >= N - T && nsntP0 >= T + 1)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  6: locSP -> locD1
+      when (nsntP01Q >= N - T && nsntP1 >= T + 1)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  7: locSP -> locE0
+      when (nsntP01Q >= N - T && nsntP0 < T + 1 && nsntP1 < T + 1 && nsntP0 > 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  8: locSP -> locE1
+      when (nsntP01Q >= N - T && nsntP0 < T + 1 && nsntP1 < T + 1 && nsntP1 > 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  9: locSP -> locCT
+      when (nsntP01Q >= N - T && nsntP0 < 1 && nsntP1 < 1)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  10: locCT -> locE0
+      when (nsntP01Q >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  11: locCT -> locE1
+      when (nsntP01Q >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  /* fail */
+  12: locV0 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  13: locV1 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  14: locSR -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  15: locSP -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  16: locRP -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  17: locD0 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  18: locD1 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  19: locE0 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  20: locE1 -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  21: locCT -> locCR
+      when (nfaulty < Fe)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double; nsntR01' == nsntR01;
+           nsntP0' == nsntP0; nsntP1' == nsntP1;
+           nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty + 1; };
+  /* self loops */
+  22: locV0 -> locV0
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  23: locV1 -> locV1
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  24: locD0 -> locD0
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  25: locD1 -> locD1
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  26: locE0 -> locE0
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  27: locE1 -> locE1
+      when (nsntP0 >= 0)
+      do { nsntR0double' == nsntR0double; nsntR1double' == nsntR1double;
+            nsntR01' == nsntR01; nsntP0' == nsntP0; nsntP1' == nsntP1; nsntPQ' == nsntPQ; nsntP01Q' == nsntP01Q; nfaulty' == nfaulty; };
+  }
+  specifications (3) {
+    /* safety */
+    validity0: (locV1 == 0) -> [](locD1 == 0 && locE1 == 0);
+    validity1: (locV0 == 0) -> [](locD0 == 0 && locE0 == 0);
+    agreement0: []((locD0 != 0) -> [](locD1 == 0 && locE1 == 0));
+    agreement1: []((locD1 != 0) -> [](locD0 == 0 && locE0 == 0));
+    
+    /* probabilistic wait freedom */
+    not_avoid: []((locD0 != 0) || (locD1 != 0));
+    avoid_inv: []((locD0 == 0 && locD1 == 0) -> [](locD0 == 0 && locD1 == 0));
+
+    /*
+    corr: <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0)
+                && (nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
+                && ((nsnt < a2 * N + b2 * T + c2) || loc2 == 0)
+                && (loc1 == 0))
+        -> ((loc0 == 0) -> <>(loc3 != 0));
+    relay: <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0)
+                && (nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
+                && ((nsnt < a2 * N + b2 * T + c2) || loc2 == 0)
+                && (loc1 == 0))
+        -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0) && (loc2 == 0)));
+    */
+  }
+} /* Proc */
+
+
