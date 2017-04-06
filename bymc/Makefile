@@ -63,11 +63,11 @@ clean:
 
 ${target}: ocaml-3.11.0
 	$(info COMPILING)
-	ocamlbuild -use-ocamlfind ${CFLAGS} ${target} | ./script/ocaml-friendly
+	ocamlbuild -use-ocamlfind ${CFLAGS} ${target}
 
 ${debug_target}: ocaml-3.11.0
 	$(info COMPILING DEBUG VERSION)
-	ocamlbuild -use-ocamlfind ${CFLAGS} ${debug_target} | ./script/ocaml-friendly
+	ocamlbuild -use-ocamlfind ${CFLAGS} ${debug_target}
 
 ocaml-3.11.0:
 	$(info Testing, whether ocaml version is at least 3.11.0)
