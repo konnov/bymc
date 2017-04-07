@@ -211,10 +211,13 @@ let test_is_cex_applicable _ =
 
 
 (*
-Merge equivalent conditions into one.
-E.g., x >= a, x >= 2 * a, x >= 3 * a will be merged into one when a = 0.
+  Merge equivalent conditions into one.
+  E.g., x >= a, x >= 2 * a, x >= 3 * a will be merged into one when a = 0.
+
+  TODO: this feature is not implemented yet. Thus, this test belongs to the todo list.
 *)
 let test_merge_in_deps _ =
+    todo "this feature is not implemented yet";
     (* prepare the test set *)
     let x, a, b = new_var "x", new_var "a", new_var "b" in
     a#set_symbolic; b#set_symbolic;
@@ -264,14 +267,16 @@ let test_merge_in_deps _ =
     (* do the test *)
     let unknowns_vec = [("a", IntConst 0); ("b", IntConst 1)] in
     let new_deps = TaSynt.merge_in_deps deps in
-    assert_equal 2 (PB.PSetEltMap.cardinal deps.PB.D.cond_map)
-        ~msg:"expected cardinality 2"
+    let card = PB.PSetEltMap.cardinal deps.PB.D.cond_map in
+    assert_equal 2 card
+        ~msg:(sprintf "expected cardinality 2, found %d" card)
 
 
 let suite = "taSynt-suite" >:::
     [
         "test_next_unknowns_vec" >:: test_next_unknowns_vec;
         "test_is_cex_applicable" >:: test_is_cex_applicable;
-        "test_merge_in_deps" >:: test_merge_in_deps;
+        (* TODO: do we actually need this feature? *)
+        (* "test_merge_in_deps" >:: test_merge_in_deps; *)
     ]
 

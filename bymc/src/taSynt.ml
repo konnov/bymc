@@ -806,8 +806,10 @@ let exclude_unknowns synt_solver assumptions unknowns =
 
 
 (*
-Merge equivalent conditions into one.
-E.g., x >= a, x >= 2 * a, x >= 3 * a will be merged into one when a = 0.
+  Merge equivalent conditions into one.
+  E.g., x >= a, x >= 2 * a, x >= 3 * a will be merged into one when a = 0.
+
+  FEATURE: implement this feature.
 *)
 let merge_in_deps deps =
     deps
