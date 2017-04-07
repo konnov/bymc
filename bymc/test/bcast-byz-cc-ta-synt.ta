@@ -12,7 +12,9 @@ skel Proc {
   /* the number of messages sent by the correct processes */
   shared nsnt, ncrashed;
   parameters N, Tb, Tcc, Fb, Fcc;
-  unknowns a1, b1, c1, d1, a2, b2, c2, d2; /* the constants to be found by synthesis */
+  unknowns /*a0, b0, */ a1, b1, c1, d1, a2, b2, c2, d2; /* the constants to be found by synthesis */
+
+  /*  N > a0 * Tb + b0 * Tcc; */
 
   assumptions (0) {
     N > 3 * Tb + Tcc;
@@ -20,6 +22,10 @@ skel Proc {
     Tb >= 1;
     Tcc >= Fcc;
     Tcc >= 1;
+    a0 < 100;
+    b0 < 100;
+    d1 < 100;
+    d2 < 100;
   }
 
 

@@ -17,8 +17,12 @@ skel Proc {
     N > 3 * T;
     T >= F;
     T >= 1;
+    /* We have to constrain the free coefficient from above. Otherwise SMT enumerates all integers. */
+    c1 < 100;
+    c2 < 100;
   }
     /*(b2 != 2);*/
+
 
 
   locations (0) {
