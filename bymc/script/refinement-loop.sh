@@ -97,11 +97,18 @@ fi
 
 cd $BYMC_HOME
 if [ -d "src" ]; then
-    # source distribution, compile the latest version
+    # source distribution
     if [ "x$DEBUG" == "x" ]; then
-        make || (cd $ORIG_DIR; exit 1)
+        if [ -x "$BYMC_HOME/bymc.native" ]; then
+            echo "Using the existing binary..."
+        else
+            make || (cd $ORIG_DIR; exit 1)
+            echo "No binary found, compiling..."
+        fi
         TOOL="$BYMC_HOME/bymc.native --plugin-dir ${PLUGIN_DIR} ${BYMC_FLAGS} "
     else
+        # compile the latest version
+        echo "Compiling bytecode..."
         BYTE="1" make || (cd $ORIG_DIR; exit 1)
         TOOL="ocamldebug $BYMC_HOME/bymc.byte --plugin-dir ${PLUGIN_DIR} "
     fi
