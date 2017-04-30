@@ -112,10 +112,12 @@ type utl_k_spec_t =
  A classification of temporal formulas
  *)
 type spec_t =
+    | Propositional of Spin.token SpinIr.expr
+        (** a purely propositional formula *)
     | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
-        (* a safety violation: init_form -> F bad_form *)
+        (** a safety violation: init_form -> F bad_form *)
     | UTL of Spin.token SpinIr.expr * utl_k_spec_t
-        (* an unrestricted formula for the initial state and a UTL formula *)
+        (** an unrestricted formula for the initial state and a UTL formula *)
 
 
 (**
@@ -585,17 +587,23 @@ let fail_first a b =
     else Lazy.force b
 
 
+(* there are three types of formulas that can be checked by check_one_order *)
+type check_t = CheckPropositional | CheckSafety | CheckUtl    
+
+
 let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, elem_order) =
-    let is_incr_safety, init_form, safety_bad =
+    let check_type, init_form, safety_bad =
         (* In the incremental mode, we distinguish between safety and the general LTL.
            Thus, for safety we do not enumerate possible orderings of F, but
            check on-the-fly, whether a bad state has been reached. Obviously,
            this requires push and pop, which only exist in the incremental mode.
           *)
         match spec with
-        | Safety (init, bad) -> true, init, bad
+        | Safety (init, bad) -> CheckSafety, init, bad
 
-        | UTL (init, _) -> false, init, IntConst 0 
+        | UTL (init, _) -> CheckUtl, init, IntConst 0 
+
+        | Propositional init -> CheckPropositional, init, IntConst 0
     in
     let node_type tl =
         if tl = [] then SchemaSmt.Leaf else SchemaSmt.Intermediate
@@ -663,7 +671,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         in
         print_top_frame ();
         (* check, whether a safety property is violated *)
-        if is_incr_safety && tac#check_property safety_bad on_error
+        if check_type = CheckSafety && tac#check_property safety_bad on_error
         then { m_is_err = true; m_schema_len = tac#top.F.no }
         else { m_is_err = false; m_schema_len = tac#top.F.no }
     in
@@ -679,29 +687,32 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         then [list_to_binex OR es]
         else []
     in
+    let on_error in_loop frame_hist =
+        let prefix, loop =
+            BatList.span (fun f -> not (in_loop f)) frame_hist in
+        let po_elem_struc_list =
+            List.map struc_of_po_elem elem_order in
+        dump_counterex_to_file solver sk deps
+            form_name (iorder, po_elem_struc_list) prefix loop;
+    in
     let rec search prefix_last_frame uset lset invs = function
         | [] ->
-            if is_incr_safety
-                (* no errors: we have already checked the prefix *)
-            then begin
+            if check_type = CheckSafety
+            then (* no errors: we have already checked the prefix *)
                 { m_is_err = false; m_schema_len = tac#top.F.no }
+            else if check_type = CheckPropositional
+            then begin (* check whether the initial state can violate the property *)
+                let found_bug = tac#check_property (IntConst 1) (on_error (fun _ -> false)) in
+                { m_is_err = found_bug; m_schema_len = tac#top.F.no }
             end else begin
                 (* close the loop *)
                 let lf = get_some prefix_last_frame in
                 let in_loop f = (f.F.no >= lf.F.no) in
                 let loop_start_frame = List.find in_loop tac#frame_hist in
-                let on_error frame_hist =
-                    let prefix, loop =
-                        BatList.span (fun f -> not (in_loop f)) frame_hist in
-                    let po_elem_struc_list =
-                        List.map struc_of_po_elem elem_order in
-                    dump_counterex_to_file solver sk deps
-                        form_name (iorder, po_elem_struc_list) prefix loop;
-                in
                 printf " END.\n"; flush stdout;
                 (* postpone an expensive check with the closed loop *)
                 let found_bug =
-                if not (tac#check_property (IntConst 1) on_error)
+                if not (tac#check_property (IntConst 1) (on_error in_loop))
                 then false (* no counterex. even without a loopback *)
                 else begin
                     (* there is probably a bug: close the loop *)
@@ -711,7 +722,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                        Add them when it is absolutely necessary. *)
                     tac#assert_frame_eq sk loop_start_frame;
                     tac#assert_top (at_least_one_step_made loop_start_frame);
-                    tac#check_property (IntConst 1) on_error
+                    tac#check_property (IntConst 1) (on_error in_loop)
                 end
                 in
                 { m_is_err = found_bug; m_schema_len = tac#top.F.no }
@@ -720,7 +731,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         | (PO_init utl_form) :: tl ->
             (* treat the initial state *)
             tac#enter_context;
-            if not is_incr_safety
+            if check_type = CheckUtl
             then assert_propositions uset lset (find_uncovered_utl_props utl_form);
             if not (SpinIr.is_c_true init_form)
             then tac#assert_top [init_form];
@@ -734,6 +745,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
             result
 
         | (PO_guard id) :: tl ->
+            assert (check_type != CheckPropositional);
             (* An unlocking/locking guard:
                activate the context, check a schema and continue.
                This can be done only outside a loop.
@@ -785,7 +797,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 search prefix_last_frame uset lset invs tl
 
         | (PO_loop_start (TL_and fs)) :: tl ->
-            assert (not is_incr_safety);
+            assert (check_type = CheckUtl);
             (* check that no other guards were activated *)
             let assert_not_active set (_, cond_id, expr, lt) =
                 if PSet.mem cond_id set
@@ -805,6 +817,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 (append_invs invs new_invs) LoopStart tl
 
         | (PO_tl (_, (TL_and fs))) :: tl ->
+            assert (check_type != CheckPropositional);
             (* an extreme appearance of F *)
             let props = find_uncovered_utl_props (TL_and fs) in
             tac#enter_context;
@@ -820,8 +833,11 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
             *)
 
             let result =
-                prune_or_continue prefix_last_frame uset lset
+                if tac#check_property (IntConst 1) (on_error (fun _ -> false))
+                then prune_or_continue prefix_last_frame uset lset
                     (append_invs invs new_invs) (node_type tl) tl
+                else (* the property contradicts to all the initial states *) 
+                    { m_is_err = false; m_schema_len = tac#top.F.no }
             in
             tac#leave_context;
             result
@@ -832,7 +848,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
         if (not reach_opt)
-            || tac#check_property (IntConst 1) ignore
+            || tac#check_property (IntConst 1) (on_error (fun _ -> false))
         then begin
             (* first, extend an execution with a suffix
                 that does not enable new conditions *)
@@ -1223,10 +1239,21 @@ let mk_cut_and_threshold_graph sk deps spec =
             2, [(po_loop, po_init)],
                 (IntMap.add po_loop (PO_loop_start (TL_and []))
                     (IntMap.singleton po_init inite))
+
+        | Propositional _ ->
+            let inite = PO_init (TL_and []) in (* handled explicitly *)
+            (* we need just the initial state for a propositional formula *)
+            2, [(po_loop, po_init)],
+                (IntMap.add po_loop (PO_loop_start (TL_and []))
+                    (IntMap.singleton po_init inite))
     in
     (* add the guards *)
-    let size, order, rev_map = poset_mixin_guards deps nelems order rmap in
-    (size, order, rev_map)
+    match spec with
+    | Propositional _ ->
+        (nelems, order, rmap) (* do not mix in the guards, one schema is enough *)
+
+    | _ -> (* mix in the guards to the order induced by the formula *)
+        poset_mixin_guards deps nelems order rmap
 
 
 (**
@@ -1668,6 +1695,11 @@ let can_handle_spec type_tab sk form =
  *)
 let mk_search_control rt tt sk form_name ltl_form deps =
     let check_trivial = function
+    | Propositional init_form ->
+        if SpinIr.is_c_false init_form
+        then raise (Failure
+            (sprintf "%s: initial condition is trivially false" form_name));
+
     | Safety (init_form, bad_form) ->
         if SpinIr.is_c_false bad_form
         then raise (Failure
@@ -1685,11 +1717,14 @@ let mk_search_control rt tt sk form_name ltl_form deps =
     Debug.ltrace Trc.scl
         (lazy (sprintf "neg_form = %s\n" (SpinIrImp.expr_s neg_form)));
     let spec =
-        if SchemaOpt.is_incremental ()
-        (* safety is treated specially in the incremental mode *)
-        then extract_safety_or_utl tt sk neg_form
-        else let ltl, utl = TL.extract_utl sk neg_form in
-            UTL (ltl, utl)
+        if Ltl.is_propositional tt neg_form
+        then (* the simplest case: the formula does not have temporal operators *)
+            Propositional neg_form
+        else if SchemaOpt.is_incremental ()
+            (* safety is treated specially in the incremental mode *)
+            then extract_safety_or_utl tt sk neg_form
+            else let ltl, utl = TL.extract_utl sk neg_form in
+                UTL (ltl, utl)
     in
     check_trivial spec;
 
