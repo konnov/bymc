@@ -130,6 +130,8 @@ type utl_k_spec_t =
  A classification of temporal formulas
  *)
 type spec_t =
+    | Propositional of Spin.token SpinIr.expr
+        (* a propositional constraint on the initial state: init_form *)
     | Safety of Spin.token SpinIr.expr * Spin.token SpinIr.expr
         (* a safety violation: init_form -> F bad_form *)
     | UTL of Spin.token SpinIr.expr * utl_k_spec_t

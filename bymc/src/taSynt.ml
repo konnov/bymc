@@ -766,8 +766,10 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
         let form = StrMap.find cex.C.f_form_name template.Sk.forms in
         let neg_form = Ltl.normalize_form (UnEx (NEG, form)) in
         (*printf "neg_form = %s\n" (SpinIrImp.expr_s neg_form);*)
-        let ltl, utl = SCL.extract_utl template neg_form in
-        SCL.UTL (ltl, utl)
+        if Ltl.is_propositional type_tab neg_form
+        then SCL.Propositional neg_form (* propositional forms need special care *)
+        else let ltl, utl = SCL.extract_utl template neg_form in
+            SCL.UTL (ltl, utl)
     in
     let size, par_order, rev_map =
         (* XXX: using deps from sk, not template *)

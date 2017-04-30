@@ -18,7 +18,7 @@ module L = SchemaCheckerLtl
 (**
   Synthesizing threshold automata using CEGYS.
 
-  @author Igor Konnov, 2016
+  @author Igor Konnov, 2016-2017
  *)
 class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
     object(self)
@@ -76,21 +76,23 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             (* call the ltl technique *)
             (* NOTE: copied from SchemaCheckerPlugin.check_ltl *)
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
+            (* check the propositional formulas first, as they are super simple *)
             let forms = StrMap.bindings fixed_skel.Sk.forms in
-            let end_iters =
-                L.find_error_in_many_forms_interleaved
-                    rt type_tab fixed_skel forms fixed_deps
-            in
-            match end_iters with
+            let is_prop (_, f) = Ltl.is_propositional type_tab f in
+            let prop_forms, ltl_forms = List.partition is_prop forms in
+            let do_check form_type forms =
+                match L.find_error_in_many_forms_interleaved
+                    rt type_tab fixed_skel forms fixed_deps with
                 | None ->
-                    log INFO "      > All specifications hold";
+                    log INFO (sprintf "      > %s specifications hold" form_type);
                     false
 
                 | Some iter ->
                     let cex = L.SchemaIter.iter_get_cex iter in
                     log INFO (sprintf "    > SLPS: counterexample for %s found" cex);
                     true
-
+            in
+            (do_check "Propositional" prop_forms) || (do_check "Temporal" ltl_forms)
 
         method do_refine rt type_tab fixed_skel =
             let template_skel = ta_source#get_ta in
@@ -103,7 +105,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 fixed_skel template_deps template_skel m_unknowns_vec new_cex;
             if not synt_solver#check
             then begin
-                log INFO (sprintf "Collected %d counterexamples in total" m_n_cexs);
+                log INFO (sprintf "> Collected %d counterexamples in total" m_n_cexs);
+                log INFO "> NO SOLUTION EXIST. Oops.";
                 false
             end else begin
                 m_unknowns_vec <- self#find_unknowns synt_solver template_skel;
