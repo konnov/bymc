@@ -185,6 +185,7 @@ skel Proc {
     fast0:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
             && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ))
+            || (z2 * nsnt0 < a2 * N + b2 * T)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
         ->
@@ -194,6 +195,7 @@ skel Proc {
     fast1:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
             && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ))
+            || (z3 * nsnt0 < a3 * N + b3 * T)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
         ->
@@ -208,6 +210,7 @@ skel Proc {
                 || (z2 * nsnt0 < a2 * N + b2 * T)
                 || (z3 * nsnt1 < a3 * N + b3 * T)
                 || (z4 * nsnt0 < a4 * N + b4 * T)
+                || (z5 * nsnt0 < a5 * N + b5 * T)
                 || (loc2 == 0 && loc3 == 0))
             && loc0 == 0 && loc1 == 0))
         ->
