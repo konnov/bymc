@@ -19,6 +19,8 @@ module L = SchemaCheckerLtl
   Synthesizing threshold automata using CEGYS.
 
   @author Igor Konnov, 2016-2017
+
+  TODO: extract large pieces of code into a separate module
  *)
 class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
     object(self)

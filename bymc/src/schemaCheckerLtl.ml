@@ -1839,3 +1839,98 @@ let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
     List.iter (fun c -> c.S.dispose_search_fun ()) ctrls;
     result
 
+
+(** a search iterator and the accompanying checking function *)
+type iterXfun_t =
+    SchemaIter.search_iter_t * (SchemaIter.search_iter_t -> SchemaIter.search_iter_t)
+
+(**
+  Iterator type for find_error_in_many_forms_interleaved_MPI, similar to S.search_t.
+  *)
+type inter_iter_t = {
+    (* an iteration number *)
+    m_iter_no: int;
+    (* a list of iterators to be checked *)
+    m_iterXfuns: iterXfun_t list;
+    (* whether the search has been aborted *)
+    m_aborted: bool;
+}
+
+(** interleave many search iterators until the search is over or aborted *)
+let next_inter_iter
+        (skip_fun: int -> bool) (iter: inter_iter_t) : inter_iter_t =
+    let iterXfuns =
+        List.filter (fun (i, _) -> not (SchemaIter.iter_is_end i)) iter.m_iterXfuns
+    in
+    (* check a schema for each iterator and abort, if an error is found *)
+    let rec map_or_fail = function
+    | [] -> (false, [])
+
+    | (i, f) :: tl ->
+            let (err, nis) = map_or_fail tl in
+            if err
+            then (true, nis)    (* error in tail *)
+            else let ni = if (skip_fun iter.m_iter_no) then i else (f i) in
+                if (SchemaIter.iter_is_err_found ni)
+                then (true, [(ni, f)])          (* error here *)
+                else (false, (SchemaIter.iter_next ni, f) :: nis) (* no error yet *)
+    in
+    let (err_found, next_iterXfuns) = map_or_fail iterXfuns in
+    if err_found
+    then {
+        m_iter_no = 1 + iter.m_iter_no;
+        m_iterXfuns = [List.last next_iterXfuns]; (* there must be one *)
+        m_aborted = true;
+    } else {
+        m_iter_no = 1 + iter.m_iter_no;
+        m_iterXfuns = next_iterXfuns;
+        m_aborted = false;
+    }
+
+(* A parameterized implementation of
+    find_error_in_many_forms_interleaved and find_error_in_many_forms_interleaved_MPI
+    (see below)
+ *)
+let find_error_in_many_forms_interleaved_impl
+        (skip_fun: int -> bool) rt tt sk named_forms deps =
+    let rec find iter =
+        if iter.m_aborted
+        then Some (fst (List.hd iter.m_iterXfuns))
+        else if iter.m_iterXfuns = []
+            then None
+            else find (next_inter_iter (fun _ -> false) iter)
+    in
+    let mk_ctrl (name, form) = mk_search_control rt tt sk name form deps in
+    let ctrls = List.map mk_ctrl named_forms in
+    let iterXfuns = List.map (fun c -> (c.S.iter, c.S.check_fun)) ctrls in
+    let init_iter = { m_iter_no = 0; m_iterXfuns = iterXfuns; m_aborted = false } in
+    let result = find init_iter in
+    List.iter (fun c -> c.S.dispose_search_fun ()) ctrls;
+    result
+
+(**
+   This function is similar to find_error_in_single_form but it enumerates
+   lassos for multiple formulas. The lassos that correspond to different
+   formulas are interleaved, i.e., the ith lasso of the first formula is
+   checked, then the ith lasso of the second formula, etc. The function stops
+   when either the first error is found, or all lassos are enumerated.
+
+   If an error is found, then the iterator of the failed formula is returned.
+   Otherwise None is returned.
+ 
+   NOTE: this function creates multiple copies of the SMT solver.
+ *)
+let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
+    find_error_in_many_forms_interleaved_impl (fun _ -> false) rt tt sk named_forms deps
+
+
+(**
+    Check many lassos like in find_error_in_many_forms_interleaved,
+    but do it in parallel using MPI (the node 0 is used as the root).
+    
+    TODO: extract this code into a separate module.
+    FIXME: nothing implemented yet!
+    *)
+let find_error_in_many_forms_interleaved_MPI rt tt sk named_forms deps =
+    find_error_in_many_forms_interleaved_impl (fun _ -> false) rt tt sk named_forms deps
+
