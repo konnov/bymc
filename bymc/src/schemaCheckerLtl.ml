@@ -9,6 +9,8 @@
 open Batteries
 open Printf
 
+open Mpi (* TODO: extract MPI code into a separate module *)
+
 open Accums
 open Debug
 open PorBounds
@@ -1863,42 +1865,42 @@ let next_inter_iter
         List.filter (fun (i, _) -> not (SchemaIter.iter_is_end i)) iter.m_iterXfuns
     in
     (* check a schema for each iterator and abort, if an error is found *)
-    let rec map_or_fail = function
+    let rec map_or_fail iter_no = function
     | [] -> (false, [])
 
     | (i, f) :: tl ->
-            let (err, nis) = map_or_fail tl in
+            let (err, nis) = map_or_fail (1 + iter_no) tl in
             if err
             then (true, nis)    (* error in tail *)
-            else let ni = if (skip_fun iter.m_iter_no) then i else (f i) in
+            else let ni = if (skip_fun iter_no) then i else (f i) in
                 if (SchemaIter.iter_is_err_found ni)
                 then (true, [(ni, f)])          (* error here *)
                 else (false, (SchemaIter.iter_next ni, f) :: nis) (* no error yet *)
     in
-    let (err_found, next_iterXfuns) = map_or_fail iterXfuns in
+    let (err_found, next_iterXfuns) = map_or_fail iter.m_iter_no iterXfuns in
     if err_found
     then {
         m_iter_no = 1 + iter.m_iter_no;
         m_iterXfuns = [List.last next_iterXfuns]; (* there must be one *)
         m_aborted = true;
     } else {
-        m_iter_no = 1 + iter.m_iter_no;
+        m_iter_no = (List.length next_iterXfuns) + iter.m_iter_no;
         m_iterXfuns = next_iterXfuns;
         m_aborted = false;
     }
 
 (* A parameterized implementation of
-    find_error_in_many_forms_interleaved and find_error_in_many_forms_interleaved_MPI
+    find_error_in_many_forms_interleaved and find_error_in_many_forms_parallel
     (see below)
  *)
-let find_error_in_many_forms_interleaved_impl
+let find_error_in_many_forms_impl
         (skip_fun: int -> bool) rt tt sk named_forms deps =
     let rec find iter =
         if iter.m_aborted
         then Some (fst (List.hd iter.m_iterXfuns))
         else if iter.m_iterXfuns = []
             then None
-            else find (next_inter_iter (fun _ -> false) iter)
+            else find (next_inter_iter skip_fun iter)
     in
     let mk_ctrl (name, form) = mk_search_control rt tt sk name form deps in
     let ctrls = List.map mk_ctrl named_forms in
@@ -1915,13 +1917,17 @@ let find_error_in_many_forms_interleaved_impl
    checked, then the ith lasso of the second formula, etc. The function stops
    when either the first error is found, or all lassos are enumerated.
 
-   If an error is found, then the iterator of the failed formula is returned.
+   If an error is found, then (Some filename) is returned.
    Otherwise None is returned.
  
    NOTE: this function creates multiple copies of the SMT solver.
  *)
 let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
-    find_error_in_many_forms_interleaved_impl (fun _ -> false) rt tt sk named_forms deps
+    let skip _ = false in
+    match find_error_in_many_forms_impl skip rt tt sk named_forms deps with
+    | None -> None
+
+    | Some iter -> Some (SchemaIter.iter_get_cex iter)
 
 
 (**
@@ -1929,8 +1935,38 @@ let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
     but do it in parallel using MPI (the node 0 is used as the root).
     
     TODO: extract this code into a separate module.
-    FIXME: nothing implemented yet!
-    *)
-let find_error_in_many_forms_interleaved_MPI rt tt sk named_forms deps =
-    find_error_in_many_forms_interleaved_impl (fun _ -> false) rt tt sk named_forms deps
+ *)
+let find_error_in_many_forms_parallel rt tt sk named_forms deps =
+    let id = Mpi.comm_rank Mpi.comm_world in
+    let npeers = Mpi.comm_size Mpi.comm_world in
+    log INFO (sprintf "MPI: node %d out of %d started\n" id npeers);
+    let skip_fun j = (id <> (j mod npeers)) in
+    let result =
+        find_error_in_many_forms_impl skip_fun rt tt sk named_forms deps
+    in
+    let flags = Mpi.gather (result != None) 0 Mpi.comm_world in
+    if id = 0
+    then begin
+        try
+            let witness = Array.findi (fun b -> b) flags in
+            (* error found *)
+            log INFO (sprintf "Node %d has found a counterexample\n" witness);
+            ignore (Mpi.broadcast witness 0 Mpi.comm_world);
+            (* transfer a filename, TODO: transfer a counterexample here *)
+            let filename =
+                if witness = 0
+                then SchemaIter.iter_get_cex (get_some result)
+                else Mpi.receive witness 0 Mpi.comm_world
+            in
+            log INFO (sprintf "Saved counterexample in %s\n" filename);
+            Some filename
+        with Not_found ->
+            ignore (Mpi.broadcast (-1) 0 Mpi.comm_world);
+            None (* no error found *)
+    end else begin
+        let witness = Mpi.broadcast 0 0 Mpi.comm_world in
+        if witness = id
+        then Mpi.send (SchemaIter.iter_get_cex (get_some result)) 0 0 Mpi.comm_world;
+        None (* if there is a counterexample, node 0 will report it *)
+    end
 

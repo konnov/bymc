@@ -89,9 +89,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     log INFO (sprintf "      > %s specifications hold" form_type);
                     false
 
-                | Some iter ->
-                    let cex = L.SchemaIter.iter_get_cex iter in
-                    log INFO (sprintf "    > SLPS: counterexample for %s found" cex);
+                | Some name ->
+                    log INFO (sprintf "    > SLPS: counterexample for %s found" name);
                     true
             in
             (do_check "Propositional" prop_forms) || (do_check "Temporal" ltl_forms)
