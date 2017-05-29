@@ -175,17 +175,14 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let specs = get_proper_specs rt#caches#options sk can_handle in
             let forms = StrMap.bindings specs in
             log INFO "  > Running SchemaCheckerLtl (MPI experimental)...";
-            let res =
-                L.find_error_in_many_forms_interleaved_MPI rt tt sk forms deps
-            in
+            let res = L.find_error_in_many_forms_parallel rt tt sk forms deps in
             match res with
             | None ->
                 log INFO "      > The specifications hold";
                 false
 
-            | Some iter ->
-                let cex = L.SchemaIter.iter_get_cex iter in
-                log INFO (sprintf "    > SLPS: counterexample for %s found" cex);
+            | Some name ->
+                log INFO (sprintf "    > SLPS: counterexample for %s found" name);
                 true
 
 
