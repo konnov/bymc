@@ -1,6 +1,6 @@
 (**
- Checking the properties using semi-linear regular path schema
- that is computed with respect to the diameter
+ Checking the properties using semi-linear regular path schemas
+ that is computed with respect to the diameter.
  
  @see PorBounds, SchemaChecker, SchemaCheckerLtl
  
@@ -48,6 +48,9 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
         method is_ltl tech =
             tech <> Some "cav15" && tech <> Some "cav15-opt"
 
+        method is_ltl_mpi tech =
+            tech = Some "ltl-mpi"
+
         method transform rt =
             let sprog = self#get_input0 in
             let tech = Options.get_plugin_opt rt#caches#options "schema.tech" in
@@ -65,6 +68,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             Program.set_has_bug is_buggy sprog
 
 
+        (* CAV'15 *)
         method check_reachability_cav15 rt sk tt =
             let tree, deps = PorBounds.make_schema_tree rt#solver sk in
             PorBounds.D.to_dot "flow.dot" sk deps;
@@ -126,6 +130,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             StrMap.fold each_form specs false
 
 
+        (* POPL'17 *)
         method check_ltl rt sk tt =
             let flow_opt = SchemaOpt.is_flow_opt_enabled () in
             let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
@@ -158,6 +163,32 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             StrMap.fold each_form specs false
 
 
+        (* Unpublished, a parallel version with MPI *)
+        method check_ltl_parallel rt sk tt =
+            let flow_opt = SchemaOpt.is_flow_opt_enabled () in
+            let deps = PorBounds.compute_deps ~against_only:flow_opt rt#solver sk in
+            PorBounds.D.to_dot "flow.dot" sk deps;
+            let can_handle f =
+                let negated = Ltl.normalize_form (UnEx (NEG, f)) in
+                L.can_handle_spec tt sk negated
+            in
+            let specs = get_proper_specs rt#caches#options sk can_handle in
+            let forms = StrMap.bindings specs in
+            log INFO "  > Running SchemaCheckerLtl (MPI experimental)...";
+            let res =
+                L.find_error_in_many_forms_interleaved_MPI rt tt sk forms deps
+            in
+            match res with
+            | None ->
+                log INFO "      > The specifications hold";
+                false
+
+            | Some iter ->
+                let cex = L.SchemaIter.iter_get_cex iter in
+                log INFO (sprintf "    > SLPS: counterexample for %s found" cex);
+                true
+
+
         method check tech rt sprog sk =
             (* introduce variables for the location counters *)
             let loc_vars = IntMap.values sk.Sk.loc_vars in
@@ -166,7 +197,9 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             BatEnum.iter set_type loc_vars;
             (* call the required technique *)
             if self#is_ltl tech
-            then self#check_ltl rt sk ntt
+            then if self#is_ltl_mpi tech
+                then self#check_ltl_parallel rt sk ntt
+                else self#check_ltl rt sk ntt
             else self#check_reachability_cav15 rt sk ntt
 
         method update_runtime rt =

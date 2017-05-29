@@ -201,6 +201,15 @@ val find_error_in_many_forms_interleaved:
         -> PorBounds.D.deps_t
         -> SchemaIter.search_iter_t option
 
+(* A parallel version of find_error_in_many_forms_interleaved *)
+val find_error_in_many_forms_interleaved_MPI:
+    Runtime.runtime_t
+        -> SpinIr.data_type_tab
+        -> SymbSkel.Sk.skel_t
+        -> (string * Spin.token SpinIr.expr) list
+        -> PorBounds.D.deps_t
+        -> SchemaIter.search_iter_t option
+
 (**
   Check one linear order.
  *)
