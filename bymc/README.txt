@@ -25,11 +25,13 @@ CONTENTS
  * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (OPTIONAL: if you want to run unit tests)
+ * mpi (opam), libopenmpi-dev and openmpi (linux)
+    (if you want to do verification or synthesis in parallel)
  * sexplib
  * ctypes and ctypes-foreign (OPTIONAL: when you compile with mathsat)
  * at least one SMT solver:
-    * yices 1.x: http://yices.csl.sri.com/download.shtml
     * Microsoft Z3
+    * yices 1.x: http://yices.csl.sri.com/download.shtml
     * Any decent SMT solver that supports SMTLIB2, logic QF_ALIA,
       model generation, and unsat cores.
  * one of the model checkers (OPTIONAL: when not using verifypa-post):
@@ -60,7 +62,17 @@ http://forsyte.at/software/bymc/#examples
 
 4. RUNNING
 
-4.1. SPIN
+4.1 PARTIAL ORDERS AND ACCELERATION IN SMT (our papers at CAV'15 and POPL'17)
+
+using Z3:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
+
+or another SMT solver:
+
+./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
+
+4.2. SPIN (our FMCAD'13 paper)
 
 # checking models with concrete parameters using spin
 ./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
@@ -81,14 +93,14 @@ Parameterized model checking with the abstraction-refinement:
 ./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
 
-4.2. NuSMV with BDDs
+4.3. NuSMV with BDDs (like in FMCAD'13)
 
 Parameterized model checking with the abstraction-refinement:
 
 ./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay
 
 
-4.3. NuSMV with BMC
+4.4. NuSMV with BMC (like in CONCUR'14)
 
 Parameterized model checking with the abstraction-refinement:
 
@@ -108,12 +120,12 @@ or using lingeling for <length2> steps
     ${benchmarks}/bcast-byz.pml relay
 
 
-4.4 FAST
+4.5 FAST (as reported in CONCUR'14)
 
 ./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
 
 
-4.5 COMPUTING DIAMETER (of PIA data abstraction)
+4.6 COMPUTING DIAMETER (of PIA data abstraction, as reported in CONCUR'14)
 
 ./analyse ${benchmarks}/bcast-byz.pml bounds
 
@@ -124,16 +136,6 @@ the new way to do that is (our CAV'15 submission):
 ./verifypa-post ${benchmarks}/bcast-byz.pml all
 
 The latter will check the properties as well (Sec. 4.6).
-
-4.6 PARTIAL ORDERS AND ACCELERATION IN SMT (our CAV'15 paper)
-
-using Z3:
-
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
-
-or another SMT solver:
-
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
 
 
 5. HOW TO INSTALL OCAML AND THE LIBRARIES?
@@ -160,15 +162,16 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie
+$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie mpi
+
+(Do not forget to include the line
+'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
+in your ~/.bashrc or ~/.zshrc before doing that)
 
 If you want to compile mathsat's library, you have to also install:
 
 $ opam install ctypes ctypes-foreign
 
-(Do not forget to include the line
-'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
-in your ~/.bashrc or ~/.zshrc before doing that)
 
 6. INSTALLING PYCUDD (DEPRECATED)
 
