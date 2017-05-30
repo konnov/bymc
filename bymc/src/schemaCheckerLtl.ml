@@ -23,6 +23,11 @@ open SymbSkel
 
 exception IllegalLtl_error of string
 
+(**
+ Default filename for a counterexample file
+ *)
+let cex_default_scm_filename = "cex-fixme.scm"
+
 (* The initial state and the state where the loop starts
    have fixed indices in the partial order.
  *)
@@ -529,7 +534,7 @@ let dump_counterex_to_file solver sk deps form_name
     printf "    > Saved counterexample to %s\n" fname;
     (* save the counterexample in a machine-readable format *)
     (* write in a machine-readable format *)
-    let machine_fname = "cex-fixme.scm" in
+    let machine_fname = cex_default_scm_filename in
     let cex = SchemaChecker.counterex_of_frame_hist
             solver sk deps form_name iorder (prefix_frames @ loop_frames)
             ~start_no:(List.length prefix_frames)
@@ -1956,7 +1961,12 @@ let find_error_in_many_forms_parallel rt tt sk named_forms deps =
             let filename =
                 if witness = 0
                 then SchemaIter.iter_get_cex (get_some result)
-                else Mpi.receive witness 0 Mpi.comm_world
+                else begin
+                    let cex = Mpi.receive witness 0 Mpi.comm_world in
+                    (* save the counterexample locally *)
+                    C.save_cex cex_default_scm_filename cex;
+                    cex_default_scm_filename (* and return the filename *)
+                end
             in
             log INFO (sprintf "Saved counterexample in %s\n" filename);
             Some filename
@@ -1966,7 +1976,12 @@ let find_error_in_many_forms_parallel rt tt sk named_forms deps =
     end else begin
         let witness = Mpi.broadcast 0 0 Mpi.comm_world in
         if witness = id
-        then Mpi.send (SchemaIter.iter_get_cex (get_some result)) 0 0 Mpi.comm_world;
-        None (* if there is a counterexample, node 0 will report it *)
+        then begin
+            let cex = C.load_cex cex_default_scm_filename in
+            Mpi.send cex 0 0 Mpi.comm_world;
+        end;
+        if witness != -1
+        then Some (sprintf "CheckNode%d" witness)
+        else None
     end
 

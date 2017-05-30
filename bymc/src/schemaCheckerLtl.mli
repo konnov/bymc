@@ -10,6 +10,11 @@
  *)
 exception IllegalLtl_error of string
 
+(**
+ Default filename for a counterexample file
+ *)
+val cex_default_scm_filename: string
+
 
 (**
  The statistics collected during the execution.
