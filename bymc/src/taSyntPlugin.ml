@@ -51,21 +51,23 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 log INFO ("> Next unknowns to try: " ^ (unknowns_vec_s m_unknowns_vec));
                 let fixed_skel = replace_unknowns_in_skel template_skel m_unknowns_vec in
                 Sk.to_file "synt.ta" fixed_skel;
-                let finished = ref false in
-                if is_ta_vacuous rt#solver fixed_skel
-                then begin
-                    log INFO "> Assumptions are violated";
-                    let synt_solver = get_some m_synt_solver in
-                    exclude_unknowns synt_solver
-                        template_skel.Sk.assumes m_unknowns_vec;
-                    finished := not synt_solver#check;
-                    m_unknowns_vec <- self#find_unknowns synt_solver template_skel
-                end else begin
-                    finished :=
+                let finished =
+                    if is_ta_vacuous rt#solver fixed_skel
+                    then begin
+                        log INFO "> Assumptions are violated";
+                        if self#is_master
+                        then begin
+                            exclude_unknowns (get_some m_synt_solver)
+                                template_skel.Sk.assumes m_unknowns_vec;
+                            not (self#update_master rt)
+                        end
+                        else not (self#update_worker rt)
+                    end else begin
                         not (self#has_counterex rt ntt fixed_skel)
-                        || not (self#do_refine rt ntt fixed_skel);
-                end;
-                if !finished
+                            || not (self#do_refine rt ntt fixed_skel);
+                    end
+                in
+                if finished
                 then log INFO (sprintf "> Finished after %d refinements" m_n_cexs)
                 else loop ()
             in
@@ -99,7 +101,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             in
             (do_check "Propositional" prop_forms) || (do_check "Temporal" ltl_forms)
 
-        method refine_worker =
+        method private update_worker rt =
             match (Mpi.broadcast None 0 Mpi.comm_world) with
             | None ->
                     log INFO "> Master node reports no solution. Aborting.";
@@ -109,10 +111,28 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     m_unknowns_vec <- vec;
                     true
 
+        method private update_master rt =
+            let synt_solver = self#get_synt_solver rt in
+            let template_skel = ta_source#get_ta in
+            if not synt_solver#check
+            then begin
+                log INFO (sprintf "> Collected %d counterexamples in total" m_n_cexs);
+                log INFO "> NO SOLUTION EXIST. Oops.";
+                if m_is_mpi
+                then ignore (Mpi.broadcast None 0 Mpi.comm_world);
+                false
+            end else begin
+                let vec = self#find_unknowns synt_solver template_skel in
+                m_unknowns_vec <- vec;
+                if m_is_mpi
+                then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);
+                true
+            end
+
 
         method do_refine rt type_tab fixed_skel =
             if not self#is_master
-            then self#refine_worker
+            then self#update_worker rt
             else begin
                 let template_skel = ta_source#get_ta in
                 let new_cex = C.load_cex "cex-fixme.scm" in
@@ -122,20 +142,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 let template_deps = get_some m_deps in
                 TaSynt.push_counterexample rt#solver synt_solver type_tab
                     fixed_skel template_deps template_skel m_unknowns_vec new_cex;
-                if not synt_solver#check
-                then begin
-                    log INFO (sprintf "> Collected %d counterexamples in total" m_n_cexs);
-                    log INFO "> NO SOLUTION EXIST. Oops.";
-                    if m_is_mpi
-                    then ignore (Mpi.broadcast None 0 Mpi.comm_world);
-                    false
-                end else begin
-                    let vec = self#find_unknowns synt_solver template_skel in
-                    m_unknowns_vec <- vec;
-                    if m_is_mpi
-                    then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);
-                    true
-                end
+                self#update_master rt
             end
 
 
