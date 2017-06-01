@@ -61,38 +61,38 @@ skel Proc {
       do { nsnt0' == nsnt0; nsnt1' == nsnt1 + 1; nsnt01' == nsnt01 + 1; };
   /* decide immediately */
   2: loc2 -> loc4 /* decide on value 0 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 >= a2 * N + b2 * T  - z2 * F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   3: loc3 -> loc5 /* decide on value 1 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z3 * nsnt1 >= a3 * N + b3 * T  - z3 * F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
 
   /* fall back to the underlying consensus with a vote */
   4: loc2 -> loc6 /* underlying consensus 0 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 >= a4 * N + b4 * T - z4 * F)
                 && (z5 * nsnt1 < a5 * N + b5 * T))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   5: loc3 -> loc6 /* underlying consensus 0 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 >= a4 * N + b4 * T - z4 * F)
                 && (z5 * nsnt1 < a5 * N + b5 * T))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   6: loc2 -> loc7 /* underlying consensus 1 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 < a4 * N + b4 * T)
                 && (z5 * nsnt1 >= a5 * N + b5 * T - z5 * F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   7: loc3 -> loc7 /* underlying consensus 1 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 < a4 * N + b4 * T)
@@ -101,28 +101,28 @@ skel Proc {
 
   /* fall through with the initial value */
   8: loc2 -> loc6 /* underlying consensus 0 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 < a4 * N + b4 * T)
                 && (z5 * nsnt1 < a5 * N + b5 * T))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   9: loc2 -> loc6 /* underlying consensus 0 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 >= a4 * N + b4 * T - z4 * F)
                 && (z5 * nsnt1 >= a5 * N + b5 * T - z5 * F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   10: loc3 -> loc7 /* underlying consensus 1 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 < a4 * N + b4 * T)
                 && (z5 * nsnt1 < a5 * N + b5 * T))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   11: loc3 -> loc7 /* underlying consensus 1 */
-      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F - z1 * F)
+      when ((z1 * nsnt01 >= (a1 * N + b1 * T ) - z1 * F)
                 && (z2 * nsnt0 < a2 * N + b2 * T)
                 && (z3 * nsnt1 < a3 * N + b3 * T)
                 && (z4 * nsnt0 >= a4 * N + b4 * T - z4 * F)
@@ -182,12 +182,12 @@ skel Proc {
     lemma4_1: (loc5 == 0) -> [](loc6 == 0);
 
     /* the fairness constraints here should be encoded with respect to
-       Byzantine faults, thus, we add -2f or -f, where needed */
+       Byzantine faults, thus, we add -f, where needed */
 
     /* fast convergence */
     fast0:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
-            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F - z1 * F)
+            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F)
             || (z2 * nsnt0 < a2 * N + b2 * T - z2 * F)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
@@ -197,7 +197,7 @@ skel Proc {
                     && loc5 == 0 && loc6 == 0 && loc7 == 0));
     fast1:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
-            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F - z1 * F)
+            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F)
             || (z3 * nsnt0 < a3 * N + b3 * T - z3 * F)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
@@ -209,7 +209,7 @@ skel Proc {
     /* convergence (either fast or slow) */
     termination:
         (<>[]((
-                (z1 * nsnt01 < (a1 * N + b1 * T) - z1 * F - z1 * F)
+                (z1 * nsnt01 < (a1 * N + b1 * T) - z1 * F)
                 || (z2 * nsnt0 < a2 * N + b2 * T - z2 * F)
                 || (z3 * nsnt1 < a3 * N + b3 * T - z3 * F)
                 || (z4 * nsnt0 < a4 * N + b4 * T - z4 * F)
