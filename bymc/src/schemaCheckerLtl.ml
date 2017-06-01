@@ -1806,50 +1806,12 @@ let find_error_in_single_form rt tt sk form_name ltl_form deps =
     end_iter
 
 
-(**
-   This function is similar to find_error_in_single_form but it enumerates
-   lassos for multiple formulas. The lassos that correspond to different
-   formulas are interleaved, i.e., the ith lasso of the first formula is
-   checked, then the ith lasso of the second formula, etc. The function stops
-   when either the first error is found, or all lassos are enumerated.
-
-   If an error is found, then the iterator of the failed formula is returned.
-   Otherwise None is returned.
- 
-   NOTE: this function creates multiple copies of the SMT solver.
- *)
-let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
-    let mk_ctrl (name, form) = mk_search_control rt tt sk name form deps in
-    let ctrls = List.map mk_ctrl named_forms in
-    let iter_each (is_err, collected) (iter, check_fun) =
-        if is_err || SchemaIter.iter_is_end iter
-        then (is_err, collected)
-        else let iter = check_fun iter in
-            if SchemaIter.iter_is_err_found iter
-            then (true, [(iter, check_fun)])
-            else let ni = SchemaIter.iter_next iter in
-                (false, (ni, check_fun) :: collected)
-    in
-    let rec search iterXfuns =
-        let (is_err, new_iterXfuns) =
-            List.fold_left iter_each (false, []) iterXfuns in
-        if is_err
-        then let last_iter, _ = List.hd new_iterXfuns in
-            Some last_iter      (* there must be one that flagged the error *)
-        else if new_iterXfuns = []
-            then None
-            else search new_iterXfuns
-    in
-    let check_funs = List.map (fun c -> c.S.check_fun) ctrls in
-    let iters = List.map (fun c -> c.S.iter) ctrls in
-    let result = search (List.combine iters check_funs) in
-    List.iter (fun c -> c.S.dispose_search_fun ()) ctrls;
-    result
-
-
 (** a search iterator and the accompanying checking function *)
 type iterXfun_t =
     SchemaIter.search_iter_t * (SchemaIter.search_iter_t -> SchemaIter.search_iter_t)
+
+(** iteration outcome *)
+type outcome_t = Error | NoError | Aborted
 
 (**
   Iterator type for find_error_in_many_forms_interleaved_MPI, similar to S.search_t.
@@ -1859,58 +1821,76 @@ type inter_iter_t = {
     m_iter_no: int;
     (* a list of iterators to be checked *)
     m_iterXfuns: iterXfun_t list;
-    (* whether the search has been aborted *)
-    m_aborted: bool;
+    (* the search outcome *)
+    m_outcome: outcome_t;
 }
+
+(** The processing command for the current iteration *)
+type iter_cmd_t =
+    | CheckAndNext  (* check and continue *)
+    | SkipAndNext   (* no checking, just continue *)
+    | Abort         (* abort the iteration *)
+
 
 (** interleave many search iterators until the search is over or aborted *)
 let next_inter_iter
-        (skip_fun: int -> bool) (iter: inter_iter_t) : inter_iter_t =
+        (cmd_fun: int -> iter_cmd_t) (iter: inter_iter_t) : inter_iter_t =
     let iterXfuns =
         List.filter (fun (i, _) -> not (SchemaIter.iter_is_end i)) iter.m_iterXfuns
     in
     (* check a schema for each iterator and abort, if an error is found *)
     let rec map_or_fail iter_no = function
-    | [] -> (false, [])
+    | [] -> (NoError, [])
 
-    | (i, f) :: tl ->
-            let (err, nis) = map_or_fail (1 + iter_no) tl in
-            if err
-            then (true, nis)    (* error in tail *)
-            else let ni = if (skip_fun iter_no) then i else (f i) in
-                if (SchemaIter.iter_is_err_found ni)
-                then (true, [(ni, f)])          (* error here *)
-                else (false, (SchemaIter.iter_next ni, f) :: nis) (* no error yet *)
+    | (i, check_fun) :: tl ->
+            let (outcome, nis) = map_or_fail (1 + iter_no) tl in
+            if outcome = Error || outcome = Aborted
+            then (outcome, nis)    (* terminate *)
+            else begin
+                let cmd = cmd_fun iter_no in
+                let ni = if cmd = CheckAndNext then (check_fun i) else i in
+                let is_err = SchemaIter.iter_is_err_found ni in
+                if is_err || cmd = Abort
+                then ((if is_err then Error else Aborted), [(ni, check_fun)]) (* error or abort *)
+                else (NoError, (SchemaIter.iter_next ni, check_fun) :: nis) (* continue *)
+            end
     in
-    let (err_found, next_iterXfuns) = map_or_fail iter.m_iter_no iterXfuns in
-    if err_found
+    let (outcome, next_iterXfuns) = map_or_fail iter.m_iter_no iterXfuns in
+    if outcome = Error || outcome = Aborted
     then {
         m_iter_no = 1 + iter.m_iter_no;
         m_iterXfuns = [List.last next_iterXfuns]; (* there must be one *)
-        m_aborted = true;
+        m_outcome = outcome;
     } else {
         m_iter_no = (List.length next_iterXfuns) + iter.m_iter_no;
         m_iterXfuns = next_iterXfuns;
-        m_aborted = false;
+        m_outcome = outcome;
     }
+
 
 (* A parameterized implementation of
     find_error_in_many_forms_interleaved and find_error_in_many_forms_parallel
     (see below)
  *)
 let find_error_in_many_forms_impl
-        (skip_fun: int -> bool) rt tt sk named_forms deps =
+        (cmd_fun: int -> iter_cmd_t) rt tt sk named_forms deps =
     let rec find iter =
-        if iter.m_aborted
-        then Some (fst (List.hd iter.m_iterXfuns))
-        else if iter.m_iterXfuns = []
+        match iter.m_outcome with
+        | Aborted ->
+                None
+
+        | Error ->
+                Some (fst (List.hd iter.m_iterXfuns))
+
+        | NoError ->
+            if iter.m_iterXfuns = []
             then None
-            else find (next_inter_iter skip_fun iter)
+            else find (next_inter_iter cmd_fun iter)
     in
     let mk_ctrl (name, form) = mk_search_control rt tt sk name form deps in
     let ctrls = List.map mk_ctrl named_forms in
     let iterXfuns = List.map (fun c -> (c.S.iter, c.S.check_fun)) ctrls in
-    let init_iter = { m_iter_no = 0; m_iterXfuns = iterXfuns; m_aborted = false } in
+    let init_iter = { m_iter_no = 0; m_iterXfuns = iterXfuns; m_outcome = NoError } in
     let result = find init_iter in
     List.iter (fun c -> c.S.dispose_search_fun ()) ctrls;
     result
@@ -1928,11 +1908,15 @@ let find_error_in_many_forms_impl
    NOTE: this function creates multiple copies of the SMT solver.
  *)
 let find_error_in_many_forms_interleaved rt tt sk named_forms deps =
-    let skip _ = false in
-    match find_error_in_many_forms_impl skip rt tt sk named_forms deps with
+    let cmd_fun _ = CheckAndNext in
+    match find_error_in_many_forms_impl cmd_fun rt tt sk named_forms deps with
     | None -> None
 
     | Some iter -> Some (SchemaIter.iter_get_cex iter)
+
+
+let tag_cex = 2     (* collecting counterexamples *)
+let tag_error = 1   (* quick notifications to let other processes know that an error was found *)
 
 
 (**
@@ -1945,43 +1929,89 @@ let find_error_in_many_forms_parallel rt tt sk named_forms deps =
     let id = Mpi.comm_rank Mpi.comm_world in
     let npeers = Mpi.comm_size Mpi.comm_world in
     log INFO (sprintf "MPI: node %d out of %d started\n" id npeers);
-    let skip_fun j = (id <> (j mod npeers)) in
-    let result =
-        find_error_in_many_forms_impl skip_fun rt tt sk named_forms deps
+    let notify j i =
+        ignore (Mpi.isend j i tag_error Mpi.comm_world)
     in
-    let flags = Mpi.gather (result != None) 0 Mpi.comm_world in
-    if id = 0
+    let cmd_fun j =
+        let abort =
+            (* check whether anybody has sent a quick notification *)
+            match Mpi.iprobe Mpi.any_source tag_error Mpi.comm_world with
+            | None ->
+                    false
+
+            | Some (src, _) ->
+                    ignore (Mpi.receive src tag_error Mpi.comm_world);
+                    log INFO (sprintf "MPI: node %d notified %d on error. Aborting.\n" src id);
+                    if id = 0
+                    then begin (* notify the workers *)
+                        BatEnum.iter (notify 0) (1--^npeers)
+                    end;
+                    true
+        in
+        if abort
+        then Abort
+        else if (id <> (j mod npeers))
+            then SkipAndNext
+            else CheckAndNext
+    in
+    let result =
+        find_error_in_many_forms_impl cmd_fun rt tt sk named_forms deps
+    in
+    log INFO (sprintf "MPI: node %d finished verification.\n" id);
+    if result <> None
     then begin
-        try
-            let witness = Array.findi (fun b -> b) flags in
-            (* error found *)
-            log INFO (sprintf "Node %d has found a counterexample\n" witness);
-            ignore (Mpi.broadcast witness 0 Mpi.comm_world);
-            (* transfer a filename, TODO: transfer a counterexample here *)
-            let filename =
-                if witness = 0
-                then SchemaIter.iter_get_cex (get_some result)
-                else begin
-                    let cex = Mpi.receive witness 0 Mpi.comm_world in
-                    (* save the counterexample locally *)
-                    C.save_cex cex_default_scm_filename cex;
-                    cex_default_scm_filename (* and return the filename *)
-                end
-            in
-            log INFO (sprintf "Saved counterexample in %s\n" filename);
-            Some filename
-        with Not_found ->
-            ignore (Mpi.broadcast (-1) 0 Mpi.comm_world);
-            None (* no error found *)
-    end else begin
-        let witness = Mpi.broadcast 0 0 Mpi.comm_world in
-        if witness = id
+        if id = 0
+        then BatEnum.iter (notify 0) (1--^npeers)    (* notify the workers   *)
+        else notify id 0                            (* notify the master    *)
+    end;
+    log INFO (sprintf "MPI: node %d joins the gather.\n" id);
+    (* the master gathers the results *)
+    let flags = Mpi.gather (result != None) 0 Mpi.comm_world in
+    let result =
+        if id = 0
         then begin
-            let cex = C.load_cex cex_default_scm_filename in
-            Mpi.send cex 0 0 Mpi.comm_world;
-        end;
-        if witness != -1
-        then Some (sprintf "CheckNode%d" witness)
-        else None
-    end
+            try
+                let witness = Array.findi (fun b -> b) flags in
+                (* error found *)
+                log INFO (sprintf "Node %d has found a counterexample\n" witness);
+                ignore (Mpi.broadcast witness 0 Mpi.comm_world);
+                (* transfer a filename, TODO: transfer a counterexample here *)
+                let filename =
+                    if witness = 0
+                    then SchemaIter.iter_get_cex (get_some result)
+                    else begin
+                        let cex = Mpi.receive witness tag_cex Mpi.comm_world in
+                        (* save the counterexample locally *)
+                        C.save_cex cex_default_scm_filename cex;
+                        cex_default_scm_filename (* and return the filename *)
+                    end
+                in
+                log INFO (sprintf "Saved counterexample in %s\n" filename);
+                Some filename
+            with Not_found ->
+                ignore (Mpi.broadcast (-1) 0 Mpi.comm_world);
+                None (* no error found *)
+        end else begin
+            let witness = Mpi.broadcast 0 0 Mpi.comm_world in
+            if witness = id
+            then begin
+                let cex = C.load_cex cex_default_scm_filename in
+                Mpi.send cex 0 tag_cex Mpi.comm_world;
+            end;
+            if witness != -1
+            then Some (sprintf "CheckNode%d" witness)
+            else None
+        end
+    in
+    (* clean the stale notifications and return *)
+    let rec clean _ =
+        match Mpi.iprobe Mpi.any_source tag_error Mpi.comm_world with
+        | None ->
+                result
+
+        | Some (src, _) ->
+                ignore (Mpi.receive src tag_error Mpi.comm_world);
+                clean ()
+    in
+    clean ()
 
