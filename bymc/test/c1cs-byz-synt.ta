@@ -57,36 +57,36 @@ skel Proc {
       do { nsnt0' == nsnt0; nsnt1' == nsnt1 + 1; nsnt01' == nsnt01 + 1; };
   /* decide immediately */
   2: loc2 -> loc4 /* decide on value 0 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt1 < a1 * N + b1 * T + c1 /*- F*/)) /* like in C1CS */
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   3: loc3 -> loc5 /* decide on value 1 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt0 < a1 * N + b1 * T + c1 /*- F*/))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
 
   /* fall back to the underlying consensus with a vote */
   4: loc2 -> loc6 /* underlying consensus 0 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt0 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt1 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt0 >= a2 * N + b2 * T + c2 - F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   5: loc3 -> loc6 /* underlying consensus 0 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt0 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt1 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt0 < a2 * N + b2 * T + c2 /*- F*/)
                 && (nsnt1 < a2 * N + b2 * T + c2 /*- F*/))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   6: loc2 -> loc7 /* underlying consensus 1 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt0 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt1 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt1 >= a2 * N + b2 * T + c2 - F))
       do { nsnt0' == nsnt0; nsnt1' == nsnt1; nsnt01' == nsnt01; };
   7: loc3 -> loc7 /* underlying consensus 1 */
-      when ((nsnt01 >= (a3 * N + b3 * T + c3) - 2 * F)
+      when ((nsnt01 >= (a3 * N + b3 * T + c3) - F)
                 && (nsnt0 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt1 >= a1 * N + b1 * T + c1 - F)
                 && (nsnt0 < a2 * N + b2 * T + c2 /*- F*/)
@@ -124,6 +124,19 @@ skel Proc {
     /* fast */
     one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
     one_step1: (loc0 == 0 -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
+
+    /* convergence (either fast or slow) */
+    termination:
+        (<>[]((
+                (nsnt01 < a3 * N + b3 * T + c3)
+                || (nsnt0 < a1 * N + b1 * T + c1)
+                || (nsnt1 < a1 * N + b1 * T + c1)
+                || (nsnt0 < a2 * N + b2 * T + c2)
+                || (nsnt1 < a2 * N + b2 * T + c2)
+                || (loc2 == 0 && loc3 == 0))
+            && loc0 == 0 && loc1 == 0))
+        ->
+        <>(loc0 == 0 && loc1 == 0 && loc2 == 0 && loc3 == 0);
   }
 } /* Proc */
 

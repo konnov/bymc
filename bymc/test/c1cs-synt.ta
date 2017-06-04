@@ -1,0 +1,196 @@
+/* a template for C1CS */
+
+skel Proc {
+  /* the control locations are as follows:
+    0 is the initial state with value 0,
+    1 is the initial state with value 1,
+    2 is the state with value 0 sent,
+    3 is the state with value 1 sent,
+    4 is the state "decided on 0",
+    5 is the state "decided on 1",
+    6 is the state "called underlying consensus with value 0",
+    7 is the state "called underlying consensus with value 1",
+    8 is the state "crashed",
+   */
+  local pc;
+  /* the number of messages sent by the correct processes */
+  shared nsnt0 /* sent 0 */, nsnt1 /* sent 1 */, nsnt01 /* the sum */;
+  shared nfaulty /* the number of crashed processes */;
+  parameters N, T, F;
+  /* the constants to be found by synthesis */
+  unknowns  a1, b1, c1,     /* e.g., T + 1      */
+            a2, b2, c2,     /* e.g., N - 2 * T  */
+            a3, b3, c3;     /* e.g., N - T      */
+
+  assumptions (1) {
+    0 <= a1; a1 <= 1;
+    0 <= a2; a2 <= 1;
+    0 <= a3; a3 <= 1;
+    -4 <= b1; b1 <= 4;
+    -4 <= b2; b2 <= 4;
+    -4 <= b3; b3 <= 4;
+    -7 <= c1; c1 <= 7;
+    -7 <= c2; c2 <= 7;
+    -7 <= c3; c3 <= 7;
+    N > 2 * T;
+    T >= F;
+    T >= 1;
+  }
+
+  locations (7) {
+    loc0: [0]; loc1: [1]; loc2: [2]; loc3: [3];
+    loc4: [4]; loc5: [5]; loc6: [6]; loc7: [7]; loc8: [8];
+  }
+
+  inits (8) {
+    (loc0 + loc1) == N;
+    loc2 == 0; loc3 == 0; loc4 == 0;
+    loc5 == 0; loc6 == 0; loc7 == 7; loc8 == 0;
+    nsnt0 == 0; nsnt1 == 0; nsnt01 == 0;
+    nfaulty == 0;
+  }
+
+  rules (0) {
+  /* send message 0 (resp. 1) when initialized with value 1 (resp. 1) */
+  0: loc0 -> loc2
+      when (nsnt0 >= 0)
+      do { nsnt0' == nsnt0 + 1; nsnt1' == nsnt1;
+        nsnt01' == nsnt01 + 1; nfaulty' == nfaulty; };
+  1: loc1 -> loc3
+      when (nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1 + 1;
+        nsnt01' == nsnt01 + 1; nfaulty' == nfaulty; };
+  /* decide immediately */
+  2: loc2 -> loc4 /* decide on value 0 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt1 < a1 * N + b1 * T + c1) /* like in C1CS */
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  3: loc3 -> loc5 /* decide on value 1 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt0 < a1 * N + b1 * T + c1)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+
+  /* fall back to the underlying consensus with a vote */
+  4: loc2 -> loc6 /* underlying consensus 0 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt0 >= a1 * N + b1 * T + c1
+                && nsnt1 >= a1 * N + b1 * T + c1
+                && nsnt0 >= a2 * N + b2 * T + c2)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  5: loc3 -> loc6 /* underlying consensus 0 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt0 >= a1 * N + b1 * T + c1
+                && nsnt1 >= a1 * N + b1 * T + c1
+                && nsnt0 < a2 * N + b2 * T + c2
+                && nsnt1 < a2 * N + b2 * T + c2)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  6: loc2 -> loc7 /* underlying consensus 1 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt0 >= a1 * N + b1 * T + c1
+                && nsnt1 >= a1 * N + b1 * T + c1
+                && nsnt1 >= a2 * N + b2 * T + c2)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  7: loc3 -> loc7 /* underlying consensus 1 */
+      when (nsnt01 >= a3 * N + b3 * T + c3
+                && nsnt0 >= a1 * N + b1 * T + c1
+                && nsnt1 >= a1 * N + b1 * T + c1
+                && nsnt0 < a2 * N + b2 * T + c2
+                && nsnt1 < a2 * N + b2 * T + c2)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+
+  /* crashing */
+  11: loc0 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  12: loc1 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  13: loc2 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  14: loc3 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  15: loc4 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  16: loc5 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  17: loc6 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+  18: loc7 -> loc8
+      when (nfaulty < F)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty + 1; };
+
+  /* self loops */
+  19: loc0 -> loc0
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  20: loc1 -> loc1
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  21: loc2 -> loc2
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  22: loc3 -> loc3
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  23: loc4 -> loc4
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  24: loc5 -> loc5
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  25: loc6 -> loc6
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  26: loc7 -> loc7
+      when (nsnt0 >= 0 && nsnt1 >= 0)
+      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+        nsnt01' == nsnt01; nfaulty' == nfaulty; };
+  }
+
+  specifications (0) {
+    /* fast */
+    one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
+    one_step1: (loc0 == 0 -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
+
+    /* convergence (either fast or slow) */
+    termination:
+        (<>[]((
+                (nsnt01 < a3 * N + b3 * T + c3)
+                || (nsnt0 < a1 * N + b1 * T + c1)
+                || (nsnt1 < a1 * N + b1 * T + c1)
+                || (nsnt0 < a2 * N + b2 * T + c2)
+                || (nsnt1 < a2 * N + b2 * T + c2)
+                || (loc2 == 0 && loc3 == 0))
+            && loc0 == 0 && loc1 == 0))
+        ->
+        <>(loc0 == 0 && loc1 == 0 && loc2 == 0 && loc3 == 0);
+  }
+} /* Proc */
+
+
