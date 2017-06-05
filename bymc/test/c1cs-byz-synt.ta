@@ -122,7 +122,7 @@ skel Proc {
 
   specifications (0) {
     feasibility:
-        a1 * N + b1 * T + c1 > 0
+        (a1 * N + b1 * T + c1 > 0
             && a1 * N + b1 * T + c1 <= N + 1
             && a2 * N + b2 * T + c2 > 0
             && a2 * N + b2 * T + c2 <= N + 1
