@@ -174,6 +174,21 @@ skel Proc {
   }
 
   specifications (0) {
+    feasibility:
+        (a1 * N + b1 * T + c1 > 0
+            && a1 * N + b1 * T + c1 <= N + 1
+            && a2 * N + b2 * T + c2 > 0
+            && a2 * N + b2 * T + c2 <= N + 1
+            && a3 * N + b3 * T + c3 > 0
+            && a3 * N + b3 * T + c3 <= N + 1
+        );
+
+    /* safety lemmas from bosco */
+    lemma3_0: (loc4 == 0) -> [](loc5 == 0);
+    lemma3_1: (loc5 == 0) -> [](loc4 == 0);
+    lemma4_0: (loc4 == 0) -> [](loc7 == 0);
+    lemma4_1: (loc5 == 0) -> [](loc6 == 0);
+
     /* fast */
     one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
     one_step1: (loc0 == 0 -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
