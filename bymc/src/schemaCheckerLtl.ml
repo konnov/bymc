@@ -907,7 +907,7 @@ let poset_mixin_guards deps start_pos prec_order rev_map =
         in
         List.fold_left add_impl lst all_ids
     in
-    let impl_order = PSetEltMap.fold add_implications deps.D.cond_imp [] in
+    let impl_order = PSetEltMap.fold add_implications deps.D.cond_pred [] in
     let after_init lst i = (po_init, i) :: lst in
     let new_order =
         List.fold_left after_init impl_order (range start_pos end_pos) in
