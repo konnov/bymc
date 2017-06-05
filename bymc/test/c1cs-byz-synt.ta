@@ -43,7 +43,7 @@ skel Proc {
   inits (8) {
     (loc0 + loc1) == N - F;
     loc2 == 0; loc3 == 0; loc4 == 0;
-    loc5 == 0; loc6 == 0; loc7 == 7;
+    loc5 == 0; loc6 == 0; loc7 == 0;
     nsnt0 == 0; nsnt1 == 0; nsnt01 == 0;
   }
 
@@ -131,10 +131,10 @@ skel Proc {
         );
 
     /* safety lemmas from bosco */
-    lemma3_0: (loc4 == 0) -> [](loc5 == 0);
-    lemma3_1: (loc5 == 0) -> [](loc4 == 0);
-    lemma4_0: (loc4 == 0) -> [](loc7 == 0);
-    lemma4_1: (loc5 == 0) -> [](loc6 == 0);
+    lemma3_0: []((loc4 == 0) -> [](loc5 == 0));
+    lemma3_1: []((loc5 == 0) -> [](loc4 == 0));
+    lemma4_0: []((loc4 == 0) -> [](loc7 == 0));
+    lemma4_1: []((loc5 == 0) -> [](loc6 == 0));
 
     /* fast convergence */
     one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));

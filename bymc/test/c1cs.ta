@@ -1,4 +1,4 @@
-/* a template for C1CS */
+/* C1CS as a threshold automaton */
 
 skel Proc {
   /* the control locations are as follows:
@@ -17,21 +17,8 @@ skel Proc {
   shared nsnt0 /* sent 0 */, nsnt1 /* sent 1 */, nsnt01 /* the sum */;
   shared nfaulty /* the number of crashed processes */;
   parameters N, T, F;
-  /* the constants to be found by synthesis */
-  unknowns  a1, b1, c1,     /* e.g., T + 1      */
-            a2, b2, c2,     /* e.g., N - 2 * T  */
-            a3, b3, c3;     /* e.g., N - T      */
 
   assumptions (1) {
-    0 <= a1; a1 <= 1;
-    0 <= a2; a2 <= 1;
-    0 <= a3; a3 <= 1;
-    -4 <= b1; b1 <= 4;
-    -4 <= b2; b2 <= 4;
-    -4 <= b3; b3 <= 4;
-    -7 <= c1; c1 <= 7;
-    -7 <= c2; c2 <= 7;
-    -7 <= c3; c3 <= 7;
     N > 2 * T;
     T >= F;
     T >= 1;
@@ -62,46 +49,46 @@ skel Proc {
         nsnt01' == nsnt01 + 1; nfaulty' == nfaulty; };
   /* decide immediately */
   2: loc2 -> loc4 /* decide on value 0 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt1 < a1 * N + b1 * T + c1) /* like in C1CS */
+      when (nsnt01 >= N - T
+                && nsnt1 < T + 1) /* like in C1CS */
       do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
   3: loc3 -> loc5 /* decide on value 1 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt0 < a1 * N + b1 * T + c1)
+      when (nsnt01 >= N - T
+                && nsnt0 < T + 1)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
 
   /* fall back to the underlying consensus with a vote */
   4: loc2 -> loc6 /* underlying consensus 0 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt0 >= a1 * N + b1 * T + c1
-                && nsnt1 >= a1 * N + b1 * T + c1
-                && nsnt0 >= a2 * N + b2 * T + c2)
+      when (nsnt01 >= N - T
+                && nsnt0 >= T + 1
+                && nsnt1 >= T + 1
+                && nsnt0 >= N - 2 * T)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
   5: loc3 -> loc6 /* underlying consensus 0 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt0 >= a1 * N + b1 * T + c1
-                && nsnt1 >= a1 * N + b1 * T + c1
-                && nsnt0 < a2 * N + b2 * T + c2
-                && nsnt1 < a2 * N + b2 * T + c2)
+      when (nsnt01 >= N - T
+                && nsnt0 >= T + 1
+                && nsnt1 >= T + 1
+                && nsnt0 < N - 2 * T
+                && nsnt1 < N - 2 * T)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
   6: loc2 -> loc7 /* underlying consensus 1 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt0 >= a1 * N + b1 * T + c1
-                && nsnt1 >= a1 * N + b1 * T + c1
-                && nsnt1 >= a2 * N + b2 * T + c2)
+      when (nsnt01 >= N - T
+                && nsnt0 >= T + 1
+                && nsnt1 >= T + 1
+                && nsnt1 >= N - 2 * T)
       do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
   7: loc3 -> loc7 /* underlying consensus 1 */
-      when (nsnt01 >= a3 * N + b3 * T + c3
-                && nsnt0 >= a1 * N + b1 * T + c1
-                && nsnt1 >= a1 * N + b1 * T + c1
-                && nsnt0 < a2 * N + b2 * T + c2
-                && nsnt1 < a2 * N + b2 * T + c2)
-      do { nsnt0' == nsnt0; nsnt1' == nsnt1;
+      when (nsnt01 >= N - T
+                && nsnt0 >= T + 1
+                && nsnt1 >= T + 1
+                && nsnt0 < N - 2 * T
+                && nsnt1 < N - 2 * T)
+          do { nsnt0' == nsnt0; nsnt1' == nsnt1;
         nsnt01' == nsnt01; nfaulty' == nfaulty; };
 
   /* crashing */
@@ -174,15 +161,6 @@ skel Proc {
   }
 
   specifications (0) {
-    feasibility:
-        (a1 * N + b1 * T + c1 > 0
-            && a1 * N + b1 * T + c1 <= N + 1
-            && a2 * N + b2 * T + c2 > 0
-            && a2 * N + b2 * T + c2 <= N + 1
-            && a3 * N + b3 * T + c3 > 0
-            && a3 * N + b3 * T + c3 <= N + 1
-        );
-
     /* safety lemmas from bosco */
     lemma3_0: []((loc4 == 0) -> [](loc5 == 0));
     lemma3_1: []((loc5 == 0) -> [](loc4 == 0));
@@ -190,17 +168,19 @@ skel Proc {
     lemma4_1: []((loc5 == 0) -> [](loc6 == 0));
 
     /* fast */
-    one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
-    one_step1: (loc0 == 0 -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
+    one_step0: ((F == 0 && loc1 == 0)
+        -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
+    one_step1: ((F == 0 && loc0 == 0)
+        -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
 
     /* convergence (either fast or slow) */
     termination:
         (<>[]((
-                (nsnt01 < a3 * N + b3 * T + c3)
-                || (nsnt0 < a1 * N + b1 * T + c1)
-                || (nsnt1 < a1 * N + b1 * T + c1)
-                || (nsnt0 < a2 * N + b2 * T + c2)
-                || (nsnt1 < a2 * N + b2 * T + c2)
+                (nsnt01 < N - T)
+                || (nsnt0 < T + 1)
+                || (nsnt1 < T + 1)
+                || (nsnt0 < N - 2 * T)
+                || (nsnt1 < N - 2 * T)
                 || (loc2 == 0 && loc3 == 0))
             && loc0 == 0 && loc1 == 0))
         ->
