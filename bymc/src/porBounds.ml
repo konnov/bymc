@@ -144,7 +144,7 @@ module D = struct
         lmask: PSet.t;
 
         (* implication relation between the conditions of the same type *)
-        cond_imp: PSet.t PSetEltMap.t;
+        cond_pred: PSet.t PSetEltMap.t;
 
         (* basic conditions to be unlocked *)
         uconds: mstone_t list;
@@ -155,7 +155,7 @@ module D = struct
     let empty = {
         cond_map = PSetEltMap.empty; act_map = PSetEltMap.empty;
         rule_pre = IntMap.empty; rule_post = IntMap.empty;
-        uconds = []; lconds = []; cond_imp = PSetEltMap.empty;
+        uconds = []; lconds = []; cond_pred = PSetEltMap.empty;
         umask = PSet.empty; lmask = PSet.empty;
         rule_flow = MGraph.make 1; loc_reach = MGraph.make 1;
         full_segment = []
@@ -568,30 +568,36 @@ let compute_post sk =
     act_map, rule_post
 
 
-let compute_cond_implications solver shared uconds lconds =
-    let does_cond_imply (lname, _, left, llockt) (rname, _, right, rlockt) =
-        if llockt <> rlockt
-        (* TODO: why not, actually? E.g., !(x < t) always precedes (x >= 2 * t) *)
-        then false (* do not compare conditions of different type *)
-        else begin
-            solver#push_ctx;
-            if llockt = Unlock
-            then ignore (solver#append_expr
-                (UnEx (NEG, (BinEx (IMPLIES, left, right)))))
-            else ignore (solver#append_expr
-                (UnEx (NEG, (BinEx (IMPLIES, right, left)))));
-            let res = solver#check in
-            solver#pop_ctx;
-            if not res && lname <> rname
-            then log INFO
-                (sprintf "  Condition %s implies condition %s" lname rname);
-            not res
-        end
+let compute_cond_precedence solver shared uconds lconds =
+    let shall_precede
+            (after_name, _, after, after_lockt)
+            (before_name, _, before, before_lockt) =
+        let antecedent, consequent =
+            (* depending on the types, construct an implication *)
+            match before_lockt, after_lockt with
+            (* e.g., after: x >= 2t implies before: x >= t *)
+            | Unlock, Unlock -> after, before
+            (* e.g., before: x < t implies after: x < 2t *)
+            | Lock, Lock -> before, after
+            (* e.g., after: x >= 2t implies !before: !(x < t) *)
+            | Lock, Unlock -> after, (UnEx (NEG, before))
+            (* e.g., !after: !(x < 2t) implies before: x >= t *)
+            | Unlock, Lock -> (UnEx (NEG, after)), before
+        in
+        solver#push_ctx;
+        ignore (solver#append_expr
+            (UnEx (NEG, (BinEx (IMPLIES, antecedent, consequent)))));
+        let res = solver#check in
+        solver#pop_ctx;
+        if not res && after_name <> before_name
+        then log INFO
+            (sprintf "  COND %s shall precede COND %s" before_name after_name);
+        not res
     in
     let each_cond map (name, id, exp, lockt) =
-        let locks = if lockt = Lock then lconds else uconds in
-        let implications =
-            List.filter (does_cond_imply (name, id, exp, lockt)) locks in
+        let conds = lconds @ uconds in
+        let preds =
+            List.filter (shall_precede (name, id, exp, lockt)) conds in
         (* this breaks only the loops of size 2: A <-> B.
            TODO: what about A -> B -> C -> A? *)
         let no_loop (_, oid, _, _) =
@@ -599,19 +605,19 @@ let compute_cond_implications solver shared uconds lconds =
             then not (PSet.mem id (PSetEltMap.find oid map))
             else true
         in
-        let impl_no_loops = List.filter no_loop implications in
+        let preds_no_loops = List.filter no_loop preds in
         let add s (_, id, _, _) = PSet.add id s in
-        let set = List.fold_left add PSet.empty impl_no_loops in
+        let set = List.fold_left add PSet.empty preds_no_loops in
         PSetEltMap.add id set map
     in
     (* run the solver *)
     solver#push_ctx;
     let nat_type = new data_type SpinTypes.TUNSIGNED in
     List.iter (fun v -> solver#append_var_def v nat_type) shared;
-    let impl_map =
+    let pred_map =
         List.fold_left each_cond PSetEltMap.empty (uconds @ lconds) in
     solver#pop_ctx;
-    impl_map
+    pred_map
 
 
 (*
@@ -662,7 +668,7 @@ let compute_deps ?(against_only=true) solver sk =
     List.iter (print_milestone Lock) lmiles;
 
     logtm INFO (sprintf "> constructing implications...");
-    let cond_imp = compute_cond_implications solver sk.Sk.shared umiles lmiles
+    let cond_pred = compute_cond_precedence solver sk.Sk.shared umiles lmiles
     in
     logtm INFO (sprintf "> constructing strongly-connected components...");
     let print_scc scc =
@@ -680,7 +686,7 @@ let compute_deps ?(against_only=true) solver sk =
     let umask = List.fold_left add PSet.empty umiles in
     {   D.cond_map; D.act_map; D.lconds = lmiles; D.uconds = umiles;
         D.rule_flow; D.loc_reach; D.rule_pre; D.rule_post;
-        D.cond_imp; D.umask; D.lmask; D.full_segment
+        D.cond_pred; D.umask; D.lmask; D.full_segment
     }
 
 
@@ -691,7 +697,7 @@ let find_successors deps =
     let succ = Hashtbl.create 10 in
     let is_succ l r =
         let lname, lid, _, _ = l and rname, rid, _, _ = r in
-        let l_imp_r = PSet.mem rid (PSetEltMap.find lid deps.D.cond_imp) in
+        let l_imp_r = PSet.mem rid (PSetEltMap.find lid deps.D.cond_pred) in
         if l_imp_r && lname <> rname
         then log INFO
             (sprintf "Lock/Unlock subsumption: %s always implies %s" lname rname);
@@ -778,13 +784,13 @@ let find_max_bound nrules guards_card deps succ =
 
 let get_cond_impls deps cond_id lockt =
     let collect_locked rhs set (_, lhs, _, _) =
-        let imps = PSetEltMap.find lhs deps.D.cond_imp in
+        let imps = PSetEltMap.find lhs deps.D.cond_pred in
         if PSet.mem rhs imps (* lhs -> rhs *)
         then PSet.add lhs set
         else set
     in
     if lockt = Unlock
-    then PSetEltMap.find cond_id deps.D.cond_imp
+    then PSetEltMap.find cond_id deps.D.cond_pred
     else List.fold_left (collect_locked cond_id) PSet.empty deps.D.lconds
 
 
