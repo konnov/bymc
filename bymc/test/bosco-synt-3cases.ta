@@ -171,15 +171,13 @@ skel Proc {
             && a5 * N + b5 * T <= z5 * (N + 1)
         );
 
-    /* liveness */
+    /* one-step safety */
     one_step0: (loc1 == 0 -> [](loc5 == 0 && loc6 == 0 && loc7 == 0));
     one_step1: (loc0 == 0 -> [](loc4 == 0 && loc6 == 0 && loc7 == 0));
 
     /* safety */
-    lemma3_0: []((loc4 == 0) -> [](loc5 == 0));
-    lemma3_1: []((loc5 == 0) -> [](loc4 == 0));
-    lemma4_0: []((loc4 == 0) -> [](loc7 == 0));
-    lemma4_1: []((loc5 == 0) -> [](loc6 == 0));
+    lemmas34_0: []((loc4 == 0) -> [](loc5 == 0 && loc7 == 0));
+    lemmas34_1: []((loc5 == 0) -> [](loc4 == 0 && loc6 == 0));
 
     /* the fairness constraints here should be encoded with respect to
        Byzantine faults, thus, we add -f, where needed */
@@ -198,7 +196,7 @@ skel Proc {
     fast1:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
             && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F)
-            || (z3 * nsnt0 < a3 * N + b3 * T - z3 * F)
+            || (z3 * nsnt1 < a3 * N + b3 * T - z3 * F)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
         ->
