@@ -185,8 +185,8 @@ skel Proc {
     /* fast convergence */
     fast0:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
-            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F)
-            || (z2 * nsnt0 < a2 * N + b2 * T - z2 * F)
+            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) /*- z1 * F*/)
+            || (z2 * nsnt0 < a2 * N + b2 * T /*- z2 * F*/)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
         ->
@@ -195,8 +195,8 @@ skel Proc {
                     && loc5 == 0 && loc6 == 0 && loc7 == 0));
     fast1:
         (((F == 0 && N > 5 * T) || (N > 7 * T))
-            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) - z1 * F)
-            || (z3 * nsnt1 < a3 * N + b3 * T - z3 * F)
+            && <>[](((z1 * nsnt01 < (a1 * N + b1 * T ) /*- z1 * F*/)
+            || (z3 * nsnt1 < a3 * N + b3 * T /*- z3 * F*/)
             || (loc2 == 0 && loc3 == 0))
                     && loc0 == 0 && loc1 == 0))
         ->
@@ -207,11 +207,11 @@ skel Proc {
     /* convergence (either fast or slow) */
     termination:
         (<>[]((
-                (z1 * nsnt01 < (a1 * N + b1 * T) - z1 * F)
-                || (z2 * nsnt0 < a2 * N + b2 * T - z2 * F)
-                || (z3 * nsnt1 < a3 * N + b3 * T - z3 * F)
-                || (z4 * nsnt0 < a4 * N + b4 * T - z4 * F)
-                || (z5 * nsnt0 < a5 * N + b5 * T - z5 * F)
+                (z1 * nsnt01 < (a1 * N + b1 * T) /*- z1 * F*/)
+                || (z2 * nsnt0 < a2 * N + b2 * T /*- z2 * F*/)
+                || (z3 * nsnt1 < a3 * N + b3 * T /*- z3 * F*/)
+                || (z4 * nsnt0 < a4 * N + b4 * T /*- z4 * F*/)
+                || (z5 * nsnt0 < a5 * N + b5 * T /*- z5 * F*/)
                 || (loc2 == 0 && loc3 == 0))
             && loc0 == 0 && loc1 == 0))
         ->
