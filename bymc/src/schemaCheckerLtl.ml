@@ -1838,32 +1838,35 @@ let next_inter_iter
     let iterXfuns =
         List.filter (fun (i, _) -> not (SchemaIter.iter_is_end i)) iter.m_iterXfuns
     in
+    let iter_no = iter.m_iter_no in
     (* check a schema for each iterator and abort, if an error is found *)
-    let rec map_or_fail iter_no = function
+    let rec map_or_fail = function
     | [] -> (NoError, [])
 
     | (i, check_fun) :: tl ->
-            let (outcome, nis) = map_or_fail (1 + iter_no) tl in
+            let (outcome, nis) = map_or_fail tl in
             if outcome = Error || outcome = Aborted
             then (outcome, nis)    (* terminate *)
             else begin
                 let cmd = cmd_fun iter_no in
-                let ni = if cmd = CheckAndNext then (check_fun i) else i in
+                let ni =
+                    if cmd = CheckAndNext
+                    then (check_fun i)
+                    else i
+                in
                 let is_err = SchemaIter.iter_is_err_found ni in
                 if is_err || cmd = Abort
                 then ((if is_err then Error else Aborted), [(ni, check_fun)]) (* error or abort *)
                 else (NoError, (SchemaIter.iter_next ni, check_fun) :: nis) (* continue *)
             end
     in
-    let (outcome, next_iterXfuns) = map_or_fail iter.m_iter_no iterXfuns in
-    if outcome = Error || outcome = Aborted
-    then {
-        m_iter_no = 1 + iter.m_iter_no;
-        m_iterXfuns = [List.last next_iterXfuns]; (* there must be one *)
-        m_outcome = outcome;
-    } else {
-        m_iter_no = (List.length next_iterXfuns) + iter.m_iter_no;
-        m_iterXfuns = next_iterXfuns;
+    let (outcome, next_iterXfuns) = map_or_fail iterXfuns in
+    {
+        m_iter_no = 1 + iter_no;
+        m_iterXfuns =
+            if outcome = Error || outcome = Aborted
+            then [List.last next_iterXfuns] (* there must be one *)
+            else next_iterXfuns;
         m_outcome = outcome;
     }
 
