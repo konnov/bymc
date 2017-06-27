@@ -63,8 +63,26 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                         end
                         else not (self#update_worker rt)
                     end else begin
-                        not (self#has_counterex rt ntt fixed_skel)
-                            || not (self#do_refine rt ntt fixed_skel);
+                        let has_cex = self#has_counterex rt ntt fixed_skel in
+                        (* debug begins *)
+                        if has_cex
+                        then begin
+                            (* double check with a sequential verifier *)
+                            if m_is_mpi && self#is_master then begin
+                                log INFO ("> The parallel verifier said OK");
+                                log INFO ("> Checking with the sequential verifier");
+                                m_is_mpi <- false;
+                                let has_seq_cex = self#has_counterex rt ntt fixed_skel in
+                                m_is_mpi <- true;
+                                if not has_seq_cex
+                                then begin
+                                    log ERROR ("> The sequential verifier found a bug");
+                                    assert false;
+                                end
+                            end
+                        end;
+                        (* debug ends *)
+                        not has_cex || not (self#do_refine rt ntt fixed_skel);
                     end
                 in
                 if finished
@@ -80,10 +98,6 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             in
             (* call the ltl technique *)
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
-            (* check the propositional formulas first, as they are the easiest *)
-            let forms = StrMap.bindings fixed_skel.Sk.forms in
-            let is_prop (_, f) = Ltl.is_propositional type_tab f in
-            let prop_forms, ltl_forms = List.partition is_prop forms in
             let do_check form_type forms =
                 let check_fun = (* TODO: use a functor somewhere! *)
                     if m_is_mpi
@@ -99,6 +113,10 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     log INFO (sprintf "    > SLPS: counterexample for %s found" name);
                     true
             in
+            (* check the propositional formulas first, as they are the easiest *)
+            let all_forms = StrMap.bindings fixed_skel.Sk.forms in
+            let is_prop (_, f) = Ltl.is_propositional type_tab f in
+            let prop_forms, ltl_forms = List.partition is_prop all_forms in
             (do_check "Propositional" prop_forms) || (do_check "Temporal" ltl_forms)
 
         method private update_worker rt =
