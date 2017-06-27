@@ -65,7 +65,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     end else begin
                         let has_cex = self#has_counterex rt ntt fixed_skel in
                         (* debug begins *)
-                        if has_cex
+                        if not has_cex
                         then begin
                             (* double check with a sequential verifier *)
                             if m_is_mpi && self#is_master then begin
@@ -74,7 +74,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                                 m_is_mpi <- false;
                                 let has_seq_cex = self#has_counterex rt ntt fixed_skel in
                                 m_is_mpi <- true;
-                                if not has_seq_cex
+                                if has_seq_cex
                                 then begin
                                     log ERROR ("> The sequential verifier found a bug");
                                     assert false;
