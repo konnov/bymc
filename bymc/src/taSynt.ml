@@ -258,6 +258,7 @@ let bind state var =
  This class is a modified copy of SchemaChecker.tree_tac_t.
  *)
 class eval_tac_t (tt: SpinIr.data_type_tab)
+        (deps: PorBounds.D.deps_t)
         (cex: C.cex_t) (unknowns: (string * Spin.token SpinIr.expr) list) =
     object(self)
         inherit tac_t
@@ -396,7 +397,7 @@ class eval_tac_t (tt: SpinIr.data_type_tab)
             m_depth <- m_depth - 1
 
 
-        method push_rule deps sk rule_no =
+        method push_rule sk rule_no =
             let get_int = function
                 | IntConst i -> i
                 | _ as e ->
@@ -502,6 +503,7 @@ class eval_tac_t (tt: SpinIr.data_type_tab)
  XXX: Refactor.
  *)
 class simp_tac_t (tt: SpinIr.data_type_tab)
+        (deps: PorBounds.D.deps_t)
         (cex: C.cex_t) (template: SymbSkel.Sk.skel_t)
         (unknowns: (string * Spin.token SpinIr.expr) list) =
     object(self)
@@ -510,7 +512,7 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
         val mutable m_moves_left = cex.C.f_moves
         val mutable m_state: int StrMap.t =
             StrMap.add "F000000_warp" 0 cex.C.f_init_state
-        val mutable m_eval_tac = new eval_tac_t tt cex unknowns
+        val mutable m_eval_tac = new eval_tac_t tt deps cex unknowns
         (* we collect assertions here, since we need a negation *)
         val mutable m_assertions = []
         
@@ -561,7 +563,7 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
         method leave_context =
             m_eval_tac#leave_context
 
-        method push_rule deps sk rule_no =
+        method push_rule sk rule_no =
             let get_int = function
                 | IntConst i -> i
                 | _ as e ->
@@ -579,7 +581,7 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
                 let frame = self#top in
                 let actions = List.filter not_redundant_action rule.Sk.act in
                 (* push the rule to eval_tac_t *)
-                m_eval_tac#push_rule deps sk rule_no;
+                m_eval_tac#push_rule sk rule_no;
                 (* and now we have a new frame! *)
                 let new_frame = self#top in
                 self#push_frame new_frame;
@@ -725,7 +727,7 @@ let is_cex_applicable_new solver type_tab sk deps cex =
         let set_type v = ntt#set_type v (new data_type SpinTypes.TUNSIGNED) in
         BatEnum.iter set_type loc_vars;
         (* END: XXX *)
-        let tac = new eval_tac_t ntt cex [] in
+        let tac = new eval_tac_t ntt deps cex [] in
         solver#push_ctx;
         let initf = F.init_frame ntt sk in
         tac#push_frame initf;
@@ -779,7 +781,7 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
         try List.map (fun n -> IntMap.find n rev_map) cex.C.f_iorder
         with Not_found -> []
     in
-    let tac = new simp_tac_t type_tab cex template unknowns in
+    let tac = new simp_tac_t type_tab deps cex template unknowns in
     solver#push_ctx;
     let initf = F.init_frame type_tab sk in
     tac#push_frame initf;

@@ -307,8 +307,13 @@ type frame_stack_elem_t =
  In the non-incremental mode, no new SMT context is ever introduced.
  This mode can be used to check individual schemas one-by-one.
  Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
+
+ BUGFIX-20170628: TODO
  *)
-class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
+class tree_tac_t
+        (solver: Smt.smt_solver)
+        (tt: SpinIr.data_type_tab) (deps: PorBounds.D.deps_t) =
+
     object(self)
         inherit tac_t
 
@@ -316,6 +321,9 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
         val mutable m_depth  = 0
         val mutable m_incremental = true (** is mode incremental *)
         val mutable m_pred_ctx = P.mk_context solver
+        val mutable m_guard_predicates = false
+            (** whether to associate a predicate to every guard,
+                when entering a new context (see BUGFIX-20170628) *)
         
         method top =
             let rec find = function
@@ -471,7 +479,7 @@ class tree_tac_t (solver: Smt.smt_solver) (tt: SpinIr.data_type_tab) =
             if m_incremental then slv#pop_ctx
 
 
-        method push_rule deps sk rule_no =
+        method push_rule sk rule_no =
             let frame = self#top in
             let rule = List.nth sk.Sk.rules rule_no in
             let src_loc_v = List.nth frame.F.loc_vars rule.Sk.src in
@@ -561,7 +569,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
             (* and this effects into firing of the following rules *)
             let cond_rules =
                 PorBounds.unpack_rule_set pre_rule_set deps.D.full_segment in
-            List.iter (tac#push_rule deps sk) cond_rules;
+            List.iter (tac#push_rule sk) cond_rules;
             (* REMOVED: why having more constraints than necessary?
             (* only one rule fires *)
             let constr = BinEx (Spin.EQ, IntConst 1, sum_factors new_frames) in
@@ -588,7 +596,7 @@ let check_static_tree rt tt sk bad_form on_leaf form_name deps tac tree =
             then false (* prune the subtree and do not report any error *)
             else begin (* check the property and the subtree *)
                 let seg = PorBounds.unpack_rule_set segment deps.D.full_segment in
-                List.iter (tac#push_rule deps sk) seg;
+                List.iter (tac#push_rule sk) seg;
                 let err =
                     tac#check_property bad_form
                         (fun hist -> ignore (dump_counterex_to_file rt#solver sk form_name hist))
@@ -631,7 +639,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     rt#solver#set_need_model true;
 
     let ntt = tt#copy in
-    let tac = new tree_tac_t rt#solver ntt in
+    let tac = new tree_tac_t rt#solver ntt deps in
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     tac#assert_top sk.Sk.inits;

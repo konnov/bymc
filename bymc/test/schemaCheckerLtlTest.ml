@@ -407,7 +407,7 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
         method leave_context =
             m_call_stack <- "(leave_context)" :: m_call_stack
 
-        method push_rule _ sk rule_no =
+        method push_rule sk rule_no =
             let tag = sprintf "(push_rule _ _ %d)" rule_no in
             m_call_stack <- tag :: m_call_stack;
             let new_frame = F.advance_frame tt sk self#top rule_no (fun _ _ -> true) in
