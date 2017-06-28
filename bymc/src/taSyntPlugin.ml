@@ -28,7 +28,6 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         inherit TaSource.ta_source_t
 
         val mutable m_out_skel: Sk.skel_t option = None
-        val mutable m_deps: D.deps_t option = None
         val mutable m_synt_solver = None (* we need own our copy here to keep counterex. *)
         val mutable m_unknowns_vec: (string * Spin.token SpinIr.expr) list = []
         val mutable m_n_cexs = 0
@@ -63,26 +62,42 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                         end
                         else not (self#update_worker rt)
                     end else begin
-                        let has_cex = self#has_counterex rt ntt fixed_skel in
+                        (* Compute the dependencies by instantiating the unknowns,
+                           while keeping all the expressions symbolic.
+                           We will need it to generalize a counterexample.
+                         *)
+                        let flow_opt = SchemaOpt.is_flow_opt_enabled () in
+                        let symb_deps = PorBounds.compute_deps
+                            ~against_only:flow_opt
+                            ~ex_rewrite_f:(TaSynt.replace_unknowns_in_expr m_unknowns_vec)
+                            rt#solver template_skel
+                        in
+                        (* assign values to the unknowns *)
+                        let fixed_deps =
+                            replace_unknowns_in_deps symb_deps m_unknowns_vec
+                        in
+                        (* verify *)
+                        let has_cex =
+                            self#has_counterex rt ntt fixed_skel fixed_deps in
                         (* debug begins *)
                         if not has_cex
                         then begin
                             (* double check with a sequential verifier *)
                             if m_is_mpi && self#is_master then begin
-                                log INFO ("> The parallel verifier said OK");
+                                log INFO ("> The parallel verifier reports OK");
                                 log INFO ("> Checking with the sequential verifier");
                                 m_is_mpi <- false;
-                                let has_seq_cex = self#has_counterex rt ntt fixed_skel in
+                                let has_seq_cex = self#has_counterex rt ntt fixed_skel fixed_deps in
                                 m_is_mpi <- true;
                                 if has_seq_cex
                                 then begin
-                                    log ERROR ("> The sequential verifier found a bug");
+                                    log ERROR ("> The sequential verifier has found a bug");
                                     assert false;
                                 end
                             end
                         end;
                         (* debug ends *)
-                        not has_cex || not (self#do_refine rt ntt fixed_skel);
+                        not has_cex || not (self#do_refine rt ntt symb_deps fixed_skel);
                     end
                 in
                 if finished
@@ -92,10 +107,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             loop ();
             self#get_input0
 
-        method private has_counterex rt type_tab fixed_skel =
-            let fixed_deps =
-                replace_unknowns_in_deps (get_some m_deps) m_unknowns_vec
-            in
+        method private has_counterex rt type_tab fixed_skel fixed_deps =
             (* call the ltl technique *)
             log INFO "  > Running SchemaCheckerLtl (on the fly)...";
             let do_check form_type forms =
@@ -148,7 +160,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             end
 
 
-        method do_refine rt type_tab fixed_skel =
+        method do_refine rt type_tab symb_deps fixed_skel =
             if not self#is_master
             then self#update_worker rt
             else begin
@@ -157,9 +169,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 C.save_cex (sprintf "cex%d.scm" m_n_cexs) new_cex;
                 m_n_cexs <- m_n_cexs + 1;
                 let synt_solver = self#get_synt_solver rt in
-                let template_deps = get_some m_deps in
                 TaSynt.push_counterexample rt#solver synt_solver type_tab
-                    fixed_skel template_deps template_skel m_unknowns_vec new_cex;
+                    fixed_skel symb_deps template_skel m_unknowns_vec new_cex;
                 self#update_master rt
             end
 
@@ -178,15 +189,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 List.iter append_var (template_skel.Sk.params);
                 let assume e = ignore (synt_solver#append_expr e) in
                 List.iter assume template_skel.Sk.assumes;
-            end;
-            (*
-              Compute dependencies on the template automaton.
-              Note that these dependencies are not as optimal as in the fixed case.
-             *)
-            let flow_opt = SchemaOpt.is_flow_opt_enabled () in
-            let deps =
-                PorBounds.compute_deps ~against_only:flow_opt rt#solver template_skel in
-            m_deps <- Some (deps)
+            end
 
 
         method private get_ta =

@@ -568,7 +568,8 @@ let compute_post sk =
     act_map, rule_post
 
 
-let compute_cond_precedence solver shared uconds lconds =
+(* use expr_rewrite_f to preprocess the conditions, e.g., replace unknowns *)
+let compute_cond_precedence expr_rewrite_f solver shared uconds lconds =
     let shall_precede
             (after_name, _, after, after_lockt)
             (before_name, _, before, before_lockt) =
@@ -585,8 +586,9 @@ let compute_cond_precedence solver shared uconds lconds =
             | Unlock, Lock -> (UnEx (NEG, after)), before
         in
         solver#push_ctx;
-        ignore (solver#append_expr
-            (UnEx (NEG, (BinEx (IMPLIES, antecedent, consequent)))));
+        let aex, cex =
+            (expr_rewrite_f antecedent), (expr_rewrite_f consequent) in
+        ignore (solver#append_expr (UnEx (NEG, (BinEx (IMPLIES, aex, cex)))));
         let res = solver#check in
         solver#pop_ctx;
         if not res && after_name <> before_name
@@ -630,7 +632,9 @@ let compute_cond_precedence solver shared uconds lconds =
 
   @return a dependencies record
  *)    
-let compute_deps ?(against_only=true) solver sk =
+let compute_deps
+        ?(against_only=true)
+        ?(ex_rewrite_f=(fun e -> e)) solver sk =
     let rule_flow = make_rule_flow sk in
     let nflow = MGraph.nb_edges rule_flow in
     logtm INFO (sprintf "> %d transition flow dependencies" nflow);
@@ -668,7 +672,8 @@ let compute_deps ?(against_only=true) solver sk =
     List.iter (print_milestone Lock) lmiles;
 
     logtm INFO (sprintf "> constructing implications...");
-    let cond_pred = compute_cond_precedence solver sk.Sk.shared umiles lmiles
+    let cond_pred =
+        compute_cond_precedence ex_rewrite_f solver sk.Sk.shared umiles lmiles
     in
     logtm INFO (sprintf "> constructing strongly-connected components...");
     let print_scc scc =
