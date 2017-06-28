@@ -390,6 +390,6 @@ class virtual tac_t =
 
          @param rule_no a rule number
          *)
-        method virtual push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
+        method virtual push_rule: SymbSkel.Sk.skel_t -> int -> unit
     end
 

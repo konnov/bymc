@@ -650,7 +650,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
         (* push all the unlocked rules *)
         let push_rule r =
             let rule = List.nth sk.Sk.rules r in
-            tac#push_rule deps sk r;
+            tac#push_rule sk r;
             (* the invariants And_Keq0 are treated in get_unlocked_rules *)
             if rule.Sk.src <> rule.Sk.dst
             (* if the state is changed, change the invariants again *)
@@ -660,7 +660,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
             let rules = find_segment_rules in_loop uset lset invs in
             if rules <> [] then begin
                 (* push the first rule together with the invariants *)
-                tac#push_rule deps sk (List.hd rules);
+                tac#push_rule sk (List.hd rules);
                 assert_propositions uset lset filtered_invs;
                 List.iter push_rule (List.tl rules)
             end
@@ -769,7 +769,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
 
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
-                    tac#push_rule deps sk r;
+                    tac#push_rule sk r;
                     tac#top :: lst
                 in
                 let in_loop = (prefix_last_frame <> None) in
@@ -1742,7 +1742,7 @@ let mk_search_control rt tt sk form_name ltl_form deps =
         ?logic:(Some "QF_LIA") ("schemaLtl_" ^ form_name) in
 
     let ntt = tt#copy in
-    let tac = new SchemaChecker.tree_tac_t my_solver ntt in
+    let tac = new SchemaChecker.tree_tac_t my_solver ntt deps in
     let initf = F.init_frame ntt sk in
     let init_solver_fun _ =
         my_solver#comment "top-level declarations";

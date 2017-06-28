@@ -52,7 +52,8 @@ val counterex_of_frame_hist:
  This mode can be used to check individual schemas one-by-one.
  Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
  *)
-class tree_tac_t: Smt.smt_solver -> SpinIr.data_type_tab ->
+class tree_tac_t: Smt.smt_solver
+        -> SpinIr.data_type_tab -> PorBounds.D.deps_t ->
     object
         inherit tac_t
         
@@ -82,7 +83,7 @@ class tree_tac_t: Smt.smt_solver -> SpinIr.data_type_tab ->
 
         method leave_context: unit
 
-        method push_rule: PorBounds.D.deps_t -> SymbSkel.Sk.skel_t -> int -> unit
+        method push_rule: SymbSkel.Sk.skel_t -> int -> unit
 
         method reset: unit
 
