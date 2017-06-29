@@ -562,16 +562,18 @@ class tree_tac_t
                 let conds =
                     PSet.inter pre (PSet.union deps.D.umask deps.D.lmask)
                 in
-                let mk_or id pred_var e =
-                    if not (PSet.mem id conds)
-                    then e
-                    else BinEx (Spin.OR, e, Var pred_var)
+                let pred_vars =
+                    (List.hd m_pred_map_list)
+                        |> (PSetEltMap.filter (fun id _ -> PSet.mem id conds))
+                        |> PSetEltMap.values
+                        |> (BatEnum.map (fun v -> Var v))
+                        |> BatList.of_enum
                 in
-                let preds_hold =
-                    PSetEltMap.fold mk_or (List.hd m_pred_map_list) factor_eq_0
-                in
-                if preds_hold != factor_eq_0
-                then ignore (solver#append_expr preds_hold)
+                if pred_vars <> []
+                then let ex =
+                    BinEx (Spin.OR,
+                        factor_eq_0, list_to_binex Spin.AND pred_vars) in
+                    ignore (solver#append_expr ex)
             end;
             let accelerated =
                 List.map (B.accelerate_expr new_frame.F.accel_v) actions in

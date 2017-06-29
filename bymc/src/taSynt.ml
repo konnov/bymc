@@ -640,7 +640,13 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             (* and then do an update as prescribed by the actions *)
             do_update ();
             if move.C.f_accel > 0
-            then m_assertions <- simp_guard :: m_assertions (* push the assertions *)
+            then begin
+                (* just for debugging *)
+                let guard_eval = replace_unknowns_in_expr unknowns simp_guard in
+                assert ((IntConst 1) = guard_eval);
+                (* debugging ends *)
+                m_assertions <- simp_guard :: m_assertions (* push the assertions *)
+            end
             (* else the rule was not fired, ignore its guards *)
 
 
@@ -737,6 +743,8 @@ let is_cex_applicable_new solver type_tab sk deps cex =
                     (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
         in
         solver#pop_ctx;
+        if not res.SCL.m_is_err
+        then log ERROR ("Failed to replay the counterexample. The tool is buggy!");
         res.SCL.m_is_err
     end
 
@@ -793,6 +801,8 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
                 (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
     in
     solver#pop_ctx;
+    if not res.SCL.m_is_err
+    then log ERROR ("Failed to replay the counterexample. The tool is buggy!");
     (* push the assertions! *)
     tac#push_assertions synt_solver;
     ()

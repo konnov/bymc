@@ -774,11 +774,6 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
                 tac#enter_context;
 
-                (* assert that the condition is not locked yet.
-                   It does not work in some cases (see BUGFIX-20170628) *)
-                if not (SchemaOpt.use_guard_predicates ()) && is_locking
-                then tac#assert_top [cond_expr];
-
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
                     tac#push_rule sk r;
@@ -797,7 +792,13 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                  f >= 0, then x >= f can be initially unlocked. We simulate this by
                  executing a prefix with zero acceleration factors.
                  *)
-                tac#assert_top [sum_accel_at_most_one frames];
+                (* assert that the condition is not locked yet.
+                   It does not work in some cases (see BUGFIX-20170628) *)
+                if not (SchemaOpt.use_guard_predicates ()) && is_locking
+                then begin
+                    tac#assert_top [cond_expr];
+                    tac#assert_top [sum_accel_at_most_one frames]
+                end;
                 (* assert that the condition is now unlocked (resp. locked) *)
                 (* TODO: check m_guard_predicates *)
                 if is_locking

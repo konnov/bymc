@@ -155,11 +155,18 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             end else begin
                 let vec = self#find_unknowns synt_solver template_skel in
                 if vec = m_unknowns_vec
-                then raise (Failure "REFINEMENT IS STUCK. The vector of unknowns is not changing...");
-                m_unknowns_vec <- vec;
-                if m_is_mpi
-                then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);
-                true
+                then begin
+                    log INFO "> REFINEMENT IS STUCK. The vector of unknowns is not changing...";
+                    log INFO ("  > Unknowns vector: " ^ (unknowns_vec_s vec));
+                    if m_is_mpi
+                    then ignore (Mpi.broadcast None 0 Mpi.comm_world);
+                    false
+                end else begin
+                    m_unknowns_vec <- vec;
+                    if m_is_mpi
+                    then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);
+                    true
+                end
             end
 
 
