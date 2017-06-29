@@ -39,6 +39,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             (* disable incompatible options *)
             SchemaOpt.set_incremental false;
             SchemaOpt.set_reach_opt false;
+            SchemaOpt.set_use_guard_predicates true; (* BUGFIX-20170628 *)
             (* introduce variables for the location counters *)
             let loc_vars = IntMap.values template_skel.Sk.loc_vars in
             let ntt = (Program.get_type_tab self#get_input0)#copy in
@@ -153,6 +154,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 false
             end else begin
                 let vec = self#find_unknowns synt_solver template_skel in
+                if vec = m_unknowns_vec
+                then raise (Failure "REFINEMENT IS STUCK. The vector of unknowns is not changing...");
                 m_unknowns_vec <- vec;
                 if m_is_mpi
                 then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);

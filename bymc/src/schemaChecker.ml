@@ -307,8 +307,6 @@ type frame_stack_elem_t =
  In the non-incremental mode, no new SMT context is ever introduced.
  This mode can be used to check individual schemas one-by-one.
  Note that this mode is intended only for LTL checking (see SchemaCheckerLtl).
-
- BUGFIX-20170628: TODO
  *)
 class tree_tac_t
         (solver: Smt.smt_solver)
@@ -321,9 +319,14 @@ class tree_tac_t
         val mutable m_depth  = 0
         val mutable m_incremental = true (** is mode incremental *)
         val mutable m_pred_ctx = P.mk_context solver
-        val mutable m_guard_predicates = false
-            (** whether to associate a predicate to every guard,
-                when entering a new context (see BUGFIX-20170628) *)
+        val mutable m_guard_predicates = SchemaOpt.use_guard_predicates ()
+            (** Whether to associate a predicate to every guard,
+                when entering a new context (see BUGFIX-20170628).
+                To reproduce the CAV'15 and POPL'17 results, turn off
+                by setting -O schema.noguardpreds=1.
+             *)
+        val mutable m_pred_map_list = []
+            (** a stack of predicates introduced for guards *)
         
         method top =
             let rec find = function
@@ -458,7 +461,30 @@ class tree_tac_t
             slv#comment
                 (sprintf "push@%d: enter_context: potential milestones at frame %d"
                         m_depth frame_no);
-            m_frames <- (Context frame_no) :: m_frames
+            m_frames <- (Context frame_no) :: m_frames;
+            if m_guard_predicates
+            then begin
+                let top_frame = self#top in
+                (* declare predicates for each guard *)
+                let add_var map (_, id, cond_expr, _) =
+                    let name =
+                        sprintf "F%d_%d_C%s" frame_no m_depth (PSet.elem_str id)
+                    in
+                    let v = SpinIr.new_var name in
+                    let bool_tp = new data_type SpinTypes.TBIT in
+                    tt#set_type v bool_tp;
+                    solver#append_var_def v bool_tp;
+                    let frame_expr =
+                        F.to_frame_expr top_frame top_frame cond_expr in
+                    let eq = SpinIr.BinEx (Spin.EQUIV, Var v, frame_expr) in
+                    ignore (solver#append_expr eq);
+                    PSetEltMap.add id v map
+                in
+                let pred_map = 
+                    List.fold_left add_var PSetEltMap.empty (PorBounds.D.conds deps)
+                in
+                m_pred_map_list <- pred_map :: m_pred_map_list
+            end
 
 
         method leave_context =
@@ -473,6 +499,8 @@ class tree_tac_t
             assert (frame_no = old_no);
             m_depth <- m_depth - 1;
             P.clean_late_predicates m_pred_ctx m_depth;
+            if m_guard_predicates
+            then m_pred_map_list <- List.tl m_pred_map_list;
             let slv = solver in
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
@@ -522,11 +550,29 @@ class tree_tac_t
                  *)
                 PorBounds.D.non_milestones deps rule_no
             in
+            let factor_eq_0 =
+                BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0) in
             let guard = (* if acceleration factor > 0 then guard *)
-                BinEx (Spin.OR, BinEx (Spin.EQ, Var new_frame.F.accel_v, IntConst 0), rule_guard) in
+                BinEx (Spin.OR, factor_eq_0, rule_guard) in
             if rule_guard <> IntConst 1
             then self#assert_top2 [guard];
-
+            if m_guard_predicates then begin
+                (* check guard predicates explicitly *)
+                let pre = IntMap.find rule_no deps.D.rule_pre in
+                let conds =
+                    PSet.inter pre (PSet.union deps.D.umask deps.D.lmask)
+                in
+                let mk_or id pred_var e =
+                    if not (PSet.mem id conds)
+                    then e
+                    else BinEx (Spin.OR, e, Var pred_var)
+                in
+                let preds_hold =
+                    PSetEltMap.fold mk_or (List.hd m_pred_map_list) factor_eq_0
+                in
+                if preds_hold != factor_eq_0
+                then ignore (solver#append_expr preds_hold)
+            end;
             let accelerated =
                 List.map (B.accelerate_expr new_frame.F.accel_v) actions in
             self#assert_top2 accelerated

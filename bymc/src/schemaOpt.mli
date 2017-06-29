@@ -29,3 +29,10 @@ val get_ada_reach_adapt_after: unit -> int
 (** set the number of rounds to wait before switching reachability on/off *)
 val set_ada_reach_adapt_after: int -> unit
 
+(** do we associate a predicate with every guard when switching contexts?
+    (see BUGFIX-20160628)
+ *)
+val use_guard_predicates: unit -> bool
+(** associate a predicate with every guard when switching a context *)
+val set_use_guard_predicates: bool -> unit
+

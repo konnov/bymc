@@ -12,6 +12,8 @@ module F = struct
     (** how often to try to switch between the reachability
         and non-reachability optimizations (in the adaptive mode) *)
     let ada_reach_adapt_after = ref 3
+    (** do we introduce predicates for each guard when switching context? *)
+    let use_guard_predicates = ref true
 end
 
 let is_incremental _ =
@@ -43,4 +45,10 @@ let get_ada_reach_adapt_after _ =
 
 let set_ada_reach_adapt_after n =
     F.ada_reach_adapt_after := n
+
+let use_guard_predicates _ =
+    !F.use_guard_predicates
+
+let set_use_guard_predicates b =
+    F.use_guard_predicates := b
 
