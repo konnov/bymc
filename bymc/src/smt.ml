@@ -875,6 +875,12 @@ class lib2_smt name solver_cmd solver_args =
                         let key = Sexp.to_string key_sexp in
                         let value = parse_val val_s in
                         ignore (Q.add_result query new_q key (IntConst value))
+
+                | Sexp.List [_ as key_sexp;
+                    Sexp.List [Sexp.Atom "-"; Sexp.Atom val_s]] ->
+                        let key = Sexp.to_string key_sexp in
+                        let value = -(parse_val val_s) in
+                        ignore (Q.add_result query new_q key (IntConst value))
                 
                 | _ as s ->
                         raise (Smt_error

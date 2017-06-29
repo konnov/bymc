@@ -193,10 +193,11 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             if self#is_master then begin
                 (* in MPI mode, only the master is running the generator *)
                 let synt_solver = self#get_synt_solver rt in
-                let int_type = new SpinIr.data_type SpinTypes.TUNSIGNED in
-                let append_var v = synt_solver#append_var_def v int_type in
-                List.iter append_var (template_skel.Sk.unknowns);
-                List.iter append_var (template_skel.Sk.params);
+                let unsigned = new SpinIr.data_type SpinTypes.TUNSIGNED in
+                let signed = new SpinIr.data_type SpinTypes.TINT in
+                let append_var tp v = synt_solver#append_var_def v tp in
+                List.iter (append_var signed) (template_skel.Sk.unknowns);
+                List.iter (append_var unsigned) (template_skel.Sk.params);
                 let assume e = ignore (synt_solver#append_expr e) in
                 List.iter assume template_skel.Sk.assumes;
             end
