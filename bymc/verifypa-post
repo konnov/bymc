@@ -41,6 +41,8 @@ function help_and_quit() {
     echo "  -O schema.noadaptive=1 (disable the adaptive reachability optimization, default: 0"
     echo "                          i.e., the tool will not try to choose between"
     echo "                          enabling/disabling the reachability optimization)"
+    echo "  -O schema.noguardpreds=1 (do not introduce predicates for"
+    echo "                            the threshold guards, default: 0)"
 
     exit 1
 }

@@ -213,6 +213,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let no_reach_opt = getopt "schema.noreachopt" in
             let no_adaptive_reach_opt = getopt "schema.noadaptive" in
             let incremental = getopt "schema.incremental" in
+            let no_guard_preds = getopt "schema.noguardpreds" in
 
             let reach_on =
                 if no_reach_opt <> None
@@ -243,22 +244,27 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
 
             SchemaOpt.set_incremental (is_enabled incremental);
             Debug.log INFO
-                (sprintf "  # The incremental mode is %s"
+                (sprintf "  # Incremental mode: %s"
                     (if is_enabled incremental then "enabled" else "disabled"));
 
             SchemaOpt.set_flow_opt (not (is_disabled no_flow_opt));
             Debug.log INFO
-                (sprintf "  # The control flow optimization is %s"
+                (sprintf "  # Control flow optimization: %s"
                     (if is_disabled no_flow_opt then "disabled" else "enabled"));
 
             SchemaOpt.set_reach_opt reach_on;
             Debug.log INFO
-                (sprintf "  # The reachability optimization is %s"
+                (sprintf "  # Reachability optimization: %s"
                     (if reach_on then "enabled" else "disabled"));
 
             SchemaOpt.set_adaptive_reach_opt adaptive_on;
             Debug.log INFO
-                (sprintf "  # The adaptive reachability optimization is %s"
+                (sprintf "  # Adaptive reachability optimization: %s"
                     (if adaptive_on then "enabled" else "disabled"));
+
+            SchemaOpt.set_use_guard_predicates (not (is_disabled no_guard_preds));
+            Debug.log INFO
+                (sprintf "  # Guards predicates: %s"
+                    (if is_disabled no_flow_opt then "disabled" else "enabled"));
     end
 

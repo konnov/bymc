@@ -598,6 +598,17 @@ let fail_first a b =
 type check_t = CheckPropositional | CheckSafety | CheckUtl    
 
 
+(*
+ BUGFIX-20170628: in our verification case studies, we assumed that threshold
+ guards can be linearly ordered, e.g., we considered different case that differ
+ in the order of threshold guards. For instance, x >= t + 1 always precedes x >= n-t.
+ This assumption allowed us to unlock guards one by one, e.g., x >= t + 1 first
+ and x >= n - t. This no longer works in synthesis, as we have guards like
+ g1: x >= a * n + b * t and g2: x >= c * n + d * t, which cannot ordered in
+ consistently. Requiring that g1 is unlocked while g2 is locked will miss
+ a counterexample. To deal with such related guards, we introduce predicates
+ for each guard that are evaluated during a context switch.
+ *)
 let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, elem_order) =
     let check_type, init_form, safety_bad =
         (* In the incremental mode, we distinguish between safety and the general LTL.
@@ -762,10 +773,11 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 let is_locking = PSet.mem id deps.D.lmask in
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
                 tac#enter_context;
-                (* assert that the condition is locked (resp. unlocked) *)
-                if is_locking
+
+                (* assert that the condition is not locked yet.
+                   It does not work in some cases (see BUGFIX-20170628) *)
+                if not (SchemaOpt.use_guard_predicates ()) && is_locking
                 then tac#assert_top [cond_expr];
-                (* else: the condition might have been unlocked in an state *)
 
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
@@ -787,6 +799,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                  *)
                 tac#assert_top [sum_accel_at_most_one frames];
                 (* assert that the condition is now unlocked (resp. locked) *)
+                (* TODO: check m_guard_predicates *)
                 if is_locking
                 then tac#assert_top [UnEx (NEG, cond_expr)]
                 else tac#assert_top [cond_expr];
