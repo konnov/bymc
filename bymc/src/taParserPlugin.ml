@@ -39,10 +39,12 @@ class ta_parser_plugin_t (plugin_name: string) =
             (* just return the empty program, the TA will be accessed by get_ta *)
             let data_type_tab = new SpinIr.data_type_tab in
             let unsigned = new SpinIr.data_type SpinTypes.TUNSIGNED in
-            let set_type v = data_type_tab#set_type v unsigned in
-            List.iter set_type sk.Sk.params;
-            List.iter set_type sk.Sk.shared;
-            List.iter set_type sk.Sk.unknowns;
+            let signed = new SpinIr.data_type SpinTypes.TINT in
+            let set_type tp v = data_type_tab#set_type v tp in
+            List.iter (set_type unsigned) sk.Sk.params;
+            List.iter (set_type unsigned) sk.Sk.shared;
+            (* BUGFIX-20170630: unknowns can be negative *)
+            List.iter (set_type signed) sk.Sk.unknowns;
             Program.set_assumes sk.Sk.assumes
                 (Program.set_type_tab data_type_tab
                     (Program.set_params sk.Sk.params
