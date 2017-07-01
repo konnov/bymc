@@ -22,4 +22,4 @@
 <test/*.byte>: package(oUnit), package(batteries), package(sexplib), \
     package(mpi)
 
-true: use_menhir
+true: use_menhir, bin_annot, annot
