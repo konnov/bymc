@@ -215,6 +215,18 @@ class virtual tac_t:
         method virtual leave_context: unit
 
         (**
+         A trigger to be called before a steady schedule is evaluated,
+         e.g., to evaluate unlocking guards.
+         *)
+        method virtual pre_steady: unit
+
+        (**
+         A trigger to be called after a steady schedule is evaluated,
+         e.g., to evaluate locking guards.
+         *)
+        method virtual post_steady: unit
+
+        (**
          Push a rule into the SMT solver.
 
          @param rule_no a rule number

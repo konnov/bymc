@@ -681,7 +681,9 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
            require a schema multiplied several times *)
         let mult = find_schema_multiplier invs in
         assert (mult >= 1);
+        tac#pre_steady;
         BatEnum.iter push_schema (1--mult);
+        tac#post_steady;
         let on_error frame_hist =
             let po_elem_struc_list = List.map struc_of_po_elem elem_order in
             dump_counterex_to_file solver sk deps
@@ -774,14 +776,22 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 let cond_expr = PSetEltMap.find id deps.D.cond_map in
                 tac#enter_context;
 
+                (* assert that the condition is not locked yet.
+                   It does not work in some cases (see BUGFIX-20170628) *)
+                if not (SchemaOpt.use_guard_predicates ()) && is_locking
+                then tac#assert_top [cond_expr];
+
                 (* fire a sequence of rules that should unlock the condition associated with id *)
                 let push_rule lst r =
                     tac#push_rule sk r;
                     tac#top :: lst
                 in
                 let in_loop = (prefix_last_frame <> None) in
+                tac#pre_steady;
                 let frames = find_segment_rules in_loop uset lset invs
                     |> List.fold_left push_rule [] in
+                tac#post_steady;
+
                 (*
                  In the following constraint, we say that at most one rule is executed
                  (by at most one process). Otherwise, a sequence of rules might violate
@@ -792,13 +802,9 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                  f >= 0, then x >= f can be initially unlocked. We simulate this by
                  executing a prefix with zero acceleration factors.
                  *)
-                (* assert that the condition is not locked yet.
-                   It does not work in some cases (see BUGFIX-20170628) *)
                 if not (SchemaOpt.use_guard_predicates ()) && is_locking
-                then begin
-                    tac#assert_top [cond_expr];
-                    tac#assert_top [sum_accel_at_most_one frames]
-                end;
+                then tac#assert_top [sum_accel_at_most_one frames];
+
                 (* assert that the condition is now unlocked (resp. locked) *)
                 (* TODO: check m_guard_predicates *)
                 if is_locking

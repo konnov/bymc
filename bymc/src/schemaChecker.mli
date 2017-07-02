@@ -83,6 +83,10 @@ class tree_tac_t: Smt.smt_solver
 
         method leave_context: unit
 
+        method pre_steady: unit
+
+        method post_steady: unit
+
         method push_rule: SymbSkel.Sk.skel_t -> int -> unit
 
         method reset: unit
