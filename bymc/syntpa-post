@@ -2,7 +2,7 @@
 #
 # Synthesize threshold automata with CEGYS.
 #
-# Igor Konnov, 2016
+# Igor Konnov, 2016-2017
 
 # parse options
 TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o h --long help,limit-time:,limit-mem: -n '$@' -- "$@"`
@@ -12,33 +12,44 @@ MEM_LIMIT="unlimited"
 TIME_LIMIT="unlimited"
 
 function help_and_quit() {
-    echo "use $0 [switches] prog spec bymc_options"
-    echo " where spec is one of those:"
-    echo "   * <spec> -- use only the specification with the name <spec>"
-    echo "   * all -- use all the available specifications"
-    echo ""
-    echo " and the switches are"
-    echo "  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)"
-    echo "  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)"
-    echo "  -h|--help: show this help message"
-    echo ""
-    echo " bymc_options are as follows:"
-    echo "  -O schema.tech=cav15        (reachability as in the CAV'15 paper)"
-    echo "  -O schema.tech=ltl          (default, the latest technique including liveness)"
-    echo "  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)"
-    echo "  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)"
-    echo "  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)"
-    echo ""
-    echo " Fine tuning of schema.tech=ltl:"
-    echo "  -O schema.incremental=1 (enable the incremental solver, default: 0)"
-    echo ""
-    echo "  -O schema.noflowopt=1  (disable the control flow optimizations, default: 0"
-    echo "                          may lead to a combinatorial explosion of guards)"
-    echo "  -O schema.noreachopt=1 (disable the reachability optimization, default: 0"
-    echo "                          i.e., reachability is not checked on-the-fly)"
-    echo "  -O schema.noadaptive=1 (disable the adaptive reachability optimization, default: 0"
-    echo "                          i.e., the tool will not try to choose between"
-    echo "                          enabling/disabling the reachability optimization)"
+cat << EOF
+Synthesize threshold automata by running CEGYS loop
+
+use $0 [switches] prog spec bymc_options
+ where spec is one of those:
+   * <spec> -- use only the specification with the name <spec>
+   * all -- use all the available specifications
+
+to run in MPI mode (requires -O schema.tech=ltl-mpi):
+  mpirun -n <number of nodes> --output-filename synt\\
+  $0 [switches] prog spec bymc_options -O schema.tech=ltl-mpi
+
+ and the switches are
+  --limit-time: limit (in seconds) cpu time of subprocesses (ulimit -t)
+  --limit-mem: limit (in MB) virtual memory of subprocesses (ulimit -v)
+  -h|--help: show this help message
+
+ bymc_options are as follows:
+  -O schema.tech=ltl          (default, the latest technique including liveness)
+  -O schema.tech=ltl-mpi      (parallel implementation of 'ltl')
+  -O schema.tech=cav15        (reachability as in the CAV'15 paper)
+  --smt 'lib2|z3|-smt2|-in'   (default, use z3 as the backend solver)
+  --smt 'lib2|mysolver|arg1|arg2|arg3'  (use an SMT2 solver)
+  --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)
+
+ Fine tuning of schema.tech=ltl and ltl-mpi:
+  -O schema.mpi.then.seq=1 (double-check the synthesis result
+     with the sequential verifier, i.e., ltl, default: 0)
+  -O schema.incremental=1 (enable the incremental solver, default: 0)
+
+  -O schema.noflowopt=1  (disable control flow optimizations, default: 0
+                          may lead to a combinatorial explosion of guards)
+  -O schema.noreachopt=1 (disable reachability optimization, default: 0
+                          i.e., reachability is not checked on-the-fly)
+  -O schema.noadaptive=1 (disable adaptive reachability optimization, default: 0
+                          i.e., the tool will not try to choose between
+                          enabling/disabling the reachability optimization)
+EOF
 
     exit 1
 }
