@@ -20,7 +20,7 @@ module L = SchemaCheckerLtl
 
   @author Igor Konnov, 2016-2017
 
-  TODO: extract large pieces of code into a separate module
+  TODO: move large pieces of code to TaSynt
  *)
 class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
     object(self)
@@ -32,6 +32,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         val mutable m_unknowns_vec: (string * Spin.token SpinIr.expr) list = []
         val mutable m_n_cexs = 0
         val mutable m_is_mpi = true (* using MPI for synthesis in parallel *)
+        val mutable m_double_check = false
 
         method transform rt =
             let template_skel = ta_source#get_ta in
@@ -80,10 +81,9 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                         (* verify *)
                         let has_cex =
                             self#has_counterex rt ntt fixed_skel fixed_deps in
-                        (* debug begins *)
-                        if not has_cex
+                        if not has_cex && m_double_check
                         then begin
-                            (* double check with a sequential verifier *)
+                            (* DEBUGGING: double check with a sequential verifier *)
                             if m_is_mpi && self#is_master then begin
                                 log INFO ("> The parallel verifier reports OK");
                                 log INFO ("> Checking with the sequential verifier");
@@ -97,7 +97,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                                 end
                             end
                         end;
-                        (* debug ends *)
+                        (* either finish or refine *)
                         not has_cex || not (self#do_refine rt ntt symb_deps fixed_skel);
                     end
                 in
@@ -242,7 +242,11 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             (self#get_synt_solver rt)#stop
 
         method update_runtime rt =
-            ()
+            let getopt = Options.get_plugin_opt rt#caches#options in
+            let is_enabled opt = 
+                opt = Some "1" || opt = Some "true"
+            in
+            m_double_check <- is_enabled (getopt "schema.mpi.then.seq")
 
         method decode_trail _ path =
             path
