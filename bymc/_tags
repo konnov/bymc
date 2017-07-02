@@ -23,3 +23,6 @@
     package(mpi)
 
 true: use_menhir, bin_annot, annot
+
+# this is the directory containing the runtime results, ignore
+<x>: -traverse
