@@ -395,6 +395,10 @@ class mock_tac_t (tt: SpinIr.data_type_tab) =
             let tag = sprintf "(leave_node %s)" (node_type_s tp) in
             m_call_stack <- tag :: m_call_stack
 
+        method pre_steady = ()
+
+        method post_steady = ()
+
         method check_property exp _ =
             let tag = sprintf "(check_property %s _)" (SpinIrImp.expr_s exp) in
             m_call_stack <- tag :: m_call_stack;

@@ -325,7 +325,7 @@ class tree_tac_t
                 To reproduce the CAV'15 and POPL'17 results, turn off
                 by setting -O schema.noguardpreds=1.
              *)
-        val mutable m_pred_map_list = []
+        val mutable m_pred_map_list: (int * SpinIr.var PSetEltMap.t) list = []
             (** a stack of predicates introduced for guards *)
         
         method top =
@@ -447,6 +447,7 @@ class tree_tac_t
             m_frames <- old_frames;
             assert (frame_no = self#top.F.no);
             P.clean_late_predicates m_pred_ctx m_depth;
+            self#clean_guard_predicates frame_no;
             slv#comment
                 (sprintf "pop@%d: leave_node[%s] at frame %d"
                     m_depth k_s self#top.F.no);
@@ -462,29 +463,6 @@ class tree_tac_t
                 (sprintf "push@%d: enter_context: potential milestones at frame %d"
                         m_depth frame_no);
             m_frames <- (Context frame_no) :: m_frames;
-            if m_guard_predicates
-            then begin
-                let top_frame = self#top in
-                (* declare predicates for each guard *)
-                let add_var map (_, id, cond_expr, _) =
-                    let name =
-                        sprintf "F%d_%d_C%s" frame_no m_depth (PSet.elem_str id)
-                    in
-                    let v = SpinIr.new_var name in
-                    let bool_tp = new data_type SpinTypes.TBIT in
-                    tt#set_type v bool_tp;
-                    solver#append_var_def v bool_tp;
-                    let frame_expr =
-                        F.to_frame_expr top_frame top_frame cond_expr in
-                    let eq = SpinIr.BinEx (Spin.EQUIV, Var v, frame_expr) in
-                    ignore (solver#append_expr eq);
-                    PSetEltMap.add id v map
-                in
-                let pred_map = 
-                    List.fold_left add_var PSetEltMap.empty (PorBounds.D.conds deps)
-                in
-                m_pred_map_list <- pred_map :: m_pred_map_list
-            end
 
 
         method leave_context =
@@ -499,12 +477,61 @@ class tree_tac_t
             assert (frame_no = old_no);
             m_depth <- m_depth - 1;
             P.clean_late_predicates m_pred_ctx m_depth;
-            if m_guard_predicates
-            then m_pred_map_list <- List.tl m_pred_map_list;
+            self#clean_guard_predicates frame_no;
             let slv = solver in
             slv#comment (sprintf "pop@%d: leave_context at frame %d"
                 m_depth frame_no);
             if m_incremental then slv#pop_ctx
+
+        method pre_steady =
+            if m_guard_predicates
+            then begin
+                let top_frame = self#top in
+                (* declare predicates for each guard *)
+                let add_var map (_, id, cond_expr, _) =
+                    let name =
+                        sprintf "F%d_%d_C%s" top_frame.F.no m_depth (PSet.elem_str id)
+                    in
+                    let v = SpinIr.new_var name in
+                    let bool_tp = new data_type SpinTypes.TBIT in
+                    tt#set_type v bool_tp;
+                    solver#append_var_def v bool_tp;
+                    PSetEltMap.add id v map
+                in
+                let pred_map = 
+                    List.fold_left add_var PSetEltMap.empty (PorBounds.D.conds deps)
+                in
+                m_pred_map_list <- (top_frame.F.no, pred_map) :: m_pred_map_list;
+
+                (* evaluate the unlocking guards and store them in the predicates *)
+                self#bind_guard_predicates deps.PorBounds.D.uconds
+            end;
+
+        method post_steady =
+            if m_guard_predicates
+            then begin
+                (* evaluate the locking guards and store them in the predicates *)
+                (* TODO: explain why *)
+                self#bind_guard_predicates deps.PorBounds.D.lconds
+            end
+
+        method private bind_guard_predicates conds =
+            let _, pred_map = List.hd m_pred_map_list in
+            let top_frame = self#top in
+            let bind_cond (_, id, cond_expr, _) =
+                let frame_expr =
+                    F.to_frame_expr top_frame top_frame cond_expr in
+                let pred = PSetEltMap.find id pred_map in
+                let eq = SpinIr.BinEx (Spin.EQUIV, Var pred, frame_expr) in
+                ignore (solver#append_expr eq)
+            in
+            List.iter bind_cond conds
+
+
+        method private clean_guard_predicates frame_no =
+            if m_guard_predicates
+            then m_pred_map_list <-
+                List.filter (fun (f, _) -> f < frame_no) m_pred_map_list
 
 
         method push_rule sk rule_no =
@@ -563,7 +590,7 @@ class tree_tac_t
                     PSet.inter pre (PSet.union deps.D.umask deps.D.lmask)
                 in
                 let pred_vars =
-                    (List.hd m_pred_map_list)
+                    snd (List.hd m_pred_map_list)
                         |> (PSetEltMap.filter (fun id _ -> PSet.mem id conds))
                         |> PSetEltMap.values
                         |> (BatEnum.map (fun v -> Var v))

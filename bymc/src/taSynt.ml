@@ -397,6 +397,11 @@ class eval_tac_t (tt: SpinIr.data_type_tab)
             m_depth <- m_depth - 1
 
 
+        method pre_steady = ()
+
+        method post_steady = ()
+
+
         method push_rule sk rule_no =
             let get_int = function
                 | IntConst i -> i
@@ -563,6 +568,11 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
         method leave_context =
             m_eval_tac#leave_context
 
+
+        method pre_steady = ()
+
+        method post_steady = ()
+
         method push_rule sk rule_no =
             let get_int = function
                 | IntConst i -> i
@@ -643,7 +653,12 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             then begin
                 (* just for debugging *)
                 let guard_eval = replace_unknowns_in_expr unknowns simp_guard in
-                assert ((IntConst 1) = guard_eval);
+                if (IntConst 0) = guard_eval
+                then begin
+                    printf "   > FAILED rule %d, factor %d, simp_guard = %s\n"
+                        rule_no move.C.f_accel (SpinIrImp.expr_s simp_guard);
+                    assert ((IntConst 1) = guard_eval)
+                end;
                 (* debugging ends *)
                 m_assertions <- simp_guard :: m_assertions (* push the assertions *)
             end
