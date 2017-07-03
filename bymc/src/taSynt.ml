@@ -588,7 +588,6 @@ class simp_tac_t (tt: SpinIr.data_type_tab)
             let rule = List.nth template.Sk.rules rule_no in
             let move = List.hd m_moves_left in
             let do_update _ =
-                let frame = self#top in
                 let actions = List.filter not_redundant_action rule.Sk.act in
                 (* push the rule to eval_tac_t *)
                 m_eval_tac#push_rule sk rule_no;
