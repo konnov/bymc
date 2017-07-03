@@ -1,0 +1,12 @@
+#!/bin/sh
+
+cat <<EOF
+***  RUN verifypa-schema INSTEAD OF THIS SCRIPT    ***
+***                                                ***
+*** THIS SCRIPT IS KEPT FOR BACKWARD COMPATIBILITY ***
+***   AND MAY BE REMOVED IN THE FUTURE VERSIONS    ***
+
+EOF
+
+./verifypa-schema $@
+
