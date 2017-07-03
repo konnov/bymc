@@ -12,18 +12,18 @@ ocaml_major := $(shell echo ${ocamlver} | perl -pe 's/([0-9]+)\.[0-9]+\.[0-9]+/\
 ocaml_minor := $(shell echo ${ocamlver} | perl -pe 's/[0-9]+\.([0-9]+)\.[0-9]+/\1/')
 ocaml_rev := $(shell echo ${ocamlver} | perl -pe 's/[0-9]+\.[0-9]+\.([0-9]+)/\1/')
 dist_ver := $(shell date '+%Y%m%d')
+OCAMLBUILD := ocamlbuild -use-ocamlfind
 
-DIST_FILES=bymc.native verifyco-spin verifypa-spin script/ LICENSE
+DIST_FILES=bymc.native verifyco-* verifypa-* syntpa-* script/ LICENSE
 
 all: ${target}
-	#otags src/*.ml
 
 compile: ${target}
 
 debug: ${debug_target}
 
 ${unittests}: src/*.ml src/*.mli src/*.mly test/*.ml
-	ocamlbuild -use-ocamlfind ${CFLAGS} ./unitTests.byte
+	${OCAMLBUILD} ${CFLAGS} ./unitTests.byte
 
 # unit tests
 test: clean ${unittests}
@@ -59,15 +59,15 @@ tags:
 
 clean:
 	$(info CLEANING)
-	ocamlbuild -clean
+	${OCAMLBUILD} -clean
 
 ${target}: ocaml-3.11.0
 	$(info COMPILING)
-	ocamlbuild -use-ocamlfind ${CFLAGS} ${target}
+	${OCAMLBUILD} ${CFLAGS} ${target}
 
 ${debug_target}: ocaml-3.11.0
 	$(info COMPILING DEBUG VERSION)
-	ocamlbuild -use-ocamlfind ${CFLAGS} ${debug_target}
+	${OCAMLBUILD} ${CFLAGS} ${debug_target}
 
 ocaml-3.11.0:
 	$(info Testing, whether ocaml version is at least 3.11.0)

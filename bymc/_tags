@@ -1,6 +1,5 @@
 # ocamlbuild tags
 #
-# use_str, 
 # check the documentation at: http://brion.inria.fr/gallium/index.php/Tags
 
 <**/*.mli>: package(batteries)
