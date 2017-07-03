@@ -80,8 +80,12 @@ module Sk = struct
         | _ as e -> SpinIrImp.expr_s e
 
     let print out sk =
-        let pexp e = fprintf out "    %s;\n" (expr_s e) in
-
+        let pexp e =
+            let e_s = expr_s e in
+            if "1" <> e_s
+            then fprintf out "    %s;\n" (expr_s e)
+            else fprintf out "    /* true */\n"
+        in
         fprintf out "skel %s {\n" sk.name;
         let vname v = v#get_name in
         fprintf out "  local %s;\n"
