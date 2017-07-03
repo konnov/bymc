@@ -618,6 +618,12 @@ class tree_tac_t
             m_incremental <- b
 
         method get_incremental = m_incremental
+
+        method set_guard_predicates b =
+            m_guard_predicates <- b
+
+        method get_guard_predicates =
+            m_guard_predicates
     end
 
 
@@ -715,6 +721,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
 
     let ntt = tt#copy in
     let tac = new tree_tac_t rt#solver ntt deps in
+    tac#set_guard_predicates false; (* guard predicates are used only in SchemaCheckerLtl *)
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;
     tac#assert_top sk.Sk.inits;

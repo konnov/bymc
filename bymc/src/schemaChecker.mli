@@ -94,5 +94,9 @@ class tree_tac_t: Smt.smt_solver
         method set_incremental: bool -> unit
 
         method get_incremental: bool
+
+        method set_guard_predicates: bool -> unit
+
+        method get_guard_predicates: bool
     end
 
