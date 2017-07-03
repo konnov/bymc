@@ -82,6 +82,23 @@ let map_action var_fun (lhs, exp) =
         map_arith_expr var_fun exp)
 
 
+let map_bool_expr var_fun e =
+    let rec map = function
+        | Cmp e ->
+            map_rel_expr var_fun e
+
+        | Not e ->
+            SpinIr.UnEx (Spin.NEG, map e)
+
+        | And (l, r) ->
+            SpinIr.BinEx (Spin.AND, map l, map r)
+
+        | Or (l, r) ->
+            SpinIr.BinEx (Spin.OR, map l, map r)
+    in
+    map e
+
+
 let map_ltl_expr var_fun e =
     let rec map = function
         | LtlCmp e ->
@@ -167,10 +184,6 @@ let skel_of_ta ta =
         List.filter f ta.Ta.decls
             |> List.map (fun n -> var_fun (name n)) 
     in
-    let map_expr =
-        SpinIr.map_vars (fun v -> SpinIr.Var (var_fun v#get_name))
-    in
-    let locals = map is_local in
     let params = map is_param in
     let unknowns = map is_unknown in
     List.iter (fun v -> v#set_symbolic) (params @ unknowns); (* mark parameters and unknowns as symbolic *)
@@ -181,7 +194,7 @@ let skel_of_ta ta =
         Sk.shared = map is_shared;
         Sk.params = params;
         Sk.unknowns = unknowns;
-        Sk.assumes = List.map (map_rel_expr var_fun) ta.Ta.assumptions;
+        Sk.assumes = List.map (map_bool_expr var_fun) ta.Ta.assumptions;
         Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
         Sk.loc_vars = loc_vars;
         Sk.nrules = List.length ta.Ta.rules;

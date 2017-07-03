@@ -58,7 +58,7 @@ module Ta = struct
     type ta_t = {
         name: string;
         decls: decl_t list;
-        assumptions: rel_expr_t list;
+        assumptions: bool_expr_t list;
         locs: loc_def_t list;
         inits: rel_expr_t list;
         rules: rule_t list;
@@ -117,6 +117,30 @@ let print_rel_expr_with_semi out expr =
     fprintf out ";\n"
 
 
+let print_bool_expr_with_semi out expr =
+    let rec pr = function
+        | Cmp e ->
+            fprintf out "(";
+            print_rel_expr out e;
+            fprintf out ")"
+
+        | Not e ->
+            fprintf out "!("; pr e; fprintf out ")"
+
+        | And (l, r) ->
+            fprintf out "("; pr l; fprintf out ")";
+            fprintf out " && ";
+            fprintf out "("; pr r; fprintf out ")"
+
+        | Or (l, r) ->
+            fprintf out "("; pr l; fprintf out ")";
+            fprintf out " || ";
+            fprintf out "("; pr r; fprintf out ")"
+    in
+    pr expr;
+    fprintf out ";\n"
+
+
 let print_ltl_expr out name expr =
     let rec pr = function
         | LtlCmp e ->
@@ -169,7 +193,7 @@ let print_ta out ta =
         | Unknown name -> fprintf out "  unknowns %s;\n" name
     in
     List.iter print_decl ta.Ta.decls;
-    List.iter (print_rel_expr_with_semi out) ta.Ta.assumptions;
+    List.iter (print_bool_expr_with_semi out) ta.Ta.assumptions;
     List.iter (print_loc out) ta.Ta.locs;
     List.iter (print_rel_expr_with_semi out) ta.Ta.inits;
     StrMap.iter (print_ltl_expr out) ta.Ta.specs;
