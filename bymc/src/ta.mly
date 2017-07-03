@@ -161,7 +161,7 @@ unknowns
     ;
 
 assumptions
-    : ASSUME LPAREN CONST RPAREN LCURLY es = rel_expr_list RCURLY
+    : ASSUME LPAREN CONST RPAREN LCURLY es = bool_expr_list RCURLY
         { es }
     ;
 
@@ -254,6 +254,13 @@ bool_expr
 
     | LPAREN e = bool_expr RPAREN
         { e }
+    ;
+
+bool_expr_list
+    : { [] }
+
+    | e = bool_expr SEMI es = bool_expr_list
+        { e :: es }
     ;
 
 cmp_expr

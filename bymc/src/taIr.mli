@@ -66,7 +66,7 @@ module Ta: sig
     type ta_t = {
         name: string;
         decls: decl_t list;
-        assumptions: rel_expr_t list;
+        assumptions: bool_expr_t list;
         locs: loc_def_t list;
         inits: rel_expr_t list;
         rules: rule_t list;
@@ -81,7 +81,7 @@ val mk_rule:
 
 
 val mk_ta:
-    string -> decl_t list -> rel_expr_t list
+    string -> decl_t list -> bool_expr_t list
            -> Ta.loc_def_t list -> rel_expr_t list -> Ta.rule_t list
            -> ltl_expr_t Accums.StrMap.t
            -> Ta.ta_t
