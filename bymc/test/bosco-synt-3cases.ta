@@ -43,8 +43,17 @@ skel Proc {
     N > 3 * T;
     T >= F;
     T >= 1;
+    
+    /* assume symmetric rules for 0 and 1 */
     a2 == a3; b2 == b3; c2 == c3; z2 == z3;
     a4 == a5; b4 == b5; c4 == c5; z4 == z5;
+
+    /* actually, let's exclude the known answer */
+    a1 != 1 ||  b1 != -1 ||  z1 != 1
+        || a2 != 1 ||  b2 != 3 ||  z2 != 2
+        || a3 != 1 ||  b3 != 3 ||  z3 != 2
+        || a4 != 1 ||  b4 != -1 ||  z4 != 2
+        || a5 != 1 ||  b5 != -1 ||  z5 != 2;
 
     /* to guess the right numbers...
     a1 == 1; b1 == -1; z1 == 1;
