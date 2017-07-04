@@ -928,7 +928,8 @@ let make_schema_tree solver sk =
     logtm INFO (sprintf "> found %d locations..." sk.Sk.nlocs);
     logtm INFO (sprintf "> found %d rules..." sk.Sk.nrules);
 
-    let deps = compute_deps solver sk in
+    let flow_opt = SchemaOpt.is_flow_opt_enabled () in
+    let deps = compute_deps ~against_only:flow_opt solver sk in
 
     let guards_card = count_guarded sk deps in
     let print_potential_mstone g n =
