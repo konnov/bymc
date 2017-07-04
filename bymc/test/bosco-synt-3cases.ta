@@ -216,11 +216,9 @@ skel Proc {
     /* the fairness constraints here should be encoded with respect to
        Byzantine faults, thus, we add -f, where needed */
 
-    /* XXX: this is an experimental part: (F == 1 && N > 6 * T) || */ 
-
     /* fast convergence */
     fast0:
-        (((F == 0 && N > 5 * T) || (F == 1 && N > 6 * T) || (N > 7 * T))
+        (((F == 0 && N > 5 * T) || (N > 7 * T))
             && <>[](((z1 * nsnt01 < (a1 * N + b1 * T + c1))
             || (z2 * nsnt0 < a2 * N + b2 * T + c2)
             || (loc2 == 0 && loc3 == 0))
@@ -230,7 +228,7 @@ skel Proc {
             -> <>(loc0 == 0 && loc1 == 0 && loc2 == 0 && loc3 == 0
                     && loc5 == 0 && loc6 == 0 && loc7 == 0));
     fast1:
-        (((F == 0 && N > 5 * T) || (F == 1 && N > 6 * T) || (N > 7 * T))
+        (((F == 0 && N > 5 * T) || (N > 7 * T))
             && <>[](((z1 * nsnt01 < (a1 * N + b1 * T + c1))
             || (z3 * nsnt1 < a3 * N + b3 * T + c3)
             || (loc2 == 0 && loc3 == 0))
