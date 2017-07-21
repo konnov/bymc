@@ -102,14 +102,20 @@ threshAuto proc {
       when (true)
       do { unchanged(nsnt, nsntCandF, ncrashed); };
   }
-  specifications (3) {
+
+  specifications (0) {
+    sanity:
+        (0 <= THRESH1 && THRESH1 <= N && 0 <= THRESH2 && THRESH2 <= N);
+
     /* safety */
     unforg: (loc1 == 0) -> [](locAC == 0);
+
     corr: <>[]((nsnt < THRESH1 || loc0 == 0)
                 && (nsnt < THRESH2 || loc0 == 0)
                 && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
         -> ((loc0 == 0) -> <>(locAC != 0));
+
     relay: <>[]((nsnt < THRESH1 || loc0 == 0)
                 && (nsnt < THRESH2 || loc0 == 0)
                 && ((nsnt < THRESH2) || locSE == 0)
