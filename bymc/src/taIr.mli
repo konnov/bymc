@@ -22,6 +22,7 @@ type arith_expr_t =
     | Int of int
     | Var of string
     | NextVar of string
+    | Macro of string
     | Add of arith_expr_t * arith_expr_t
     | Sub of arith_expr_t * arith_expr_t
     | Mul of arith_expr_t * arith_expr_t
@@ -66,6 +67,7 @@ module Ta: sig
     type ta_t = {
         name: string;
         decls: decl_t list;
+        macros: arith_expr_t Accums.StrMap.t;
         assumptions: bool_expr_t list;
         locs: loc_def_t list;
         inits: rel_expr_t list;
@@ -81,7 +83,9 @@ val mk_rule:
 
 
 val mk_ta:
-    string -> decl_t list -> bool_expr_t list
+    string -> decl_t list
+           -> arith_expr_t Accums.StrMap.t 
+           -> bool_expr_t list
            -> Ta.loc_def_t list -> rel_expr_t list -> Ta.rule_t list
            -> ltl_expr_t Accums.StrMap.t
            -> Ta.ta_t

@@ -9,8 +9,13 @@ let find_var var_map name =
     with Not_found ->
         raise (Failure (Printf.sprintf "Variable %s not found" name))
 
+let find_macro macros name =
+    try StrMap.find name macros
+    with Not_found ->
+        raise (Failure (Printf.sprintf "Macro %s not found" name))
 
-let map_arith_expr var_fun e =
+
+let map_arith_expr macro_fun var_fun e =
     let rec map = function
     | Int i ->
         SpinIr.IntConst i
@@ -20,6 +25,9 @@ let map_arith_expr var_fun e =
 
     | NextVar n ->
         SpinIr.UnEx (Spin.NEXT, SpinIr.Var (var_fun n))
+
+    | Macro n ->
+        map (macro_fun n)
 
     | Add (l, r) ->
         SpinIr.BinEx(Spin.PLUS, map l, map r)
@@ -33,11 +41,11 @@ let map_arith_expr var_fun e =
     map e
 
 
-let map_rel_expr var_fun e =
+let map_rel_expr macro_fun var_fun e =
     let map tok l r =
         SpinIr.BinEx(tok,
-            map_arith_expr var_fun l,
-            map_arith_expr var_fun r)
+            map_arith_expr macro_fun var_fun l,
+            map_arith_expr macro_fun var_fun r)
     in
     match e with
     | Eq (l, r) ->
@@ -59,10 +67,10 @@ let map_rel_expr var_fun e =
             map Spin.GE l r
 
 
-let map_bool_expr var_fun e =
+let map_bool_expr macro_fun var_fun e =
     let rec map = function
     | Cmp e ->
-            map_rel_expr var_fun e
+            map_rel_expr macro_fun var_fun e
 
     | Not e ->
             SpinIr.UnEx (Spin.NEG, map e)
@@ -76,33 +84,16 @@ let map_bool_expr var_fun e =
     map e
 
 
-let map_action var_fun (lhs, exp) =
+let map_action macro_fun var_fun (lhs, exp) =
     SpinIr.BinEx (Spin.EQ,
         SpinIr.UnEx (Spin.NEXT, SpinIr.Var (var_fun lhs)),
-        map_arith_expr var_fun exp)
+        map_arith_expr macro_fun var_fun exp)
 
 
-let map_bool_expr var_fun e =
-    let rec map = function
-        | Cmp e ->
-            map_rel_expr var_fun e
-
-        | Not e ->
-            SpinIr.UnEx (Spin.NEG, map e)
-
-        | And (l, r) ->
-            SpinIr.BinEx (Spin.AND, map l, map r)
-
-        | Or (l, r) ->
-            SpinIr.BinEx (Spin.OR, map l, map r)
-    in
-    map e
-
-
-let map_ltl_expr var_fun e =
+let map_ltl_expr macro_fun var_fun e =
     let rec map = function
         | LtlCmp e ->
-            map_rel_expr var_fun e
+            map_rel_expr macro_fun var_fun e
 
         | LtlNot e ->
             SpinIr.UnEx (Spin.NEG, map e)
@@ -125,11 +116,11 @@ let map_ltl_expr var_fun e =
     map e
 
 
-let map_rule var_fun r = {
+let map_rule macro_fun var_fun r = {
     Sk.src = r.Ta.src_loc;
     Sk.dst = r.Ta.dst_loc;
-    Sk.guard = map_bool_expr var_fun r.Ta.guard;
-    Sk.act = List.map (map_action var_fun) r.Ta.actions
+    Sk.guard = map_bool_expr macro_fun var_fun r.Ta.guard;
+    Sk.act = List.map (map_action macro_fun var_fun) r.Ta.actions
 }
 
 
@@ -180,13 +171,16 @@ let skel_of_ta ta =
         BatEnum.fold add_var var_map (IntMap.values loc_vars)
     in
     let var_fun = find_var var_map in
+    let macro_fun = find_macro ta.Ta.macros in
     let map f =
         List.filter f ta.Ta.decls
             |> List.map (fun n -> var_fun (name n)) 
     in
     let params = map is_param in
     let unknowns = map is_unknown in
-    List.iter (fun v -> v#set_symbolic) (params @ unknowns); (* mark parameters and unknowns as symbolic *)
+    (* mark parameters and unknowns as symbolic *)
+    List.iter (fun v -> v#set_symbolic) (params @ unknowns);
+    (* construct the automaton *)
     {
         Sk.name = ta.Ta.name; Sk.nlocs = List.length ta.Ta.locs;
         Sk.locs = List.map snd ta.Ta.locs;
@@ -194,11 +188,11 @@ let skel_of_ta ta =
         Sk.shared = map is_shared;
         Sk.params = params;
         Sk.unknowns = unknowns;
-        Sk.assumes = List.map (map_bool_expr var_fun) ta.Ta.assumptions;
-        Sk.inits = List.map (map_rel_expr var_fun) ta.Ta.inits;
+        Sk.assumes = List.map (map_bool_expr macro_fun var_fun) ta.Ta.assumptions;
+        Sk.inits = List.map (map_rel_expr macro_fun var_fun) ta.Ta.inits;
         Sk.loc_vars = loc_vars;
         Sk.nrules = List.length ta.Ta.rules;
-        Sk.rules = List.map (map_rule var_fun) ta.Ta.rules;
-        Sk.forms = StrMap.map (map_ltl_expr var_fun) ta.Ta.specs;
+        Sk.rules = List.map (map_rule macro_fun var_fun) ta.Ta.rules;
+        Sk.forms = StrMap.map (map_ltl_expr macro_fun var_fun) ta.Ta.specs;
     }
 
