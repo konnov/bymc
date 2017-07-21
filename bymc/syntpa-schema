@@ -30,6 +30,8 @@ to run in MPI mode (requires -O schema.tech=ltl-mpi):
   -h|--help: show this help message
 
  bymc_options are as follows:
+  -O synt.all=1               enumerate all possible solutions, default: 0
+                              (termination is up to you!)
   -O schema.tech=ltl          (default, the latest technique including liveness)
   -O schema.tech=ltl-mpi      (parallel implementation of 'ltl')
   -O schema.tech=cav15        (reachability as in the CAV'15 paper)
@@ -38,8 +40,8 @@ to run in MPI mode (requires -O schema.tech=ltl-mpi):
   --smt 'yices'               (use yices 1.x as the backend solver, DEPRECATED)
 
  Fine tuning of schema.tech=ltl and ltl-mpi:
-  -O schema.mpi.then.seq=1 (double-check the synthesis result
-     with the sequential verifier, i.e., ltl, default: 0)
+  -O synt.mpi.then.seq=1 (double-check the synthesis result
+                          with the sequential verifier, i.e., ltl, default: 0)
   -O schema.incremental=1 (enable the incremental solver, default: 0)
 
   -O schema.noflowopt=1  (disable control flow optimizations, default: 0
