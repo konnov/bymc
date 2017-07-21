@@ -31,10 +31,13 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         val mutable m_synt_solver = None (* we need own our copy here to keep counterex. *)
         val mutable m_unknowns_vec: (string * Spin.token SpinIr.expr) list = []
         val mutable m_n_cexs = 0
+        val mutable m_n_solutions = 0
         val mutable m_is_mpi = true (* using MPI for synthesis in parallel *)
         val mutable m_double_check = false
+        val mutable m_all = false   (* enumerate all possible solutions *)
 
         method transform rt =
+            self#set_options rt;
             let template_skel = ta_source#get_ta in
             self#init rt;
             (* disable incompatible options *)
@@ -47,6 +50,16 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let new_data_type = new SpinIr.data_type SpinTypes.TUNSIGNED in
             let set_type v = ntt#set_type v new_data_type in
             BatEnum.iter set_type loc_vars;
+            (* sometimes, we have to exclude the found solution *)
+            let exclude_solution _ =
+                if self#is_master
+                then begin
+                    exclude_unknowns (get_some m_synt_solver)
+                        template_skel.Sk.assumes m_unknowns_vec;
+                    not (self#update_master rt)
+                end
+                else not (self#update_worker rt)
+            in
             (* verify/refine loop *)
             let rec loop () =
                 log INFO ("> Next unknowns to try: " ^ (unknowns_vec_s m_unknowns_vec));
@@ -56,13 +69,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     if is_ta_vacuous rt#solver fixed_skel
                     then begin
                         log INFO "> Assumptions are violated";
-                        if self#is_master
-                        then begin
-                            exclude_unknowns (get_some m_synt_solver)
-                                template_skel.Sk.assumes m_unknowns_vec;
-                            not (self#update_master rt)
-                        end
-                        else not (self#update_worker rt)
+                        exclude_solution ()
                     end else begin
                         (* Compute the dependencies by instantiating the unknowns,
                            while keeping all the expressions symbolic.
@@ -98,7 +105,16 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                             end
                         end;
                         (* either finish or refine *)
-                        not has_cex || not (self#do_refine rt ntt symb_deps fixed_skel);
+                        if has_cex
+                        then not (self#do_refine rt ntt symb_deps fixed_skel)
+                        else begin
+                            m_n_solutions <- m_n_solutions + 1;
+                            log INFO (sprintf "> SOLUTION %d: %s"
+                                m_n_solutions (unknowns_vec_s m_unknowns_vec));
+                            if m_all
+                            then exclude_solution () (* look for another solution *)
+                            else true   (* found one solution, terminate *)
+                        end
                     end
                 in
                 if finished
@@ -148,7 +164,10 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             if not synt_solver#check
             then begin
                 log INFO (sprintf "> Collected %d counterexamples in total" m_n_cexs);
-                log INFO "> NO SOLUTION EXIST. Oops.";
+                if m_n_solutions = 0
+                then log INFO "> NO SOLUTION EXIST. Oops."
+                else log INFO (sprintf
+                    "> Found %d solutions. Check them with grep SOLUTION x/**/synt" m_n_solutions);
                 if m_is_mpi
                 then ignore (Mpi.broadcast None 0 Mpi.comm_world);
                 false
@@ -241,12 +260,22 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         method dispose rt =
             (self#get_synt_solver rt)#stop
 
-        method update_runtime rt =
+        method set_options rt =
             let getopt = Options.get_plugin_opt rt#caches#options in
             let is_enabled opt = 
                 opt = Some "1" || opt = Some "true"
             in
-            m_double_check <- is_enabled (getopt "schema.mpi.then.seq")
+            m_double_check <- is_enabled (getopt "schema.mpi.then.seq");
+            Debug.log INFO
+                (sprintf "  # Double check with sequential solver: %s"
+                    (if m_double_check then "enabled" else "disabled"));
+            m_all <- is_enabled (getopt "synt.all");
+            Debug.log INFO
+                (sprintf "  # Synthesizing all solutions: %s"
+                    (if m_all then "enabled" else "disabled"))
+
+        method update_runtime rt =
+            ()
 
         method decode_trail _ path =
             path
