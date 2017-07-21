@@ -38,6 +38,7 @@ type rel_expr_t =
 
 
 type bool_expr_t =
+    | True
     | Cmp of rel_expr_t
     | Not of bool_expr_t
     | And of bool_expr_t * bool_expr_t

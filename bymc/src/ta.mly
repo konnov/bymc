@@ -66,6 +66,7 @@ let find_loc name =
 %token	<string> MACRO
 
 %token  INITS ASSUME LOCATIONS RULES SPECIFICATIONS DEFINE
+%token  TRUE
 %token  LTLF LTLG
 %token  IMPLIES
 %token  OR
@@ -191,11 +192,19 @@ rules
         { rs }
     ;
 
+guard
+    : WHEN LPAREN g = bool_expr RPAREN   { g }
+    | WHEN LPAREN i = CONST RPAREN       {
+        if i = 1
+        then True
+        else error "expected when (1)"
+    }
+
 rule_list
     : { [] }
 
     | CONST COLON src = NAME IMPLIES dst = NAME
-        WHEN LPAREN grd = bool_expr RPAREN
+        grd = guard
         DO LCURLY acts = act_list RCURLY SEMI rs = rule_list
         {
             let r = TaIr.mk_rule (find_loc src) (find_loc dst) grd acts in
@@ -269,6 +278,9 @@ int_list
 bool_expr
     : e = cmp_expr
         { Cmp e }
+
+    | TRUE
+        { True }
 
     | NOT e = bool_expr
         { Not e }
