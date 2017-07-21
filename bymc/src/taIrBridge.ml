@@ -69,6 +69,9 @@ let map_rel_expr macro_fun var_fun e =
 
 let map_bool_expr macro_fun var_fun e =
     let rec map = function
+    | True ->
+            SpinIr.IntConst 1 (* that is how we treat Booleans internally *)
+
     | Cmp e ->
             map_rel_expr macro_fun var_fun e
 

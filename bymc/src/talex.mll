@@ -47,6 +47,7 @@ let token_s = function
     | GT -> "GT"
     | LE -> "LE"
     | GE -> "GE"
+    | TRUE -> "TRUE"
     | COMMA -> "COMMA"
     | LPAREN -> "LPAREN"
     | RPAREN -> "RPAREN"
@@ -109,6 +110,7 @@ rule token = parse
  | ':'                   { COLON }
  | ';'                   { SEMI }
  | '''                   { PRIME }
+ | "true"                { TRUE } 
  | "skel"                { SKEL } 
  | "threshAuto"          { THRESHAUTO } 
  | "assumptions"         { ASSUME } 
