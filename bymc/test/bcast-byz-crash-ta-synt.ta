@@ -73,7 +73,7 @@ threshAuto proc {
       do { unchanged(nsnt, nsntCandF); ncrashed' == ncrashed + 1; };
   /* send a message when having value 1 */
   5: loc1 -> locSE
-      when (nsnt >= 0)
+      when (true)
       do { nsnt' == nsnt + 1; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed; };
   /* accept directly */
   6: loc0 -> locAC
@@ -93,13 +93,13 @@ threshAuto proc {
 
   /* self-loops in all the locations but loc1, from which processes must progress */
   10: loc0 -> loc0
-      when (nsnt >= 0)
+      when (true)
       do { unchanged(nsnt, nsntCandF, ncrashed); };
   11: locSE -> locSE
-      when (nsnt >= 0)
+      when (true)
       do { unchanged(nsnt, nsntCandF, ncrashed); };
   12: locAC -> locAC
-      when (nsnt >= 0)
+      when (true)
       do { unchanged(nsnt, nsntCandF, ncrashed); };
   }
   specifications (3) {
