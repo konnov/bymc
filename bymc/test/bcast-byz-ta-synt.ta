@@ -13,8 +13,12 @@ skel Proc {
   parameters N, T, F;
   unknowns a1, b1, c1, a2, b2, c2; /* the constants to be found by synthesis */
 
+  define THRESH1 == a1 * N + b1 * T + c1;
+  define THRESH2 == a2 * N + b2 * T + c2;
+
   assumptions (0) {
     N > 3 * T;
+
     T >= F;
     T >= 1;
     /* We have to constrain the free coefficient from above. Otherwise SMT enumerates all integers. */
@@ -31,61 +35,64 @@ skel Proc {
   locations (0) {
     loc0: [0];
     loc1: [1];
-    loc2: [2];
-    loc3: [3];
+    locSE: [2];
+    locAC: [3];
   }
 
   inits (0) {
     (loc0 + loc1) == N - F;
-    loc2 == 0;
-    loc3 == 0;
+    locSE == 0;
+    locAC == 0;
     nsnt == 0;
   }
 
   rules (8) {
   /* send a message when having value 1 */
-  0: loc1 -> loc2
-      when (nsnt >= 0)
+  0: loc1 -> locSE
+      when (true)
       do { nsnt' == nsnt + 1; };
   /* accept directly */
-  1: loc0 -> loc3
-      when (nsnt >= (a2 * N + b2 * T + c2 - F))
+  1: loc0 -> locAC
+      when (nsnt >= THRESH2 - F)
       do { nsnt' == nsnt + 1; };
-  2: loc1 -> loc3
-      when (nsnt >= a2 * N + b2 * T + c2 - F)
+  2: loc1 -> locAC
+      when (nsnt >= THRESH2 - F)
       do { nsnt' == nsnt + 1; };
   /* send a message */
-  3: loc0 -> loc2
-      when (nsnt >= a1 * N + b1 * T + c1 - F)
+  3: loc0 -> locSE
+      when (nsnt >= THRESH1 - F)
       do { nsnt' == nsnt + 1; };
   /* accept */
-  4: loc2 -> loc3
-      when (nsnt >= a2 * N + b2 * T + c2 - F)
+  4: locSE -> locAC
+      when (nsnt >= THRESH2 - F)
       do { nsnt' == nsnt; };
+
   /* self-loops in all the locations but loc1, from which processes must progress */
   5: loc0 -> loc0
-      when (nsnt >= 0)
+      when (true)
       do { nsnt' == nsnt; };
-  6: loc2 -> loc2
-      when (nsnt >= 0)
+  6: locSE -> locSE
+      when (true)
       do { nsnt' == nsnt; };
-  7: loc3 -> loc3
-      when (nsnt >= 0)
+  7: locAC -> locAC
+      when (true)
       do { nsnt' == nsnt; };
   }
   specifications (3) {
     /* safety */
-    unforg: (loc1 == 0) -> [](loc3 == 0);
-    corr: <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0)
-                && (nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
-                && ((nsnt < a2 * N + b2 * T + c2) || loc2 == 0)
+    unforg: (loc1 == 0) -> [](locAC == 0);
+    
+    corr: <>[]((nsnt < THRESH1 || loc0 == 0)
+                && (nsnt < THRESH2 || loc0 == 0)
+                && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
-        -> ((loc0 == 0) -> <>(loc3 != 0));
-    relay: <>[]((nsnt < a1 * N + b1 * T + c1 || loc0 == 0)
-                && (nsnt < a2 * N + b2 * T + c2 || loc0 == 0)
-                && ((nsnt < a2 * N + b2 * T + c2) || loc2 == 0)
+        -> ((loc0 == 0) -> <>(locAC != 0));
+
+    relay: <>[]((nsnt < THRESH1 || loc0 == 0)
+                && (nsnt < THRESH2 || loc0 == 0)
+                && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
-        -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0) && (loc2 == 0)));
+        -> []((locAC != 0) -> <>((loc0 == 0) && (loc1 == 0) && (locSE == 0)));
   }
 } /* Proc */
 
