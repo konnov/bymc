@@ -12,91 +12,104 @@ skel Proc {
      and crashed processes (the crashed processes can send their messages
      right before crashing) */
   shared nsnt, nsntF, nfaulty;
-  parameters N, F;
-  unknowns a1, b1, a2, b2; /* the constants to be found by synthesis */
+  parameters N, T, F;
+  unknowns a1, b1, c1, a2, b2, c2; /* the constants to be found by synthesis */
+
+  define THRESH1 == a1 * N + b1 * T + c1;
+  define THRESH2 == a2 * N + b2 * T + c2;
+
+
   assumptions (1) {
     N >= 1;
-    N > F;
+    N > T;
+    T >= F;
+
+    /* we want sane guards */
+    /*
+    0 <= a1 * N + b1 * T + c1;
+    a1 * N + b1 * T + c1 <= N;
+    0 <= a2 * N + b2 * T + c2;
+    a2 * N + b2 * T + c2 <= N;
+    */
+
+    0 <= a1; a1 <= 1;
+    0 <= a2; a2 <= 1;
+    -2 <= b1; b1 <= 2;
+    -2 <= b2; b2 <= 2;
+    -4 <= c1; c1 <= 4;
+    -4 <= c2; c2 <= 4;
   }
 
   locations (0) {
     loc0: [0]; /* initialized with value 0 */
     loc1: [1]; /* initialized with value 1 */
-    loc2: [2]; /* crashed */
-    loc3: [3]; /* accepted */
+    locSE: [2]; /* crashed */
+    locAC: [3]; /* accepted */
   }
 
   inits (0) {
     (loc0 + loc1) == N;
-    loc2 == 0;
-    loc3 == 0;
+    locSE == 0;
+    locAC == 0;
     nsnt == 0;
     nsntF == 0;
   }
 
   rules (0) {
   /* crashing without sending a message */
-  0: loc0 -> loc2
+  0: loc0 -> locSE
       when (nfaulty < F)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
-  1: loc1 -> loc2
+      do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
+  1: loc1 -> locSE
       when (nfaulty < F)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
+      do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
   /* crashing after sending a message */
-  2: loc1 -> loc2
+  2: loc1 -> locSE
       when (nfaulty < F)
       do { nsnt' == nsnt; nsntF' == nsntF + 1; nfaulty' == nfaulty + 1; };
   /* crashing when in the accepting state */
-  3: loc3 -> loc2
+  3: locAC -> locSE
       when (nfaulty < F)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty + 1; };
+      do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
   /* sending a message and accepting when initialized with value 1 */
-  4: loc1 -> loc3
-      when (nsnt >= a1 * N + b1)
-      do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
+  4: loc1 -> locAC
+      when (nsnt >= THRESH1)
+      do { nsnt' == nsnt + 1; unchanged(nsntF, nfaulty); };
   /* sending a message and accepting when initialized with value 0 */
-  5: loc0 -> loc3
-      when (nsnt >= a2 * N + b2)
-      do { nsnt' == nsnt + 1; nsntF' == nsntF; nfaulty' == nfaulty; };
+  5: loc0 -> locAC
+      when (nsnt >= THRESH2)
+      do { nsnt' == nsnt + 1; unchanged(nsntF, nfaulty); };
+
   /* self-loops in all the locations but loc1, from which processes must progress */
   6: loc0 -> loc0
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+      do { unchanged(nsnt, nsntF, nfaulty); };
   7: loc1 -> loc1 /* it is crucial to have this self-loop, although it is not obvious */
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
-  8: loc3 -> loc3
+      do { unchanged(nsnt, nsntF, nfaulty); };
+  8: locAC -> locAC
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntF' == nsntF; nfaulty' == nfaulty; };
+      do { unchanged(nsnt, nsntF, nfaulty); };
   }
-  specifications (3) {
+
+  specifications (0) {
+    sanity:
+        (0 <= THRESH1 && THRESH1 <= N && 0 <= THRESH2 && THRESH2 <= N);
+
     /* safety */
-    unforg: (loc1 == 0) -> [](loc3 == 0);
-    /* the following two liveness properties require the following fairness constraint:
-       if nsnt > 0, then every process should eventually leave the location loc0.
-     */
-    corr: <>[](((nsnt < a2 * N + b2) || loc0 == 0)
-            && ((nsnt < a1 * N + b1) || loc1 == 0))
-        -> ((loc0 == 0) -> <>(loc3 != 0));
-    relay: <>[](((nsnt < a2 * N + b2) || loc0 == 0)
-            && ((nsnt < a1 * N + b1) || loc1 == 0))
-        -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0)));
+    unforg: (loc1 == 0) -> [](locAC == 0);
+    
+    /* the following two liveness properties require fairness constraints */
+    corr:
+        <>[](((nsnt < THRESH2) || loc0 == 0)
+            && ((nsnt < THRESH1) || loc1 == 0))
+        -> ((loc0 == 0) -> <>(locAC != 0));
+
+    relay:
+        <>[](((nsnt < THRESH2) || loc0 == 0)
+            && ((nsnt < THRESH1) || loc1 == 0))
+        -> []((locAC != 0) -> <>((loc0 == 0) && (loc1 == 0)));
   }
 } /* Proc */
 
-/*
-#BEGIN-TEST correct-unforg
-$bymc_dir/verifypa-post ${testsource} unforg -O smt.log=1
-#EXPECT grep "verified in 0 refinement" ${testlog}
-#END-TEST
 
-#BEGIN-TEST correct-corr
-$bymc_dir/verifypa-post ${testsource} corr -O smt.log=1
-#EXPECT grep "verified in 0 refinement" ${testlog}
-#END-TEST
-
-#BEGIN-TEST correct-relay
-$bymc_dir/verifypa-post ${testsource} relay -O smt.log=1
-#EXPECT grep "verified in 0 refinement" ${testlog}
-#END-TEST
-*/
