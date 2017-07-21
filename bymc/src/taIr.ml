@@ -14,6 +14,7 @@ type arith_expr_t =
     | Int of int
     | Var of string
     | NextVar of string
+    | Macro of string
     | Add of arith_expr_t * arith_expr_t
     | Sub of arith_expr_t * arith_expr_t
     | Mul of arith_expr_t * arith_expr_t
@@ -58,6 +59,7 @@ module Ta = struct
     type ta_t = {
         name: string;
         decls: decl_t list;
+        macros: arith_expr_t Accums.StrMap.t;
         assumptions: bool_expr_t list;
         locs: loc_def_t list;
         inits: rel_expr_t list;
@@ -67,9 +69,9 @@ module Ta = struct
 end
 
 let empty =
-    { Ta.name = ""; Ta.decls = []; Ta.assumptions = [];
-      Ta.locs = []; Ta.inits = []; Ta.rules = [];
-      Ta.specs = StrMap.empty;
+    { Ta.name = ""; Ta.decls = []; Ta.macros = StrMap.empty;
+      Ta.assumptions = []; Ta.locs = []; Ta.inits = [];
+      Ta.rules = []; Ta.specs = StrMap.empty;
     }
 
 
@@ -77,8 +79,8 @@ let mk_rule src_loc dst_loc guard actions =
     { Ta.src_loc; Ta.dst_loc; Ta.guard; Ta.actions }
 
 
-let mk_ta n ds ass ls is rs specs =
-    { Ta.name = n; Ta.decls = ds; Ta.assumptions = ass;
+let mk_ta n ds macros ass ls is rs specs =
+    { Ta.name = n; Ta.decls = ds; Ta.macros = macros; Ta.assumptions = ass;
       Ta.locs = ls; Ta.inits = is; Ta.rules = rs; Ta.specs = specs }
 
 
@@ -87,6 +89,7 @@ let print_arith_expr out expr =
         | Int i -> fprintf out "%d" i
         | Var n -> fprintf out "%s" n
         | NextVar n -> fprintf out "%s'" n
+        | Macro n -> fprintf out "%s" n
         | Add (l, r) -> pr l; fprintf out " + "; pr r
         | Sub (l, r) -> pr l; fprintf out " - "; pr r
         | Mul (l, r) -> pr l; fprintf out " * "; pr r

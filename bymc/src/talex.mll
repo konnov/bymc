@@ -4,7 +4,10 @@
  * This is a temporary language that will most likely be replaced by
  * something more appropriate in the future.
  *
- * Igor Konnov, 2015
+ * Since we started to use threshold automata as an input for synthesis,
+ * we have extended their syntax with unknowns, unchanged, define, etc.
+ *
+ * Igor Konnov, 2015-2017
  *)
 open Printf
 
@@ -55,6 +58,7 @@ let token_s = function
     | SEMI -> "SEMI"
     | PRIME -> "PRIME"
     | SKEL -> "SKEL"
+    | THRESHAUTO -> "threshAuto"
     | ASSUME -> "ASSUME"
     | SPECIFICATIONS -> "SPECIFICATIONS"
     | DO -> "DO"
@@ -68,6 +72,9 @@ let token_s = function
     | WHEN -> "WHEN"
     | CONST i -> "CONST" (*Printf.sprintf "CONST(%d)" i*)
     | NAME n -> "NAME" (*Printf.sprintf "NAME(%s)" n*)
+    | MACRO n -> "MACRO" (*Printf.sprintf "NAME(%s)" n*)
+    | DEFINE -> "define" (*Printf.sprintf "NAME(%s)" n*)
+    | UNCHANGED -> "UNCHANGED"
     | EOF -> "EOF"
 
 }
@@ -103,6 +110,7 @@ rule token = parse
  | ';'                   { SEMI }
  | '''                   { PRIME }
  | "skel"                { SKEL } 
+ | "threshAuto"          { THRESHAUTO } 
  | "assumptions"         { ASSUME } 
  | "specifications"      { SPECIFICATIONS } 
  | "do"                  { DO }
@@ -114,10 +122,25 @@ rule token = parse
  | "rules"               { RULES } 
  | "shared"              { SHARED } 
  | "when"                { WHEN } 
+ | "unchanged"           { UNCHANGED } 
+ | "define"              { DEFINE } 
  | ['0'-'9']+            { CONST (int_of_string (Lexing.lexeme lexbuf)) }
- | ['_' 'A'-'Z' 'a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
+ (* an identifier is either one capital letter (for backward compatibility),
+    or it should have at least one small letter *)
+ | ['_' 'A'-'Z']*['a'-'z']['_' 'A'-'Z' 'a'-'z' '0'-'9']*
     {
         NAME (Lexing.lexeme lexbuf)
+    }
+ | ['A'-'Z']
+    {
+        NAME (Lexing.lexeme lexbuf)
+    }
+ (* a macro should have at least two characters, starting with a capital letter
+    and containing only capitals and digits
+  *)
+ | ['_' 'A'-'Z']['_' 'A'-'Z' '0'-'9']+
+    {
+        MACRO (Lexing.lexeme lexbuf)
     }
  | eof                   { EOF }
  | _ as c { raise (Unexpected_token (sprintf "Unrecognized char: %c" c)) }

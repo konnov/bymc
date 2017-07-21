@@ -14,6 +14,7 @@
 open Printf
 open Lexing
 
+open Accums
 open TaIr
 
 let error message =
@@ -57,13 +58,14 @@ let find_loc name =
 
 %}
 
-%token  SKEL PARAMETERS UNKNOWNS LOCAL SHARED
+%token  SKEL THRESHAUTO PARAMETERS UNKNOWNS LOCAL SHARED
 %token	SEMI
 %token	WHEN DO
 %token	<int> CONST
 %token	<string> NAME
+%token	<string> MACRO
 
-%token  INITS ASSUME LOCATIONS RULES SPECIFICATIONS
+%token  INITS ASSUME LOCATIONS RULES SPECIFICATIONS DEFINE
 %token  LTLF LTLG
 %token  IMPLIES
 %token  OR
@@ -73,7 +75,7 @@ let find_loc name =
 %token  PLUS MINUS
 %token  MULT
 %token  COLON COMMA LPAREN RPAREN LBRACE RBRACE LCURLY RCURLY
-%token  PRIME
+%token  PRIME UNCHANGED
 %token  EOF
 
 %left IMPLIES
@@ -89,8 +91,9 @@ let find_loc name =
 %%
 
 start
-    : SKEL n = NAME LCURLY
+    : header n = NAME LCURLY
         ds = decls
+        defs = defines
         ass = assumptions
         locs = locations
         is = inits
@@ -99,22 +102,28 @@ start
       RCURLY EOF
         {
             check_locations ds locs;
-            TaIr.mk_ta n (List.rev ds) ass locs is rs specs
+            TaIr.mk_ta n (List.rev ds) defs ass locs is rs specs
         }
     (* error handling *)
-    | SKEL NAME LCURLY decls assumptions locations inits rules specifications error
+    | header NAME LCURLY decls defines assumptions locations inits rules specifications error
         { error "expected: '}' after specifications {..}" }
-    | SKEL NAME LCURLY decls assumptions locations inits rules error
+    | header NAME LCURLY decls defines assumptions locations inits rules error
         { error "expected: specifications after rules {..}" }
-    | SKEL NAME LCURLY decls assumptions locations inits error
+    | header NAME LCURLY decls defines assumptions locations inits error
         { error "expected: rules {..} after inits {..}" }
-    | SKEL NAME LCURLY decls assumptions locations error
+    | header NAME LCURLY decls defines assumptions locations error
         { error "expected: inits {..} after locations {..}" }
-    | SKEL NAME LCURLY decls assumptions error
+    | header NAME LCURLY decls defines assumptions error
         { error "expected: locations {..} after assumptions {..}" }
-    | SKEL NAME LCURLY decls error
-        { error "expected: assumptions {..} after declarations" }
+    | header NAME LCURLY decls defines error
+        { error "expected: [defines] assumptions {..} after declarations" }
 	;
+
+header
+    :
+    | SKEL          {}
+    | THRESHAUTO    {}
+    ;
 
 decls
     :                           { reset_locs (); [] }
@@ -160,6 +169,13 @@ unknowns
         { (Unknown n) :: ns }
     ;
 
+defines
+    : { StrMap.empty }
+
+    | DEFINE n = MACRO EQ e = arith_expr SEMI defs = defines
+        { StrMap.add n e defs }
+    ;
+
 assumptions
     : ASSUME LPAREN CONST RPAREN LCURLY es = bool_expr_list RCURLY
         { es }
@@ -190,13 +206,24 @@ rule_list
     ;
 
 
+names
+    : n = NAME
+        { [ n ] }
+
+    | ns = names COMMA n = NAME
+        { n :: ns }
+    ;
+
 act_list
     : { [] }
 
     | n = NAME PRIME EQ e = arith_expr SEMI acts = act_list
         { (n, e) :: acts }
 
-    | error { error "expected var' == arith_expr" }
+    | UNCHANGED LPAREN ns = names RPAREN SEMI acts = act_list
+        { (List.map (fun n -> (n, Var n)) ns) @ acts }
+
+    | error { error "expected var' == arith_expr OR unchanged(var, ..., var)" }
 
 
 rel_expr_list
@@ -276,6 +303,7 @@ arith_expr
     : i = CONST                             { Int i }
     | n = NAME                              { Var n }
     | n = NAME PRIME                        { NextVar n }
+    | n = MACRO                             { Macro n }
     | LPAREN e = arith_expr RPAREN          { e }
     | i = arith_expr PLUS j = arith_expr    { Add (i, j) }
     | i = arith_expr MINUS j = arith_expr   { Sub (i, j) }

@@ -1,6 +1,6 @@
 /* a template for the reliable broadcast: Byzantine faults and non-clean crashes */
 
-skel Proc {
+threshAuto proc {
   /* the control locations are as follows:
     0 is the initial state with value 0,
     1 is the initial state with value 1,
@@ -12,12 +12,12 @@ skel Proc {
   /* the number of messages sent by the correct processes and (possibly) by the crashed processes */
   shared nsnt, nsntCandF, ncrashed;
   parameters N, Tb, Tc, Fb, Fc;
-  unknowns /*a0, b0,*/ a1, b1, c1, d1, a2, b2, c2, d2; /* the constants to be found by synthesis */
+  unknowns a1, b1, c1, d1, a2, b2, c2, d2;
+    /* the constants to be found by synthesis */
 
-  /*N > a0 * Tb + b0 * Tc;
-    a0 < 100;
-    b0 < 100;
-  */
+  define THRESH1 == a1 * N + b1 * Tb + c1 * Tc + d1;
+  define THRESH2 == a2 * N + b2 * Tb + c2 * Tc + d2;
+
   assumptions (0) {
     N > 3 * Tb + 2 * Tc;
     Tb >= Fb;
@@ -25,30 +25,29 @@ skel Proc {
     Tc >= Fc;
     Tc >= 1;
 
-    a1 < 100;
-    a2 < 100;
-    b1 < 100;
-    b2 < 100;
-    c1 < 100;
-    c2 < 100;
-    d1 < 100;
-    d2 < 100;
+    0 <= a1; a1 <= 1;
+    0 <= a2; a2 <= 1;
+    -4 <= b1; b1 <= 4;
+    -4 <= b2; b2 <= 4;
+    -6 <= c1; c1 <= 6;
+    -6 <= c2; c2 <= 6;
+    -13 <= d1; d1 <= 13;
+    -13 <= d2; d2 <= 13;
   }
-
 
   locations (0) {
     loc0: [0];
     loc1: [1];
-    loc2: [2];
-    loc3: [3];
-    loc4: [4];
+    locSE: [2];
+    locAC: [3];
+    locCR: [4];
   }
 
   inits (0) {
     (loc0 + loc1) == N - Fb;
-    loc2 == 0;
-    loc3 == 0;
-    loc4 == 0;
+    locSE == 0;
+    locAC == 0;
+    locCR == 0;
     nsnt == 0;
     nsntCandF == 0;
     ncrashed == 0;
@@ -56,65 +55,66 @@ skel Proc {
 
   rules (0) {
   /* crashing without or with sending a message */
-  0: loc0 -> loc4
+  0: loc0 -> locCR
       when (ncrashed < Fc)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed + 1; };
-  1: loc1 -> loc4
+      do { unchanged(nsnt, nsntCandF); ncrashed' == ncrashed + 1; };
+  1: loc1 -> locCR
       when (ncrashed < Fc)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed + 1; };
-  2: loc1 -> loc4
+      do { unchanged(nsnt, nsntCandF); ncrashed' == ncrashed + 1; };
+  2: loc1 -> locCR
       when (ncrashed < Fc)
       do { nsnt' == nsnt; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed + 1; };
   /* crashing when in the sent or accepting state */
-  3: loc2 -> loc4
+  3: locSE -> locCR
       when (ncrashed < Fc)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed + 1; };
-  4: loc3 -> loc4
+      do { unchanged(nsnt, nsntCandF); ncrashed' == ncrashed + 1; };
+  4: locAC -> locCR
       when (ncrashed < Fc)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed + 1; };
+      do { unchanged(nsnt, nsntCandF); ncrashed' == ncrashed + 1; };
   /* send a message when having value 1 */
-  5: loc1 -> loc2
+  5: loc1 -> locSE
       when (nsnt >= 0)
       do { nsnt' == nsnt + 1; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed; };
   /* accept directly */
-  6: loc0 -> loc3
-      when (nsnt >= (a2 * N + b2 * Tb + c2 * Tc + d2 - Fb))
+  6: loc0 -> locAC
+      when (nsntCandF >= THRESH2 - Fb)
       do { nsnt' == nsnt + 1; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed; };
-  7: loc1 -> loc3
-      when (nsntCandF >= (a2 * N + b2 * Tb + c2 * Tc + d2 - Fb))
+  7: loc1 -> locAC
+      when (nsntCandF >= THRESH2 - Fb)
       do { nsnt' == nsnt + 1; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed; };
   /* send a message */
-  8: loc0 -> loc2
-      when (nsntCandF >= (a1 * N + b1 * Tb + c1 * Tc + d1 - Fb))
+  8: loc0 -> locSE
+      when (nsntCandF >= THRESH1 - Fb)
       do { nsnt' == nsnt + 1; nsntCandF' == nsntCandF + 1; ncrashed' == ncrashed; };
   /* accept */
-  9: loc2 -> loc3
-      when (nsntCandF >= (a2 * N + b2 * Tb + c2 * Tc + d2 - Fb))
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed; };
+  9: locSE -> locAC
+      when (nsntCandF >= THRESH2 - Fb)
+      do { unchanged(nsnt, nsntCandF, ncrashed); };
+
   /* self-loops in all the locations but loc1, from which processes must progress */
   10: loc0 -> loc0
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed; };
-  11: loc2 -> loc2
+      do { unchanged(nsnt, nsntCandF, ncrashed); };
+  11: locSE -> locSE
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed; };
-  12: loc3 -> loc3
+      do { unchanged(nsnt, nsntCandF, ncrashed); };
+  12: locAC -> locAC
       when (nsnt >= 0)
-      do { nsnt' == nsnt; nsntCandF' == nsntCandF; ncrashed' == ncrashed; };
+      do { unchanged(nsnt, nsntCandF, ncrashed); };
   }
   specifications (3) {
     /* safety */
-    unforg: (loc1 == 0) -> [](loc3 == 0);
-    corr: <>[]((nsnt < a1 * N + b1 * Tb + c1 * Tc + d1 || loc0 == 0)
-                && (nsnt < a2 * N + b2 * Tb + c2 * Tc + d2 || loc0 == 0)
-                && ((nsnt < a2 * N + b2 * Tb + c2 * Tc + d2) || loc2 == 0)
+    unforg: (loc1 == 0) -> [](locAC == 0);
+    corr: <>[]((nsnt < THRESH1 || loc0 == 0)
+                && (nsnt < THRESH2 || loc0 == 0)
+                && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
-        -> ((loc0 == 0) -> <>(loc3 != 0));
-    relay: <>[]((nsnt < a1 * N + b1 * Tb + c1 * Tc + d1 || loc0 == 0)
-                && (nsnt < a2 * N + b2 * Tb + c2 * Tc + d2 || loc0 == 0)
-                && ((nsnt < a2 * N + b2 * Tb + c2 * Tc + d2) || loc2 == 0)
+        -> ((loc0 == 0) -> <>(locAC != 0));
+    relay: <>[]((nsnt < THRESH1 || loc0 == 0)
+                && (nsnt < THRESH2 || loc0 == 0)
+                && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
-        -> []((loc3 != 0) -> <>((loc0 == 0) && (loc1 == 0) && (loc2 == 0)));
+        -> []((locAC != 0) -> <>(loc0 == 0 && loc1 == 0 && locSE == 0));
   }
 } /* Proc */
 
