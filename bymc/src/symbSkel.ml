@@ -100,9 +100,13 @@ module Sk = struct
         fprintf out "  assumptions (%d) {\n" (List.length sk.assumes);
         List.iter pexp sk.assumes;
         fprintf out "  }\n\n";
+        let find_locname l =
+            let v = IntMap.find l sk.loc_vars in
+            v#get_name
+        in
         let ploc (i, l) =
             fprintf out "    %s: [%s];\n"
-                (locname l) (str_join "; " (List.map int_s l))
+                (find_locname i) (str_join "; " (List.map int_s l))
         in
         fprintf out "  locations (%d) {\n" sk.nlocs;
         List.iter ploc (lst_enum sk.locs);
@@ -111,7 +115,7 @@ module Sk = struct
         List.iter pexp sk.inits;
         fprintf out "  }\n\n";
         let prule (i, r) =
-            let loc j = locname (List.nth sk.locs j) in
+            let loc j = find_locname j in
             let e_s e = (expr_s e) ^ ";" in
             fprintf out "  %d: %s -> %s\n      when (%s)\n      do { %s };\n"
                 i (loc r.src) (loc r.dst) (expr_s r.guard)
