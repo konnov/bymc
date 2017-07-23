@@ -24,14 +24,6 @@ skel Proc {
     N > T;
     T >= F;
 
-    /* we want sane guards */
-    /*
-    0 <= a1 * N + b1 * T + c1;
-    a1 * N + b1 * T + c1 <= N;
-    0 <= a2 * N + b2 * T + c2;
-    a2 * N + b2 * T + c2 <= N;
-    */
-
     0 <= a1; a1 <= 1;
     0 <= a2; a2 <= 1;
     -2 <= b1; b1 <= 2;
@@ -43,13 +35,13 @@ skel Proc {
   locations (0) {
     loc0: [0]; /* initialized with value 0 */
     loc1: [1]; /* initialized with value 1 */
-    locSE: [2]; /* crashed */
+    locCR: [2]; /* crashed */
     locAC: [3]; /* accepted */
   }
 
   inits (0) {
     (loc0 + loc1) == N;
-    locSE == 0;
+    locCR == 0;
     locAC == 0;
     nsnt == 0;
     nsntF == 0;
@@ -57,18 +49,18 @@ skel Proc {
 
   rules (0) {
   /* crashing without sending a message */
-  0: loc0 -> locSE
+  0: loc0 -> locCR
       when (nfaulty < F)
       do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
-  1: loc1 -> locSE
+  1: loc1 -> locCR
       when (nfaulty < F)
       do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
   /* crashing after sending a message */
-  2: loc1 -> locSE
+  2: loc1 -> locCR
       when (nfaulty < F)
       do { nsnt' == nsnt; nsntF' == nsntF + 1; nfaulty' == nfaulty + 1; };
   /* crashing when in the accepting state */
-  3: locAC -> locSE
+  3: locAC -> locCR
       when (nfaulty < F)
       do { unchanged(nsnt, nsntF); nfaulty' == nfaulty + 1; };
   /* sending a message and accepting when initialized with value 1 */
@@ -93,6 +85,7 @@ skel Proc {
   }
 
   specifications (0) {
+    /* to have sane guards */
     sanity:
         (0 <= THRESH1 && THRESH1 <= N && 0 <= THRESH2 && THRESH2 <= N);
 

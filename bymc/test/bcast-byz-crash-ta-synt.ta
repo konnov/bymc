@@ -19,7 +19,7 @@ threshAuto proc {
   define THRESH2 == a2 * N + b2 * Tb + c2 * Tc + d2;
 
   assumptions (0) {
-    N > 3 * Tb + 2 * Tc;
+    N > 3 * Tb + 2* Tc - 2;
     Tb >= Fb;
     Tb >= 1;
     Tc >= Fc;
