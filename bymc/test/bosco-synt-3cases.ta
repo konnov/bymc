@@ -239,6 +239,7 @@ skel Proc {
                     && loc4 == 0 && loc6 == 0 && loc7 == 0));
 
     /* convergence (either fast or slow) */
+    /*
     termination:
         (<>[]((
                 (z1 * nsnt01 < THRESH1)
@@ -250,6 +251,7 @@ skel Proc {
             && loc0 == 0 && loc1 == 0))
         ->
         <>(loc0 == 0 && loc1 == 0 && loc2 == 0 && loc3 == 0);
+        */
   }
 } /* Proc */
 
