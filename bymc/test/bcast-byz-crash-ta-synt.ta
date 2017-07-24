@@ -19,11 +19,11 @@ threshAuto proc {
   define THRESH2 == a2 * N + b2 * Tb + c2 * Tc + d2;
 
   assumptions (0) {
-    N > 3 * Tb + 2* Tc - 2;
+    N > 3 * Tb + 2 * Tc /* + Tb */;
     Tb >= Fb;
-    Tb >= 1;
+    Tb >= 0;
     Tc >= Fc;
-    Tc >= 1;
+    Tc >= 0;
 
     0 <= a1; a1 <= 1;
     0 <= a2; a2 <= 1;
@@ -121,6 +121,18 @@ threshAuto proc {
                 && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
         -> []((locAC != 0) -> <>(loc0 == 0 && loc1 == 0 && locSE == 0));
+
+
+    /*
+    cond_corr: <>[]((nsnt < THRESH1 || loc0 == 0)
+                && (nsnt < THRESH2 || loc0 == 0)
+                && ((nsnt < THRESH2) || locSE == 0)
+                && (loc1 == 0))
+        -> ((loc1 >= Tb + Tc + 1) -> <>(locAC != 0));
+
+
+    cond_unforg: (loc1 <= Tb) -> [](locAC == 0);
+    */
   }
 } /* Proc */
 
