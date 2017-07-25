@@ -32,17 +32,17 @@ skel Proc {
     0 <= a2; a2 <= 2;
     0 <= a4; a4 <= 2;
     /* we take a conservative estimate for n > 7t */
-    -24 <= b1; b1 <= 24;
-    -24 <= b2; b2 <= 24;
-    -24 <= b4; b4 <= 24;
-    -48 <= c1; c1 <= 48;
-    -48 <= c2; c2 <= 48;
-    -48 <= c4; c4 <= 48;
+    -48 <= b1; b1 <= 48;
+    -48 <= b2; b2 <= 48;
+    -48 <= b4; b4 <= 48;
+    -96 <= c1; c1 <= 96;
+    -96 <= c2; c2 <= 96;
+    -96 <= c4; c4 <= 96;
     /* fix then denominators to 2 to have only unique solutions
        for x/1, x/2, x/3 */
-    z1 == 3;
-    z2 == 3;
-    z4 == 3;
+    z1 == 6;
+    z2 == 6;
+    z4 == 6;
     N > 3 * T;
     T >= F;
     T >= 1;
