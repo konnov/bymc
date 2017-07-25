@@ -34,6 +34,10 @@ let cex_default_scm_filename = "cex-fixme.scm"
 let po_init = 1
 let po_loop = 0
 
+(* we precompute the number of schemas for use experience,
+   but when there are too many, we just say 'too many' *)
+let linext_too_many = 100000
+
 (**
  The statistics collected during the execution.
  *)
@@ -1199,9 +1203,14 @@ let accum_stat r_st watch no schema_len =
         else 0.0
     in
     let percentage = 100 * no / nschemas in
-    printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, nr: %d\n"
+    if nschemas < linext_too_many
+    then printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, nr: %d\n"
         percentage (human_readable_duration one_lap)
-        (human_readable_duration elapsed) (human_readable_duration eta) no;
+        (human_readable_duration elapsed) (human_readable_duration eta) no
+    else printf "  (?)%%, lap: %s, elapsed: %s, ETA: unknown, nr: %d\n"
+        (human_readable_duration one_lap)
+        (human_readable_duration elapsed) no;
+            
 
     (* update the running time with the reachability optimization on/off *)
     let fadd_if is_true a b = if is_true then a +. b else a in
@@ -1310,12 +1319,19 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
     logtm INFO (form_name ^ ": counting linear extensions...");
     let poi = POI.iter_first get_elem (linord_iter_first size order) in
     let total_count = ref 0 in
-    while not (POI.iter_is_end poi) do
+    while not (POI.iter_is_end poi)
+            && !total_count < linext_too_many do (* stop when there are too many *)
         total_count := 1 + !total_count;
         POI.iter_next poi
     done;
-    logtm INFO (sprintf
-        "%s: %d linear extensions to enumerate\n\n" form_name !total_count);
+    let msg = 
+        if !total_count < linext_too_many
+        then sprintf
+            "%s: %d linear extensions to enumerate\n\n" form_name !total_count
+        else sprintf
+            "%s: more than %d linear extensions to enumerate (disabled percentage)\n\n" form_name linext_too_many
+    in
+    logtm INFO msg;
 
     (* and check the properties for each of them *)
     let current = ref 0 in
