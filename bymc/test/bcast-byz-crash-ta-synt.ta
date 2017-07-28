@@ -123,15 +123,13 @@ threshAuto proc {
         -> []((locAC != 0) -> <>(loc0 == 0 && loc1 == 0 && locSE == 0));
 
 
+    /* new specs by Josef */
     /*
-    cond_corr: <>[]((nsnt < THRESH1 || loc0 == 0)
+    Z: <>[]((nsnt < THRESH1 || loc0 == 0)
                 && (nsnt < THRESH2 || loc0 == 0)
                 && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
         -> ((loc1 >= Tb + Tc + 1) -> <>(locAC != 0));
-
-
-    cond_unforg: (loc1 <= Tb) -> [](locAC == 0);
     */
   }
 } /* Proc */
