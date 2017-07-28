@@ -97,6 +97,10 @@ skel Proc {
                 && ((nsnt < THRESH2) || locSE == 0)
                 && (loc1 == 0))
         -> []((locAC != 0) -> <>((loc0 == 0) && (loc1 == 0) && (locSE == 0)));
+
+    /* the new specs invented by Josef */
+    /* X: (loc1 <= 2) -> [](locAC == 0); */
+    /* Y: (loc1 <= T) -> [](locAC == 0); */
   }
 } /* Proc */
 
