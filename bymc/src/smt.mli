@@ -1,7 +1,7 @@
 (**
     Interface to SMT.
 
-    @author Igor Konnov, 2012-2014
+    @author Igor Konnov, 2012-2017
  *)
 
 exception Smt_error of string
@@ -19,9 +19,14 @@ module Q: sig
 
     val query_result_s: query_t -> query_result_t -> string
 
+    val add_result: query_t -> query_t
+        -> string -> Spin.token SpinIr.expr -> query_t
+
     val try_get: query_t -> Spin.token SpinIr.expr -> query_result_t
 
     val print_contents: query_t -> unit
+
+    val keys: query_t -> string list
 end
 
 

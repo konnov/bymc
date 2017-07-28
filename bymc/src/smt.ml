@@ -4,6 +4,8 @@
     @author Igor Konnov, 2012-2016
  *)
 
+open Batteries
+
 open Printf
 open Str
 
@@ -75,6 +77,9 @@ module Q = struct
             nq
         end with Not_found ->
             nq
+
+    let keys (q: query_t) =
+        List.of_enum (Hashtbl.keys q.tab)
                 
 end
 

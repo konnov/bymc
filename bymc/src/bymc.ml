@@ -32,6 +32,9 @@ let print_version_if_needed opts =
 let run_solver opts =
     let mk_solver =
         match opts.smt with
+        | SmtApiZ3 ->
+                ((new SmtZ3.z3_smt "main") :> Smt.smt_solver)
+
         | SmtYices ->
                 new Smt.yices_smt "main" "yices"
 
