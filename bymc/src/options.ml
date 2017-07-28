@@ -22,7 +22,7 @@ type action_opt_t =
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv | ToolNone
 
-type smt_opt_t = SmtYices | SmtLib2 of string array | SmtMathsat5
+type smt_opt_t = SmtYices | SmtLib2 of string array | SmtApiZ3 | SmtMathsat5
 
 type options_t =
     {
@@ -49,7 +49,7 @@ let input_s = function
 
 let empty =
     (* z3 is our default solver *)
-    let smt = SmtLib2 [|"z3"; "-smt2"; "-in"|] in
+    let smt = SmtApiZ3 (*SmtLib2 [|"z3"; "-smt2"; "-in"|]*) in 
     {
         action = OptNone; input = InputPromela;
         trail_name = ""; filename = ""; spec = "";
@@ -92,7 +92,9 @@ let parse_mc_tool = function
 
 
 let parse_smt s =
-    if s = "yices"
+    if s = "z3"
+    then SmtApiZ3
+    else if s = "yices"
     then SmtYices
     else if s = "mathsat5"
     then SmtMathsat5
@@ -145,7 +147,7 @@ let parse_options _ =
             );
             ("--smt", (Arg.String (fun s ->
                 opts := {!opts with smt = parse_smt s})),
-                " choose SMT solver: yices (default), lib2|solver-name|arg1|arg2...");
+                " choose SMT solver: z3 (default), lib2|solver-name|arg1|arg2...");
             ("--spec", (Arg.String (fun s -> opts := {!opts with spec = s})),
                 " specification name to check."
             );

@@ -2,4 +2,4 @@ S src
 S test
 B _build/src
 B _build/test
-PKG threads batteries ocamlgraph oUnit sexplib mpi
+PKG threads batteries ocamlgraph oUnit sexplib mpi Z3
