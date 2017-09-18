@@ -25,22 +25,26 @@ CONTENTS
  * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (OPTIONAL: if you want to run unit tests)
- * mpi (opam), libopenmpi-dev and openmpi (linux)
+ * ocamlmpi (github), libmpich2 (linux) and openmpi-bin (linux)
     (if you want to do verification or synthesis in parallel)
  * sexplib
  * ctypes and ctypes-foreign (OPTIONAL: when you compile with mathsat)
  * at least one SMT solver:
-    * Microsoft Z3
+    * Microsoft Z3 (ocaml bindings)
     * yices 1.x: http://yices.csl.sri.com/download.shtml
     * Any decent SMT solver that supports SMTLIB2, logic QF_ALIA,
       model generation, and unsat cores.
+
  * one of the model checkers (OPTIONAL: when not using verifypa-post):
      - spin: http://spinroot.com/spin/Man/README.html#S2
      - nusmv: http://nusmv.fbk.eu/NuSMV/download/getting-v2.html
      - faster: http://www.lsv.ens-cachan.fr/Software/fast/
+
  * gcc (OPTIONAL: if you are going to use spin)
+
  * lingeling: http://fmv.jku.at/lingeling/
      (OPTIONAL: if you want to run bounded model checking with nusmv + lingeling)
+
  * pycudd (OPTIONAL and DEPRECATED:
      see Sec. 6, if you want to reproduce the results on the diameter, or to
      check the algorithms with FASTer, as in the paper at CONCUR'14)
@@ -144,10 +148,10 @@ The latter will check the properties as well (Sec. 4.6).
 
 The easiest way to install the dependencies is to use your package manager,
 i.e., apt-get, zypper, etc. For instance, this tool is periodically built
-on Debian Wheezy, which makes all the libraries available via its package
+on Debian testing, which makes all the libraries available via its package
 manager apt-get.
 
-5.1 Ocamlbrew
+5.2 Ocamlbrew
 
 If you do not have ocaml and the required ocaml packages, consider using
 ocamlbrew: http://opam.ocaml.org/doc/Quick_Install.html#h4-Usingocamlbrew
@@ -162,15 +166,26 @@ Ocamlbrew bootstraps the whole ocaml infrastructure together with the package
 manager called opam. As soon as opam is in place, you can install the
 packages as follows:
 
-$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie mpi
+$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie
 
 (Do not forget to include the line
-'source ~/ocamlbrew/ocaml-4.00.1/etc/ocamlbrew.bashrc'
+'source ~/ocamlbrew/ocaml-4.XX.X/etc/ocamlbrew.bashrc'
 in your ~/.bashrc or ~/.zshrc before doing that)
 
 If you want to compile mathsat's library, you have to also install:
 
 $ opam install ctypes ctypes-foreign
+
+5.3. Installing ocamlmpi
+
+As of September 2017, MPI bindings for ocaml are not available in opam.
+To install ocamlmpi, do the following:
+  
+  1. Download the latest version from: https://github.com/xavierleroy/ocamlmpi
+  2. Fix MPIINCDIR to point to mpich
+  3. make && && make opt && make install
+  
+
 
 
 6. INSTALLING PYCUDD (DEPRECATED)
