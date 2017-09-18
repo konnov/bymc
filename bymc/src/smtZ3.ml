@@ -69,6 +69,50 @@ let var_to_fun_decl ctx var tp =
     (var_expr, constraints)
 
 
+(* TODO: just reusing Smt.expr_to_smt2, but could use virtually anything *)
+let rec expr_to_key = function
+    | Nop comment -> sprintf ";; %s\n" comment
+    | IntConst i -> string_of_int i
+    | Var v -> v#mangled_name
+
+    | UnEx (tok, f) ->
+        begin match tok with
+        | UMIN -> sprintf "(- %s)" (expr_to_key f)
+        | NEG  -> sprintf "(not %s)" (expr_to_key f)
+        | _ ->
+            raise (Failure
+                (sprintf "No idea how to translate %s to SMT" (token_s tok)))
+        end
+
+    | BinEx (tok, l, r) ->
+        begin match tok with
+        | PLUS  -> sprintf "(+ %s %s)" (expr_to_key l) (expr_to_key r)
+        | MINUS -> sprintf "(- %s %s)" (expr_to_key l) (expr_to_key r)
+        | MULT  -> sprintf "(* %s %s)" (expr_to_key l) (expr_to_key r)
+        | DIV   -> sprintf "(div %s %s)" (expr_to_key l) (expr_to_key r)
+        | MOD   -> sprintf "(mod %s %s)" (expr_to_key l) (expr_to_key r)
+        | GT    -> sprintf "(> %s %s)" (expr_to_key l) (expr_to_key r)
+        | LT    -> sprintf "(< %s %s)" (expr_to_key l) (expr_to_key r)
+        | GE    -> sprintf "(>= %s %s)"  (expr_to_key l) (expr_to_key r)
+        | LE    -> sprintf "(<= %s %s)"  (expr_to_key l) (expr_to_key r)
+        | EQ    -> sprintf "(= %s %s)"  (expr_to_key l) (expr_to_key r)
+        | NE    -> sprintf "(not (= %s %s))"  (expr_to_key l) (expr_to_key r)
+        | AND   -> sprintf "(and %s %s)" (expr_to_key l) (expr_to_key r)
+        | OR    -> sprintf "(or %s %s)"  (expr_to_key l) (expr_to_key r)
+        | EQUIV -> sprintf "(= %s %s)"  (expr_to_key l) (expr_to_key r)
+        | IMPLIES -> sprintf "(=> %s %s)"  (expr_to_key l) (expr_to_key r)
+        | ARR_ACCESS -> sprintf "(select %s %s)" (expr_to_key l) (expr_to_key r)
+        | _ -> raise (Failure
+                (sprintf "No idea how to translate '%s' to SMT" (token_s tok)))
+        end
+
+    | Phi (lhs, rhs) ->
+            raise (Failure "Phi to SMT is not supported")
+
+    | LabelRef (proc_name, lab_name) ->
+            raise (Failure "LabelRef to SMT is not supported")
+
+
 let expr_to_z3 ctx vars ex =
     let rec trans = function
     | Nop comment -> raise (Failure "Nop is not supported")
@@ -234,11 +278,11 @@ class z3_smt name =
 
         method get_need_unsat_cores = m_need_unsat_cores
             
-        method get_model_query = Q.new_query SpinIrImp.expr_s
+        method get_model_query = Q.new_query expr_to_key
 
         method submit_query (query: Q.query_t) =
             let keys = Smt.Q.keys query in
-            let new_q = Q.new_query SpinIrImp.expr_s in
+            let new_q = Q.new_query expr_to_key in
             let to_int str =
                 try int_of_string str
                 with Failure m ->
@@ -247,7 +291,11 @@ class z3_smt name =
             in
             let umin_re = Str.regexp "(- \\([-0-9]+\\))" in
             let each_key model key =
-                let var_expr = Hashtbl.find m_vars key in
+                let var_expr =
+                    try Hashtbl.find m_vars key
+                    with Not_found ->
+                        raise (Failure ("No variable " ^ key ^ " in SMT query"))
+                in
                 match Model.eval model var_expr true with
                 | None ->
                     raise (Failure (sprintf "No model for %s" key))
