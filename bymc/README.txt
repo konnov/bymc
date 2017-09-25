@@ -1,8 +1,9 @@
 
 0. WHAT IS THAT?
+================
 
-ByMC is a tool for model checking fault-tolerant distributed algorithms.
-More details to be found at: http://forsyte.at/software/bymc/
+ByMC is a tool for model checking (and synthesis) of fault-tolerant distributed
+algorithms.  More details to be found at: http://forsyte.at/software/bymc/
 
 Should you have any questions, ask Igor Konnov <konnov at forsyte.at>
 
@@ -19,6 +20,7 @@ CONTENTS
 
 
 1. PREREQUISITES
+================
 
  * python 2.x
  * ocaml and ocamlbuild (not earlier than 3.11.0)
@@ -35,7 +37,7 @@ CONTENTS
     * Any decent SMT solver that supports SMTLIB2, logic QF_ALIA,
       model generation, and unsat cores.
 
- * one of the model checkers (OPTIONAL: when not using verifypa-post):
+ * one of the model checkers (OPTIONAL: when not using verifypa-schema):
      - spin: http://spinroot.com/spin/Man/README.html#S2
      - nusmv: http://nusmv.fbk.eu/NuSMV/download/getting-v2.html
      - faster: http://www.lsv.ens-cachan.fr/Software/fast/
@@ -47,43 +49,69 @@ CONTENTS
 
  * pycudd (OPTIONAL and DEPRECATED:
      see Sec. 6, if you want to reproduce the results on the diameter, or to
-     check the algorithms with FASTer, as in the paper at CONCUR'14)
+     check the algorithms with FASTer, as in the paper at CONCUR'14. Better
+     download ByMC 0.6.7)
 
 If you do not know how to install ocaml and ocaml libraries in your system,
 check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
 
+
 2. COMPILING
+============
 
 # building (you need ocaml and ocamlbuild)
 cd bymc # (the directory with this README)
 make
 
+
 3. EXAMPLES
+===========
 
 You can find the examples at the tool's website:
 
-http://forsyte.at/software/bymc/#examples
+  [http://forsyte.at/software/bymc/]
+
+as well as in the following github repository:
+
+  [https://github.com/konnov/fault-tolerant-benchmarks]
+
 
 4. RUNNING
+==========
 
-4.1 PARTIAL ORDERS AND ACCELERATION IN SMT (our papers at CAV'15 and POPL'17)
+4.1 PARTIAL ORDERS AND ACCELERATION IN SMT (CAV'15, POPL'17, FMSD'17)
+---------------------------------------------------------------------
 
-using Z3:
+using Z3 and OCaml bindings:
 
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|z3|-in|-smt2'
+$ ./verifypa-schema ${benchmarks}/popl17/promela/bcast-byz.pml unforg
 
-or another SMT solver:
+or an SMT solver that supports SMTLIB2:
 
-./verifypa-post ${benchmarks}/2015/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
+$ ./verifypa-post ${benchmarks}/popl17/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'
 
-4.2. SPIN (our FMCAD'13 paper)
+
+4.2 SYNTHESIS (submission to OPODIS'17)
+
+using Z3 and OCaml bindings (single core):
+
+$ ./syntpa-schema test/bcast-byz-ta-synt.ta all
+
+or running the parallel version with MPI (set $PROCS to the number of MPI processes):
+
+$ mpirun -n $PROCS --output-filename out \
+  ./syntpa-schema test/bcast-byz-ta-synt.ta all -O schema.tech=ltl-mpi
+
+
+4.3. SPIN (our FMCAD'13 paper)
+------------------------------
 
 # checking models with concrete parameters using spin
-./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
+$ ./verifyco-spin 'N=3,T=1,F=1' ${spin13-benchmarks}/cond-consensus.pml termination
 
 Parameterized model checking with the abstraction-refinement:
 
-./verifypa-spin ${benchmarks}/bcast-byz.pml relay
+$ ./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
 (you can invoke verifypa-* scripts from any directory you want)
 
@@ -94,57 +122,63 @@ Parameterized model checking with the abstraction-refinement:
 # The tool will check automatically, whether it is an invariant.
 #
 # after that run cegar once more:
-./verifypa-spin ${benchmarks}/bcast-byz.pml relay
+$ ./verifypa-spin ${benchmarks}/bcast-byz.pml relay
 
 
-4.3. NuSMV with BDDs (like in FMCAD'13)
-
-Parameterized model checking with the abstraction-refinement:
-
-./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay
-
-
-4.4. NuSMV with BMC (like in CONCUR'14)
+4.4. NuSMV with BDDs (like in FMCAD'13 but symbolic)
+----------------------------------------------------
 
 Parameterized model checking with the abstraction-refinement:
 
-./verifypa-nusmv-bmc -k length ${benchmarks}/bcast-byz.pml relay
+$ ./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay
+
+
+4.5. NuSMV with BMC (like in CONCUR'14)
+---------------------------------------
+
+Parameterized model checking with the abstraction-refinement:
+
+$ ./verifypa-nusmv-bmc -k length ${benchmarks}/bcast-byz.pml relay
 
 or using lingeling for <length2> steps
     (refinement only up to <length> steps is supported):
 
-./verifypa-nusmv-bmc -k length --lingeling length2 \
+$ ./verifypa-nusmv-bmc -k length --lingeling length2 \
     ${benchmarks}/bcast-byz.pml relay
 
 or using lingeling for <length2> steps
     (refinement only up to <length> steps is supported):
 
-./verifypa-nusmv-bmc -k length --lingeling length2 \
+$ ./verifypa-nusmv-bmc -k length --lingeling length2 \
     --plingeling num_workers \
     ${benchmarks}/bcast-byz.pml relay
 
 
-4.5 FAST (as reported in CONCUR'14)
+4.6 FAST (as reported in CONCUR'14)
+-----------------------------------
 
-./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
+$ ./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg
 
 
-4.6 COMPUTING DIAMETER (of PIA data abstraction, as reported in CONCUR'14)
+4.7 COMPUTING DIAMETER (of PIA data abstraction, as in CONCUR'14)
+--------------------------------------------------------------------------
 
-./analyse ${benchmarks}/bcast-byz.pml bounds
+$ ./analyse ${benchmarks}/bcast-byz.pml bounds
 
 gives bounds on the diameter of counter systems and counter abstractions
 
 the new way to do that is (our CAV'15 submission):
 
-./verifypa-post ${benchmarks}/bcast-byz.pml all
+$ ./verifypa-post ${benchmarks}/bcast-byz.pml all
 
 The latter will check the properties as well (Sec. 4.6).
 
 
-5. HOW TO INSTALL OCAML AND THE LIBRARIES?
+5. HOW TO INSTALL OCAML AND REQUIRED LIBRARIES?
+===============================================
 
 5.1 Your package manager
+------------------------
 
 The easiest way to install the dependencies is to use your package manager,
 i.e., apt-get, zypper, etc. For instance, this tool is periodically built
@@ -152,6 +186,7 @@ on Debian testing, which makes all the libraries available via its package
 manager apt-get.
 
 5.2 Ocamlbrew
+-------------
 
 If you do not have ocaml and the required ocaml packages, consider using
 ocamlbrew: http://opam.ocaml.org/doc/Quick_Install.html#h4-Usingocamlbrew
@@ -177,18 +212,17 @@ If you want to compile mathsat's library, you have to also install:
 $ opam install ctypes ctypes-foreign
 
 5.3. Installing ocamlmpi
+------------------------
 
 As of September 2017, MPI bindings for ocaml are not available in opam.
 To install ocamlmpi, do the following:
   
   1. Download the latest version from: https://github.com/xavierleroy/ocamlmpi
-  2. Fix MPIINCDIR to point to mpich
-  3. make && && make opt && make install
+  2. make && && make opt && make install
   
 
-
-
 6. INSTALLING PYCUDD (DEPRECATED)
+=================================
 
 WARNING: PyCUDD is required only for the script ./analyse that computes
 reachability bounds as in the paper accepted at CONCUR'14. This script
@@ -205,6 +239,7 @@ To compile pycudd:
 
 
 7. MISC
+=======
 
 Nothing here yet
 
