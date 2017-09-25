@@ -115,7 +115,7 @@ let rec expr_to_key = function
 
 let expr_to_z3 ctx vars ex =
     let rec trans = function
-    | Nop comment -> raise (Failure "Nop is not supported")
+    | Nop comment -> raise (Failure (sprintf "Not supported: Nop '%s'" comment))
     | IntConst i -> Arithmetic.Integer.mk_numeral_i ctx i
     | Var v -> Hashtbl.find vars v#mangled_name
 
