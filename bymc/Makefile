@@ -37,7 +37,6 @@ integrate: clean
 fun: integrate
 
 dist:
-
 	git archive --prefix=bymc-src-${ver}/ master \
         | bzip2 > bymc-src-${ver}.tar.bz2
 
