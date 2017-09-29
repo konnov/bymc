@@ -27,8 +27,9 @@ CONTENTS
  * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (OPTIONAL: if you want to run unit tests)
- * ocamlmpi (github), libmpich2 (linux) and openmpi-bin (linux)
+ * ocamlmpi (github), libopenmpi-dev (linux) and openmpi-bin (linux)
     (if you want to do verification or synthesis in parallel)
+    (if needed, use: $ sudo ln -s /etc/alternatives/mpi /usr/include/mpi/)
  * sexplib
  * ctypes and ctypes-foreign (OPTIONAL: when you compile with mathsat)
  * at least one SMT solver:
@@ -101,6 +102,11 @@ or running the parallel version with MPI (set $PROCS to the number of MPI proces
 
 $ mpirun -n $PROCS --output-filename out \
   ./syntpa-schema test/bcast-byz-ta-synt.ta all -O schema.tech=ltl-mpi
+
+
+You can also enumerate all possible solutions by adding -O synt.all=1:
+
+$ ./syntpa-schema test/bcast-byz-ta-synt.ta all -O synt.all=1
 
 
 4.3. SPIN (our FMCAD'13 paper)
@@ -177,15 +183,7 @@ The latter will check the properties as well (Sec. 4.6).
 5. HOW TO INSTALL OCAML AND REQUIRED LIBRARIES?
 ===============================================
 
-5.1 Your package manager
-------------------------
-
-The easiest way to install the dependencies is to use your package manager,
-i.e., apt-get, zypper, etc. For instance, this tool is periodically built
-on Debian testing, which makes all the libraries available via its package
-manager apt-get.
-
-5.2 Ocamlbrew
+5.1. Ocamlbrew
 -------------
 
 If you do not have ocaml and the required ocaml packages, consider using
@@ -211,14 +209,15 @@ If you want to compile mathsat's library, you have to also install:
 
 $ opam install ctypes ctypes-foreign
 
-5.3. Installing ocamlmpi
+5.2. Installing ocamlmpi
 ------------------------
 
 As of September 2017, MPI bindings for ocaml are not available in opam.
 To install ocamlmpi, do the following:
   
   1. Download the latest version from: https://github.com/xavierleroy/ocamlmpi
-  2. make && && make opt && make install
+  2. edit Makefile and change MPIINCDIR, if needed
+  2. make && make opt && make install
   
 
 6. INSTALLING PYCUDD (DEPRECATED)
@@ -226,7 +225,7 @@ To install ocamlmpi, do the following:
 
 WARNING: PyCUDD is required only for the script ./analyse that computes
 reachability bounds as in the paper accepted at CONCUR'14. This script
-is superseded by ./verify-post that neither uses pycydd, nor nusmv.
+is superseded by ./verify-schema that neither uses pycydd, nor nusmv.
 
 PyCUDD is required when ./analysis is run with the property 'bounds'.
 To compile pycudd:
