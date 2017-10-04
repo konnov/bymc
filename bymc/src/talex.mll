@@ -59,7 +59,7 @@ let token_s = function
     | SEMI -> "SEMI"
     | PRIME -> "PRIME"
     | SKEL -> "SKEL"
-    | THRESHAUTO -> "threshAuto"
+    | THRESHAUTO -> "thresholdAutomaton"
     | ASSUME -> "ASSUME"
     | SPECIFICATIONS -> "SPECIFICATIONS"
     | DO -> "DO"
@@ -113,6 +113,7 @@ rule token = parse
  | "true"                { TRUE } 
  | "skel"                { SKEL } 
  | "threshAuto"          { THRESHAUTO } 
+ | "thresholdAutomaton"  { THRESHAUTO } 
  | "assumptions"         { ASSUME } 
  | "specifications"      { SPECIFICATIONS } 
  | "do"                  { DO }
