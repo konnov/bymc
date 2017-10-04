@@ -1527,6 +1527,10 @@ module TL = struct
         | (ExtOrNe0 js, ExtAndOrNe0 ors) ->
             ExtAndOrNe0 (js :: ors)
 
+        | (Ne0 i, Ne0 j) ->
+            (* BUGFIX: a corner case *)
+            ExtAndOrNe0 [[i]; [j]]
+
         | (Ne0 j, ExtOrNe0 is) ->
             ExtAndOrNe0 [[j]; is]
 
