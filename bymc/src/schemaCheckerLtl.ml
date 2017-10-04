@@ -1564,17 +1564,18 @@ module TL = struct
         | (Eq0 j, ExtShared_Or_And_Keq0 (es1, is1)) ->
                 ExtList [(es1, is1); ([IntConst 0], [j])]
 
-        | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
-            ExtShared_Or_And_Keq0 (es, js @ is)
-
         | (ExtList lst1, Eq0 j) ->
                 ExtList (lst1 @ [([IntConst 0], [j])])
 
         | (Eq0 j, ExtList lst1) ->
                 ExtList (([IntConst 0], [j]) :: lst1)
 
+        (* BUGFIX-20171004: two missing cases *)
         | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
-            ExtShared_Or_And_Keq0 (es, js @ is)
+                ExtList [([IntConst 0], js); (es, is)]
+
+        | (ExtAndEq0 js, ExtList lst) ->
+                ExtList (([IntConst 0], js) :: lst)
 
         | _ ->
             raise Unexpected_err
