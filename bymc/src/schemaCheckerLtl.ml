@@ -1376,16 +1376,17 @@ module TL = struct
         Spin.token SpinIr.expr (* propositional *) * utl_sub_t list (* temporal *)
 
 
-    (** An atomic formula *)
+    (** An atomic formula according to our grammar *)
     type atomic_ext_t =
-        | Eq0 of int
-        | Ne0 of int
-        | ExtOrNe0 of int list
-        | ExtAndEq0 of int list
-        | ExtAndOrNe0 of int list list
+        | Eq0 of int                    (* k_i = 0  *)
+        | Ne0 of int                    (* k_i ≠ 0 *)
+        | ExtOrNe0 of int list          (* ⋁_{i ∈ X} k_i ≠ 0 *)
+        | ExtAndEq0 of int list         (* ⋀_{i ∈ X} k_i = 0 *)
+        | ExtAndOrNe0 of int list list  (* ⋀_{1 ≤ j ≤ m} ⋁_{i \in X_j} k_i ≠ 0 *)
         | ExtShared_Or_And_Keq0 of Spin.token SpinIr.expr list * int list
-            (* looks complicated *)
+                (* e.g., ((x < t + 1) ⋀ (x < n - t)) ⋁ ⋀_{i ∈ X} k_i = 0 *)
         | ExtList of (Spin.token SpinIr.expr list * int list) list
+                (* a conjunction of ExtShared_Or_And_Keq0 instances *)
 
 
     let rec utl_tab_of_expr = function
@@ -1451,14 +1452,14 @@ module TL = struct
             TL_p (AndOr_Kne0 ors)
 
         | ExtShared_Or_And_Keq0 (shared_es, is) ->
-            let not_useless e = (e <> (IntConst 1)) in
+            let not_useless e = (e <> (IntConst 0)) in
             let filtered = List.filter not_useless shared_es in
             if filtered <> []
             then TL_p (Shared_Or_And_Keq0 (list_to_binex OR filtered, is))
             else TL_p (And_Keq0 is)
 
         | ExtList lst ->
-            let not_useless e = (e <> (IntConst 1)) in
+            let not_useless e = (e <> (IntConst 0)) in
             let each (es, is) =
                 let filtered = List.filter not_useless es in
                 if filtered <> []
@@ -1528,7 +1529,7 @@ module TL = struct
             ExtAndOrNe0 (js :: ors)
 
         | (Ne0 i, Ne0 j) ->
-            (* BUGFIX: a corner case *)
+            (* BUGFIX 20171004: a corner case *)
             ExtAndOrNe0 [[i]; [j]]
 
         | (Ne0 j, ExtOrNe0 is) ->
@@ -1558,21 +1559,28 @@ module TL = struct
 
         (* ...and many special cases *)
         | (ExtShared_Or_And_Keq0 (es1, is1), Eq0 j) ->
-                ExtList [(es1, is1); ([IntConst 1], [j])]
+                ExtList [(es1, is1); ([IntConst 0], [j])]
 
         | (Eq0 j, ExtShared_Or_And_Keq0 (es1, is1)) ->
-                ExtList [(es1, is1); ([IntConst 1], [j])]
+                ExtList [(es1, is1); ([IntConst 0], [j])]
+
+        | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
+            ExtShared_Or_And_Keq0 (es, js @ is)
 
         | (ExtList lst1, Eq0 j) ->
-                ExtList (lst1 @ [([IntConst 1], [j])])
+                ExtList (lst1 @ [([IntConst 0], [j])])
 
         | (Eq0 j, ExtList lst1) ->
-                ExtList (([IntConst 1], [j]) :: lst1)
+                ExtList (([IntConst 0], [j]) :: lst1)
+
+        | (ExtAndEq0 js, ExtShared_Or_And_Keq0 (es, is)) ->
+            ExtShared_Or_And_Keq0 (es, js @ is)
 
         | _ ->
             raise Unexpected_err
 
 
+    (* NOTE: It is kind of a manually written parser... Needs refactoring. *)
     let extract_utl sk form_exp =
         let var_to_int i v map = IntMap.add v#id i map in
         let rev_map = IntMap.fold var_to_int sk.Sk.loc_vars IntMap.empty
