@@ -1,0 +1,44 @@
+/* An example from our Information & Computation paper. */
+
+thresholdAutomaton Proc {
+  local pc;
+  shared x, y;
+  parameters N, T, F;
+
+  assumptions (0) {
+    N > T;
+    T >= F;
+    T >= 1;
+  }
+
+  locations (0) {
+    loc1: [0];
+    loc2: [1];
+    loc3: [2];
+    loc4: [3];
+  }
+
+  inits (0) {
+    loc1 == N;
+    loc2 == 0; loc3 == 0; loc4 == 0;
+    x == 0; y == 0;
+  }
+
+  rules (8) {
+  0: loc1 -> loc3
+      when (x >= N - F)
+      do { x' == x; y' == y + 1; };
+  1: loc1 -> loc2
+      when (true)
+      do { x' == x + 1; y' == y; };
+  2: loc2-> loc4
+      when (y >= T)
+      do { unchanged(x, y); };
+  }
+
+  specifications (0) {
+    unforg: (loc1 == 0) -> [](loc3 == 0);
+  }
+} /* Proc */
+
+
