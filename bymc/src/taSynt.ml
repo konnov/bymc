@@ -823,7 +823,7 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
 
 
 (** exclude a given tuple of unknowns from consideration *)
-let exclude_unknowns synt_solver assumptions unknowns =
+let exclude_unknowns synt_solver unknowns =
     let neq (name, value) = BinEx (NE, Var (SpinIr.new_var name), value) in
     let ineqs = List.map neq unknowns in
     if ineqs <> []
@@ -831,6 +831,58 @@ let exclude_unknowns synt_solver assumptions unknowns =
         synt_solver#comment ("excluded " ^ (unknowns_vec_s unknowns));
         ignore (synt_solver#append_expr (list_to_binex OR ineqs))
     end
+
+
+(**
+ * 1. Enumerate all vectors of unknowns that satisfy the current formula.
+ * 2. Dump the vectors in a file.
+ * 3. Restore the SMT context.
+ *)
+let dump_all_solutions synt_solver proj_vars =
+    let vars = List.map (fun n -> SpinIr.new_var n) proj_vars in
+    let fout =
+        open_out_gen [Open_creat; Open_append; Open_text]
+            0o666 "synt-dump.txt" in
+    fprintf fout "----\n";
+    (* extract the solution that has been found already,
+       and write it first *)
+    let pushed = ref false in
+    let continue = ref true in
+    while !continue do
+        (* extract a solution *)
+        let q = synt_solver#get_model_query in
+        let try_var v = ignore (Smt.Q.try_get q (SpinIr.Var v)) in
+        List.iter try_var vars;
+        let new_query = synt_solver#submit_query q in
+        let map v =
+            match Smt.Q.try_get new_query (SpinIr.Var v) with
+                | Smt.Q.Result (IntConst i) ->
+                    (v, i)
+
+                | _ ->
+                    raise (Failure "Unexpected result")
+        in
+        let var_vals = List.map map vars in
+        (* print it to the file *)
+        let vv_str (v, i) = sprintf "%s=%d" v#get_name i in
+        fprintf fout "%s\n" (str_join "," (List.map vv_str var_vals));
+        (* for the first time, save the context *)
+        if not !pushed
+        then begin
+            pushed := true;
+            synt_solver#push_ctx
+        end;
+        (* exclude the solution *)
+        let neq (var, value) = BinEx (NE, Var var, IntConst value) in
+        let ineqs = List.map neq var_vals in
+        if ineqs <> []
+        then ignore (synt_solver#append_expr (list_to_binex OR ineqs));
+
+        continue := synt_solver#check
+    done;
+    if !pushed
+    then synt_solver#pop_ctx; (* restore the context *)
+    close_out fout
 
 
 (*

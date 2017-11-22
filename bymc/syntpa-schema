@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Synthesize threshold automata with CEGYS.
+# Synthesize threshold automata with CEGIS.
 #
 # Igor Konnov, 2016-2017
 
@@ -13,7 +13,7 @@ TIME_LIMIT="unlimited"
 
 function help_and_quit() {
 cat << EOF
-Synthesize threshold automata by running CEGYS loop
+Synthesize threshold automata by running CEGIS loop
 
 use $0 [switches] prog spec bymc_options
  where spec is one of those:
@@ -51,6 +51,9 @@ to run in MPI mode (requires -O schema.tech=ltl-mpi):
   -O schema.noadaptive=1 (disable adaptive reachability optimization, default: 0
                           i.e., the tool will not try to choose between
                           enabling/disabling the reachability optimization)
+  -O synt.dump.vectors=var1,var2,...,var_k (at each iteration, enumerate all
+                          vectors of var_1,...,var_k that satisfy the oracle
+                          formula and dump them in file synt-dump.txt)
 EOF
 
     exit 1

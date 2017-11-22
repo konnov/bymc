@@ -1,4 +1,5 @@
 open Printf
+open Str
 
 open Accums
 open Debug
@@ -16,7 +17,7 @@ open TaSynt
 module L = SchemaCheckerLtl
 
 (**
-  Synthesizing threshold automata using CEGYS.
+  Synthesizing threshold automata using CEGIS.
 
   @author Igor Konnov, 2016-2017
 
@@ -35,6 +36,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
         val mutable m_is_mpi = true (* using MPI for synthesis in parallel *)
         val mutable m_double_check = false
         val mutable m_all = false   (* enumerate all possible solutions *)
+        val mutable m_dump_vecs = None (* dump vectors of vars from the list *)
 
         method transform rt =
             self#set_options rt;
@@ -54,8 +56,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let exclude_solution _ =
                 if self#is_master
                 then begin
-                    exclude_unknowns (get_some m_synt_solver)
-                        template_skel.Sk.assumes m_unknowns_vec;
+                    exclude_unknowns (get_some m_synt_solver) m_unknowns_vec;
                     not (self#update_master rt)
                 end
                 else not (self#update_worker rt)
@@ -111,6 +112,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                             m_n_solutions <- m_n_solutions + 1;
                             log INFO (sprintf "> SOLUTION %d: %s"
                                 m_n_solutions (unknowns_vec_s m_unknowns_vec));
+
                             if m_all
                             then exclude_solution () (* look for another solution *)
                             else true   (* found one solution, terminate *)
@@ -121,7 +123,15 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 then log INFO (sprintf "> Finished after %d refinements" m_n_cexs)
                 else loop ()
             in
-            loop ();
+            (* find the first matching values *)
+            let cont =
+                if not self#is_master
+                then self#update_worker rt
+                else self#update_master rt
+            in
+            (* if successful, run the loop *)
+            if cont
+            then loop ();
             self#get_input0
 
         method private has_counterex rt type_tab fixed_skel fixed_deps =
@@ -181,6 +191,8 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                     then ignore (Mpi.broadcast None 0 Mpi.comm_world);
                     false
                 end else begin
+                    if m_dump_vecs != None
+                    then TaSynt.dump_all_solutions synt_solver (get_some m_dump_vecs);
                     m_unknowns_vec <- vec;
                     if m_is_mpi
                     then ignore (Mpi.broadcast (Some vec) 0 Mpi.comm_world);
@@ -208,7 +220,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             let template_skel = ta_source#get_ta in
             let mk0 v = (v#get_name, SpinIr.IntConst 0) in
             m_unknowns_vec <- List.map mk0 template_skel.Sk.unknowns;
-            log INFO ("> Starting with: " ^ (unknowns_vec_s m_unknowns_vec));
+            (*log INFO ("> Starting with: " ^ (unknowns_vec_s m_unknowns_vec));*)
             if self#is_master then begin
                 (* in MPI mode, only the master is running the generator *)
                 let synt_solver = self#get_synt_solver rt in
@@ -218,7 +230,7 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
                 List.iter (append_var signed) (template_skel.Sk.unknowns);
                 List.iter (append_var unsigned) (template_skel.Sk.params);
                 let assume e = ignore (synt_solver#append_expr e) in
-                List.iter assume template_skel.Sk.assumes;
+                List.iter assume template_skel.Sk.assumes
             end
 
 
@@ -272,7 +284,13 @@ class ta_synt_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source_t) =
             m_all <- is_enabled (getopt "synt.all");
             Debug.log INFO
                 (sprintf "  # Synthesizing all solutions: %s"
-                    (if m_all then "enabled" else "disabled"))
+                    (if m_all then "enabled" else "disabled"));
+            match getopt "synt.dump.vectors" with
+            | None -> ()
+            | Some strs ->
+                Debug.log INFO
+                    (sprintf "  # Dump unknown vectors: %s" strs);
+                m_dump_vecs <- Some (split_delim (regexp ",") strs)
 
         method update_runtime rt =
             ()
