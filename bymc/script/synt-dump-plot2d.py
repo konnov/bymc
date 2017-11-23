@@ -87,12 +87,19 @@ if __name__ == "__main__":
         #i = len(data)
         fig = plt.figure()
         ax = fig.gca()
-        ax.tick_params(axis='both', which='major', labelsize=20)
+        ax.tick_params(axis='both', which='major', labelsize=18)
         data_x, data_y = up_gen(i)
-        x_range = np.arange(min(data_x), max(data_x) + 2) -.5
-        y_range = np.arange(min(data_y), max(data_y) + 2) -.5
+        x_range = np.arange(min(data_x), max(data_x) + 2.0)
+        plt.xticks(x_range) # show all ticks
+        y_range = np.arange(min(data_y), max(data_y) + 2.0)
+        plt.yticks(y_range) # show all ticks
+        #ax.grid(True)
+        # move things a bit for a histogram
+        x_range = x_range -.5
+        y_range = y_range -.5
         # plot the excluded areas as a heat map
-        ax.hist2d(data_x, data_y, cmap='viridis', bins=[x_range, y_range])
+        ax.hist2d(data_x, data_y, cmap='viridis',
+                bins=[x_range, y_range], vmin=0.0)
         # plot the support solutions
         data_x, data_y = leads_up_gen(i)
         ax.plot(data_x, data_y, "r*", ms=20)
