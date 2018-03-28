@@ -22,6 +22,11 @@ skel Proc {
     T >= F;
     T >= 1;
     /* We have to constrain the free coefficient from above. Otherwise SMT enumerates all integers. */
+    /*
+    a1 == 0; a2 == 0; /* SIMPLIFYING */
+    c1 == 1; c2 == 1; /* SIMPLIFYING */
+    */
+
     0 <= a1; a1 <= 1;
     0 <= a2; a2 <= 1;
     -4 <= b1; b1 <= 4;
