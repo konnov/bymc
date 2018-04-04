@@ -8,5 +8,8 @@ cat <<EOF
 
 EOF
 
-./verifypa-schema $@
+DIR=`dirname $0`
+DIR=`cd "$DIR"; pwd`
+
+"$DIR"/verifypa-schema "$@"
 
