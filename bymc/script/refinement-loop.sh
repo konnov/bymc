@@ -17,10 +17,10 @@ trap "cd $ORIG_DIR; kill 0" SIGHUP SIGINT SIGTERM
 set -e # fail on first error
 export CAMLRUNPARAM="b"
 
-PROG=`readlink -f $1`
-PROP=$2
 BYMC_HOME=`dirname $0`
 BYMC_HOME=`cd $BYMC_HOME/..; pwd`
+PROG=`"$BYMC_HOME"/script/realpath.py "$1"`  #instead of: `readlink -f $1`
+PROP=$2
 PLUGIN_DIR=`cd $BYMC_HOME/../plugins; pwd`
 CEX="cex.trace"
 MC_OUT="mc.out"
