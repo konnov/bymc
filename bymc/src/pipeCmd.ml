@@ -62,8 +62,9 @@ let write_handler (pid, wts, fdout) =
     (* blocking write *)
     let writeln l = 
         trace Trc.cmd (fun _ -> sprintf "writeln@%d: %s\n" pid l);
-        let ln = l ^ "\n" in
-        try let _ = Unix.write fdout ln 0 (String.length ln) in ()
+        let ln =  l ^ "\n" in
+        let lnb = Bytes.of_string ln in
+        try ignore (Unix.write fdout lnb 0 (Bytes.length lnb))
         with Unix.Unix_error (e, op, msg) ->
         begin
             let uem = Unix.error_message e in

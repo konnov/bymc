@@ -208,7 +208,7 @@ let write_bad_region ff prog skels bad_form =
 
 
 let write_cond_safety ff prog skels name init_form bad_form =
-    let suffix = String.lowercase name in
+    let suffix = String.lowercase_ascii name in
     F.fprintf ff "@[<v 2>Region init_%s := {@," suffix;
     write_init_region ff prog skels init_form;
     F.fprintf ff "@]@,};@,";
@@ -221,9 +221,9 @@ let write_cond_safety ff prog skels name init_form bad_form =
     F.fprintf ff "print(result_%s);@," suffix;
     F.fprintf ff "if (isEmpty(result_%s))@," suffix;
     F.fprintf ff "  then print(\"specification %s is satisfied\");@,"
-        (String.lowercase name);
+        (String.lowercase_ascii name);
     F.fprintf ff "  else print(\"specification %s is violated\");@,"
-        (String.lowercase name);
+        (String.lowercase_ascii name);
     F.fprintf ff "endif@,"
 
 
@@ -265,7 +265,7 @@ let write_to_file filename rt prog skels =
     let ff = F.formatter_of_out_channel fo in
     F.pp_set_margin ff 80;
     let mname = model_name rt#caches#options.Options.filename in
-    F.fprintf ff "@[<v 2>model %s {@," (String.uppercase mname);
+    F.fprintf ff "@[<v 2>model %s {@," (String.uppercase_ascii mname);
 
     write_vars ff skels;
     F.fprintf ff "states normal;@\n@\n";

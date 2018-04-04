@@ -1,6 +1,6 @@
 # Makefile to build them all
 #
-# Igor Konnov, 2012-2016
+# Igor Konnov, 2012-2018
 
 CFLAGS=-cflag -g -lflag -g -lflag -thread # the options at the end fix a bug
 
@@ -60,15 +60,15 @@ clean:
 	$(info CLEANING)
 	${OCAMLBUILD} -clean
 
-${target}: ocaml-3.11.0
+${target}: ocaml-up-to-date
 	$(info COMPILING)
 	${OCAMLBUILD} ${CFLAGS} ${target}
 
-${debug_target}: ocaml-3.11.0
+${debug_target}: ocaml-up-to-date
 	$(info COMPILING DEBUG VERSION)
 	${OCAMLBUILD} ${CFLAGS} ${debug_target}
 
-ocaml-3.11.0:
-	$(info Testing, whether ocaml version is at least 3.11.0)
-	test ${ocaml_major} -gt 3 -o ${ocaml_minor} -ge 11
+ocaml-up-to-date:
+	$(info Testing, whether ocaml version is at least 4.02.0)
+	test ${ocaml_major} -gt 4 -o ${ocaml_minor} -ge 2
 

@@ -23,7 +23,7 @@ CONTENTS
 ================
 
  * python 2.x
- * ocaml and ocamlbuild (not earlier than 3.11.0)
+ * ocaml and ocamlbuild (not earlier than 4.02.0)
  * ocaml batteries: http://batteries.forge.ocamlcore.org/
  * ocamlgraph: http://ocamlgraph.lri.fr/
  * ocamlunit (OPTIONAL: if you want to run unit tests)
@@ -216,8 +216,15 @@ As of September 2017, MPI bindings for ocaml are not available in opam.
 To install ocamlmpi, do the following:
   
   1. Download the latest version from: https://github.com/xavierleroy/ocamlmpi
-  2. edit Makefile and change MPIINCDIR, if needed
-  2. make && make opt && make install
+  2. Hack the files 'opam' and 'Makefile' if needed (see below)
+  3. Run: opam install ocamlmpi --verbose
+
+Hack for MacOSX: if conf-mpi is not working, remove conf-mpi from the file
+    'opam' and overwrite MPIINCDIR, MPILIBDIR, MPICC, and MPIRUN with the path
+    pointing to /usr/local/{include,lib,bin,bin}/openmpi
+
+Hack OCaml 4.02.0 and later: edit Makefile, add option -unsafe-string to OCAMLC
+    and OCAMLOPT
   
 
 6. INSTALLING PYCUDD (DEPRECATED)
