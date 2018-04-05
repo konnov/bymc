@@ -21,7 +21,9 @@ TIME_LIMIT="unlimited"
 STACK_LIMIT="$((92*1024))" # recursion in nusmv needs larger stack
 
 # parse options
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hk:K:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,custom-sat:,skel,voodoo,no-reach,no-initial,no-loopback,no-justice,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
+DIR=`dirname $0`
+DIR=`cd "$DIR"; pwd`
+TEMPOPTS=`"$DIR"/script/ggetopt.py -o hk:K:w: --long help,length:,nusmv-verbose:,one-shot,lingeling:,plingeling:,custom-sat:,skel,voodoo,no-reach,no-initial,no-loopback,no-justice,completeness,limit-time:,limit-mem:,limit-stack: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_quit() {

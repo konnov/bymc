@@ -11,7 +11,9 @@ NO_JUSTICE=""
 SOURCE=""
 
 # parse options
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o h,w: --long help,nusmv-verbose:,rel-mono,rel-reach,no-justice,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
+DIR=`dirname $0`
+DIR=`cd "$DIR"; pwd`
+TEMPOPTS=`"$DIR"/script/ggetopt.py -o h,w: --long help,nusmv-verbose:,rel-mono,rel-reach,no-justice,source:,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_quit() {

@@ -2,7 +2,9 @@
 
 PANCC_FLAGS="-DCOLLAPSE -DNOREDUCE"
 
-TEMPOPTS=`POSIXLY_CORRECT=1 getopt -o hd: --long help,depth:,on-disk-stack,limit-time:,limit-mem: -n '$@' -- "$@"`
+DIR=`dirname $0`
+DIR=`cd "$DIR"; pwd`
+TEMPOPTS=`"$DIR"/script/ggetopt.py -o hd: --long help,depth:,on-disk-stack,limit-time:,limit-mem: -n '$@' -- "$@"`
 if [ $? != 0 ] ; then echo "Terminating..." >&2 ; exit 1 ; fi
 
 function help_and_quit() {
