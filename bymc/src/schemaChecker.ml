@@ -377,6 +377,7 @@ class tree_tac_t
             in
             List.map (F.to_frame_expr frame frame) assertions
                 |> replace
+                |> List.map Simplif.compute_consts  (* simplify constants *)
                 |> List.iter (fun e -> ignore (self#assert_expr e))
 
         method assert_top2 assertions =
@@ -388,6 +389,7 @@ class tree_tac_t
             in
             List.map (F.to_frame_expr prev top) assertions
                 |> replace
+                |> List.map Simplif.compute_consts  (* simplify constants *)
                 |> List.iter (fun e -> ignore (self#assert_expr e))
 
         method assert_frame_eq sk loop_frame =
