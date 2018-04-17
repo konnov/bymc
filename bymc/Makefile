@@ -69,6 +69,6 @@ ${debug_target}: ocaml-up-to-date
 	${OCAMLBUILD} ${CFLAGS} ${debug_target}
 
 ocaml-up-to-date:
-	$(info Testing, whether ocaml version is at least 4.02.0)
-	test ${ocaml_major} -gt 4 -o ${ocaml_minor} -ge 2
+	$(info Testing, whether ocaml version is at least 4.06.0)
+	test ${ocaml_major} -gt 4 -o ${ocaml_minor} -ge 6
 
