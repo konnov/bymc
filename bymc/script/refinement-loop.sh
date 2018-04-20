@@ -69,6 +69,8 @@ function to_verdict() {
 
     stat=$(mc_collect_stat)
     common="03:refinements=$step|04:sys=`basename $PROG .pml`|05:spec=`basename $PROP .never`|06:total-sec=$DIFF_TIME|$stat"
+    # the local verdict is useful when merging MPI results
+    echo "$out|$common|$mc_stat" >>my-verdict.txt 
     cd $ORIG_DIR
     echo "$out|$common|$mc_stat" >>verdict.txt
 }
