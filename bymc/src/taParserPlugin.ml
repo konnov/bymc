@@ -34,7 +34,7 @@ class ta_parser_plugin_t (plugin_name: string) =
 
             Sk.to_file "original.ta" sk;
             log INFO "  [DONE]";
-            log INFO (sprintf "> #locs: %d, #nrules: %d, #forms: %d"
+            log INFO (sprintf "> #locs: %d, #rules: %d, #forms: %d"
                 sk.Sk.nlocs sk.Sk.nrules (StrMap.cardinal sk.Sk.forms));
             (* just return the empty program, the TA will be accessed by get_ta *)
             let data_type_tab = new SpinIr.data_type_tab in
