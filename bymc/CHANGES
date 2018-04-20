@@ -1,17 +1,61 @@
-28/06/2017
+Version 2.4.1
 
-BUGFIX-20170628
+ * Compatibility with MacOS
 
-todo: copy
-
-11/01/2016
-
-* posetSmt.ml operations on partially-ordered sets
-
-19/10/2013
-
-* cfgSmt.ml: using integer succ${i} to denote successors instead of
-boolean variable at${i}; eliminate mutual exclusion of successors by doing so.
+ * Multiple bugfixes
 
 
-I was too lazy to keep track of the changes, but you can find them in git...
+Version 2.4.0
+
+ * Artifact for OPODIS'17
+
+ * Support for MPI
+
+ * Binding against Z3 directly
+
+
+Version 2.2.1
+
+ * threshold automata are supported directly as the input format
+
+ * switched from ocaml parser to menhir
+
+
+Version 2.1.4
+
+ * A stable artifact for POPL'17.
+
+
+Version 2.0.0
+ 
+ * Stable support for liveness properties with schemas
+
+
+Version 1.0.1
+
+ * A stable version of after CAV'15
+
+ * Fixed all tests
+
+
+Version cav15-rc2
+
+ * Reachability with schemas, CAV'15
+
+
+Version 0.8.0
+ 
+ * Supporting SMTLIB2
+
+
+Version concur14-rc10
+
+ * Computing diameter bounds for counter abstraction. CONCUR'14.
+
+ * Encoding in NuSMV
+
+
+Version 0.1.2
+
+ * Parameterized interval data and counter abstraction. FMCAD'13.
+
