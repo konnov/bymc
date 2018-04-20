@@ -61,6 +61,12 @@ while (<>) {
     if (/.*?(\d+) locking milestones/) { $locking = $1; }
     if (/.*found (\d+) locations.*/) { $nlocs = $1; }
     if (/.*found (\d+) rules*/) { $nrules = $1; }
+    if (/.*[Ff]ound (\d+) reachable locations and (\d+) rules.*/)
+        { $nlocs = $1; $nrules = $2; }
+    if (/.*#locs: (\d+), #rules: (\d+).*/)
+        { $nlocs = $1; $nrules = $2; }
+    if (/.*#locs (\d+) reachable locations and (\d+) rules.*/)
+        { $nlocs = $1; $nrules = $2; }
     if (/.*?(\d+) schemas to inspect*/) { $nschemas = $1; }
     if (/nschemas = (\d+), min length = (\d+), max length = (\d+), avg length = (\d+)/) {
         $nschemas = $1; $minlen = $2; $maxlen = $3; $avglen = $4;

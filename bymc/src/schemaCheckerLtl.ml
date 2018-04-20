@@ -43,6 +43,7 @@ let linext_too_many = 100000
  *)
 type stat_t = {
     m_nschemas: int;  (** the number of inspected schemas *)
+    m_npred_schemas: int;  (** the number of predicted schemas *)
     m_min_schema_len: int;  (** the minimal schema length encountered *)
     m_max_schema_len: int;  (** the maximal schema length encountered *)
     m_sum_schema_len: int;  (** the sum of all schema lengths (for the average) *)
@@ -76,7 +77,8 @@ let mk_stat () =
         else -1
     in
     {
-        m_nschemas = 0; m_min_schema_len = max_int; m_max_schema_len = 0;
+        m_npred_schemas = 0; m_nschemas = 0;
+        m_min_schema_len = max_int; m_max_schema_len = 0;
         m_sum_schema_len = 0; m_min_schema_time_sec = max_float;
         m_max_schema_time_sec = 0.0; m_sum_schema_time_sec = 0.0;
         m_reachopt_sec = 0.0; m_noreachopt_sec = 0.0;
@@ -1194,7 +1196,7 @@ let enum_orders (map_fun: int -> po_elem_t)
 
 (** accumulate the statistics and adaptively change the options *)
 let accum_stat r_st watch no schema_len =
-    let nschemas = !r_st.m_nschemas in
+    let nschemas = !r_st.m_npred_schemas in
     let elapsed, one_lap = watch#next_event "" in
     let eta =
         if no < nschemas
@@ -1217,6 +1219,7 @@ let accum_stat r_st watch no schema_len =
     let add_if is_true a b = if is_true then a + b else a in
     let reach_on = !r_st.m_reachability_on in
     r_st := { !r_st with
+        m_nschemas = 1 + !r_st.m_nschemas;
         m_reachopt_sec = fadd_if reach_on !r_st.m_reachopt_sec one_lap;
         m_noreachopt_sec = fadd_if (not reach_on) !r_st.m_noreachopt_sec one_lap;
         m_reachopt_rounds = add_if reach_on !r_st.m_reachopt_rounds 1;
@@ -1329,13 +1332,13 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
         then sprintf
             "%s: %d linear extensions to enumerate\n\n" form_name !total_count
         else sprintf
-            "%s: more than %d linear extensions to enumerate (disabled percentage)\n\n" form_name linext_too_many
+            "%s: more than %d linear extensions to enumerate (disabled prediction)\n\n" form_name linext_too_many
     in
     logtm INFO msg;
 
     (* and check the properties for each of them *)
     let current = ref 0 in
-    let r_stat = ref ({ (mk_stat ()) with m_nschemas = !total_count }) in
+    let r_stat = ref ({ (mk_stat ()) with m_npred_schemas = !total_count }) in
     (* we need the watch for user experience,
         the precise timing is given at the end *)
     let watch = new Accums.stop_watch ~is_wall:true ~with_children:true in

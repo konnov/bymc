@@ -20,7 +20,8 @@ val cex_default_scm_filename: string
  The statistics collected during the execution.
  *)
 type stat_t = {
-    m_nschemas: int;  (** the number of inspected schemas *)
+    m_nschemas: int;        (** the number of inspected schemas *)
+    m_npred_schemas: int;   (** the predicted number of schemas (imprecise) *)
     m_min_schema_len: int;  (** the minimal schema length encountered *)
     m_max_schema_len: int;  (** the maximal schema length encountered *)
     m_sum_schema_len: int;  (** the sum of all schema lengths (for the average) *)
