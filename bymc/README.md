@@ -1,6 +1,5 @@
 
-0. WHAT IS THAT?
-================
+# 0. WHAT IS THAT?
 
 ByMC is a tool for parameterized model checking (and synthesis) of fault-tolerant distributed
 algorithms.  More details to be found at: [ByMC](http://forsyte.at/software/bymc/)
@@ -8,8 +7,7 @@ algorithms.  More details to be found at: [ByMC](http://forsyte.at/software/bymc
 Should you have questions, ask Igor Konnov ```<konnov at forsyte.at>```
 
 
-CONTENTS
-----------------
+## CONTENTS
 
  1. PREREQUISITES
  2. COMPILING
@@ -20,8 +18,7 @@ CONTENTS
  7. PUBLICATIONS
 
 
-1. PREREQUISITES
-================
+# 1. PREREQUISITES
 
  * ```python``` 2.x
  * ```ocaml``` and ```ocamlbuild``` (up to 4.06.1)
@@ -51,26 +48,22 @@ If you do not know how to install ocaml and ocaml libraries in your system,
 check with "HOW TO INSTALL OCAML AND THE LIBRARIES?"
 
 
-2. COMPILING
-============
+# 2. COMPILING
 
 Run the ```make``` in the directory that contains this README file:
 
 ```$ make```
 
 
-3. EXAMPLES
-===========
+# 3. EXAMPLES
 
 You can find the examples at the [ByMC website]([http://forsyte.at/software/bymc/])
 
 as well as at our [benchmarks repository](https://github.com/konnov/fault-tolerant-benchmarks)
 
-4. RUNNING
-==========
+# 4. RUNNING
 
-4.1 PARTIAL ORDERS AND ACCELERATION IN SMT
----------------------------------------------------------------------
+## 4.1 PARTIAL ORDERS AND ACCELERATION IN SMT
 
 This technique is explained in [CAV15], [POPL17], [FMSD17]
 
@@ -83,8 +76,7 @@ or an SMT solver that supports SMTLIB2:
 ```$ ./verifypa-schema ${benchmarks}/popl17/promela/bcast-byz.pml unforg --smt 'lib2|mysolver|arg1|arg2|arg3'```
 
 
-4.2 SYNTHESIS
-----------------------
+## 4.2 SYNTHESIS
 
 This technique is explained in [OPODIS17].
 
@@ -102,8 +94,7 @@ You can also enumerate all possible solutions by adding ```-O synt.all=1```:
 ```$ ./syntpa-schema test/bcast-byz-ta-synt.ta all -O synt.all=1```
 
 
-4.3. SPIN
--------------
+## 4.3. SPIN
 
 This technique is explained in [FMCAD13].
 
@@ -125,8 +116,7 @@ After that run the tool again:
 ```$ ./verifypa-spin ${benchmarks}/bcast-byz.pml relay```
 
 
-4.4. NuSMV with BDDs
--------------------------------
+## 4.4. NuSMV with BDDs
 
 Data and counter abstraction like in [FMCAD13] but using binary decision diagrams. The experiments were reported in [INFCOMP17] and [CONCUR14].
 
@@ -135,8 +125,7 @@ Parameterized model checking with the abstraction-refinement:
 ```$ ./verifypa-nusmv-bdd ${benchmarks}/bcast-byz.pml relay```
 
 
-4.5. NuSMV with BMC
-------------------------------
+## 4.5. NuSMV with BMC
 
 Data and counter abstraction like in [FCMAD13] but using bounded model checking that is implemented in ```NuSMV```. The experiments were reported in [INFCOMP17] and [CONCUR14].
 
@@ -155,16 +144,14 @@ or using lingeling for ```<length2>``` steps
     ${benchmarks}/bcast-byz.pml relay```
 
 
-4.6 FAST
-------------
+## 4.6 FAST
 
 Acceleration of counter automata that is implemented in ```faster```. The experiments were reported in [INFCOMP17] and [CONCUR14].
 
 ```$ ./verifypa-fast --plugin <fast-plugin> ${benchmarks}/bcast-byz.pml unforg```
 
 
-4.7 COMPUTING DIAMETER
-----------------------------------------
+## 4.7 COMPUTING DIAMETER
 
 The new way to compute the diameter bound:
 
@@ -177,11 +164,9 @@ The old way as was initially implemented for [CONCUR14] is as follows:
 This technique requires ```pycudd```, see Section 6.
 
 
-5. HOW TO INSTALL OCAML AND REQUIRED LIBRARIES?
-===============================================
+# 5. HOW TO INSTALL OCAML AND REQUIRED LIBRARIES?
 
-5.1. Ocamlbrew
----------------------
+## 5.1. Ocamlbrew
 
 If you do not have ocaml and the required ocaml packages, consider using
 [```ocamlbrew```](http://opam.ocaml.org/doc/Quick_Install.html#h4-Usingocamlbrew)
@@ -206,8 +191,7 @@ If you want to compile the tool against ```mathsat```, you have to also install:
 
 ```$ opam install ctypes ctypes-foreign```
 
-5.2. Installing ocamlmpi
-------------------------
+## 5.2. Installing ocamlmpi
 
 As of September 2017, MPI bindings for ocaml are not available from ```opam```.
 To install ```ocamlmpi```, do the following:
@@ -225,8 +209,7 @@ __Hack__ for OCaml 4.02.0 and later: edit Makefile, add option ```-unsafe-string
     and ```OCAMLOPT```.
   
 
-6. INSTALLING PYCUDD
-====================
+# 6. INSTALLING PYCUDD
 
 __WARNING__: PyCUDD is required only by the script ```analyse``` that computes
 reachability bounds as in [CONCUR14]. This script
@@ -244,8 +227,7 @@ To compile pycudd, run the following:
 ```
 
 
-7. PUBLICATIONS
-==============
+# 7. PUBLICATIONS
 
 1. A short counterexample property for safety and liveness verification of fault-tolerant distributed algorithms.
 Igor V. Konnov, Marijana Lazic, Helmut Veith, Josef Widder.
@@ -283,3 +265,4 @@ FMCAD, pages 201-209, 2013. [FMCAD13]
 [CAV15]: http://forsyte.at/download/konnov-cav15.pdf
 [CONCUR14]: http://forsyte.at/wp-content/uploads/concur14-reachability.pdf
 [FMCAD13]: http://www.cs.utexas.edu/users/hunt/FMCAD/FMCAD13/papers/10-Model-Checking-Fault-Tolerant-Distributed-Algo.pdf
+
