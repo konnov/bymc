@@ -1,12 +1,13 @@
-# ByMC: Byzantine Model Checker #
+# ByMC: Byzantine Model Checker
 
-This is a toolset for parameterized model checking of fault-tolerant distributed algorithms.
+This is a toolset for parameterized model checking of fault-tolerant distributed algorithms. Check [README](./bymc/README.md) in the source directory.
 
 The directory layout is as follows:
 
-* bymc -- the source code of the tool
-* bddc -- set of auxillary scripts for model checking with NuSMV (needed only if you want to run legacy techniques)
-* deps -- various dependencies required for the tools that are hard to install automatically  (needed only if you want to run legacy techniques)
+* ```bymc``` -- the scripts and tool source code
+
+* ```legacy-bddc``` -- set of auxiliary scripts for model checking with NuSMV, needed only to run legacy techniques
+* ```legacy-deps``` -- various dependencies required by the tools that are hard to install automatically, needed only to run legacy techniques
 
 
-Shall you have any questions, ask Igor Konnov <konnov@forsyte.tuwien.ac.at>
+Shall you have any questions, ask Igor Konnov ```<konnov at forsyte.at>```
