@@ -865,8 +865,18 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
                 else find_G_props (TL_and fs) in
             *)
 
+            (* Check reachability of the prefix right here.
+               In some cases, it gives us good speed ups.
+               However, in the non-incremental mode it may cause an
+               incredible slowdown from hours to days,
+               e.g., see aba.pml, spec agreement *)
+            let no_shortcut =
+                if SchemaOpt.is_incremental()
+                then (tac#check_property (IntConst 1) (on_error (fun _ -> false)))
+                else true
+            in
             let result =
-                if tac#check_property (IntConst 1) (on_error (fun _ -> false))
+                if no_shortcut
                 then prune_or_continue prefix_last_frame uset lset
                     (append_invs invs new_invs) (node_type tl) tl
                 else (* the property contradicts to all the initial states *) 
@@ -880,8 +890,12 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
 
     and prune_or_continue prefix_last_frame uset lset invs node_type seq =
         (* the following reachability check does not always improve the situation *)
-        if (not reach_opt)
-            || tac#check_property (IntConst 1) (on_error (fun _ -> false))
+        let no_shortcut =
+            if reach_opt
+            then (tac#check_property (IntConst 1) (on_error (fun _ -> false)))
+            else true
+        in
+        if no_shortcut
         then begin
             (* first, extend an execution with a suffix
                 that does not enable new conditions *)
