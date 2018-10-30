@@ -65,7 +65,9 @@ let var_to_fun_decl ctx var tp =
         | TPROPOSITION -> raise (Failure "Type proposition is not supported")
         | TUNDEF -> raise (Failure "Undefined type met")
     in
-    (assert (not tp#is_array)); (* arrays are not supported yet *)
+    if tp#is_array
+    then raise (Failure ("Arrays are not supported by this module."
+        ^ " Use --smt 'lib2|z3|-in|-smt2'"));
     (var_expr, constraints)
 
 
