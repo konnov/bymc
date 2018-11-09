@@ -1597,7 +1597,41 @@ module TL = struct
         | _ ->
             raise Unexpected_err
 
+    (* Is an expression on the left-hand side of a guard allowed.
+       In our papers at CAV15 and POPL17, we only allowed a
+       single shared variable. This has changed in our papers
+       at OPODIS17 and CONCUR18. We allow a linear combination
+       of shared variables, where the coefficients are either
+       non-negative integers, or unknowns (for synthesis)
+     *)
+    let is_legal_lhs sk e =
+        let rec is_ok = function
+        | Var x ->
+            (* it must be a shared variable *)
+            List.exists (fun v -> x#id = v#id) sk.Sk.shared
 
+        | BinEx (MULT, IntConst i, Var x) ->
+            if i < 0
+            then let m = "Negative coefficient in " ^ (SpinIrImp.expr_s e) in
+                raise (IllegalLtl_error m)
+            else is_ok (Var x)
+
+        | BinEx (MULT, Var u, Var x) ->
+            if not (List.mem u sk.Sk.unknowns)
+            then let m = sprintf ("Variable %s should be multiplied by an unknown"
+                    ^^ " or an integer constant in %s")
+                    x#get_name (SpinIrImp.expr_s e) in
+                raise (IllegalLtl_error m)
+            else is_ok (Var x)
+
+        | BinEx (PLUS, l, r) ->
+            (is_ok l) && (is_ok r)
+
+        | _ -> false
+        in
+        is_ok e
+
+        
     (* NOTE: It is kind of a manually written parser... Needs refactoring. *)
     let extract_utl sk form_exp =
         let var_to_int i v map = IntMap.add v#id i map in
@@ -1626,55 +1660,22 @@ module TL = struct
                         sprintf "Unexpected formula: %s" (SpinIrImp.expr_s cmp) in
                         raise (IllegalLtl_error m)
 
-            (* a comparison against a linear combination of parameters *)
-            | BinEx (NE, Var x, e)
-            | BinEx (EQ, Var x, e)
-            | BinEx (GE, Var x, e)
-            | BinEx (LT, Var x, e)
-            | BinEx (GT, Var x, e)
-            | BinEx (LE, Var x, e)
-            (* multiplication by an integer constant is also fine *)
-            | BinEx (NE, BinEx (MULT, IntConst _, Var x), e)
-            | BinEx (EQ, BinEx (MULT, IntConst _, Var x), e)
-            | BinEx (GE, BinEx (MULT, IntConst _, Var x), e)
-            | BinEx (LT, BinEx (MULT, IntConst _, Var x), e)
-            | BinEx (GT, BinEx (MULT, IntConst _, Var x), e)
-            | BinEx (LE, BinEx (MULT, IntConst _, Var x), e) as cmp
-                ->
-                if SpinIr.expr_exists SpinIr.not_symbolic e
+            (* check whether the expression is a threshold guard *)
+            | BinEx (NE, left, right)
+            | BinEx (EQ, left, right)
+            | BinEx (GE, left, right)
+            | BinEx (LT, left, right)
+            | BinEx (GT, left, right)
+            | BinEx (LE, left, right) as cmp ->
+                if SpinIr.expr_exists SpinIr.not_symbolic right
                 then let m = sprintf "Unexpected %s in %s"
-                        (SpinIrImp.expr_s e) (SpinIrImp.expr_s cmp) in
+                        (SpinIrImp.expr_s right) (SpinIrImp.expr_s cmp) in
                     raise (IllegalLtl_error m)
-                else if List.exists (fun v -> x#id = v#id) sk.Sk.shared
-                    then ExtShared_Or_And_Keq0 ([cmp], [])
-                    else let m =
-                        sprintf "Unexpected comparison to a location: %s"
-                            (SpinIrImp.expr_s cmp) in
-                        raise (IllegalLtl_error m)
-
-            (* synthesis: multiplication by a synthesis parameter
-               (called an unknown) is also fine *)
-            | BinEx (NE, BinEx (MULT, Var u, Var x), e)
-            | BinEx (EQ, BinEx (MULT, Var u, Var x), e)
-            | BinEx (GE, BinEx (MULT, Var u, Var x), e)
-            | BinEx (LT, BinEx (MULT, Var u, Var x), e)
-            | BinEx (GT, BinEx (MULT, Var u, Var x), e)
-            | BinEx (LE, BinEx (MULT, Var u, Var x), e) as cmp
-                ->
-                if not (List.mem u sk.Sk.unknowns)
-                then let m = sprintf ("A variable should be multiplied by an unknown"
-                        ^^ " or an integer constant in %s") (SpinIrImp.expr_s cmp) in
+                else if (is_legal_lhs sk left)
+                then ExtShared_Or_And_Keq0 ([cmp], [])
+                else let m = sprintf "Unexpected comparison to a location: %s"
+                        (SpinIrImp.expr_s cmp) in
                     raise (IllegalLtl_error m)
-                else if SpinIr.expr_exists SpinIr.not_symbolic e
-                then let m = sprintf "Unexpected %s in %s"
-                        (SpinIrImp.expr_s e) (SpinIrImp.expr_s cmp) in
-                    raise (IllegalLtl_error m)
-                else if List.exists (fun v -> x#id = v#id) sk.Sk.shared
-                    then ExtShared_Or_And_Keq0 ([cmp], [])
-                    else let m =
-                        sprintf "Unexpected comparison to a location: %s"
-                            (SpinIrImp.expr_s cmp) in
-                        raise (IllegalLtl_error m)
 
             | BinEx (OR, l, r) as expr ->
                 begin
