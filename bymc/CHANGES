@@ -1,3 +1,12 @@
+Version 2.4.2
+
+ * Allowing linear combinations in the left-hand side of a guard,
+   e.g., a * x + b * y + c * z >= n - t + f. The coefficients a, b, ..., c
+   should be either non-negative integers, or unknowns (for synthesis).
+   The parameters can have both positive and negative coefficients.
+   It is sound to use sums of shared variables in the guards.
+   However, differences lead to undecidability. See CONCUR'18 for details.
+
 Version 2.4.1
 
  * Compatibility with MacOS

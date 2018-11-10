@@ -302,7 +302,15 @@ To compile pycudd, run the following:
 ```
 
 
-# 7. PUBLICATIONS
+# 7. MAIN PUBLICATIONS
+
+1. ByMC: Byzantine Model Checker.
+Igor Konnov, Josef Widder.
+ISOLA 2018, pages 327-342, 2018. [ISOLA18]
+
+1. Reachability in Parameterized Systems: All Flavors of Threshold Automata.
+Jure Kukovec, Igor Konnov, Josef Widder.
+CONCUR 2018, pages 19:1--19:17, 2018. [CONCUR18]
 
 1. A short counterexample property for safety and liveness verification of fault-tolerant distributed algorithms.
 Igor V. Konnov, Marijana Lazic, Helmut Veith, Josef Widder.
@@ -332,7 +340,8 @@ CONCUR 2014, volume 8704 of LNCS, pages 125-140, 2014. [CONCUR14]
 Annu John, Igor Konnov, Ulrich Schmid, Helmut Veith, Josef Widder.
 FMCAD, pages 201-209, 2013. [FMCAD13]
 
-
+[ISOLA18]: https://hal.inria.fr/hal-01909653
+[CONCUR18]: https://doi.org/10.4230/LIPIcs.CONCUR.2018.19
 [OPODIS17]: https://doi.org/10.4230/LIPIcs.OPODIS.2017.32
 [POPL17]: http://forsyte.at/wp-content/uploads/popl17main-main116-p-9d29769-29971-final.pdf
 [INFCOMP17]: http://dx.doi.org/10.1016/j.ic.2016.03.006
