@@ -247,6 +247,7 @@ To install `ocamlmpi`, do the following:
   opam pin add ocamlmpi . -n
 ```
 
+
   4. Run:
   
 ```bash
@@ -261,6 +262,28 @@ __Hack__ for OCaml 4.02.0 and later: edit Makefile, add option `-unsafe-string` 
     and `OCAMLOPT`.
   
 
+## 5.3. Installing z3
+
+Here are instructions for z3 4.7.1. For other versions, check README in the
+distribution of z3:
+
+  1. Download z3 from: https://github.com/Z3Prover/z3/releases
+
+  2. Compile and install z3 by running:
+
+```bash
+python scripts/mk_make.py --ml -p ~/usr
+cd build; make
+make install
+```
+  
+  If you have previous versions of Z3 ocaml bindings, remove them by issuing:
+
+```bash
+ocamlfind remove Z3
+```
+
+  
 # 6. INSTALLING PYCUDD
 
 __WARNING__: PyCUDD is required only by the script `analyse` that computes
