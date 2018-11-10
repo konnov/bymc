@@ -1610,11 +1610,11 @@ module TL = struct
             (* it must be a shared variable *)
             List.exists (fun v -> x#id = v#id) sk.Sk.shared
 
-        | BinEx (MULT, IntConst i, Var x) ->
+        | BinEx (MULT, IntConst i, rhs) ->
             if i < 0
             then let m = "Negative coefficient in " ^ (SpinIrImp.expr_s e) in
                 raise (IllegalLtl_error m)
-            else is_ok (Var x)
+            else is_ok rhs
 
         | BinEx (MULT, Var u, Var x) ->
             if not (List.mem u sk.Sk.unknowns)
