@@ -1,31 +1,39 @@
-(*
- An interface to Z3 using the new Z3 ML bindings (Z3 4.5.0)
-
- Igor Konnov, 2017
- *)
-
 open Smt
 
-class z3_smt: string ->
+(**
+    A dummy solver that always returns unsat.
+    It is used for isolating memory leaks in our code, not in the solver.
+    The first argument is the solver name.
+    The second argument is a filename that stores a sequence of 0s and 1s
+    that is fed to the user as the responses to sat queries.
+    As soon as the sequence is over, the solver always returns unsat.
+
+    In order to record a trace from a live execution, run the tool with
+    the following SMT options: --smt 'lib2|z3|-in|-smt2' -O smt.log=1
+    A trace of sat responses will be recorded into the file smt-sat-trace.num
+
+    @author Igor Konnov
+ *)
+class dummy_smt: string -> string ->
     object
         inherit smt_solver
 
         method get_name: string
 
-        (** create a new context *)
+        (** start the solver *)
         method start: unit
 
-        (** destroy the context *)
+        (** stop the solver process *)
         method stop: unit
 
-        (** reset the context *)
+        (** reset the solver *)
         method reset: unit
 
-        (** make a copy of the context *)
+        (** make a copy of the solver object without starting the new copy *)
         method clone_not_started: ?logic:string -> string -> smt_solver
 
         (**
-         Set a theory.
+         Set a theory. In this implementation, the method is doing nothing.
 
          @param theory name as in the SMTLIB2 standard.
          *)
@@ -93,8 +101,9 @@ class z3_smt: string ->
 
         method get_enable_log: bool
 
-        (**
-         not used in the Z3 bindings
+        (** Indicate, whether to wait for response from the solver for each
+            expression. It does not have any effect with yices, as it always
+            has to be synchronized in a lockstep.
          *)
         method set_enable_lockstep: bool -> unit
 

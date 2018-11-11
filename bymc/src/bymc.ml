@@ -35,13 +35,16 @@ let run_solver opts =
         | SmtApiZ3 ->
                 ((new SmtZ3.z3_smt "main") :> Smt.smt_solver)
 
-        | SmtYices ->
-                new Smt.yices_smt "main" "yices"
-
         | SmtLib2 args ->
                 let prog = args.(0) in
                 let args = Array.sub args 1 ((Array.length args) - 1) in
                 new Smt.lib2_smt "main" prog args
+
+        | SmtDummy filename ->
+                new SmtDummy.dummy_smt "dummy" filename
+
+        | SmtYices ->
+                new Smt.yices_smt "main" "yices"
 
         | SmtMathsat5 ->
                 MsatLoader.load_plugin_mathsat4ml opts.Options.plugin_dir;

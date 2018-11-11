@@ -33,6 +33,9 @@ end
 (* An abstract interface to an SMT solver *)
 class virtual smt_solver:
     object
+        (* get the name assigned to the solver *)
+        method virtual get_name: string
+
         (** fork a new process that executes 'yices' *)
         method virtual start: unit
 
@@ -138,6 +141,8 @@ class virtual smt_solver:
 class yices_smt: string -> string ->
     object
         inherit smt_solver
+
+        method get_name: string
 
         (** fork a new process that executes 'yices' *)
         method start: unit
@@ -247,6 +252,8 @@ class lib2_smt: string-> string -> string array ->
     object
         inherit smt_solver
 
+        method get_name: string
+
         (** fork a new process that executes 'yices' *)
         method start: unit
 
@@ -349,6 +356,8 @@ class lib2_smt: string-> string -> string array ->
 class mathsat5_smt: string ->
     object
         inherit smt_solver
+
+        method get_name: string
 
         (** create a new instance of Mathsat *)
         method start: unit

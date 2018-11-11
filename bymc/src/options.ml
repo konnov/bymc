@@ -22,7 +22,8 @@ type action_opt_t =
 
 type mc_tool_opt_t = ToolSpin | ToolNusmv | ToolNone
 
-type smt_opt_t = SmtYices | SmtLib2 of string array | SmtApiZ3 | SmtMathsat5
+type smt_opt_t = SmtYices | SmtLib2 of string array
+        | SmtApiZ3 | SmtDummy of string | SmtMathsat5
 
 type options_t =
     {
@@ -103,6 +104,9 @@ let parse_smt s =
             if "lib2|" = (Str.string_before s 5)
             then let cmd = Str.string_after s 5 in  
                 SmtLib2 (Array.of_list (Str.split_delim (Str.regexp "|") cmd))
+            else if "dummy|" = (Str.string_before s 6)
+            then let filename = Str.string_after s 6 in  
+                SmtDummy filename
             else raise (Failure ("Unknown --smt argument: " ^ s))
         with Invalid_argument _ ->
             raise (Failure ("Unknown --smt argument: " ^ s))

@@ -75,7 +75,7 @@ class ta_parser_plugin_t (plugin_name: string) =
             (* add the assumptions to check their consistency *)
             let append_expr e = ignore (rt#solver#append_expr e) in
             List.iter append_expr (get_assumes prog);
-            if not rt#solver#check
+            if not rt#solver#check && rt#solver#get_name <> "dummy"
             then raise (Program.Program_error "Basic assertions are contradictory")
 
         method decode_trail _ path = path

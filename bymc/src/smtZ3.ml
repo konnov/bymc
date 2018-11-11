@@ -188,6 +188,8 @@ class z3_smt name =
         (** the theory to use *)
         val mutable m_logic = None
 
+        method get_name = name
+
         method start =
             let bool_s = string_of_bool in
             let cfg = [

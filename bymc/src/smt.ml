@@ -87,6 +87,8 @@ end
 (** An abstract interface to an SMT solver *)
 class virtual smt_solver =
     object
+        method virtual get_name: string
+
         (** fork a new process that executes 'yices' *)
         method virtual start: unit
 
@@ -414,6 +416,8 @@ class yices_smt (name: string) (solver_cmd: string) =
         (** the number of stack pushes executed within inconsistent context *)
         val mutable m_inconsistent_pushes = 0
 
+        method get_name = name
+
         method start =
             assert(PipeCmd.is_null m_pipe_cmd);
             m_pipe_cmd <-
@@ -646,6 +650,40 @@ class yices_smt (name: string) (solver_cmd: string) =
     end
 
 
+(*
+    This module is used by lib2_smt solver to record a sequential trace of 
+    all responses to the sat queries, independent of the solver.
+    All the instances of lib2_smt share the single trace file.
+ *)
+module TraceRecorder = struct
+    let filename = "smt-sat-trace.num"
+    (** the number of solvers whose sat queries are recorded *)
+    let n_recording_solvers = ref 0
+    (** the output stream, equals to Some _, if there is at least one solver *)
+    let s_out = ref None
+
+    let solver_join () =
+        if !n_recording_solvers = 0
+        then begin
+            s_out := Some (open_out_gen
+                [Open_creat; Open_append; Open_text] 0o666 filename)
+        end;
+        n_recording_solvers := 1 + !n_recording_solvers
+
+
+    let solver_leave () =
+        n_recording_solvers := 1 - !n_recording_solvers;
+        flush (Accums.get_some !s_out);
+        if !n_recording_solvers = 0
+        then close_out (get_some !s_out)
+
+    let solver_record_check is_sat =
+        if is_sat
+        then output_string (get_some !s_out) "1\n"
+        else output_string (get_some !s_out) "0\n"
+end
+
+
 (**
     An interface to a solver supporting SMTLIB2. This class invokes a solver
     and communicates with it via pipes.
@@ -678,6 +716,8 @@ class lib2_smt name solver_cmd solver_args =
         (** the theory to use *)
         val mutable m_logic = None
 
+        method get_name = name
+
         method start =
             let args_s = BatArray.fold_left (fun a s -> a ^ " " ^ s) "" solver_args in
             Printf.fprintf stderr
@@ -701,6 +741,8 @@ class lib2_smt name solver_cmd solver_args =
             then begin
                 fprintf clog "Logging is disabled by default. Pass -O smt.log=1 to enable it.\n";
                 flush clog
+            end else begin
+                TraceRecorder.solver_join () (* start collecting the trace *)
             end;
             if m_logic <> None
             then self#append_and_sync (sprintf "(set-logic %s)" (get_some m_logic));
@@ -741,6 +783,8 @@ class lib2_smt name solver_cmd solver_args =
             close_out clog;
             ignore (PipeCmd.destroy m_pipe_cmd);
             m_pipe_cmd <- PipeCmd.null ();
+            if m_enable_log
+            then TraceRecorder.solver_leave ();
             Printf.fprintf stderr "DONE\n"; flush stderr
 
         method reset =
@@ -836,6 +880,8 @@ class lib2_smt name solver_cmd solver_args =
         method check =
             self#append "(check-sat)";
             let res = self#is_out_sat ~ignore_errors:false in
+            if m_enable_log
+            then TraceRecorder.solver_record_check res;
             res
 
         method set_need_model b =
@@ -1039,6 +1085,8 @@ class mathsat5_smt name =
         val mutable m_need_unsat_cores = false
         (** the number of stack pushes executed within consistent context *)
         val mutable m_pushes = 0
+
+        method get_name = name
 
         method start =
             m_instance <- (!Msat.p_create) ();

@@ -34,9 +34,19 @@ let cex_default_scm_filename = "cex-fixme.scm"
 let po_init = 1
 let po_loop = 0
 
-(* we precompute the number of schemas for use experience,
+(* We precompute the number of schemas for use experience,
    but when there are too many, we just say 'too many' *)
 let linext_too_many = 100000
+
+(*
+   We cache visited schemas projections in a hash table.
+   This cache table get extremely large on on very large benchmarks
+    (e.g., rs-bosco goes over 64 GB after visiting >200k schemas).
+   Hence, we clean the hash table when it grows larger then the
+   parameter below. This might cause exploring more schemas after reset,
+   but allows us not to go out of memory.
+ *)
+let fingerprints_too_large = 100
 
 (**
  The statistics collected during the execution.
@@ -1038,7 +1048,7 @@ let compute_fingerprint order =
 module POI = struct
     type po_iter_t = {
         loiter: linord_iter_t;
-        visited: (string, bool) Hashtbl.t;
+        visited: ((string, bool) Hashtbl.t) ref;
         map_fun: int -> po_elem_t;
         po_seq: (int list) ref;
         mapped_seq: (po_elem_t list) ref;
@@ -1067,8 +1077,8 @@ module POI = struct
             else trunc_guards_after_loop map_fun
                      (BatArray.to_list (linord_iter_get init_linorder_iter))
         in
-        let visited = Hashtbl.create 1024 in
-        Hashtbl.add visited (compute_fingerprint iorder) true;
+        let visited = ref (Hashtbl.create 1024) in
+        Hashtbl.add !visited (compute_fingerprint iorder) true;
         {
             loiter = init_linorder_iter;
             visited = visited;
@@ -1100,10 +1110,14 @@ module POI = struct
                 let order = BatArray.to_list (linord_iter_get poi.loiter) in
                 let filtered = trunc_guards_after_loop poi.map_fun order in
                 let fingerprint = compute_fingerprint filtered in
-                if Hashtbl.mem poi.visited fingerprint
+                if Hashtbl.mem !(poi.visited) fingerprint
                 then find_next ()
                 else begin
-                    Hashtbl.add poi.visited fingerprint true;
+                    if (Hashtbl.length !(poi.visited)) > fingerprints_too_large
+                    (* the table is too large, forget it *)
+                    then poi.visited := Hashtbl.create 1024;
+
+                    Hashtbl.add !(poi.visited) fingerprint true;
                     poi.po_seq := filtered;
                     poi.mapped_seq := List.map poi.map_fun filtered
                 end
