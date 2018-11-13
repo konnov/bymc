@@ -1822,9 +1822,8 @@ let mk_search_control rt tt sk form_name ltl_form deps =
         rt#solver#clone_not_started
         ?logic:(Some "QF_LIA") ("schemaLtl_" ^ form_name) in
 
-    let ntt = tt#copy in
-    let tac = new SchemaChecker.tree_tac_t my_solver ntt deps in
-    let initf = F.init_frame ntt sk in
+    let tac = new SchemaChecker.tree_tac_t my_solver deps in
+    let initf = F.init_frame tt#copy sk in
     let init_solver_fun _ =
         my_solver#comment "top-level declarations";
         let append_var v = my_solver#append_var_def v (tt#get_type v) in

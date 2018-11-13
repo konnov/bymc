@@ -39,6 +39,15 @@ module F = struct
                 introduced in this frame  *)
         var_map: SpinIr.var Accums.IntMap.t;
             (** mapping id of the original variable to its copy in the frame *) 
+
+        r_type_tab: SpinIr.data_type_tab ref;
+            (** The data type table associated with this frame
+                and its predecessors. Note that this table can be updated
+                by the frame processing methods. However, it should not
+                be used once the frame is popped out.
+                BUGFIX 2018-11-13:
+                We carry different tables around to prevent memory leaks.
+              *)
     }
 
     (* auxillary functions *)
@@ -72,11 +81,12 @@ module F = struct
     (**
      Introduce a new frame and connect it to the previous one.
      *)
-    let advance_frame tt sk prev_frame rule_no is_var_updated_fun =
+    let advance_frame sk prev_frame rule_no is_var_updated_fun =
         let next_no = 1 + prev_frame.no in 
+        let new_tt = !(prev_frame.r_type_tab)#copy in
         let copy_var ctor_fun (map, vs, new_vs) basev v =
             if is_var_updated_fun basev v
-            then let nv = ctor_fun tt next_no basev in
+            then let nv = ctor_fun new_tt next_no basev in
                 (IntMap.add basev#id nv map, nv :: vs, nv :: new_vs)
             else (map, v :: vs, new_vs)
         in
@@ -88,10 +98,11 @@ module F = struct
             List.fold_left2 (copy_var mk_shared_var)
                 (map, [], new_vars) (List.rev sk.Sk.shared) (List.rev prev_frame.shared_vars) in
         let accel_v = new_var (sprintf "F%06d_warp" next_no) in
-        tt#set_type accel_v (new data_type SpinTypes.TUNSIGNED);
+        new_tt#set_type accel_v (new data_type SpinTypes.TUNSIGNED);
         { no = next_no; rule_no = rule_no; accel_v = accel_v;
             loc_vars = locs; shared_vars = shared;
-            new_vars = new_vars; var_map = map }
+            new_vars = new_vars; var_map = map; r_type_tab = ref new_tt;
+        }
 
     (**
      Create a frame for an initial state.
@@ -103,18 +114,19 @@ module F = struct
             rule_no = -1; (* no rule to lead to the initial frame *)
             accel_v = new_var "";
             loc_vars = loc_vars; shared_vars = sk.Sk.shared;
-            new_vars = []; var_map = IntMap.empty
+            new_vars = []; var_map = IntMap.empty;
+            r_type_tab = ref tt#copy
         }
         in
-        advance_frame tt sk empty_frame (-1) (fun _ _ -> true)
+        advance_frame sk empty_frame (-1) (fun _ _ -> true)
 
     (**
      Push variable declarations into SMT.
      *)
-    let declare_frame solver tt frame =
+    let declare_frame solver frame =
         solver#comment (sprintf "frame %d" frame.no);
         let add_var v =
-            solver#append_var_def v (tt#get_type v) in
+            solver#append_var_def v (!(frame.r_type_tab)#get_type v) in
         add_var frame.accel_v;
         List.iter add_var frame.new_vars
 
@@ -127,7 +139,7 @@ module F = struct
     (**
      Push assertions into SMT.
      *)
-    let assert_frame solver tt frame next_frame assertions =
+    let assert_frame solver frame next_frame assertions =
         let add_expr e =
             ignore (solver#append_expr (map_frame_vars frame next_frame e))
         in
@@ -138,9 +150,9 @@ module F = struct
      Assert that all the variables in two frames are equal, e.g.,
      to check whether a loop has been formed.
      *)
-    let assert_frame_eq solver tt vars frame1 frame2 =
+    let assert_frame_eq solver vars frame1 frame2 =
         let eq v = BinEx (Spin.EQ, UnEx (Spin.NEXT, Var v), Var v) in
-        assert_frame solver tt frame2 frame1 (List.map eq vars)
+        assert_frame solver frame2 frame1 (List.map eq vars)
 end
 
 

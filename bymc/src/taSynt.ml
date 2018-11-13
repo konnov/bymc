@@ -419,7 +419,7 @@ class eval_tac_t (tt: SpinIr.data_type_tab)
                 let frame = self#top in
                 let actions = List.filter not_redundant_action rule.Sk.act in
                 let is_new_f _ _ = false in (* nothing new *)
-                let new_frame = F.advance_frame tt sk frame rule_no is_new_f in
+                let new_frame = F.advance_frame sk frame rule_no is_new_f in
                 self#push_frame new_frame;
                 let move_loc state loc add_fun =
                     let loc_var = IntMap.find loc sk.Sk.loc_vars in

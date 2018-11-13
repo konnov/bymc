@@ -310,7 +310,7 @@ type frame_stack_elem_t =
  *)
 class tree_tac_t
         (solver: Smt.smt_solver)
-        (tt: SpinIr.data_type_tab) (deps: PorBounds.D.deps_t) =
+        (deps: PorBounds.D.deps_t) =
 
     object(self)
         inherit tac_t
@@ -355,7 +355,7 @@ class tree_tac_t
             top, prev
 
         method push_frame f =
-            F.declare_frame solver tt f;
+            F.declare_frame solver f;
             m_frames <- (Frame f) :: m_frames
 
         method private assert_expr e =
@@ -395,8 +395,8 @@ class tree_tac_t
         method assert_frame_eq sk loop_frame =
             solver#comment (sprintf "assert_frame_eq this %d" loop_frame.F.no);
             let loc_vars = List.map (Sk.locvar sk) (range 0 sk.Sk.nlocs) in
-            F.assert_frame_eq solver tt loc_vars loop_frame self#top;
-            F.assert_frame_eq solver tt sk.Sk.shared loop_frame self#top
+            F.assert_frame_eq solver loc_vars loop_frame self#top;
+            F.assert_frame_eq solver sk.Sk.shared loop_frame self#top
 
         method enter_node kind =
             let slv = solver in
@@ -496,7 +496,7 @@ class tree_tac_t
                     in
                     let v = SpinIr.new_var name in
                     let bool_tp = new data_type SpinTypes.TBIT in
-                    tt#set_type v bool_tp;
+                    !(top_frame.F.r_type_tab)#set_type v bool_tp;
                     solver#append_var_def v bool_tp;
                     PSetEltMap.add id v map
                 in
@@ -550,7 +550,7 @@ class tree_tac_t
                     && rule.Sk.src <> rule.Sk.dst)
                     || IntSet.mem basev#id next_shared
             in
-            let new_frame = F.advance_frame tt sk frame rule_no is_new_f in
+            let new_frame = F.advance_frame sk frame rule_no is_new_f in
             self#push_frame new_frame;
             let move loc sign =
                 let prev = List.nth frame.F.loc_vars loc in
@@ -722,7 +722,7 @@ let is_error_tree rt tt sk on_leaf form_name ltl_form deps tree =
     rt#solver#set_need_model true;
 
     let ntt = tt#copy in
-    let tac = new tree_tac_t rt#solver ntt deps in
+    let tac = new tree_tac_t rt#solver deps in
     tac#set_guard_predicates false; (* guard predicates are used only in SchemaCheckerLtl *)
     let initf = F.init_frame ntt sk in
     tac#push_frame initf;

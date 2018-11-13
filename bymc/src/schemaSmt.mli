@@ -28,6 +28,13 @@ module F: sig
                 introduced in this frame  *)
         var_map: SpinIr.var Accums.IntMap.t;
             (** mapping id of the original variable to its copy in the frame *) 
+
+        r_type_tab: SpinIr.data_type_tab ref;
+            (** The data type table associated with this frame
+                and its predecessors. Note that this table can be updated
+                by the frame processing methods. However, it should not
+                be used once the frame is popped out.
+              *)
     }
 
     (**
@@ -38,25 +45,25 @@ module F: sig
     (**
      Introduce a new frame and connect it to the previous one.
      *)
-    val advance_frame: SpinIr.data_type_tab -> SymbSkel.Sk.skel_t -> frame_t
+    val advance_frame: SymbSkel.Sk.skel_t -> frame_t
         -> int -> (SpinIr.var -> SpinIr.var -> bool) -> frame_t
 
     (**
      Push variable declarations into SMT.
      *)
-    val declare_frame: Smt.smt_solver -> SpinIr.data_type_tab -> frame_t -> unit
+    val declare_frame: Smt.smt_solver -> frame_t -> unit
 
     (**
      Push assertions into SMT.
      *)
-    val assert_frame: Smt.smt_solver -> SpinIr.data_type_tab
+    val assert_frame: Smt.smt_solver
         -> frame_t -> frame_t -> Spin.token SpinIr.expr list -> unit
 
     (**
      Assert that all the variables in two frames are equal, e.g.,
      to check whether a loop has been formed.
      *)
-    val assert_frame_eq: Smt.smt_solver -> SpinIr.data_type_tab
+    val assert_frame_eq: Smt.smt_solver
         -> SpinIr.var list -> frame_t -> frame_t -> unit
 
     (**

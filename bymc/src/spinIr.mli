@@ -214,6 +214,12 @@ class data_type :
     method to_s : string
   end
 
+(**
+   A table of variable types.
+
+   Copying this table is cheap, as
+   we just carry a map around.
+ *)
 class data_type_tab :
   object
     method copy : data_type_tab
