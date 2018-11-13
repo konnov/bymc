@@ -8,18 +8,18 @@
 <**/*.top>: package(threads), thread, package(ocamlgraph), package(batteries)
 <**/*.native> or <**/*.byte>: package(threads), thread, use_dynlink, \
     package(ocamlgraph), package(batteries), package(sexplib), \
-    package(mpi), package(Z3)
+    package(mpi), package(z3)
 
 # when you want to compile against ../plugins/mathsat4ml, uncomment the package:
 # package(ctypes.foreign)
 
 <src/*.ml>: package(ocamlgraph), package(batteries), package(sexplib), \
-    package(mpi), package(Z3)
+    package(mpi), package(z3)
 
 <src/pipeCmd.ml>: thread
 <test/*.ml>: package(oUnit), package(batteries), package(sexplib)
 <test/*.byte>: package(oUnit), package(batteries), package(sexplib), \
-    package(mpi), package(Z3)
+    package(mpi), package(z3)
 
 true: use_menhir, bin_annot, annot
 
