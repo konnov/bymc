@@ -9,6 +9,8 @@
 open Batteries
 open Printf
 
+open Lazy_trie
+
 open Mpi (* TODO: extract MPI code into a separate module *)
 
 open Accums
@@ -1026,31 +1028,13 @@ let poset_make_utl form =
 
 
 (**
-  Given an element order (the elements come from a small set 0..n),
-  we compute the unique fingerprint of the order.
-  For the moment, we use just a simple string representation.
-  XXX: storing fingerprints slowly becomes a bottleneck in this technique.
-  TODO: use a trie on po elements.
-  *)
-let compute_fingerprint order =
-    let buf = BatBuffer.create (3 * (List.length order)) in
-    let append is_first i =
-        if not is_first
-        then BatBuffer.add_char buf '.';
-        BatBuffer.add_string buf (sprintf "%x" i);
-        false
-    in
-    ignore (List.fold_left append true order);
-    BatBuffer.contents buf
-
-
-(**
   Iterating over partial orders on threshold-and-cut graphs.
   *)
 module POI = struct
     type po_iter_t = {
         loiter: linord_iter_t;
-        visited: ((string, bool) Hashtbl.t) ref;
+        (* store the covered sequences in a prefix tree *)
+        covered: ((int, bool) Lazy_trie.t) ref;
         map_fun: int -> po_elem_t;
         po_seq: (int list) ref;
         mapped_seq: (po_elem_t list) ref;
@@ -1079,11 +1063,9 @@ module POI = struct
             else trunc_guards_after_loop map_fun
                      (BatArray.to_list (linord_iter_get init_linorder_iter))
         in
-        let visited = ref (Hashtbl.create 1024) in
-        Hashtbl.add !visited (compute_fingerprint iorder) true;
         {
             loiter = init_linorder_iter;
-            visited = visited;
+            covered = ref (Lazy_trie.set Lazy_trie.empty iorder true);
             map_fun = map_fun;
             po_seq = ref iorder;
             mapped_seq = ref (List.map map_fun iorder);
@@ -1111,19 +1093,12 @@ module POI = struct
             then begin
                 let order = BatArray.to_list (linord_iter_get poi.loiter) in
                 let filtered = trunc_guards_after_loop poi.map_fun order in
-                let fingerprint = compute_fingerprint filtered in
-                if Hashtbl.mem !(poi.visited) fingerprint
+                if Lazy_trie.mem !(poi.covered) filtered
                 then find_next ()
                 else begin
-                    (*
-                    if (Hashtbl.length !(poi.visited)) > fingerprints_too_large
-                    (* the table is too large, forget it *)
-                    then poi.visited := Hashtbl.create 1024;
-                    *)
-
-                    Hashtbl.add !(poi.visited) fingerprint true;
                     poi.po_seq := filtered;
-                    poi.mapped_seq := List.map poi.map_fun filtered
+                    poi.mapped_seq := List.map poi.map_fun filtered;
+                    poi.covered := Lazy_trie.set !(poi.covered) filtered true
                 end
             end
         in
