@@ -1238,15 +1238,18 @@ let accum_stat r_st watch no schema_len =
     in
     let percentage = 100 * no / nschemas in
     let rate = (float_of_int !r_st.m_nschemas) /. !r_st.m_sum_schema_time_sec in
-    if nschemas < linext_too_many
-    then printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, rate: %.1f/s, nr: %d\n"
-        percentage (human_readable_duration one_lap) 
-        (human_readable_duration elapsed) (human_readable_duration eta)
-        rate no
-    else printf "  (?)%%, lap: %s, elapsed: %s, ETA: ?, rate: %.1f/s, nr: %d\n"
-        (human_readable_duration one_lap)
-        (human_readable_duration elapsed) rate no;
-            
+    let msg =
+        if nschemas < linext_too_many
+        then sprintf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, rate: %.1f/s, nr: %d\n"
+            percentage (human_readable_duration one_lap) 
+            (human_readable_duration elapsed) (human_readable_duration eta)
+            rate no
+        else sprintf "  (?)%%, lap: %s, elapsed: %s, ETA: ?, rate: %.1f/s, nr: %d\n"
+            (human_readable_duration one_lap)
+            (human_readable_duration elapsed) rate no
+    in
+    (* avoid printing stats too often *)
+    watch#print_once_in_interval 1.0 msg;
 
     (* update the running time with the reachability optimization on/off *)
     let fadd_if is_true a b = if is_true then a +. b else a in
@@ -1386,7 +1389,8 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
         let iorder = POI.iter_get_iorder iter.SchemaIter.po_iter in
         let eorder = POI.iter_get_eorder iter.SchemaIter.po_iter in
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
-        printf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder));
+        watch#print_once_in_interval 1.0 
+            (sprintf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder)));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
         let res = check_one_order solver sk (form_name, spec) deps

@@ -387,11 +387,13 @@ class stop_watch ~(is_wall: bool) ~(with_children: bool) =
         val mutable start_time = 0.0
         val mutable last_time = 0.0
         val mutable last_event = ""
+        val mutable last_print_sec = 0.0
 
         method start event_name =
             start_time <- self#get_time ();
             last_time <- self#get_time ();
             last_event <- "";
+            last_print_sec <- 0.0;
             ignore (self#next_event event_name)
 
         method next_event event_name =
@@ -409,6 +411,14 @@ class stop_watch ~(is_wall: bool) ~(with_children: bool) =
                 last_event (current_time -. last_time);
             last_time <- current_time;
             last_event <- event_name
+
+        (** print only if the given period has elapsed since the last time *)
+        method print_once_in_interval interval_sec msg =
+            if last_time -. last_print_sec >= interval_sec
+            then begin
+                last_print_sec <- last_time;
+                print_string msg
+            end
 
         method private get_time () =
             if is_wall
