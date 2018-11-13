@@ -549,7 +549,7 @@ let dump_counterex_to_file solver sk deps form_name
     end;
     fprintf out "\n Gute Nacht. Spokoinoy nochi. Laku noch.\n";
     close_out out;
-    printf "    > Saved counterexample to %s\n" fname;
+    log DEBUG (sprintf "    > Saved counterexample to %s" fname);
     (* save the counterexample in a machine-readable format *)
     (* write in a machine-readable format *)
     let machine_fname = cex_default_scm_filename in
@@ -1250,6 +1250,7 @@ let accum_stat r_st watch no schema_len =
     in
     (* avoid printing stats too often *)
     watch#print_once_in_interval 1.0 msg;
+    log DEBUG msg; (* always print in the verbose mode *)
 
     (* update the running time with the reachability optimization on/off *)
     let fadd_if is_true a b = if is_true then a +. b else a in
@@ -1389,7 +1390,7 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
         let iorder = POI.iter_get_iorder iter.SchemaIter.po_iter in
         let eorder = POI.iter_get_eorder iter.SchemaIter.po_iter in
         let pp e = sprintf "%3s" (po_elem_short_s sk e) in
-        watch#print_once_in_interval 1.0 
+        logtm DEBUG
             (sprintf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder)));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
@@ -2085,7 +2086,7 @@ let find_error_in_many_forms_parallel rt tt sk named_forms deps =
                         cex_default_scm_filename (* and return the filename *)
                     end
                 in
-                log INFO (sprintf "Saved counterexample in %s\n" filename);
+                log DEBUG (sprintf "Saved counterexample in %s\n" filename);
                 Some filename
             with Not_found ->
                 ignore (Mpi.broadcast (-1) 0 Mpi.comm_world);

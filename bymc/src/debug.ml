@@ -45,7 +45,7 @@ let verbosity_s = function
     | ERROR -> "ERR  "
     | WARN -> "WARN: "
     | INFO -> " "
-    | DEBUG -> " --- "
+    | DEBUG -> " ### "
 
 let may_log level =
     let to_num = function
