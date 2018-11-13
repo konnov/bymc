@@ -183,6 +183,7 @@ class z3_smt name =
         val mutable m_inconsistent_pushes = 0
         (** the last id used in the assertions *)
         val mutable m_last_id = 1
+
         (** the number of times the solver has been started *)
         val mutable m_nstarts = 0
         (** the theory to use *)

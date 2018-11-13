@@ -35,7 +35,9 @@ let po_init = 1
 let po_loop = 0
 
 (* We precompute the number of schemas for use experience,
-   but when there are too many, we just say 'too many' *)
+   but when there are too many, we just say 'too many'.
+   This threshold is effective only if schema.compute-nschemas=1.
+ *)
 let linext_too_many = 100000
 
 (*
@@ -46,7 +48,7 @@ let linext_too_many = 100000
    parameter below. This might cause exploring more schemas after reset,
    but allows us not to go out of memory.
  *)
-let fingerprints_too_large = 100
+let fingerprints_too_large = 10000
 
 (**
  The statistics collected during the execution.
@@ -1113,9 +1115,11 @@ module POI = struct
                 if Hashtbl.mem !(poi.visited) fingerprint
                 then find_next ()
                 else begin
+                    (*
                     if (Hashtbl.length !(poi.visited)) > fingerprints_too_large
                     (* the table is too large, forget it *)
                     then poi.visited := Hashtbl.create 1024;
+                    *)
 
                     Hashtbl.add !(poi.visited) fingerprint true;
                     poi.po_seq := filtered;
@@ -1349,20 +1353,25 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
     (* count the linear extensions *)
     logtm INFO (form_name ^ ": counting linear extensions...");
     let poi = POI.iter_first get_elem (linord_iter_first size order) in
+    let is_too_many i = (* when to stop if there are too many schemas *)
+        i >= linext_too_many && not (SchemaOpt.is_always_compute_nschemas ())
+    in
     let total_count = ref 0 in
     while not (POI.iter_is_end poi)
-            && !total_count < linext_too_many do (* stop when there are too many *)
+            && not (is_too_many !total_count) do
         total_count := 1 + !total_count;
         POI.iter_next poi
     done;
-    let msg = 
-        if !total_count < linext_too_many
-        then sprintf
-            "%s: %d linear extensions to enumerate\n\n" form_name !total_count
-        else sprintf
-            "%s: more than %d linear extensions to enumerate (disabled prediction)\n\n" form_name linext_too_many
-    in
-    logtm INFO msg;
+    if not (is_too_many !total_count)
+    then logtm INFO
+        (sprintf "%s: %d linear extensions to enumerate\n\n"
+            form_name !total_count)
+    else begin
+        logtm INFO (sprintf
+        "%s: more than %d linear extensions to enumerate (disabled prediction)\n\n"
+            form_name linext_too_many);
+        logtm INFO ("(To enable, use the option -O schema.compute-nschemas=1)")
+    end;
 
     (* and check the properties for each of them *)
     let current = ref 0 in

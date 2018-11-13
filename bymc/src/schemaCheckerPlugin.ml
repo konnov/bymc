@@ -214,6 +214,7 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             let no_adaptive_reach_opt = getopt "schema.noadaptive" in
             let incremental = getopt "schema.incremental" in
             let no_guard_preds = getopt "schema.noguardpreds" in
+            let always_compute_nschemas = getopt "schema.compute-nschemas" in
 
             let reach_on =
                 if no_reach_opt <> None
@@ -266,5 +267,12 @@ class slps_checker_plugin_t (plugin_name: string) (ta_source: TaSource.ta_source
             Debug.log INFO
                 (sprintf "  # Guards predicates: %s"
                     (if is_disabled no_flow_opt then "disabled" else "enabled"));
+
+            SchemaOpt.set_always_compute_nschemas (is_enabled always_compute_nschemas);
+            Debug.log INFO
+                (sprintf "  # Always predict the number of schemas: %s"
+                    (if is_enabled always_compute_nschemas
+                        then "enabled"
+                        else "disabled"));
     end
 

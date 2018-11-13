@@ -14,6 +14,8 @@ module F = struct
     let ada_reach_adapt_after = ref 3
     (** do we introduce predicates for each guard when switching context? *)
     let use_guard_predicates = ref true
+    (** do we always predict the number of schemas? *)
+    let always_compute_nschemas = ref false
 end
 
 let is_incremental _ =
@@ -51,4 +53,11 @@ let use_guard_predicates _ =
 
 let set_use_guard_predicates b =
     F.use_guard_predicates := b
+
+let is_always_compute_nschemas () =
+    !F.always_compute_nschemas
+
+(* enable/disable computation of the number of schemas *)
+let set_always_compute_nschemas b =
+    F.always_compute_nschemas := b
 

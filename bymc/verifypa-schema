@@ -45,6 +45,8 @@ function help_and_quit() {
     echo "                          enabling/disabling the reachability optimization)"
     echo "  -O schema.noguardpreds=1 (do not introduce predicates for"
     echo "                            the threshold guards, default: 0)"
+    echo "  -O schema.compute-nschemas=1 (always compute the total number of"
+    echo "                                schemas, even if takes long, default: 0)"
 
     exit 1
 }

@@ -36,3 +36,10 @@ val use_guard_predicates: unit -> bool
 (** associate a predicate with every guard when switching a context *)
 val set_use_guard_predicates: bool -> unit
 
+(** is the total number of schemas always computed,
+    even if there are too many (default: no) *)
+val is_always_compute_nschemas: unit -> bool
+
+(* enable/disable computation of the number of schemas *)
+val set_always_compute_nschemas: bool -> unit
+

@@ -264,6 +264,12 @@ __Hack__ for OCaml 4.02.0 and later: edit Makefile, add option `-unsafe-string` 
 
 ## 5.3. Installing z3
 
+Consider installing the z3 package by issuing:
+
+```bash
+opam install z3
+```
+
 Here are instructions for z3 4.7.1. For other versions, check README in the
 distribution of z3:
 
