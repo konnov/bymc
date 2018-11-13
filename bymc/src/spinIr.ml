@@ -9,6 +9,8 @@
  * support several layers of code transformations.
  *)
 
+open Accums
+
 open Printf
 open SpinTypes
 
@@ -350,33 +352,34 @@ let mk_int_range l r =
 (* This table binds integer identifiers of (variables) to the datatypes *)
 class data_type_tab =
     object(self)
-        val mutable m_tab: (int, data_type) Hashtbl.t = Hashtbl.create 5
+        val mutable m_tab: data_type IntMap.t = IntMap.empty
 
-        method has_type (v: var) = Hashtbl.mem m_tab v#id
+        method has_type (v: var) = IntMap.mem v#id m_tab
         method get_type (v: var) =
-            try Hashtbl.find m_tab v#id
+            try IntMap.find v#id m_tab 
             with Not_found ->
                 self#print;
                 raise (Type_not_found (sprintf "Type of %s (id=%d) not found"
                     v#get_name v#id))
 
         method set_type (v: var) (dtp: data_type) =
-            Hashtbl.replace m_tab v#id dtp
+            m_tab <- IntMap.add v#id dtp m_tab 
 
-        method set_all_types hash_tbl = m_tab <- hash_tbl
-
-        method length = Hashtbl.length m_tab
+        method length = IntMap.cardinal m_tab
 
         method copy =
             let new_t = new data_type_tab in
-            new_t#set_all_types (Hashtbl.copy m_tab);
+            new_t#set_all m_tab;
             new_t
 
         method print =
-            let p (id, t) =
+            let p id t =
                 printf "  %6d -> %s\n" id t#to_s
             in
-            List.iter p (Accums.hashtbl_as_list m_tab)
+            IntMap.iter p m_tab
+
+        method set_all map =
+            m_tab <- map
     end
 
 

@@ -216,14 +216,13 @@ class data_type :
 
 class data_type_tab :
   object
-    val mutable m_tab : (int, data_type) Hashtbl.t
     method copy : data_type_tab
     method get_type : var -> data_type
     method has_type : var -> bool
     method length : int
     method print : unit
-    method set_all_types : (int, data_type) Hashtbl.t -> unit
     method set_type : var -> data_type -> unit
+    method set_all : (data_type Accums.IntMap.t) -> unit
   end
 
 

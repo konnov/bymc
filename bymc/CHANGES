@@ -1,4 +1,10 @@
 Version 2.4.2
+ 
+ * fixing memory leaks
+
+ * replacing the hashtable of fingerprints with a prefix tree
+
+ * superincremental optimization
 
  * Allowing linear combinations in the left-hand side of a guard,
    e.g., a * x + b * y + c * z >= n - t + f. The coefficients a, b, ..., c
