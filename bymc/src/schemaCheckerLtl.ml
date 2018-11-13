@@ -1167,39 +1167,6 @@ module S = struct
 end
 
 
-let enum_orders (map_fun: int -> po_elem_t)
-        (order_fun: (int list * po_elem_t list) -> 'r)
-        (is_end_fun: 'r -> bool) (result: 'r ref) (iter: linord_iter_t): 'r =
-    let visited = Hashtbl.create 1024 in
-    let not_loop e = (e <> po_loop) in
-    let not_guard num =
-        match map_fun num with
-        | PO_guard _ -> false
-        | _ -> true
-    in
-    let filter_guards_after_loop order =
-        if po_loop = (List.hd order)
-        then List.tl order (* incremental safety *)
-        else let prefix, loop = BatList.span not_loop order in
-            let floop = List.filter not_guard loop in
-            prefix @ floop (* liveness or non-incremental safety *)
-    in
-    while not (linord_iter_is_end iter) && not (is_end_fun !result) do
-        let order = BatArray.to_list (linord_iter_get iter) in
-        let filtered = filter_guards_after_loop order in
-        let fingerprint = compute_fingerprint filtered in
-        if not (Hashtbl.mem visited fingerprint)
-        then begin
-            (*printf "  visiting %s\n" fingerprint;*)
-            Hashtbl.add visited fingerprint true;
-            let eorder = List.map map_fun filtered in
-            result := order_fun (filtered, eorder);
-        end;
-        if not (is_end_fun !result)
-        then linord_iter_next iter;
-    done;
-    !result
-
 
 (** accumulate the statistics and adaptively change the options *)
 let accum_stat r_st watch no schema_len =
