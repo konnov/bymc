@@ -1237,13 +1237,15 @@ let accum_stat r_st watch no schema_len =
         else 0.0
     in
     let percentage = 100 * no / nschemas in
+    let rate = (float_of_int !r_st.m_nschemas) /. !r_st.m_sum_schema_time_sec in
     if nschemas < linext_too_many
-    then printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, nr: %d\n"
-        percentage (human_readable_duration one_lap)
-        (human_readable_duration elapsed) (human_readable_duration eta) no
-    else printf "  (?)%%, lap: %s, elapsed: %s, ETA: unknown, nr: %d\n"
+    then printf "  %3d%%, lap: %s, elapsed: %s, ETA: %s, rate: %.1f/s, nr: %d\n"
+        percentage (human_readable_duration one_lap) 
+        (human_readable_duration elapsed) (human_readable_duration eta)
+        rate no
+    else printf "  (?)%%, lap: %s, elapsed: %s, ETA: ?, rate: %.1f/s, nr: %d\n"
         (human_readable_duration one_lap)
-        (human_readable_duration elapsed) no;
+        (human_readable_duration elapsed) rate no;
             
 
     (* update the running time with the reachability optimization on/off *)
