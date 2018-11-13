@@ -223,6 +223,7 @@ val check_one_order:
     Smt.smt_solver -> SymbSkel.Sk.skel_t -> (string * spec_t)
     -> PorBounds.D.deps_t -> SchemaSmt.tac_t -> reach_opt:bool
     -> (int list * po_elem_t list)
+    -> memo_fun:(int list -> unit)
     -> internal_result_t
 
 (**

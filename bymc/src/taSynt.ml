@@ -754,7 +754,8 @@ let is_cex_applicable_new solver type_tab sk deps cex =
         tac#assert_top sk.Sk.inits;
         let res =
             SCL.check_one_order solver sk (cex.C.f_form_name, spec) deps
-                    (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
+                (tac :> SchemaSmt.tac_t) ~reach_opt:false
+                (cex.C.f_iorder, eorder) ~memo_fun:(fun _ -> ())
         in
         solver#pop_ctx;
         if not res.SCL.m_is_err
@@ -812,7 +813,8 @@ let push_counterexample solver synt_solver type_tab sk deps template unknowns ce
     tac#assert_top template.Sk.inits;
     let res =
         SCL.check_one_order solver template (cex.C.f_form_name, spec) deps
-                (tac :> SchemaSmt.tac_t) ~reach_opt:false (cex.C.f_iorder, eorder)
+                (tac :> SchemaSmt.tac_t) ~reach_opt:false
+                (cex.C.f_iorder, eorder) ~memo_fun:(fun _ -> ())
     in
     solver#pop_ctx;
     if not res.SCL.m_is_err

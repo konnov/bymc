@@ -43,14 +43,14 @@ let po_loop = 0
 let linext_too_many = 100000
 
 (*
-   We cache visited schemas projections in a hash table.
-   This cache table get extremely large on on very large benchmarks
+   We cache visited schemas projections in a prefix tree (trie).
+   This tree gets extremely large on on very large benchmarks
     (e.g., rs-bosco goes over 64 GB after visiting >200k schemas).
-   Hence, we clean the hash table when it grows larger then the
+   Hence, we clean the tree when it grows larger then the
    parameter below. This might cause exploring more schemas after reset,
    but allows us not to go out of memory.
  *)
-let fingerprints_too_large = 10000
+let prefix_tree_too_large = 1000000
 
 (**
  The statistics collected during the execution.
@@ -629,7 +629,8 @@ type check_t = CheckPropositional | CheckSafety | CheckUtl
  a counterexample. To deal with such related guards, we introduce predicates
  for each guard that are evaluated during a context switch.
  *)
-let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, elem_order) =
+let check_one_order solver sk (form_name, spec)
+        deps tac ~reach_opt (iorder, elem_order) ~memo_fun =
     let check_type, init_form, safety_bad =
         (* In the incremental mode, we distinguish between safety and the general LTL.
            Thus, for safety we do not enumerate possible orderings of F, but
@@ -736,7 +737,7 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
             form_name (iorder, po_elem_struc_list) prefix loop;
     in
     let rec search prefix_last_frame uset lset invs = function
-        | [] ->
+        | [] -> (* reached the end of schema *)
             if check_type = CheckSafety
             then (* no errors: we have already checked the prefix *)
                 { m_is_err = false; m_schema_len = tac#top.F.no }
@@ -921,8 +922,16 @@ let check_one_order solver sk (form_name, spec) deps tac ~reach_opt (iorder, ele
             in
             tac#leave_node node_type;
             res
-        end else (* the current frame is unreachable *)
+        end else begin
+            (* Current frame is unreachable. *)
+            (* Incremental optimization: return without exploring the schema. *)
+            (* [13-11-2018] Superincremental optimization:
+               save the prefix to prune schemas in the future*)
+            let prefix_len = (List.length iorder) - (List.length seq) in
+            let iprefix = List.take prefix_len iorder in
+            memo_fun iprefix; (* superincremental optimization! *)
             { m_is_err = false; m_schema_len = tac#top.F.no }
+        end
     in
     (* evaluate the order *)
     let result = search None PSet.empty PSet.empty [] elem_order in
@@ -1035,6 +1044,7 @@ module POI = struct
         loiter: linord_iter_t;
         (* store the covered sequences in a prefix tree *)
         covered: ((int, bool) Lazy_trie.t) ref;
+        covered_num: int ref;
         map_fun: int -> po_elem_t;
         po_seq: (int list) ref;
         mapped_seq: (po_elem_t list) ref;
@@ -1066,6 +1076,7 @@ module POI = struct
         {
             loiter = init_linorder_iter;
             covered = ref (Lazy_trie.set Lazy_trie.empty iorder true);
+            covered_num = ref 1;
             map_fun = map_fun;
             po_seq = ref iorder;
             mapped_seq = ref (List.map map_fun iorder);
@@ -1083,6 +1094,25 @@ module POI = struct
     let iter_is_end poi =
         linord_iter_is_end poi.loiter
 
+    (* Save the prefix for future prunning of all the sequences
+       that start with it. *)
+    let save_prefix poi prefix =
+        poi.covered := Lazy_trie.set !(poi.covered) prefix true
+
+    let rec mem_or_prefix tree = function
+            | hd :: tl ->
+                if Lazy_trie.mem tree []
+                then begin
+                    (*Printf.printf "\nsuperincremental HITS!\n";*)
+                    true (* there is a prefix of our sequence that has a value *)
+                end else
+                    let subtree = Lazy_trie.sub tree [hd] in
+                    if subtree = Lazy_trie.empty
+                    then false (* no subtree follows the sequence *)
+                    else mem_or_prefix subtree tl
+
+            | [] -> Lazy_trie.mem tree [] (* the path ends up with a value *)
+
     (**
       Advance the iterator value (by updating its arguments in place).
      *)
@@ -1093,16 +1123,24 @@ module POI = struct
             then begin
                 let order = BatArray.to_list (linord_iter_get poi.loiter) in
                 let filtered = trunc_guards_after_loop poi.map_fun order in
-                if Lazy_trie.mem !(poi.covered) filtered
+                if mem_or_prefix !(poi.covered) filtered
                 then find_next ()
                 else begin
+                    if !(poi.covered_num) >= prefix_tree_too_large
+                    then begin
+                        (* the tree is too large -- clean it *)
+                        poi.covered := Lazy_trie.empty;
+                        poi.covered_num := 0;
+                    end;
                     poi.po_seq := filtered;
                     poi.mapped_seq := List.map poi.map_fun filtered;
-                    poi.covered := Lazy_trie.set !(poi.covered) filtered true
+                    poi.covered := Lazy_trie.set !(poi.covered) filtered true;
+                    poi.covered_num := !(poi.covered_num) + 1;
                 end
             end
         in
         find_next ()
+
 end
 
 
@@ -1336,8 +1374,12 @@ let mk_schema_iterator solver sk (form_name, spec) deps tac reset_fun =
             (sprintf "  -> %s: %s...\n" form_name (str_join "  " (List.map pp eorder)));
         current := 1 + !current;
         let ropt = !r_stat.m_reachability_on in
+        let memo_fun iprefix =
+            POI.save_prefix iter.SchemaIter.po_iter iprefix
+        in
         let res = check_one_order solver sk (form_name, spec) deps
-                tac ~reach_opt:ropt (iorder, eorder) in
+                tac ~reach_opt:ropt (iorder, eorder) ~memo_fun:memo_fun
+        in
         accum_stat r_stat watch !current res.m_schema_len;
         reset_fun ();
         if res.m_is_err
