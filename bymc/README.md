@@ -221,7 +221,7 @@ the package manager called `opam`. As soon as `opam` is in place, you can
 install the packages as follows:
 
 ```bash
-$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie
+$ opam install batteries ounit ocamlgraph sexplib menhir lazy-trie opam
 ```
 
 (Do not forget to include the line
