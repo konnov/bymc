@@ -168,7 +168,7 @@ $ cat x/strb.ta-relay-*/cex-relay.trx
  
  The steps between the lines `****** LOOP ******` and `************` show the loop of the discovered lasso. Since it is a counterexample to liveness, it has the shape of a lasso. In case of safety, there will be no loop part.
  
- ### Checking safety and liveness of Parametric Promela code
+### Checking safety and liveness of algorithms in Parametric Promela
  
  To verify a threshold-guarded distributed algorithm in Parametric Promela, one runs ByMC similar to the case of threshold automata:
 
@@ -177,8 +177,11 @@ $ cat x/strb.ta-relay-*/cex-relay.trx
 
  ```
  
+ However, in this case, the tool applies a preprocessing step. It constructs a threshold automaton by applying interval abstraction to the local message counters such as `nrcvd` and `next_nrcvd`. The output of this preprocessing step is explained in the figure below.
+ 
  ![The output of the tool](./img/pml-output-annotated.png "The tool output explained (Parametric Promela as an input)")
  
+ The intermediate result of the abstraction in the Promela format can be found in the file `x/strb-relay-*/abs-interval-semi.prm`, while the resulting threshold automaton can be found in the file `x/strb-relay-*/fuse.sk`. You can also check the threshold automaton in the [graphviz](https://www.graphviz.org/) format in `x/strb-relay-*/flow.dot`.
  
  
  
