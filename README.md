@@ -1,6 +1,10 @@
 # ByMC: Byzantine Model Checker
 
-This is a toolset for parameterized model checking of fault-tolerant distributed algorithms. Check [README](./bymc/README.md) in the source directory.
+This is a toolset for parameterized model checking of threshold-guarded fault-tolerant distributed algorithms.
+
+* To see the tool in action, read [the tutorial](doc/tutorial.md).
+* For installation instructions, check [README](./bymc/README.md) in the source directory. 
+* To see the accompanying publications, visit the [tool website](https://forsyte.at/software/bymc/).
 
 The directory layout is as follows:
 
