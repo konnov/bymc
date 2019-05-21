@@ -22,17 +22,19 @@ In this tutorial, we assume that you followed the easy path and downloaded the v
 The benchmarks for all of our experiments are available from the [benchmarks repository](https://github.com/konnov/fault-tolerant-benchmarks). In this tutorial, we assume that you are using the [ISOLA18 benchmarks](https://github.com/konnov/fault-tolerant-benchmarks/tree/master/isola18), which are the latest benchmarks. ByMC supports two kinds of inputs:
 
  * **Parametric Promela**, which is a subset of [Spin's Promela](http://spinroot.com/spin/whatispin.html) extended with several parametric constructs. These files usually have the extension `pml`. For instance, check [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml), which specifies reliable broadcast in Parametric Promela.
+   A complete grammar of Parametric Promela is hard to summarize. Usually,
+   it is sufficient to follow the templates of the benchmarks that can be found in: [ISOLA18 benchmarks](https://github.com/konnov/fault-tolerant-benchmarks/tree/master/isola18/promela).
  
  * **Threshold automata**, which is the tool's internal language. These files usually have the extension `ta`. For instance, check [strb.ta](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/ta/strb.ta), which specifies reliable broadcast as a threshold automaton.
+   To see the input language of threshold automata, check the [ta-format](./ta-format.md).
  
  
 ### Which language do I choose?
  
  
-  Parametric Promela allows you to model the number of received messages with a local counter such as `nrcvd` in [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml). As a result, the specifications are somewhat closer to the original pseudo-code. Moreover, fairness constraints can be easily written in Parametric Promela. However, specifications in Parametric Promela require the tool to apply interval abstraction to the number of received messages. So it may happen that the tool cannot refine spurious counterexamples, which result from a too coarse abstraction. In this case, you can manually refine the abstraction domain. A complete grammar of Parametric Promela is hard to summarize. Usually,
-  it is sufficient to follow the templates of the benchmarks that can be found in: [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/tree/master/isola18/promela).
+  Parametric Promela allows you to model the number of received messages with a local counter such as `nrcvd` in [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml). As a result, the specifications are somewhat closer to the original pseudo-code. Moreover, fairness constraints can be easily written in Parametric Promela. However, specifications in Parametric Promela require the tool to apply interval abstraction to the number of received messages. So it may happen that the tool cannot refine spurious counterexamples, which result from a too coarse abstraction. In this case, you can manually refine the abstraction domain. 
   
-  Threshold automata is the theoretical model of the techniques that are implemented in ByMC. As a result, it is easier to understand how the tool works when it is given a threshold automaton. However, it is more tedious to write threshold automata and fairness constraints. Nevertheless, we prefer to use threshold automata as a direct input to the tool. To see the input language of threshold automata, check the [ta-format](./ta-format.md).
+  Threshold automata is the theoretical model of the techniques that are implemented in ByMC. As a result, it is easier to understand how the tool works when it is given a threshold automaton. However, it is more tedious to write threshold automata and fairness constraints. Nevertheless, we prefer to use threshold automata as a direct input to the tool.
  
 
   For a more detailed discussion on the topic, check the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
