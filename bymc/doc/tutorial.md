@@ -1,6 +1,8 @@
 # ByMC: Byzantine Model Checker -- Tutorial
 
-Author: Igor Konnov, May 2019
+Igor Konnov, May 2019
+
+
 
 This tutorial presents the latest techniques that are implemented in version 2.4.2. We do not cover earlier techniques, which are also implemented in ByMC, as they are interesting only from the historical perspective. To get an overview of the input and the implemented techniques, read the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
 
@@ -27,9 +29,10 @@ The benchmarks for all of our experiments are available from the [benchmarks rep
 ### Which language do I choose?
  
  
-  Parametric Promela allows you to model the number of received messages with a local counter such as `nrcvd` in [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml). As a result, the specifications are somewhat closer to the original pseudo-code. Moreover, fairness constraints can be easily written in Parametric Promela. However, specifications in Parametric Promela require the tool to apply interval abstraction to the number of received messages. So it may happen that the tool cannot refine spurious counterexamples, which result from a too coarse abstraction. In this case, you can manually refine the abstraction domain.
+  Parametric Promela allows you to model the number of received messages with a local counter such as `nrcvd` in [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml). As a result, the specifications are somewhat closer to the original pseudo-code. Moreover, fairness constraints can be easily written in Parametric Promela. However, specifications in Parametric Promela require the tool to apply interval abstraction to the number of received messages. So it may happen that the tool cannot refine spurious counterexamples, which result from a too coarse abstraction. In this case, you can manually refine the abstraction domain. A complete grammar of Parametric Promela is hard to summarize. Usually,
+  it is sufficient to follow the templates of the benchmarks that can be found in: [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/tree/master/isola18/promela).
   
-  Threshold automata is the theoretical model of the techniques that are implemented in ByMC. As a result, it is easier to understand how the tool works when it is given a threshold automaton. However, it is more tedious to write threshold automata and fairness constraints. Nevertheless, we prefer to use threshold automata as a direct input to the tool.
+  Threshold automata is the theoretical model of the techniques that are implemented in ByMC. As a result, it is easier to understand how the tool works when it is given a threshold automaton. However, it is more tedious to write threshold automata and fairness constraints. Nevertheless, we prefer to use threshold automata as a direct input to the tool. To see the input language of threshold automata, check the [ta-format](./ta-format.md).
  
 
   For a more detailed discussion on the topic, check the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
