@@ -1,6 +1,8 @@
 # ".ta": a format of threshold automata
 
-Igor Konnov, May 2019
+*Igor Konnov, May 2019*
+
+
 
 In [CONCUR14](http://forsyte.at/wp-content/uploads/concur14-reachability.pdf), we have introduced threshold automata as part of a theoretical framework for encoding threshold-guarded fault-tolerant distributed algorithms. In ByMC, we have introduced an intermediate language for threshold automata, which was not designed to be human-readable. However, later, we started to use this language to encode threshold automata directly, without involving additional abstractions. Hence, we added a few language constructs that ease specifying threshold automata by humans. The [threshold automata](https://link.springer.com/article/10.1007%2Fs10703-017-0297-4) in ByMC should adhere the following grammar in [EBNF](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form).
 

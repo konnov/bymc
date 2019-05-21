@@ -1,6 +1,6 @@
 # ByMC: Byzantine Model Checker -- Tutorial
 
-Igor Konnov, May 2019
+*Igor Konnov, May 2019*
 
 
 
