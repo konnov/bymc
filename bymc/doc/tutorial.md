@@ -1,5 +1,7 @@
 # ByMC: Byzantine Model Checker -- Tutorial
 
+Author: Igor Konnov, May 2019
+
 This tutorial presents the latest techniques that are implemented in version 2.4.2. We do not cover earlier techniques, which are also implemented in ByMC, as they are interesting only from the historical perspective. To get an overview of the input and the implemented techniques, read the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
 
 ## Installation
