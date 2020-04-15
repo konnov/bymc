@@ -119,7 +119,13 @@ let expr_to_z3 ctx vars ex =
     let rec trans = function
     | Nop comment -> raise (Failure (sprintf "Not supported: Nop '%s'" comment))
     | IntConst i -> Arithmetic.Integer.mk_numeral_i ctx i
-    | Var v -> Hashtbl.find vars v#mangled_name
+    | Var v ->
+        begin
+            try
+                Hashtbl.find vars v#mangled_name
+            with Not_found ->
+                raise (Failure (sprintf "Variable '%s' is not in SMT context" v#mangled_name))
+        end
 
     | UnEx (tok, f) ->
         begin match tok with

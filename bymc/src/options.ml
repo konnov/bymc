@@ -1,15 +1,15 @@
 (* Tool options. As the number of options continues to grow,
    this is one place to check the options and to access them from other modules.
 
-   Igor Konnov, 2013-2017
+   Igor Konnov, 2013-2020
  *)
 
 open Str
 
 open Accums
 
-let version = [2; 4; 2]
-let version_full = "ByMC-2.4.2"
+let version = [2; 4; 3]
+let version_full = "ByMC-2.4.3"
 
 let macro_prefix = "macro."
 

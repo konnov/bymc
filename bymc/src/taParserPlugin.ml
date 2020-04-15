@@ -67,14 +67,31 @@ class ta_parser_plugin_t (plugin_name: string) =
         method update_runtime rt =
             let sk = self#get_ta in
             let prog = self#get_output in
+            let var_name v = v#mangled_name in
             (* introduce the parameters to the solver *)
             let append_var v = rt#solver#append_var_def v (get_type prog v) in
             List.iter append_var (get_params prog);
             (* as we have unknowns now, we also add them *)
             List.iter append_var (sk.Sk.unknowns);
-            (* add the assumptions to check their consistency *)
-            let append_expr e = ignore (rt#solver#append_expr e) in
-            List.iter append_expr (get_assumes prog);
+            (*
+              Add the assumptions to check their consistency.
+              Check that only the parameters are used in the assumptions.
+             *)
+            let params = List.map var_name (get_params prog) in
+            let params_set = StrSet.of_list params in
+            let append_assume e =
+                let used = List.map var_name (SpinIr.expr_used_vars e) in
+                let used_set = StrSet.of_list used in
+                let diff = StrSet.diff used_set params_set in
+                if not (StrSet.is_empty diff)
+                then begin
+                    let diff_str = Accums.str_join ", " (StrSet.to_list diff) in
+                    printf "assumptions {...} contain variables that are not parameters: %s\n" diff_str;
+                    raise (Failure ("assumptions should refer only to the parameters"))
+                end;
+                ignore (rt#solver#append_expr e)
+            in
+            List.iter append_assume (get_assumes prog);
             if not rt#solver#check && rt#solver#get_name <> "dummy"
             then raise (Program.Program_error "Basic assertions are contradictory")
 

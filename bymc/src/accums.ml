@@ -11,7 +11,7 @@ open Str
 
 exception Not_found_msg of string
 
-module IntSet = Set.Make (struct
+module IntSet = BatSet.Make (struct
  type t = int
  let compare a b = a - b
 end)
@@ -23,7 +23,7 @@ end)
 
 module StringMap = BatMap.Make(String) (* deprecated: use StrMap *)
 module StrMap = BatMap.Make(String)
-module StrSet = Set.Make(String)
+module StrSet = BatSet.Make(String)
 
 (** a shorter name for string_of_int *)
 let int_s i = string_of_int i
