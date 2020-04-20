@@ -20,7 +20,7 @@ let lex_pp lexfun buf =
 
 
 let parse_input name input =
-    let buf = Lexing.from_input input in
+    let buf = Lexing.from_channel input in
     buf.lex_curr_p <- { buf.lex_curr_p with pos_fname = name };
     SpinParserState.reset_state ();
     try Ta.start (lex_pp Talex.token) buf with

@@ -23,7 +23,7 @@ let print_version_if_needed opts =
     match opts.action with
     | OptVersion ->
         printf "%s\n" version_full;
-        Pervasives.exit 1
+        exit 1
 
     | _ ->
         ()

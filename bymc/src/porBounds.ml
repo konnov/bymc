@@ -492,15 +492,15 @@ let compute_unlocking ?(against_only=true) loc_reach lockt solver sk
     in
     (* rules and their indices *)
     let rules_enum1 =
-        BatEnum.combine ((0--^sk.Sk.nrules), (BatList.enum sk.Sk.rules))
+        BatList.combine (BatList.of_enum (0--^sk.Sk.nrules)) sk.Sk.rules
     in
     let rules_enum2 = (* rules and their indices *)
-        BatEnum.combine ((0--^sk.Sk.nrules), (BatList.enum sk.Sk.rules))
+        BatList.combine (BatList.of_enum (0--^sk.Sk.nrules)) sk.Sk.rules
     in
     let _, _, mstone_set =
-        (BatEnum.cartesian_product rules_enum1 rules_enum2)
-            |> BatEnum.filter is_pair_included
-            |> BatEnum.fold collect_milestones
+        (BatList.cartesian_product rules_enum1 rules_enum2)
+            |> BatList.filter is_pair_included
+            |> BatList.fold_left collect_milestones
                 (P2Set.empty, P2Set.empty, PSet.empty)
     in
     let mstones =
