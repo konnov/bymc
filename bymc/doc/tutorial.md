@@ -1,16 +1,16 @@
 # ByMC: Byzantine Model Checker -- Tutorial
 
-*Igor Konnov, May 2019*
+*Igor Konnov, created on May 2019, updated on June 2020*
 
 
 
-This tutorial presents the latest techniques that are implemented in version 2.4.2. We do not cover earlier techniques, which are also implemented in ByMC, as they are interesting only from the historical perspective. To get an overview of the input and the implemented techniques, read the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
+This tutorial presents the latest techniques that are implemented in version 2.4.4. We do not cover earlier techniques, which are also implemented in ByMC, as they are interesting only in the historical perspective. To get an overview of the input and the implemented techniques, read the [ISOLA18 paper](https://hal.inria.fr/hal-01909653/file/camera.pdf).
 
 ## Installation
 
 There are two ways to install ByMC:
 
-  1. Download a virtual machine from [the tool website](https://forsyte.at/software/bymc/). For instance, [download the latest version 2.4.2](http://forsyte.at/static/download/bymc-2.4.2.ova).  
+  1. Download a virtual machine from [the tool website](https://forsyte.at/software/bymc/). For instance, [download the latest version 2.4.4](http://forsyte.at/static/download/bymc-2.4.4.ova).  
   1. Download the sources from the [github repository](https://github.com/konnov/bymc), compile, and install the tool. Detailed instructions can be found in the [README](../README.md)
   
 In this tutorial, we assume that you followed the easy path and downloaded the virtual machine. If you do not know how to install the virtual machine, check the [virtualbox instructions](https://docs.oracle.com/cd/E26217_01/E26796/html/qs-create-vm.html). After you have installed the virtual machine, run it and log in with the name `user` and password `user`. You should see a screen similar to this one:
@@ -44,8 +44,8 @@ The benchmarks for all of our experiments are available from the [benchmarks rep
  In the virtual machine, open `Terminator` and execute the following commands:
  
 ```bash
-$ cd submission82/bymc/bymc
-$ ./verifypa-schema
+$ cd bymc/bymc
+$ ./verify
 ```
  
  You should now see the list of the available options:
@@ -82,7 +82,7 @@ use ./verifypa-schema [switches] prog spec bymc_options
 Let's now check safety of reliable broadcast that is specified as a threshold automaton [strb.pml](https://github.com/konnov/fault-tolerant-benchmarks/blob/master/isola18/promela/strb.pml):
 
 ```bash
-$ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/ta/strb.ta unforg
+$ ./verify ~/fault-tolerant-benchmarks/isola18/ta/strb.ta unforg
 
 ```
  
@@ -99,7 +99,7 @@ $ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/ta/strb.ta unforg
 *Inspecting SMT queries.* By default, ByMC is using Z3 via OCaml API. If you like to see the produced SMT constraints, run ByMC with the SMT-LIB mode as follows:
  
 ```
-$ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/ta/strb.ta unforg --smt 'lib2|z3|-smt2|-in' -O smt.log=1
+$ ./verify ~/fault-tolerant-benchmarks/isola18/ta/strb.ta unforg --smt 'lib2|z3|-smt2|-in' -O smt.log=1
 ```
  
  If the command line version of `z3` is not available, install it by executing:
@@ -115,7 +115,7 @@ $ sudo apt-get update; sudo apt-get install z3
 This is done similar to safety:
  
  ```bash
- $ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/ta/strb.ta relay
+ $ ./verify ~/fault-tolerant-benchmarks/isola18/ta/strb.ta relay
  ```
  
  The output of the tool is similar to the safety case. However, the property `relay` is more complex and thus the tool produces a larger number of schemas (38 instead of 9).
@@ -131,7 +131,7 @@ The most interesting part about ByMC is that not only it can prove the propertie
  and run ByMC again:
  
  ```bash
- $ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/ta/strb.ta relay
+ $ ./verify ~/fault-tolerant-benchmarks/isola18/ta/strb.ta relay
  ```
  
  This time ByMC reports that it has found a counterexample to liveness:
@@ -180,7 +180,7 @@ $ cat x/strb.ta-relay-*/cex-relay.trx
  To verify a threshold-guarded distributed algorithm in Parametric Promela, one runs ByMC similar to the case of threshold automata:
 
  ```bash
- $ ./verifypa-schema ~/fault-tolerant-benchmarks/isola18/promela/strb.pml relay
+ $ ./verify ~/fault-tolerant-benchmarks/isola18/promela/strb.pml relay
 
  ```
  
