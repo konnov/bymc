@@ -22,5 +22,5 @@ Promela](https://github.com/konnov/fault-tolerant-benchmarks/tree/master/isola18
 (the latter use an additional abstraction step). The TA-format is summarized
 [here](https://github.com/konnov/bymc/blob/master/bymc/doc/ta-format.md).
 
-
+If you have any questions on this tutorial, ask [Igor Konnov](https://konnov.github.io/).
 
