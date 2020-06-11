@@ -1,5 +1,7 @@
 # Resources on ByMC for FORTE'2020
 
+Check the [tutorial paper at FORTE'20](https://link.springer.com/chapter/10.1007%2F978-3-030-50086-3_11).
+
 We recommend trying ByMC in [VirtualBox](https://www.virtualbox.org/).  To do
 so, download
 [bymc-2.4.4.ova](http://forsyte.at/static/download/bymc-2.4.4.ova), import the
@@ -7,7 +9,7 @@ appliance in VirtualBox and login as `user` using the password `user`. The tool
 source code is available at the [github
 repository](https://github.com/konnov/bymc).
 
-To check the commmand-line parameters, see [ByMC
+To find the commmand-line parameters, see [ByMC
 tutorial](https://github.com/konnov/bymc/blob/master/bymc/doc/tutorial.md).
 The related papers can be found at the [ByMC
 page](https://forsyte.at/software/bymc/) at [Forsyte](https://forsyte.at).
