@@ -2,6 +2,21 @@
 
 This is a toolset for parameterized model checking of threshold-guarded fault-tolerant distributed algorithms.
 
+**WARNING:** Since this tool is using libraries that go back to 2013, it is
+getting harder to compile it. The easiest way to run ByMC is by downloading a
+virtual machine and running the tool inside
+[VirtualBox](https://www.virtualbox.org/). The latest version is
+[2.4.4](./VMs/bymc-2.4.4.ova). You can find the full list of virtual machines
+in [VMs](./VMs).
+
+A recent survey of the techniques implemented in ByMC (and other tools) can
+be found in the [paper at LMCS'23](https://lmcs.episciences.org/10824):
+
+    Igor Konnov ; Marijana Lazić ; Ilina Stoilkovska ; Josef Widder -
+    Survey on Parameterized Verification with Threshold Automata and the
+    Byzantine Model Checker. Logical Methods in Computer Science, January 18,
+    2023, Volume 19, Issue 1
+
 * To see the tool in action, read [the tutorial](./bymc/doc/tutorial.md).
 * For installation instructions, check [README](./bymc/README.md) in the source directory. 
 * To see the accompanying publications, visit the [tool website](https://forsyte.at/software/bymc/).
@@ -15,4 +30,4 @@ The directory layout is as follows:
 * ```legacy-deps``` -- various dependencies required by the tools that are hard to install automatically, needed only to run legacy techniques
 
 
-Shall you have any questions, ask Igor Konnov ```<konnov at forsyte.at>```
+Shall you have any questions, ask [Igor Konnov](https://konnov.github.io/).
