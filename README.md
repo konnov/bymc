@@ -6,8 +6,7 @@ This is a toolset for parameterized model checking of threshold-guarded fault-to
 getting harder to compile it. The easiest way to run ByMC is by downloading a
 virtual machine and running the tool inside
 [VirtualBox](https://www.virtualbox.org/). The latest version is
-[2.4.4](./VMs/bymc-2.4.4.ova). You can find the full list of virtual machines
-in [VMs](./VMs).
+[ByMC 2.4.4](https://drive.google.com/file/d/1m1LNeCPbEdOE35KBsVSsICeXQi8FM8gq/view?usp=share_link) (at Google Drive).
 
 A recent survey of the techniques implemented in ByMC (and other tools) can
 be found in the [paper at LMCS'23](https://lmcs.episciences.org/10824):
